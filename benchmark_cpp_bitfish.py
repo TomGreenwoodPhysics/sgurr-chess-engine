@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -11,25 +12,26 @@ import chess
 import chess.engine
 import chess.pgn
 
-from v11.bitfish_board_v11 import Board as BitfishBoard
-from v11.bitfish_board_v11 import Move as BitfishMove
-from v11.bitfish_engine_v11 import Engine as BitfishEngine
-
 
 STOCKFISH_PATH = r"C:\Users\Tom Greenwood\Desktop\Coding Projects\Chess Bot\stockfish\stockfish-windows-x86-64-avx2.exe"
+
+BITFISH_CPP_PATH = (Path("bitfish_cpp") / "bitfish.exe").resolve()
+
+MSYS2_UCRT64_BIN = r"C:\msys64\ucrt64\bin"
+os.environ["PATH"] = MSYS2_UCRT64_BIN + os.pathsep + os.environ["PATH"]
 
 STOCKFISH_ELO = 2000
 NUM_GAMES = 2
 MAX_PLIES = 400
 
 BITFISH_MAX_DEPTH = 10
-BITFISH_TIME_PER_MOVE = 5
+BITFISH_TIME_PER_MOVE = 5.0
 STOCKFISH_TIME_PER_MOVE = 0.1
 
 OUTPUT_DIR = Path("analysis_games")
-PGN_FILE = OUTPUT_DIR / "bitfish_benchmark_games.pgn"
-MOVE_LOG_FILE = OUTPUT_DIR / "bitfish_move_log.jsonl"
-DIAGNOSTICS_FILE = OUTPUT_DIR / "bitfish_diagnostics.csv"
+PGN_FILE = OUTPUT_DIR / "bitfish_cpp_benchmark_games.pgn"
+MOVE_LOG_FILE = OUTPUT_DIR / "bitfish_cpp_move_log.jsonl"
+DIAGNOSTICS_FILE = OUTPUT_DIR / "bitfish_cpp_diagnostics.csv"
 
 LOW_DEPTH_LIMIT = 3
 WORST_CASES_TO_PRINT = 20
@@ -45,59 +47,55 @@ def get_game_phase(ply: int) -> str:
     return "endgame"
 
 
-def chess_board_to_bitfish_board(board: chess.Board) -> BitfishBoard:
-    return BitfishBoard(board.fen())
+def score_to_centipawns(score: chess.engine.PovScore, turn: chess.Color) -> int:
+    pov = score.pov(turn)
+
+    if pov.is_mate():
+        mate = pov.mate()
+        if mate is None:
+            return 0
+        return 100000 if mate > 0 else -100000
+
+    cp = pov.score()
+    return cp if cp is not None else 0
 
 
-def bitfish_move_to_chess_move(move: BitfishMove | None) -> chess.Move | None:
-    if move is None:
-        return None
-
-    return chess.Move.from_uci(str(move))
-
-
-def choose_bitfish_move(
-    engine: BitfishEngine,
+def choose_bitfish_cpp_move(
+    bitfish: chess.engine.SimpleEngine,
     board: chess.Board,
 ) -> tuple[chess.Move | None, dict[str, Any]]:
-    bitfish_board = chess_board_to_bitfish_board(board)
-    legal_move_count = len(bitfish_board.generate_legal_moves())
+    start = time.time()
 
-    result = engine.search_best_move(
-        bitfish_board,
-        max_depth=BITFISH_MAX_DEPTH,
-        time_limit=BITFISH_TIME_PER_MOVE,
+    result = bitfish.play(
+        board,
+        chess.engine.Limit(
+            time=BITFISH_TIME_PER_MOVE,
+            depth=BITFISH_MAX_DEPTH,
+        ),
+        info=chess.engine.INFO_ALL,
     )
 
-    best_move: BitfishMove | None = result.best_move
-    move = bitfish_move_to_chess_move(best_move)
-    nodes_per_second = result.nodes / result.time_taken if result.time_taken > 0 else 0
+    elapsed = time.time() - start
+    info = result.info
+
+    move = result.move
+    nodes = int(info.get("nodes", 0))
+    depth = int(info.get("depth", 0))
+    tt_hits = int(info.get("tbhits", 0))
+
+    score_obj = info.get("score")
+    score = score_to_centipawns(score_obj, board.turn) if score_obj is not None else 0
+
+    nodes_per_second = nodes / elapsed if elapsed > 0 else 0
 
     stats: dict[str, Any] = {
-        "depth": result.depth,
-        "nodes": result.nodes,
-        "time": result.time_taken,
+        "depth": depth,
+        "nodes": nodes,
+        "time": elapsed,
         "nodes_per_second": nodes_per_second,
-        "legal_moves": legal_move_count,
-        "tt_hits": result.tt_hits,
-        "score": result.score,
-        "main_nodes": getattr(result, "main_nodes", 0),
-        "q_nodes": getattr(result, "q_nodes", 0),
-        "eval_calls": getattr(result, "eval_calls", 0),
-        "eval_time": getattr(result, "eval_time", 0.0),
-        "movegen_calls": getattr(result, "movegen_calls", 0),
-        "movegen_time": getattr(result, "movegen_time", 0.0),
-        "futility_prunes": getattr(result, "futility_prunes", 0),
-        "delta_prunes": getattr(result, "delta_prunes", 0),
-        "null_prunes": getattr(result, "null_prunes", 0),
-        "lmr_reductions": getattr(result, "lmr_reductions", 0),
-        "lmr_researches": getattr(result, "lmr_researches", 0),
-        "beta_cutoffs": getattr(result, "beta_cutoffs", 0),
-        "time_checks": getattr(result, "time_checks", 0),
-        "full_eval_calls": getattr(result, "full_eval_calls", 0),
-        "full_eval_time": getattr(result, "full_eval_time", 0.0),
-        "quiet_eval_calls": getattr(result, "quiet_eval_calls", 0),
-        "quiet_eval_time": getattr(result, "quiet_eval_time", 0.0),
+        "legal_moves": board.legal_moves.count(),
+        "tt_hits": tt_hits,
+        "score": score,
     }
 
     return move, stats
@@ -111,17 +109,17 @@ def save_game_pgn(
 ) -> None:
     game = chess.pgn.Game.from_board(board)
 
-    game.headers["Event"] = "Bitfish Benchmark"
+    game.headers["Event"] = "Bitfish C++ Benchmark"
     game.headers["Round"] = str(game_number)
-    game.headers["White"] = "Bitfish" if bitfish_colour == chess.WHITE else "Stockfish"
-    game.headers["Black"] = "Bitfish" if bitfish_colour == chess.BLACK else "Stockfish"
+    game.headers["White"] = "BitfishCPP" if bitfish_colour == chess.WHITE else "Stockfish"
+    game.headers["Black"] = "BitfishCPP" if bitfish_colour == chess.BLACK else "Stockfish"
     game.headers["Result"] = result
     game.headers["StockfishElo"] = str(STOCKFISH_ELO)
     game.headers["BitfishTimePerMove"] = f"{BITFISH_TIME_PER_MOVE:.2f}"
-    game.headers["StockfishTimePerMove"] = f"{STOCKFISH_TIME_PER_MOVE:.2f}"
     game.headers["BitfishMaxDepth"] = str(BITFISH_MAX_DEPTH)
+    game.headers["StockfishTimePerMove"] = f"{STOCKFISH_TIME_PER_MOVE:.2f}"
 
-    with open(PGN_FILE, "a", encoding="utf-8") as file:
+    with PGN_FILE.open("a", encoding="utf-8") as file:
         print(game, file=file, end="\n\n")
 
 
@@ -132,108 +130,60 @@ def play_game(
 ) -> tuple[str, int, str, list[dict], str]:
     board = chess.Board()
 
-    # fresh engine each game so the transposition table does not carry over
-    bitfish = BitfishEngine()
-
-    move_stats = []
-    bitfish_move_logs = []
+    move_stats: list[dict] = []
+    bitfish_move_logs: list[dict] = []
     stop_reason = "normal_game_over"
 
-    while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
-        if board.turn == bitfish_colour:
-            phase = get_game_phase(board.ply())
-            fen_before = board.fen()
+    # fresh Bitfish C++ process each game, like your Python benchmark used a fresh engine instance
+    with chess.engine.SimpleEngine.popen_uci([str(BITFISH_CPP_PATH), "uci"]) as bitfish:
+        while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
+            if board.turn == bitfish_colour:
+                phase = get_game_phase(board.ply())
+                fen_before = board.fen()
 
-            move, stats = choose_bitfish_move(bitfish, board)
+                move, stats = choose_bitfish_cpp_move(bitfish, board)
 
-            move_stats.append({
-                "game": game_number,
-                "ply": board.ply(),
-                "fen_before": fen_before,
-                "move": move.uci() if move is not None else None,
-                "bitfish_colour": "white" if bitfish_colour == chess.WHITE else "black",
-                "phase": phase,
-                "depth": stats["depth"],
-                "nodes": stats["nodes"],
-                "time": stats["time"],
-                "nodes_per_second": stats["nodes_per_second"],
-                "legal_moves": stats["legal_moves"],
-                "tt_hits": stats["tt_hits"],
-                "score": stats["score"],
-                "main_nodes": stats["main_nodes"],
-                "q_nodes": stats["q_nodes"],
-                "eval_calls": stats["eval_calls"],
-                "eval_time": stats["eval_time"],
-                "full_eval_calls": stats["full_eval_calls"],
-                "full_eval_time": stats["full_eval_time"],
-                "quiet_eval_calls": stats["quiet_eval_calls"],
-                "quiet_eval_time": stats["quiet_eval_time"],
-                "movegen_calls": stats["movegen_calls"],
-                "movegen_time": stats["movegen_time"],
-                "futility_prunes": stats["futility_prunes"],
-                "delta_prunes": stats["delta_prunes"],
-                "null_prunes": stats["null_prunes"],
-                "lmr_reductions": stats["lmr_reductions"],
-                "lmr_researches": stats["lmr_researches"],
-                "beta_cutoffs": stats["beta_cutoffs"],
-                "time_checks": stats["time_checks"],
-            })
+                row = {
+                    "game": game_number,
+                    "ply": board.ply(),
+                    "fen_before": fen_before,
+                    "move": move.uci() if move is not None else None,
+                    "bitfish_colour": "white" if bitfish_colour == chess.WHITE else "black",
+                    "phase": phase,
+                    "depth": stats["depth"],
+                    "nodes": stats["nodes"],
+                    "time": stats["time"],
+                    "nodes_per_second": stats["nodes_per_second"],
+                    "legal_moves": stats["legal_moves"],
+                    "tt_hits": stats["tt_hits"],
+                    "score": stats["score"],
+                }
 
-            bitfish_move_logs.append({
-                "game": game_number,
-                "ply": board.ply(),
-                "fen_before": fen_before,
-                "move": move.uci() if move is not None else None,
-                "phase": phase,
-                "depth": stats["depth"],
-                "nodes": stats["nodes"],
-                "time": stats["time"],
-                "nodes_per_second": stats["nodes_per_second"],
-                "legal_moves": stats["legal_moves"],
-                "tt_hits": stats["tt_hits"],
-                "score": stats["score"],
-                "main_nodes": stats["main_nodes"],
-                "q_nodes": stats["q_nodes"],
-                "eval_calls": stats["eval_calls"],
-                "eval_time": stats["eval_time"],
-                "full_eval_calls": stats["full_eval_calls"],
-                "full_eval_time": stats["full_eval_time"],
-                "quiet_eval_calls": stats["quiet_eval_calls"],
-                "quiet_eval_time": stats["quiet_eval_time"],
-                "movegen_calls": stats["movegen_calls"],
-                "movegen_time": stats["movegen_time"],
-                "futility_prunes": stats["futility_prunes"],
-                "delta_prunes": stats["delta_prunes"],
-                "null_prunes": stats["null_prunes"],
-                "lmr_reductions": stats["lmr_reductions"],
-                "lmr_researches": stats["lmr_researches"],
-                "beta_cutoffs": stats["beta_cutoffs"],
-                "time_checks": stats["time_checks"],
-                "bitfish_colour": "white" if bitfish_colour == chess.WHITE else "black",
-            })
+                move_stats.append(row)
+                bitfish_move_logs.append(row.copy())
 
-        else:
-            result = stockfish.play(
-                board,
-                chess.engine.Limit(time=STOCKFISH_TIME_PER_MOVE),
-            )
-            move = result.move
+            else:
+                result = stockfish.play(
+                    board,
+                    chess.engine.Limit(time=STOCKFISH_TIME_PER_MOVE),
+                )
+                move = result.move
 
-        if move is None:
-            stop_reason = "move_is_none"
-            print(f"  stopped early: {stop_reason}")
-            print(f"  fen: {board.fen()}")
-            break
+            if move is None:
+                stop_reason = "move_is_none"
+                print(f"  stopped early: {stop_reason}")
+                print(f"  fen: {board.fen()}")
+                break
 
-        if move not in board.legal_moves:
-            stop_reason = f"illegal_move:{move}"
-            print(f"  stopped early: {stop_reason}")
-            print(board)
-            print(f"  fen: {board.fen()}")
-            print("  legal moves:", " ".join(m.uci() for m in board.legal_moves))
-            break
+            if move not in board.legal_moves:
+                stop_reason = f"illegal_move:{move}"
+                print(f"  stopped early: {stop_reason}")
+                print(board)
+                print(f"  fen: {board.fen()}")
+                print("  legal moves:", " ".join(m.uci() for m in board.legal_moves))
+                break
 
-        board.push(move)
+            board.push(move)
 
     if board.ply() >= MAX_PLIES and not board.is_game_over(claim_draw=True):
         stop_reason = "max_plies"
@@ -242,7 +192,7 @@ def play_game(
 
     save_game_pgn(board, game_number, bitfish_colour, result)
 
-    with open(MOVE_LOG_FILE, "a", encoding="utf-8") as file:
+    with MOVE_LOG_FILE.open("a", encoding="utf-8") as file:
         for log in bitfish_move_logs:
             log["result"] = result
             log["stop_reason"] = stop_reason
@@ -280,9 +230,9 @@ def score_results(results: list[str]) -> tuple[int, int, int, int, float, float]
     losses = results.count("loss")
     unfinished = results.count("unfinished")
 
-    total_decisive_or_drawn = wins + draws + losses
+    completed = wins + draws + losses
     score = wins + 0.5 * draws
-    score_rate = score / total_decisive_or_drawn if total_decisive_or_drawn > 0 else 0
+    score_rate = score / completed if completed > 0 else 0
 
     return wins, draws, losses, unfinished, score, score_rate
 
@@ -299,12 +249,12 @@ def estimate_elo_difference(score_rate: float) -> float:
 
 def average(values: list[float]) -> float:
     if not values:
-        return 0
+        return 0.0
 
     return sum(values) / len(values)
 
 
-def summarise_search_stats(all_move_stats: list[dict]) -> dict:
+def summarise_search_stats(all_move_stats: list[dict]) -> dict[str, Any]:
     depths = [stat["depth"] for stat in all_move_stats]
     nodes = [stat["nodes"] for stat in all_move_stats]
     times = [stat["time"] for stat in all_move_stats]
@@ -356,23 +306,6 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
         "nodes_per_second",
         "tt_hits",
         "score",
-        "main_nodes",
-        "q_nodes",
-        "eval_calls",
-        "eval_time",
-        "full_eval_calls",
-        "full_eval_time",
-        "quiet_eval_calls",
-        "quiet_eval_time",
-        "movegen_calls",
-        "movegen_time",
-        "futility_prunes",
-        "delta_prunes",
-        "null_prunes",
-        "lmr_reductions",
-        "lmr_researches",
-        "beta_cutoffs",
-        "time_checks",
         "result",
         "stop_reason",
         "fen_before",
@@ -396,23 +329,6 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
                 "nodes_per_second": f"{stat.get('nodes_per_second', 0):.1f}",
                 "tt_hits": stat.get("tt_hits"),
                 "score": stat.get("score"),
-                "main_nodes": stat.get("main_nodes"),
-                "q_nodes": stat.get("q_nodes"),
-                "eval_calls": stat.get("eval_calls"),
-                "eval_time": f"{stat.get('eval_time', 0):.6f}",
-                "full_eval_calls": stat.get("full_eval_calls"),
-                "full_eval_time": f"{stat.get('full_eval_time', 0):.6f}",
-                "quiet_eval_calls": stat.get("quiet_eval_calls"),
-                "quiet_eval_time": f"{stat.get('quiet_eval_time', 0):.6f}",
-                "movegen_calls": stat.get("movegen_calls"),
-                "movegen_time": f"{stat.get('movegen_time', 0):.6f}",
-                "futility_prunes": stat.get("futility_prunes"),
-                "delta_prunes": stat.get("delta_prunes"),
-                "null_prunes": stat.get("null_prunes"),
-                "lmr_reductions": stat.get("lmr_reductions"),
-                "lmr_researches": stat.get("lmr_researches"),
-                "beta_cutoffs": stat.get("beta_cutoffs"),
-                "time_checks": stat.get("time_checks"),
                 "result": stat.get("result"),
                 "stop_reason": stat.get("stop_reason"),
                 "fen_before": stat.get("fen_before"),
@@ -433,8 +349,8 @@ def print_position_report(title: str, rows: list[dict]) -> None:
             f"game {stat['game']:>2} ply {stat['ply']:>3} "
             f"{stat['phase']:<10} depth {stat['depth']:>2} "
             f"legal {stat['legal_moves']:>2} "
-            f"nodes {stat['nodes']:>7} "
-            f"nps {stat['nodes_per_second']:>8.0f} "
+            f"nodes {stat['nodes']:>8} "
+            f"nps {stat['nodes_per_second']:>9.0f} "
             f"time {stat['time']:>5.2f}s "
             f"score {stat['score']:>8} "
             f"move {stat['move']}"
@@ -490,13 +406,25 @@ def print_diagnostic_reports(all_move_stats: list[dict]) -> None:
         highest_legal_moves,
     )
     print_position_report(
-        "Longest Bitfish searches",
+        "Longest Bitfish C++ searches",
         longest_searches,
     )
 
 
+def check_paths() -> None:
+    if not BITFISH_CPP_PATH.exists():
+        raise FileNotFoundError(
+            f"Could not find {BITFISH_CPP_PATH}. "
+            "Compile the C++ engine first from bitfish_cpp/."
+        )
+
+    if not Path(STOCKFISH_PATH).exists():
+        raise FileNotFoundError(f"Could not find Stockfish at {STOCKFISH_PATH}")
+
 
 def main() -> None:
+    check_paths()
+
     OUTPUT_DIR.mkdir(exist_ok=True)
     PGN_FILE.write_text("", encoding="utf-8")
     MOVE_LOG_FILE.write_text("", encoding="utf-8")
@@ -517,7 +445,7 @@ def main() -> None:
             bitfish_colour = chess.WHITE if game_number % 2 == 1 else chess.BLACK
             colour_name = "White" if bitfish_colour == chess.WHITE else "Black"
 
-            print(f"Game {game_number}/{NUM_GAMES}: Bitfish as {colour_name}")
+            print(f"Game {game_number}/{NUM_GAMES}: Bitfish C++ as {colour_name}")
 
             result, plies, raw_result, move_stats, stop_reason = play_game(
                 stockfish,
@@ -545,10 +473,12 @@ def main() -> None:
     print()
     print("Benchmark complete")
     print("------------------")
-    print(f"Bitfish max depth: {BITFISH_MAX_DEPTH}")
+    print("Engine: Bitfish C++")
     print(f"Bitfish time per move: {BITFISH_TIME_PER_MOVE:.2f}s")
+    print(f"Bitfish max depth: {BITFISH_MAX_DEPTH}")
     print(f"Stockfish Elo setting: {STOCKFISH_ELO}")
     print(f"Stockfish time per move: {STOCKFISH_TIME_PER_MOVE:.2f}s")
+
     completed_games = wins + draws + losses
 
     print(f"Games requested: {NUM_GAMES}")

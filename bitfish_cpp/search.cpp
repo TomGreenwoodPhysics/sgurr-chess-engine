@@ -304,6 +304,10 @@ int Engine::negamax(
     int beta,
     int ply
 ) {
+    if (ply >= MAX_PLY - 1) {
+        return evaluate_quiet_position(board);
+    }
+
     nodes += 1;
 
     if (nodes % TIME_CHECK_INTERVAL == 0 && time_is_up()) {
@@ -425,7 +429,7 @@ int Engine::negamax(
         legal_moves_searched += 1;
 
         bool gives_check = board.in_check(board.side_to_move);
-        int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH ? 1 : 0;
+        int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
         int next_depth = depth - 1 + extension;
 
         int score;
@@ -488,6 +492,10 @@ int Engine::negamax(
 }
 
 int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
+    if (ply >= MAX_PLY - 1) {
+        return evaluate_quiet_position(board);
+    }
+
     nodes += 1;
 
     if (nodes % TIME_CHECK_INTERVAL == 0 && time_is_up()) {
