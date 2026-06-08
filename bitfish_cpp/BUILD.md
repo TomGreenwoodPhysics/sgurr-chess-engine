@@ -1,0 +1,6 @@
+# Building Bitfish C++
+
+From this folder:
+
+```bash
+g++ -std=c++20 -O2 -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp -o bitfish.exe
