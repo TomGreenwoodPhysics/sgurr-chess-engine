@@ -13,25 +13,45 @@ import chess.engine
 import chess.pgn
 
 
+# ---------------------------------------------------------------------
+# paths
+# ---------------------------------------------------------------------
+
+PROJECT_DIR = Path(__file__).resolve().parent
+
 STOCKFISH_PATH = r"C:\Users\Tom Greenwood\Desktop\Coding Projects\Chess Bot\stockfish\stockfish-windows-x86-64-avx2.exe"
+BITFISH_CPP_PATH = PROJECT_DIR / "bitfish_cpp" / "bitfish.exe"
 
-BITFISH_CPP_PATH = (Path("bitfish_cpp") / "bitfish.exe").resolve()
-
+# allows a dynamically linked MSYS2 build to run when launched from PowerShell/Anaconda
 MSYS2_UCRT64_BIN = r"C:\msys64\ucrt64\bin"
 os.environ["PATH"] = MSYS2_UCRT64_BIN + os.pathsep + os.environ["PATH"]
+
+
+# ---------------------------------------------------------------------
+# benchmark settings
+# ---------------------------------------------------------------------
 
 STOCKFISH_ELO = 2000
 NUM_GAMES = 2
 MAX_PLIES = 400
 
+# depth is a safety cap; time is the main limit
 BITFISH_MAX_DEPTH = 10
 BITFISH_TIME_PER_MOVE = 5.0
 STOCKFISH_TIME_PER_MOVE = 0.1
 
-OUTPUT_DIR = Path("analysis_games")
+# true = most stable while debugging; avoids carrying C++ TT/history across positions
+# false = faster and closer to a normal engine game, but currently more likely to expose state bugs
+USE_FRESH_BITFISH_PROCESS_EACH_MOVE = True
+
+ENGINE_STARTUP_TIMEOUT = 20.0
+
+OUTPUT_DIR = PROJECT_DIR / "analysis_games"
 PGN_FILE = OUTPUT_DIR / "bitfish_cpp_benchmark_games.pgn"
 MOVE_LOG_FILE = OUTPUT_DIR / "bitfish_cpp_move_log.jsonl"
 DIAGNOSTICS_FILE = OUTPUT_DIR / "bitfish_cpp_diagnostics.csv"
+CRASH_POSITION_FILE = PROJECT_DIR / "cpp_crash_position.json"
+CRASH_UCI_FILE = PROJECT_DIR / "cpp_crash_uci_command.txt"
 
 LOW_DEPTH_LIMIT = 3
 WORST_CASES_TO_PRINT = 20
@@ -60,6 +80,13 @@ def score_to_centipawns(score: chess.engine.PovScore, turn: chess.Color) -> int:
     return cp if cp is not None else 0
 
 
+def launch_bitfish() -> chess.engine.SimpleEngine:
+    return chess.engine.SimpleEngine.popen_uci(
+        [str(BITFISH_CPP_PATH), "uci"],
+        timeout=ENGINE_STARTUP_TIMEOUT,
+    )
+
+
 def choose_bitfish_cpp_move(
     bitfish: chess.engine.SimpleEngine,
     board: chess.Board,
@@ -81,6 +108,9 @@ def choose_bitfish_cpp_move(
     move = result.move
     nodes = int(info.get("nodes", 0))
     depth = int(info.get("depth", 0))
+
+    # python-chess uses tbhits for tablebases, not our transposition table.
+    # keep this column for compatibility, but expect it to be zero for now.
     tt_hits = int(info.get("tbhits", 0))
 
     score_obj = info.get("score")
@@ -101,6 +131,52 @@ def choose_bitfish_cpp_move(
     return move, stats
 
 
+def write_crash_report(
+    board: chess.Board,
+    game_number: int,
+    bitfish_colour: chess.Color,
+) -> None:
+    move_history = " ".join(move.uci() for move in board.move_stack)
+
+    crash_report = {
+        "game": game_number,
+        "ply": board.ply(),
+        "bitfish_colour": "white" if bitfish_colour == chess.WHITE else "black",
+        "fen": board.fen(),
+        "legal_moves": [move.uci() for move in board.legal_moves],
+        "move_history": move_history,
+        "settings": {
+            "bitfish_max_depth": BITFISH_MAX_DEPTH,
+            "bitfish_time_per_move": BITFISH_TIME_PER_MOVE,
+            "fresh_process_each_move": USE_FRESH_BITFISH_PROCESS_EACH_MOVE,
+        },
+    }
+
+    CRASH_POSITION_FILE.write_text(
+        json.dumps(crash_report, indent=4),
+        encoding="utf-8",
+    )
+
+    CRASH_UCI_FILE.write_text(
+        "uci\n"
+        "isready\n"
+        f"position fen {board.fen()}\n"
+        f"go depth {BITFISH_MAX_DEPTH} movetime {int(BITFISH_TIME_PER_MOVE * 1000)}\n"
+        "quit\n",
+        encoding="utf-8",
+    )
+
+    print()
+    print("C++ engine crashed.")
+    print("-------------------")
+    print(f"game: {crash_report['game']}")
+    print(f"ply: {crash_report['ply']}")
+    print(f"colour: {crash_report['bitfish_colour']}")
+    print(f"fen: {crash_report['fen']}")
+    print(f"crash position written to {CRASH_POSITION_FILE.name}")
+    print(f"uci reproduction written to {CRASH_UCI_FILE.name}")
+
+
 def save_game_pgn(
     board: chess.Board,
     game_number: int,
@@ -117,10 +193,32 @@ def save_game_pgn(
     game.headers["StockfishElo"] = str(STOCKFISH_ELO)
     game.headers["BitfishTimePerMove"] = f"{BITFISH_TIME_PER_MOVE:.2f}"
     game.headers["BitfishMaxDepth"] = str(BITFISH_MAX_DEPTH)
+    game.headers["FreshBitfishProcessEachMove"] = str(USE_FRESH_BITFISH_PROCESS_EACH_MOVE)
     game.headers["StockfishTimePerMove"] = f"{STOCKFISH_TIME_PER_MOVE:.2f}"
 
     with PGN_FILE.open("a", encoding="utf-8") as file:
         print(game, file=file, end="\n\n")
+
+
+def choose_bitfish_move_safely(
+    board: chess.Board,
+    game_number: int,
+    bitfish_colour: chess.Color,
+    persistent_engine: chess.engine.SimpleEngine | None,
+) -> tuple[chess.Move | None, dict[str, Any]]:
+    try:
+        if USE_FRESH_BITFISH_PROCESS_EACH_MOVE:
+            with launch_bitfish() as bitfish:
+                return choose_bitfish_cpp_move(bitfish, board)
+
+        if persistent_engine is None:
+            raise RuntimeError("persistent_engine is None while fresh-process mode is disabled")
+
+        return choose_bitfish_cpp_move(persistent_engine, board)
+
+    except Exception:
+        write_crash_report(board, game_number, bitfish_colour)
+        raise
 
 
 def play_game(
@@ -134,14 +232,23 @@ def play_game(
     bitfish_move_logs: list[dict] = []
     stop_reason = "normal_game_over"
 
-    # fresh Bitfish C++ process each game, like your Python benchmark used a fresh engine instance
-    with chess.engine.SimpleEngine.popen_uci([str(BITFISH_CPP_PATH), "uci"]) as bitfish:
+    persistent_bitfish: chess.engine.SimpleEngine | None = None
+
+    try:
+        if not USE_FRESH_BITFISH_PROCESS_EACH_MOVE:
+            persistent_bitfish = launch_bitfish()
+
         while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
             if board.turn == bitfish_colour:
                 phase = get_game_phase(board.ply())
                 fen_before = board.fen()
 
-                move, stats = choose_bitfish_cpp_move(bitfish, board)
+                move, stats = choose_bitfish_move_safely(
+                    board,
+                    game_number,
+                    bitfish_colour,
+                    persistent_bitfish,
+                )
 
                 row = {
                     "game": game_number,
@@ -184,6 +291,10 @@ def play_game(
                 break
 
             board.push(move)
+
+    finally:
+        if persistent_bitfish is not None:
+            persistent_bitfish.quit()
 
     if board.ply() >= MAX_PLIES and not board.is_game_over(claim_draw=True):
         stop_reason = "max_plies"
@@ -433,7 +544,7 @@ def main() -> None:
     results = []
     all_move_stats = []
 
-    with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as stockfish:
+    with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH, timeout=ENGINE_STARTUP_TIMEOUT) as stockfish:
         stockfish.configure({
             "UCI_LimitStrength": True,
             "UCI_Elo": STOCKFISH_ELO,
@@ -474,6 +585,7 @@ def main() -> None:
     print("Benchmark complete")
     print("------------------")
     print("Engine: Bitfish C++")
+    print(f"Fresh engine each move: {USE_FRESH_BITFISH_PROCESS_EACH_MOVE}")
     print(f"Bitfish time per move: {BITFISH_TIME_PER_MOVE:.2f}s")
     print(f"Bitfish max depth: {BITFISH_MAX_DEPTH}")
     print(f"Stockfish Elo setting: {STOCKFISH_ELO}")
