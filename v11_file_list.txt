@@ -1,0 +1,4 @@
+v11/bitfish_board_v11.py
+v11/bitfish_engine_v11.py
+v11/__pycache__/bitfish_board_v11.cpython-312.pyc
+v11/__pycache__/bitfish_engine_v11.cpython-312.pyc

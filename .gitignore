@@ -1,0 +1,31 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# c++ build outputs
+*.exe
+*.o
+*.obj
+*.dll
+*.a
+*.lib
+
+# generated analysis/output files
+analysis_games/
+*.jsonl
+*.csv
+*.pgn
+
+# editor/system
+.vscode/
+.DS_Store
+Thumbs.db
+
+# stockfish binary / local engines
+stockfish/
+*.nnue
