@@ -1,5 +1,0 @@
-uci
-isready
-position fen r1b2RB1/pp1pr1p1/3N2kp/8/8/PP2p2P/1BP1KnP1/8 b - - 0 26
-go depth 100 movetime 500
-quit

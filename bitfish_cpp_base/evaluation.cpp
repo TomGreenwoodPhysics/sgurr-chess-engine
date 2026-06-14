@@ -7,19 +7,9 @@
 
 namespace {
 
-// Tunable evaluation parameters. In the normal engine build EVAL_PARAM is
-// constexpr (identical codegen to before). The Texel tuner compiles this
-// translation unit with -DTUNING, which makes the marked parameters mutable
-// so they can be adjusted at runtime.
-#ifdef TUNING
-#define EVAL_PARAM
-#else
-#define EVAL_PARAM constexpr
-#endif
-
-EVAL_PARAM std::array<int, 12> PIECE_VALUE = {
-    100, 377, 369, 550, 1155, 0,
-    100, 377, 369, 550, 1155, 0
+constexpr std::array<int, 12> PIECE_VALUE = {
+    100, 320, 330, 500, 900, 0,
+    100, 320, 330, 500, 900, 0
 };
 
 constexpr std::array<int, 64> PAWN_PST = {
@@ -154,7 +144,7 @@ constexpr std::array<int, 64> KING_PST_EG = {
    -50, -35, -25, -20, -20, -25, -35, -50
 };
 
-EVAL_PARAM std::array<std::array<int, 64>, 6> PIECE_SQUARE_TABLE_MG = {
+constexpr std::array<std::array<int, 64>, 6> PIECE_SQUARE_TABLE_MG = {
     PAWN_PST,
     KNIGHT_PST,
     BISHOP_PST,
@@ -163,7 +153,7 @@ EVAL_PARAM std::array<std::array<int, 64>, 6> PIECE_SQUARE_TABLE_MG = {
     KING_PST
 };
 
-EVAL_PARAM std::array<std::array<int, 64>, 6> PIECE_SQUARE_TABLE_EG = {
+constexpr std::array<std::array<int, 64>, 6> PIECE_SQUARE_TABLE_EG = {
     PAWN_PST_EG,
     KNIGHT_PST_EG,
     BISHOP_PST_EG,
@@ -187,28 +177,24 @@ constexpr int OPENING_QUEENSIDE_KNIGHT_BONUS = 8;
 constexpr int OPENING_BISHOP_DEVELOPMENT_BONUS = 5;
 constexpr int OPENING_CASTLED_BONUS = 25;
 
-EVAL_PARAM std::array<int, 8> PASSED_PAWN_BONUS = {
-    0, -4, 14, 25, 51, 83, 94, 0
+constexpr std::array<int, 8> PASSED_PAWN_BONUS = {
+    0, 10, 15, 25, 40, 65, 100, 0
 };
 
-EVAL_PARAM int DOUBLED_PAWN_PENALTY = 23;
-EVAL_PARAM int ISOLATED_PAWN_PENALTY = 17;
-EVAL_PARAM int BACKWARD_PAWN_PENALTY = 11;
+constexpr int DOUBLED_PAWN_PENALTY = 20;
+constexpr int ISOLATED_PAWN_PENALTY = 15;
+constexpr int BACKWARD_PAWN_PENALTY = 15;
 
-EVAL_PARAM int KING_ZONE_PRESSURE_PENALTY = 2;
-EVAL_PARAM int PRESSURE_PAWN = -10;
-EVAL_PARAM int PRESSURE_MINOR = 2;
-EVAL_PARAM int PRESSURE_ROOK = 4;
-EVAL_PARAM int PRESSURE_QUEEN = 7;
-EVAL_PARAM int KING_OPEN_FILE_PENALTY = 11;
+constexpr int KING_ATTACKER_PENALTY = 28;
+constexpr int KING_OPEN_FILE_PENALTY = 22;
 
-EVAL_PARAM int ROOK_OPEN_FILE_BONUS = 49;
-EVAL_PARAM int ROOK_SEMI_OPEN_FILE_BONUS = 27;
-EVAL_PARAM int BISHOP_PAIR_BONUS = 82;
+constexpr int ROOK_OPEN_FILE_BONUS = 35;
+constexpr int ROOK_SEMI_OPEN_FILE_BONUS = 18;
+constexpr int BISHOP_PAIR_BONUS = 35;
 
-EVAL_PARAM int BISHOP_MOBILITY_BONUS = 3;
-EVAL_PARAM int ROOK_MOBILITY_BONUS = 4;
-EVAL_PARAM int QUEEN_MOBILITY_BONUS = 3;
+constexpr int BISHOP_MOBILITY_BONUS = 3;
+constexpr int ROOK_MOBILITY_BONUS = 2;
+constexpr int QUEEN_MOBILITY_BONUS = 1;
 
 const std::vector<int> BISHOP_DELTAS = {9, 7, -9, -7};
 const std::vector<int> ROOK_DELTAS = {8, -8, 1, -1};
@@ -535,46 +521,9 @@ int Board::evaluate_pawn_structure_for_colour(int colour) const {
     return score;
 }
 
-namespace {
-
-struct PawnCacheEntry {
-    U64 white_pawns = ~0ULL;   // impossible pawn set: never matches a real position
-    U64 black_pawns = ~0ULL;
-    int score = 0;
-};
-
-constexpr std::size_t PAWN_CACHE_SIZE = std::size_t(1) << 15;
-constexpr std::size_t PAWN_CACHE_MASK = PAWN_CACHE_SIZE - 1;
-
-thread_local std::array<PawnCacheEntry, PAWN_CACHE_SIZE> pawn_cache{};
-
-U64 mix64(U64 x) {
-    x += 0x9E3779B97F4A7C15ULL;
-    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
-    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
-    return x ^ (x >> 31);
-}
-
-} // namespace
-
 int Board::evaluate_pawn_structure() const {
-    U64 wp = bitboards[WP];
-    U64 bp = bitboards[BP];
-
-    // Pawn structure changes on a small minority of moves, so cache the
-    // result keyed on the exact pawn bitboards (full-key check: no aliasing).
-    std::size_t index = mix64(wp ^ mix64(bp)) & PAWN_CACHE_MASK;
-    PawnCacheEntry& entry = pawn_cache[index];
-
-    if (entry.white_pawns == wp && entry.black_pawns == bp) {
-        return entry.score;
-    }
-
-    int score = evaluate_pawn_structure_for_colour(WHITE)
-              - evaluate_pawn_structure_for_colour(BLACK);
-
-    entry = PawnCacheEntry{wp, bp, score};
-    return score;
+    return evaluate_pawn_structure_for_colour(WHITE)
+         - evaluate_pawn_structure_for_colour(BLACK);
 }
 
 int Board::evaluate_king_safety_for_colour(int colour) const {
@@ -587,53 +536,22 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
     int enemy = colour ^ 1;
     int score = 0;
 
-    U64 zone = king_attacks(king_sq) | bit(king_sq);
+    U64 king_zone = king_attacks(king_sq);
+    U64 zone_copy = king_zone | bit(king_sq);
 
-    // Weighted pressure: one pass over enemy pieces, each contributing
-    // weight x (attack squares inside the king zone). Replaces 9 separate
-    // is_square_attacked calls (each up to two ray walks) per king.
-    int pressure = 0;
-    U64 occ = occupancy();
+    int attacker_count = 0;
+    U64 temp = zone_copy;
 
-    U64 bb = bitboards[enemy == WHITE ? WP : BP];
-    while (bb) {
-        auto [sq, next] = pop_lsb(bb);
-        bb = next;
-        pressure += PRESSURE_PAWN * count_bits(pawn_attacks_from(sq, enemy) & zone);
+    while (temp) {
+        auto [sq, next] = pop_lsb(temp);
+        temp = next;
+
+        if (is_square_attacked(sq, enemy)) {
+            attacker_count += 1;
+        }
     }
 
-    bb = bitboards[enemy == WHITE ? WN : BN];
-    while (bb) {
-        auto [sq, next] = pop_lsb(bb);
-        bb = next;
-        pressure += PRESSURE_MINOR * count_bits(knight_attacks(sq) & zone);
-    }
-
-    bb = bitboards[enemy == WHITE ? WB : BB];
-    while (bb) {
-        auto [sq, next] = pop_lsb(bb);
-        bb = next;
-        pressure += PRESSURE_MINOR
-            * count_bits(attacks_from_slider(sq, BISHOP_DELTAS, occ) & zone);
-    }
-
-    bb = bitboards[enemy == WHITE ? WR : BR];
-    while (bb) {
-        auto [sq, next] = pop_lsb(bb);
-        bb = next;
-        pressure += PRESSURE_ROOK
-            * count_bits(attacks_from_slider(sq, ROOK_DELTAS, occ) & zone);
-    }
-
-    bb = bitboards[enemy == WHITE ? WQ : BQ];
-    while (bb) {
-        auto [sq, next] = pop_lsb(bb);
-        bb = next;
-        pressure += PRESSURE_QUEEN
-            * count_bits(attacks_from_slider(sq, QUEEN_DELTAS, occ) & zone);
-    }
-
-    score -= pressure * KING_ZONE_PRESSURE_PENALTY;
+    score -= attacker_count * KING_ATTACKER_PENALTY;
 
     int king_file = file_of(king_sq);
     U64 own_pawns = bitboards[colour == WHITE ? WP : BP];

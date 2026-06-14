@@ -1,0 +1,87 @@
+loaded 117015 positions (105314 train, 11701 valid)
+fitted K = 0.7733
+start: train E = 0.108931, valid E = 0.108708
+step  8 sweep 0: train E = 0.107667, valid E = 0.107410  (6s)
+step  8 sweep 1: train E = 0.107453, valid E = 0.107177  (5s)
+step  8 sweep 2: train E = 0.107367, valid E = 0.107103  (6s)
+step  8 sweep 3: train E = 0.107290, valid E = 0.107019  (6s)
+step  8 sweep 4: train E = 0.107235, valid E = 0.106944  (6s)
+step  8 sweep 5: train E = 0.107184, valid E = 0.106885  (6s)
+step  8 sweep 6: train E = 0.107151, valid E = 0.106854  (6s)
+step  8 sweep 7: train E = 0.107115, valid E = 0.106819  (6s)
+step  8 sweep 8: train E = 0.107084, valid E = 0.106784  (6s)
+step  8 sweep 9: train E = 0.107057, valid E = 0.106760  (6s)
+step  8 sweep 10: train E = 0.107033, valid E = 0.106742  (6s)
+step  8 sweep 11: train E = 0.107012, valid E = 0.106724  (6s)
+step  8 sweep 12: train E = 0.106989, valid E = 0.106710  (5s)
+step  8 sweep 13: train E = 0.106943, valid E = 0.106661  (5s)
+step  8 sweep 14: train E = 0.106919, valid E = 0.106651  (5s)
+step  8 sweep 15: train E = 0.106898, valid E = 0.106622  (6s)
+step  8 sweep 16: train E = 0.106882, valid E = 0.106608  (6s)
+step  8 sweep 17: train E = 0.106864, valid E = 0.106607  (5s)
+step  8 sweep 18: train E = 0.106837, valid E = 0.106559  (5s)
+step  8 sweep 19: train E = 0.106824, valid E = 0.106549  (6s)
+step  4 sweep 0: train E = 0.106549, valid E = 0.106300  (5s)
+step  4 sweep 1: train E = 0.106515, valid E = 0.106274  (5s)
+step  4 sweep 2: train E = 0.106494, valid E = 0.106263  (5s)
+step  4 sweep 3: train E = 0.106485, valid E = 0.106257  (5s)
+step  4 sweep 4: train E = 0.106478, valid E = 0.106253  (6s)
+step  4 sweep 5: train E = 0.106471, valid E = 0.106248  (6s)
+step  4 sweep 6: train E = 0.106466, valid E = 0.106243  (6s)
+step  4 sweep 7: train E = 0.106461, valid E = 0.106243  (6s)
+step  4 sweep 8: train E = 0.106457, valid E = 0.106240  (6s)
+step  4 sweep 9: train E = 0.106452, valid E = 0.106236  (6s)
+step  4 sweep 10: train E = 0.106440, valid E = 0.106216  (5s)
+step  4 sweep 11: train E = 0.106435, valid E = 0.106212  (6s)
+step  4 sweep 12: train E = 0.106432, valid E = 0.106210  (6s)
+step  4 sweep 13: train E = 0.106429, valid E = 0.106208  (6s)
+step  4 sweep 14: train E = 0.106427, valid E = 0.106207  (6s)
+step  4 sweep 15: train E = 0.106425, valid E = 0.106206  (6s)
+step  4 sweep 16: train E = 0.106422, valid E = 0.106201  (5s)
+step  4 sweep 17: train E = 0.106411, valid E = 0.106189  (5s)
+step  4 sweep 18: train E = 0.106410, valid E = 0.106188  (6s)
+step  4 sweep 19: train E = 0.106408, valid E = 0.106188  (6s)
+step  2 sweep 0: train E = 0.106394, valid E = 0.106186  (5s)
+step  2 sweep 1: train E = 0.106366, valid E = 0.106141  (5s)
+step  2 sweep 2: train E = 0.106325, valid E = 0.106102  (5s)
+step  2 sweep 3: train E = 0.106315, valid E = 0.106072  (5s)
+step  2 sweep 4: train E = 0.106311, valid E = 0.106067  (5s)
+step  2 sweep 5: train E = 0.106310, valid E = 0.106061  (6s)
+step  2 sweep 6: train E = 0.106310, valid E = 0.106062  (5s)
+step  2 sweep 7: train E = 0.106308, valid E = 0.106061  (6s)
+step  2 sweep 8: train E = 0.106308, valid E = 0.106061  (6s)
+step  1 sweep 0: train E = 0.106302, valid E = 0.106063  (5s)
+step  1 sweep 1: train E = 0.106300, valid E = 0.106060  (5s)
+step  1 sweep 2: train E = 0.106299, valid E = 0.106061  (5s)
+step  1 sweep 3: train E = 0.106299, valid E = 0.106061  (6s)
+step  1 sweep 4: train E = 0.106299, valid E = 0.106061  (6s)
+step  1 sweep 5: train E = 0.106299, valid E = 0.106061  (6s)
+step  1 sweep 6: train E = 0.106299, valid E = 0.106061  (6s)
+step  1 sweep 7: train E = 0.106299, valid E = 0.106061  (6s)
+
+=== tuned values ===
+PIECE_VALUE_KNIGHT = 377
+PIECE_VALUE_BISHOP = 369
+PIECE_VALUE_ROOK = 550
+PIECE_VALUE_QUEEN = 1155
+PASSED_PAWN_BONUS_r2 = -4
+PASSED_PAWN_BONUS_r3 = 14
+PASSED_PAWN_BONUS_r4 = 25
+PASSED_PAWN_BONUS_r5 = 51
+PASSED_PAWN_BONUS_r6 = 83
+PASSED_PAWN_BONUS_r7 = 94
+DOUBLED_PAWN_PENALTY = 23
+ISOLATED_PAWN_PENALTY = 17
+BACKWARD_PAWN_PENALTY = 11
+KING_ZONE_PRESSURE_PENALTY = 2
+PRESSURE_PAWN = -10
+PRESSURE_MINOR = 2
+PRESSURE_ROOK = 4
+PRESSURE_QUEEN = 7
+KING_OPEN_FILE_PENALTY = 11
+ROOK_OPEN_FILE_BONUS = 49
+ROOK_SEMI_OPEN_FILE_BONUS = 27
+BISHOP_PAIR_BONUS = 82
+BISHOP_MOBILITY_BONUS = 3
+ROOK_MOBILITY_BONUS = 4
+QUEEN_MOBILITY_BONUS = 3

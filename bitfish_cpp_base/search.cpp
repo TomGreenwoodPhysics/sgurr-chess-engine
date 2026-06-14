@@ -169,9 +169,7 @@ SearchResult Engine::search_best_move(
         int score;
         std::optional<Move> move;
 
-        bool mate_range = std::abs(best_score) > MATE - 1000;
-
-        if (depth == 1 || completed_depth == 0 || mate_range) {
+        if (depth == 1 || completed_depth == 0) {
             auto result = negamax_root(board, depth, -INF, INF);
             score = result.first;
             move = result.second;
