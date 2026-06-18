@@ -14,6 +14,15 @@ const std::vector<int> BISHOP_DELTAS = {9, 7, -9, -7};
 const std::vector<int> ROOK_DELTAS = {8, -8, 1, -1};
 const std::vector<int> QUEEN_DELTAS = {9, 7, -9, -7, 8, -8, 1, -1};
 
+// Static-exchange-evaluation piece values, indexed by piece *type* (0..5 =
+// P,N,B,R,Q,K). These mirror the canonical material scale used by search.cpp's
+// MVV-LVA / delta pruning rather than the Texel-tuned eval values: SEE is a
+// search heuristic and should stay on the same scale as the other ordering
+// terms, and decoupled from eval re-tuning. The king gets a large sentinel so
+// it is never profitably "captured"; in practice the explicit king-legality
+// guard in see() means this sentinel is never actually read into a gain.
+constexpr std::array<int, 6> SEE_VALUE = {100, 320, 330, 500, 900, 100000};
+
 std::array<std::array<U64, 64>, 12> ZOBRIST_PIECES{};
 U64 ZOBRIST_SIDE = 0;
 std::array<U64, 16> ZOBRIST_CASTLING{};
@@ -426,6 +435,216 @@ bool Board::is_square_attacked(int sq, int by_colour) const {
     }
 
     return false;
+}
+
+U64 Board::attackers_to(int sq, U64 occ) const {
+    // Every piece of either colour that attacks `sq` given occupancy `occ`.
+    // Sliders are regenerated against `occ`, so removing a front piece from
+    // `occ` and recomputing reveals any x-ray attacker behind it for free.
+    U64 result = 0;
+
+    result |= KNIGHT_ATTACKS_TBL[sq] & (bitboards[WN] | bitboards[BN]);
+    result |= KING_ATTACKS_TBL[sq] & (bitboards[WK] | bitboards[BK]);
+
+    // Pawn attackers are colour-flipped, matching is_square_attacked: white
+    // pawns attack `sq` from the black pawn-attack pattern of `sq`, and vice
+    // versa.
+    result |= PAWN_ATTACKS_TBL[BLACK][sq] & bitboards[WP];
+    result |= PAWN_ATTACKS_TBL[WHITE][sq] & bitboards[BP];
+
+    U64 bishops_queens = bitboards[WB] | bitboards[BB] | bitboards[WQ] | bitboards[BQ];
+    U64 rooks_queens = bitboards[WR] | bitboards[BR] | bitboards[WQ] | bitboards[BQ];
+
+    result |= attacks_from_slider(sq, BISHOP_DELTAS, occ) & bishops_queens;
+    result |= attacks_from_slider(sq, ROOK_DELTAS, occ) & rooks_queens;
+
+    // Restrict to pieces still present in `occ` (table-based knight/king/pawn
+    // hits are not otherwise occ-aware).
+    return result & occ;
+}
+
+int Board::see(const Move& move) const {
+    // Static exchange evaluation of a capture: the net material the side to
+    // move wins on `move.to_sq`, in centipawns, assuming both sides keep
+    // recapturing with their least valuable attacker while it is profitable.
+    // Pin-blind by design (standard for SEE). Castling is never a capture and
+    // never reaches here; promotions are handled by the caller, not SEE.
+    int to = move.to_sq;
+    int from = move.from_sq;
+    int mover = mailbox[from];
+
+    if (mover < 0) {
+        return 0;
+    }
+
+    U64 occ = occupancy();
+    int victim_value;
+
+    if (move.is_en_passant) {
+        // The captured pawn sits behind `to`, not on it.
+        int captured_sq = to + (mover < 6 ? -8 : 8);
+        victim_value = SEE_VALUE[0];
+        occ ^= bit(captured_sq);
+    } else {
+        int victim = mailbox[to];
+
+        if (victim < 0) {
+            return 0;   // not a capture: SEE is only defined on captures
+        }
+
+        victim_value = SEE_VALUE[victim % 6];
+    }
+
+    std::array<int, 32> gain{};
+    int d = 0;
+    gain[0] = victim_value;
+
+    int on_square_type = mover % 6;   // piece now standing on `to`
+    occ ^= bit(from);                 // the mover has left its origin
+    int side = (mover < 6) ? BLACK : WHITE;   // opponent recaptures next
+
+    while (true) {
+        U64 side_attackers = attackers_to(to, occ) & occupancy(side);
+
+        if (!side_attackers) {
+            break;
+        }
+
+        int lva_sq = -1;
+        int lva_type = -1;
+
+        for (int t = 0; t < 6; ++t) {
+            U64 pieces = side_attackers & bitboards[side * 6 + t];
+
+            if (pieces) {
+                lva_sq = __builtin_ctzll(pieces);
+                lva_type = t;
+                break;
+            }
+        }
+
+        if (lva_sq == -1) {
+            break;
+        }
+
+        // A king may only capture if the square is not defended by the other
+        // side once the king has moved (otherwise it would step into check).
+        // Removing the king's origin bit also reveals any x-ray behind it.
+        if (lva_type == 5) {
+            U64 opp_attackers =
+                attackers_to(to, occ ^ bit(lva_sq)) & occupancy(side ^ 1);
+
+            if (opp_attackers) {
+                break;
+            }
+        }
+
+        ++d;
+        gain[d] = SEE_VALUE[on_square_type] - gain[d - 1];
+
+        on_square_type = lva_type;
+        occ ^= bit(lva_sq);   // remove the used attacker; reveals x-rays
+        side ^= 1;
+
+        if (d >= 31) {
+            break;
+        }
+    }
+
+    // Negamax the gain array back: each side stops capturing once continuing
+    // would lose material. `d` counts recaptures; the initial capture is
+    // already folded into gain[0], so fold gain[d]..gain[1] down into gain[0].
+    while (d > 0) {
+        gain[d - 1] = -std::max(-gain[d - 1], gain[d]);
+        --d;
+    }
+
+    return gain[0];
+}
+
+bool Board::see_ge(const Move& move, int threshold) const {
+    // Returns whether the static exchange evaluation of `move` is at least
+    // `threshold`, without computing the exact value. Equivalent to
+    // see(move) >= threshold, but exits early in the common case: a capture
+    // whose victim already covers the threshold (after risking the moving
+    // piece) needs no swap-off at all. Same geometry, x-ray handling, and
+    // king-legality rule as see(); only the running balance differs.
+    int from = move.from_sq;
+    int to = move.to_sq;
+    int mover = mailbox[from];
+
+    if (mover < 0) {
+        return 0 >= threshold;
+    }
+
+    U64 occ = occupancy() ^ bit(from);
+    int victim_value;
+
+    if (move.is_en_passant) {
+        victim_value = SEE_VALUE[0];
+        occ ^= bit(to + (mover < 6 ? -8 : 8));
+    } else {
+        int victim = mailbox[to];
+        victim_value = (victim < 0) ? 0 : SEE_VALUE[victim % 6];
+        if (victim >= 0) {
+            occ ^= bit(to);
+        }
+    }
+
+    // If winning the victim still falls short of the threshold, fail. If even
+    // after conceding the moving piece we clear it, succeed. Both are O(1).
+    int balance = victim_value - threshold;
+    if (balance < 0) {
+        return false;
+    }
+
+    balance -= SEE_VALUE[mover % 6];
+    if (balance >= 0) {
+        return true;
+    }
+
+    int mover_colour = (mover < 6) ? WHITE : BLACK;
+    int side = mover_colour ^ 1;   // opponent recaptures next
+
+    while (true) {
+        U64 side_attackers = attackers_to(to, occ) & occupancy(side);
+
+        if (!side_attackers) {
+            break;
+        }
+
+        int lva_type = -1;
+        U64 lva_bit = 0;
+
+        for (int t = 0; t < 6; ++t) {
+            U64 pieces = side_attackers & bitboards[side * 6 + t];
+
+            if (pieces) {
+                lva_type = t;
+                lva_bit = pieces & (~pieces + 1);   // least significant bit
+                break;
+            }
+        }
+
+        // Same king-legality rule as see(): a king may only capture an
+        // otherwise-undefended square. Removing its origin reveals x-rays.
+        if (lva_type == 5
+                && (attackers_to(to, occ ^ lva_bit) & occupancy(side ^ 1))) {
+            break;
+        }
+
+        occ ^= lva_bit;          // remove the used attacker; reveals x-rays
+        side ^= 1;
+        balance = -balance - 1 - SEE_VALUE[lva_type];
+
+        if (balance >= 0) {
+            break;
+        }
+    }
+
+    // Whichever side could not (profitably) continue is the loser; the move
+    // meets the threshold iff that side is not the original mover's side.
+    return mover_colour != side;
 }
 
 bool Board::is_repetition() const {

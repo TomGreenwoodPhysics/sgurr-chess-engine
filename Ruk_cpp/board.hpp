@@ -74,6 +74,10 @@ public:
     bool is_repetition() const;
     bool in_check(int colour) const;
 
+    U64 attackers_to(int sq, U64 occ) const;
+    int see(const Move& move) const;
+    bool see_ge(const Move& move, int threshold) const;
+
     std::vector<Move> generate_pseudo_legal_moves();
     std::vector<Move> generate_legal_moves();
 

@@ -148,7 +148,7 @@ void uci_loop() {
 
     while (std::getline(std::cin, command)) {
         if (command == "uci") {
-            std::cout << "id name BitfishCPP\n";
+            std::cout << "id name RukCPP\n";
             std::cout << "id author Tom\n";
             std::cout << "uciok\n";
         } else if (command == "isready") {
@@ -248,9 +248,79 @@ void test_mode() {
     std::cout << "time: " << result.time_taken << "s\n";
 }
 
+int run_see_tests() {
+    // Each case: FEN, the capturing move in UCI form, and the hand-verified
+    // SEE value (centipawns, from the side-to-move's perspective). Values use
+    // the canonical scale P=100 N=320 B=330 R=500 Q=900.
+    struct SeeCase {
+        const char* fen;
+        const char* uci;
+        int expected;
+        const char* note;
+    };
+
+    const std::vector<SeeCase> cases = {
+        {"4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5", 100,
+         "pawn takes undefended pawn"},
+        {"4k3/2n5/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5", 0,
+         "pawn takes pawn defended by knight (even)"},
+        {"4k3/8/4p3/3p4/8/8/8/3RK3 w - - 0 1", "d1d5", -400,
+         "rook takes pawn defended by pawn (loses the exchange)"},
+        {"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", "d2d5", 100,
+         "attacker x-ray: doubled rooks beat a single rook defender"},
+        {"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1", "e5d6", 100,
+         "en passant, undefended"},
+        {"4k3/2p5/8/3pP3/8/8/8/4K3 w - d6 0 1", "e5d6", 0,
+         "en passant, recaptured by a pawn (even)"},
+        {"4k3/8/8/3p4/4K3/8/8/8 w - - 0 1", "e4d5", 100,
+         "king takes undefended pawn"},
+        {"4k3/8/2p1p3/3p4/2K1P3/8/8/8 w - - 0 1", "e4d5", 0,
+         "king-legality guard: king cannot recapture into a defended square"},
+        {"4k3/8/2p5/3p4/4B3/5Q2/8/4K3 w - - 0 1", "e4d5", -130,
+         "diagonal x-ray: queen behind bishop, recapture proceeds"},
+    };
+
+    int passed = 0;
+
+    for (const SeeCase& c : cases) {
+        Board board(c.fen);
+
+        std::optional<Move> move = std::nullopt;
+
+        for (const Move& candidate : board.generate_legal_moves()) {
+            if (move_to_string(candidate) == c.uci) {
+                move = candidate;
+                break;
+            }
+        }
+
+        if (!move.has_value()) {
+            std::cout << "FAIL  " << c.uci << " not a legal move in [" << c.fen
+                      << "]  (" << c.note << ")\n";
+            continue;
+        }
+
+        int got = board.see(*move);
+        bool ok = got == c.expected;
+        passed += ok ? 1 : 0;
+
+        std::cout << (ok ? "PASS  " : "FAIL  ")
+                  << c.uci
+                  << "  expected " << c.expected
+                  << "  got " << got
+                  << "   " << c.note << "\n";
+    }
+
+    std::cout << "\nSEE: " << passed << "/" << cases.size() << " passed\n";
+
+    return passed == static_cast<int>(cases.size()) ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     if (argc > 1 && std::string(argv[1]) == "uci") {
         uci_loop();
+    } else if (argc > 1 && std::string(argv[1]) == "seetest") {
+        return run_see_tests();
     } else if (argc > 2 && std::string(argv[1]) == "fen") {
         std::string fen;
 

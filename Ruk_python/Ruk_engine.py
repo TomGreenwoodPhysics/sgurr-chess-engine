@@ -4,7 +4,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from v11.bitfish_board_v11 import (
+from Ruk_python.Ruk_board import (
     Board,
     Move,
     WHITE,
@@ -852,7 +852,7 @@ def human_loop() -> None:
     board = Board()
     engine = Engine()
 
-    print("Bitfish opening experiment command mode")
+    print("Ruk opening experiment command mode")
     print("commands: display, moves, best, go 5, move e2e4, new, quit")
 
     while True:

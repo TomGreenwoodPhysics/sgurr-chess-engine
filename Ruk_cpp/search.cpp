@@ -169,7 +169,9 @@ SearchResult Engine::search_best_move(
         int score;
         std::optional<Move> move;
 
-        if (depth == 1 || completed_depth == 0) {
+        bool mate_range = std::abs(best_score) > MATE - 1000;
+
+        if (depth == 1 || completed_depth == 0 || mate_range) {
             auto result = negamax_root(board, depth, -INF, INF);
             score = result.first;
             move = result.second;
@@ -623,7 +625,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     if (board.in_check(us)) {
         std::vector<Move> moves = generate_moves(board);
-        moves = order_moves(board, moves, std::nullopt, ply);
+        moves = order_moves(board, moves, std::nullopt, ply, false);
 
         bool legal_found = false;
 
@@ -677,7 +679,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         }
     }
 
-    noisy_moves = order_moves(board, noisy_moves, std::nullopt, ply);
+    noisy_moves = order_moves(board, noisy_moves, std::nullopt, ply, false);
 
     for (const Move& move : noisy_moves) {
         auto captured = board.piece_at(move.to_sq);
@@ -688,6 +690,14 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
             if (stand_pat + captured_value + DELTA_MARGIN <= alpha) {
                 continue;
             }
+        }
+
+        // SEE pruning: skip captures that lose material by static exchange.
+        // Only reached when not in check (evasions take the path above), so it
+        // is always safe to discard a losing capture here. Promotions are
+        // excluded from SEE and never pruned.
+        if (!move.promotion.has_value() && !board.see_ge(move, 0)) {
+            continue;
         }
 
         UndoInfo undo = board.make_move(move);
@@ -741,7 +751,8 @@ std::vector<Move> Engine::order_moves(
     Board& board,
     const std::vector<Move>& moves,
     const std::optional<MoveKey>& tt_move_key,
-    int ply
+    int ply,
+    bool split_bad_captures
 ) const {
     std::optional<Move> tt_move = std::nullopt;
     std::optional<Move> killer_one = std::nullopt;
@@ -750,6 +761,7 @@ std::vector<Move> Engine::order_moves(
     // Score each move exactly once; the sorts below compare cached values
     // instead of recomputing scores inside the comparator.
     std::vector<std::pair<Move, int>> captures;
+    std::vector<std::pair<Move, int>> bad_captures;
     std::vector<std::pair<Move, int>> good_quiets;
     std::vector<Move> other_quiets;
 
@@ -774,7 +786,20 @@ std::vector<Move> Engine::order_moves(
         }
 
         if (is_noisy_move(board, move)) {
-            captures.emplace_back(move, capture_score(board, move));
+            int cscore = capture_score(board, move);
+
+            // Split captures by static exchange: losing captures (SEE < 0) are
+            // demoted to their own bucket, placed below killers but above quiets
+            // during assembly. Promotions are excluded from SEE and always stay
+            // in the main capture bucket. Only the main search splits; quiescence
+            // orders captures as before (it prunes losing captures itself, so a
+            // split there would just pay for SEE twice in the hottest path).
+            if (split_bad_captures && !move.promotion.has_value()
+                    && !board.see_ge(move, 0)) {
+                bad_captures.emplace_back(move, cscore);
+            } else {
+                captures.emplace_back(move, cscore);
+            }
             continue;
         }
 
@@ -806,6 +831,14 @@ std::vector<Move> Engine::order_moves(
     );
 
     std::sort(
+        bad_captures.begin(),
+        bad_captures.end(),
+        [](const std::pair<Move, int>& a, const std::pair<Move, int>& b) {
+            return a.second > b.second;
+        }
+    );
+
+    std::sort(
         good_quiets.begin(),
         good_quiets.end(),
         [](const std::pair<Move, int>& a, const std::pair<Move, int>& b) {
@@ -830,6 +863,16 @@ std::vector<Move> Engine::order_moves(
 
     if (killer_two.has_value()) {
         ordered.push_back(*killer_two);
+    }
+
+    // Losing captures: tried after the TT move, winning captures, and killers,
+    // but ahead of quiet moves. A forcing capture, even one that loses material
+    // by static exchange, is usually worth trying before a random quiet --
+    // measured clearly better than demoting them below all quiets (the latter
+    // raised fixed-depth node counts, since SEE is pin-blind and sometimes
+    // mislabels a tactically winning capture as losing).
+    for (const auto& [move, score] : bad_captures) {
+        ordered.push_back(move);
     }
 
     for (const auto& [move, score] : good_quiets) {

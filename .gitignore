@@ -31,3 +31,5 @@ stockfish/
 *.nnue
 
 *_file_list.txt
+
+benchmarks/

@@ -161,7 +161,8 @@ private:
         Board& board,
         const std::vector<Move>& moves,
         const std::optional<MoveKey>& tt_move_key,
-        int ply
+        int ply,
+        bool split_bad_captures = true
     ) const;
 
     int capture_score(const Board& board, const Move& move) const;

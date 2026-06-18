@@ -14,11 +14,19 @@ import pygame
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-BITFISH_CPP_PATH = PROJECT_DIR.parent / "bitfish_cpp_exp" / "bitfish_exp.exe"
+
+Ruk_CPP_PATH = PROJECT_DIR / "Ruk_cpp" / "Ruk_cpp.exe"
+SOUND_DIR = PROJECT_DIR / "assets" / "sounds"
+ANALYSIS_DIR = PROJECT_DIR / "analysis_games"
+
 MSYS2_UCRT64_BIN = r"C:\msys64\ucrt64\bin"
 os.environ["PATH"] = MSYS2_UCRT64_BIN + os.pathsep + os.environ["PATH"]
 ENGINE_TIMEOUT = 20.0
 
+for candidate in (PROJECT_DIR, PROJECT_DIR.parent):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
 
 EVAL_PANEL_WIDTH = 72
@@ -28,13 +36,35 @@ WINDOW_WIDTH = EVAL_PANEL_WIDTH + BOARD_SIZE + SIDE_PANEL_WIDTH
 WINDOW_HEIGHT = BOARD_SIZE
 SQUARE_SIZE = BOARD_SIZE // 8
 
-DEFAULT_ENGINE_DEPTH = 30
-DEFAULT_ENGINE_TIME_LIMIT = 0.5
-
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
-MAX_ENGINE_DEPTH = 50
 
-SOUND_DIR = PROJECT_DIR.parent / "assets" / "sounds"
+# --- Engine selection -------------------------------------------------------
+# The C++ port is the strong (~2550) engine; the original pure-Python engine is
+# the weaker (~1800) one. Each profile carries sensible defaults, because the
+# two engines have very different speed characteristics.
+ENGINE_CPP = "cpp"
+ENGINE_PYTHON = "python"
+DEFAULT_ENGINE_CHOICE = ENGINE_CPP
+
+ENGINE_PROFILES = {
+    ENGINE_CPP: {
+        "short_name": "Ruk C++",
+        "label": "Ruk C++ (~2550)",
+        "pgn_name": "RukCPP",
+        "default_depth": 30,
+        "default_time": 0.5,
+        "max_depth": 100,
+    },
+    ENGINE_PYTHON: {
+        "short_name": "Ruk Python",
+        "label": "Ruk Python (~1800)",
+        "pgn_name": "RukPython",
+        "default_depth": 30,
+        "default_time": 0.5,
+        "max_depth": 100,
+    },
+}
+
 SOUND_FILE_CANDIDATES = {
     "move_self": ["move-self.mp3", "Move-self.mp3", "move_self.mp3", "Move.mp3", "move.mp3", "move.wav"],
     "move_opponent": ["move-opponent.mp3", "Move-opponent.mp3", "move_opponent.mp3", "Move.mp3", "move.mp3", "move.wav"],
@@ -53,7 +83,7 @@ SOUND_FILE_CANDIDATES = {
     "button": ["button.mp3", "Button.mp3", "click.mp3", "Click.mp3", "button.wav", "click.wav"],
 }
 
-AUTO_FLIP_AS_BLACK = False
+AUTO_FLIP_AS_BLACK = True
 SHOW_ENGINE_INFO = True
 
 LIGHT_SQUARE = (238, 238, 210)
@@ -70,6 +100,7 @@ BUTTON = (75, 75, 75)
 BUTTON_HOVER = (95, 95, 95)
 BUTTON_TEXT = (245, 245, 245)
 ERROR_TEXT = (255, 130, 130)
+ACCENT = (110, 140, 200)
 
 MATERIAL_VALUES = {
     chess.PAWN: 1,
@@ -107,7 +138,7 @@ class ButtonRect:
 
 
 @dataclass
-class CppSearchResult:
+class SearchResult:
     best_move: chess.Move | None
     score: int
     depth: int
@@ -131,15 +162,15 @@ def score_to_white_centipawns(score: chess.engine.PovScore | None) -> int:
     return cp if cp is not None else 0
 
 
-class CppBitfishEngine:
-    """Small wrapper that calls the C++ Bitfish UCI executable.
+class CppRukEngine:
+    """Small wrapper that calls the C++ Ruk UCI executable (~2550 elo).
 
     A fresh process is used for each move. This is slightly slower than keeping
     one process alive, but it avoids unsafe persistent search state while the
     C++ port is still being stabilised.
     """
 
-    def __init__(self, engine_path: Path = BITFISH_CPP_PATH) -> None:
+    def __init__(self, engine_path: Path = Ruk_CPP_PATH) -> None:
         self.engine_path = engine_path
 
     def search_best_move(
@@ -147,7 +178,7 @@ class CppBitfishEngine:
         board: chess.Board,
         max_depth: int,
         time_limit: float,
-    ) -> CppSearchResult:
+    ) -> SearchResult:
         if not self.engine_path.exists():
             raise FileNotFoundError(
                 f"Could not find {self.engine_path}. Compile the C++ engine first."
@@ -171,7 +202,7 @@ class CppBitfishEngine:
         depth = int(info.get("depth", 0))
         nodes = int(info.get("nodes", 0))
 
-        return CppSearchResult(
+        return SearchResult(
             best_move=result.move,
             score=score,
             depth=depth,
@@ -195,11 +226,98 @@ class CppBitfishEngine:
         return material
 
 
-class BitfishGui:
+class PythonRukEngine:
+    """Adapter around the original pure-Python Ruk engine (~1800 elo).
+
+    The GUI uses python-chess for display and input, while the engine still
+    searches using the RukBoard/RukEngine classes. The Ruk_python
+    package is imported lazily so the C++ GUI still runs (with the C++ engine)
+    even when the Python package is not importable.
+    """
+
+    def __init__(self) -> None:
+        try:
+            from Ruk_python.Ruk_board import Board as RukBoard
+            from Ruk_python.Ruk_engine import Engine as RukEngine
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "Could not import Ruk_python. Put this script in the project "
+                "folder or one folder below it so that Ruk_python is importable."
+            ) from exc
+
+        self._RukBoard = RukBoard
+        self.engine = RukEngine()
+
+    def search_best_move(
+        self,
+        board: chess.Board,
+        max_depth: int,
+        time_limit: float,
+    ) -> SearchResult:
+        Ruk_board = self._RukBoard(board.fen())
+
+        start = time.time()
+        result = self.engine.search_best_move(
+            Ruk_board,
+            max_depth=max_depth,
+            time_limit=time_limit,
+        )
+        elapsed = time.time() - start
+
+        raw_move = getattr(result, "best_move", None)
+        best_move: chess.Move | None = None
+
+        if raw_move is not None:
+            try:
+                best_move = chess.Move.from_uci(str(raw_move))
+            except ValueError:
+                best_move = None
+
+        return SearchResult(
+            best_move=best_move,
+            score=self.safe_int(getattr(result, "score", 0)),
+            depth=self.safe_int(getattr(result, "depth", 0)),
+            nodes=self.safe_int(getattr(result, "nodes", 0)),
+            time_taken=elapsed,
+        )
+
+    def quick_white_eval(self, board: chess.Board) -> int:
+        if board.is_checkmate():
+            return -100000 if board.turn == chess.WHITE else 100000
+
+        if board.is_stalemate() or board.is_insufficient_material():
+            return 0
+
+        try:
+            Ruk_board = self._RukBoard(board.fen())
+            score = self.safe_int(Ruk_board.evaluate())
+            return score if getattr(Ruk_board, "side_to_move", 0) == 0 else -score
+        except Exception:
+            return self.material_only_eval(board)
+
+    @staticmethod
+    def material_only_eval(board: chess.Board) -> int:
+        material = 0
+
+        for piece in board.piece_map().values():
+            value = MATERIAL_VALUES[piece.piece_type] * 100
+            material += value if piece.color == chess.WHITE else -value
+
+        return material
+
+    @staticmethod
+    def safe_int(value: object) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+
+class RukGui:
     def __init__(self) -> None:
         pygame.init()
         self.sounds = self.load_sounds()
-        pygame.display.set_caption("Bitfish C++")
+        pygame.display.set_caption("Ruk")
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.clock = pygame.time.Clock()
@@ -210,12 +328,16 @@ class BitfishGui:
         self.small_font = pygame.font.SysFont("arial", 16)
         self.symbol_font = pygame.font.SysFont("segoeuisymbol", 20)
 
-        self.engine_depth = DEFAULT_ENGINE_DEPTH
-        self.engine_time_limit = DEFAULT_ENGINE_TIME_LIMIT
+        # Which engine the player will face. Defaults carry per-engine depth/time.
+        self.engine_choice = DEFAULT_ENGINE_CHOICE
+        self.max_engine_depth = ENGINE_PROFILES[self.engine_choice]["max_depth"]
+        self.engine_depth = 0
+        self.engine_time_limit = 0.0
+        self.apply_engine_defaults()
         self.auto_flip_as_black = AUTO_FLIP_AS_BLACK
 
         self.chess_board = chess.Board()
-        self.engine = CppBitfishEngine()
+        self.engine: CppRukEngine | PythonRukEngine | None = None
 
         self.human_colour: chess.Color | None = None
         self.flip_board = False
@@ -251,20 +373,53 @@ class BitfishGui:
         right_x = left_x + 270
 
         self.menu_buttons = [
-            ButtonRect(centred_rect(340, 150, 52), "Play as White", "play_white"),
-            ButtonRect(centred_rect(340, 215, 52), "Play as Black", "play_black"),
-            ButtonRect(centred_rect(340, 280, 52), "Watch Bitfish vs itself", "watch"),
-            ButtonRect(pygame.Rect(left_x, 365, 70, 38), "- Max", "depth_down"),
-            ButtonRect(pygame.Rect(mid_x, 365, 176, 38), "Max depth", "noop_depth"),
-            ButtonRect(pygame.Rect(right_x, 365, 70, 38), "+ Max", "depth_up"),
-            ButtonRect(pygame.Rect(left_x, 415, 70, 38), "- Time", "time_down"),
-            ButtonRect(pygame.Rect(mid_x, 415, 176, 38), "Time", "noop_time"),
-            ButtonRect(pygame.Rect(right_x, 415, 70, 38), "+ Time", "time_up"),
-            ButtonRect(centred_rect(340, 465, 38), "Toggle auto-flip as Black", "toggle_auto_flip"),
-            ButtonRect(centred_rect(340, 515, 38), "Load FEN", "load_fen"),
+            ButtonRect(centred_rect(340, 124, 44), "Opponent", "toggle_engine"),
+            ButtonRect(centred_rect(340, 186, 50), "Play as White", "play_white"),
+            ButtonRect(centred_rect(340, 246, 50), "Play as Black", "play_black"),
+            ButtonRect(centred_rect(340, 306, 50), "Watch Ruk vs itself", "watch"),
+            ButtonRect(pygame.Rect(left_x, 386, 70, 38), "- Max", "depth_down"),
+            ButtonRect(pygame.Rect(mid_x, 386, 176, 38), "Max depth", "noop_depth"),
+            ButtonRect(pygame.Rect(right_x, 386, 70, 38), "+ Max", "depth_up"),
+            ButtonRect(pygame.Rect(left_x, 434, 70, 38), "- Time", "time_down"),
+            ButtonRect(pygame.Rect(mid_x, 434, 176, 38), "Time", "noop_time"),
+            ButtonRect(pygame.Rect(right_x, 434, 70, 38), "+ Time", "time_up"),
+            ButtonRect(centred_rect(340, 482, 38), "Toggle auto-flip as Black", "toggle_auto_flip"),
+            ButtonRect(centred_rect(340, 530, 38), "Load FEN", "load_fen"),
         ]
 
         self.main_menu_button = pygame.Rect(0, 0, 0, 0)
+
+    # --- engine selection helpers ------------------------------------------
+
+    @property
+    def engine_profile(self) -> dict:
+        return ENGINE_PROFILES[self.engine_choice]
+
+    @property
+    def engine_name(self) -> str:
+        return self.engine_profile["short_name"]
+
+    @property
+    def engine_label(self) -> str:
+        return self.engine_profile["label"]
+
+    def apply_engine_defaults(self) -> None:
+        profile = ENGINE_PROFILES[self.engine_choice]
+        self.engine_depth = profile["default_depth"]
+        self.engine_time_limit = profile["default_time"]
+        self.max_engine_depth = profile["max_depth"]
+
+    def toggle_engine(self) -> None:
+        self.engine_choice = ENGINE_PYTHON if self.engine_choice == ENGINE_CPP else ENGINE_CPP
+        self.apply_engine_defaults()
+        self.status = f"Opponent: {self.engine_label}"
+
+    def make_engine(self) -> CppRukEngine | PythonRukEngine:
+        if self.engine_choice == ENGINE_PYTHON:
+            return PythonRukEngine()
+        return CppRukEngine()
+
+    # -----------------------------------------------------------------------
 
     def load_sounds(self) -> dict[str, pygame.mixer.Sound]:
         try:
@@ -284,7 +439,7 @@ class BitfishGui:
                     sounds[name] = pygame.mixer.Sound(str(path))
 
                     if name == "button":
-                        sounds[name].set_volume(0.35)
+                        sounds[name].set_volume(0.2)
 
                     break
                 except pygame.error:
@@ -386,7 +541,6 @@ class BitfishGui:
 
         return chess.square(file, rank)
 
-
     def previous_time_option(self) -> float:
         for option in reversed(TIME_OPTIONS):
             if option < self.engine_time_limit - 1e-9:
@@ -413,21 +567,30 @@ class BitfishGui:
 
     def start_game(self, human_colour: chess.Color | None, fen: str | None = None) -> None:
         try:
-            self.chess_board = chess.Board(fen) if fen else chess.Board()
+            new_board = chess.Board(fen) if fen else chess.Board()
         except ValueError:
             self.status = "Invalid FEN"
             return
 
-        self.engine = CppBitfishEngine()
+        try:
+            engine = self.make_engine()
+        except Exception as exc:
+            self.status = f"Could not load {self.engine_label}: {exc}"
+            return
+
+        self.chess_board = new_board
+        self.engine = engine
         self.human_colour = human_colour
         self.flip_board = bool(self.auto_flip_as_black and human_colour == chess.BLACK)
+
+        pygame.display.set_caption(f"Ruk — {self.engine_name}")
 
         self.reset_runtime_state()
         self.game_started = True
         self.update_static_eval_display()
 
         if human_colour is None:
-            self.status = "Watching Bitfish C++ vs itself"
+            self.status = f"Watching {self.engine_name} vs itself"
         elif human_colour == chess.WHITE:
             self.status = "You are White"
         else:
@@ -445,13 +608,14 @@ class BitfishGui:
 
     def return_to_main_menu(self) -> None:
         self.chess_board = chess.Board()
-        self.engine = CppBitfishEngine()
+        self.engine = None
         self.human_colour = None
         self.flip_board = False
         self.game_started = False
         self.engine_thinking = False
         self.status = "Choose a side"
         self.reset_runtime_state()
+        pygame.display.set_caption("Ruk")
 
     def load_fen(self, fen: str) -> None:
         try:
@@ -461,8 +625,15 @@ class BitfishGui:
             self.status = "Invalid FEN"
             return
 
+        try:
+            engine = self.make_engine()
+        except Exception as exc:
+            self.input_error = f"Could not load {self.engine_name}"
+            self.status = f"Could not load {self.engine_label}: {exc}"
+            return
+
         self.chess_board = board
-        self.engine = CppBitfishEngine()
+        self.engine = engine
         self.selected_square = None
         self.last_move = None
         self.engine_info = ""
@@ -472,6 +643,7 @@ class BitfishGui:
         self.input_mode = None
         self.text_input = ""
         self.input_error = ""
+        pygame.display.set_caption(f"Ruk — {self.engine_name}")
         self.update_static_eval_display()
         self.status = "Loaded FEN"
         self.play_sound("game_start")
@@ -551,7 +723,7 @@ class BitfishGui:
         self.last_move = move
         self.selected_square = None
         self.clear_drag_state()
-        self.status = "Bitfish C++ thinking..."
+        self.status = f"{self.engine_name} thinking..."
         self.update_static_eval_display()
         self.draw()
         pygame.display.flip()
@@ -647,8 +819,12 @@ class BitfishGui:
             self.update_game_over_status()
             return
 
+        if self.engine is None:
+            self.status = "No engine loaded"
+            return
+
         self.engine_thinking = True
-        self.status = "Bitfish C++ thinking..."
+        self.status = f"{self.engine_name} thinking..."
         self.draw()
         pygame.display.flip()
 
@@ -660,31 +836,37 @@ class BitfishGui:
             )
         except Exception as exc:
             self.engine_thinking = False
-            self.status = f"Bitfish C++ error: {exc}"
+            self.status = f"{self.engine_name} error: {exc}"
             return
 
         elapsed = result.time_taken
         self.engine_thinking = False
 
         if result.best_move is None:
-            self.status = "Bitfish C++ found no move"
+            self.status = f"{self.engine_name} found no move"
             return
 
         move = result.best_move
 
         if move not in self.chess_board.legal_moves:
-            self.status = f"Bitfish C++ illegal move: {move}"
+            self.status = f"{self.engine_name} illegal move: {move}"
             return
 
         self.last_engine_score = result.score
-        self.last_engine_score_from_white = result.score
         was_capture = self.chess_board.is_capture(move)
         was_castle = self.chess_board.is_castling(move)
         was_promotion = move.promotion is not None
         self.chess_board.push(move)
         self.play_move_sound(move, was_capture, was_castle, was_promotion, by_human=False)
         self.last_move = move
-        self.update_static_eval_display()
+
+        # The C++ engine returns a deep, white-relative search score, so use it
+        # directly for the eval bar. The Python engine's score sign convention is
+        # unknown, so fall back to its (white-relative) static eval there.
+        if self.engine_choice == ENGINE_CPP:
+            self.last_engine_score_from_white = result.score
+        else:
+            self.update_static_eval_display()
 
         if SHOW_ENGINE_INFO:
             self.engine_info = (
@@ -694,7 +876,7 @@ class BitfishGui:
                 f"score {result.score}"
             )
 
-        self.status = "Your move" if self.human_to_move() else "Bitfish C++ to move"
+        self.status = "Your move" if self.human_to_move() else f"{self.engine_name} to move"
         self.update_game_over_status()
 
     def undo_move(self) -> None:
@@ -721,14 +903,14 @@ class BitfishGui:
         self.update_static_eval_display()
 
     def export_pgn(self) -> None:
-        out_dir = Path("analysis_games")
+        out_dir = ANALYSIS_DIR
         out_dir.mkdir(exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = out_dir / f"bitfish_gui_game_{timestamp}.pgn"
+        path = out_dir / f"Ruk_{self.engine_choice}_gui_game_{timestamp}.pgn"
 
         game = chess.pgn.Game.from_board(self.chess_board)
-        game.headers["Event"] = "Bitfish C++ GUI Game"
+        game.headers["Event"] = f"{self.engine_name} GUI Game"
         game.headers["Date"] = datetime.now().strftime("%Y.%m.%d")
         game.headers["White"] = self.player_name(chess.WHITE)
         game.headers["Black"] = self.player_name(chess.BLACK)
@@ -738,13 +920,15 @@ class BitfishGui:
         self.status = f"PGN exported: {path}"
 
     def player_name(self, colour: chess.Color) -> str:
+        engine_name = self.engine_profile["pgn_name"]
+
         if self.human_colour is None:
-            return "BitfishCPP"
+            return engine_name
 
         if self.human_colour == colour:
             return "Human"
 
-        return "BitfishCPP"
+        return engine_name
 
     def begin_fen_input(self) -> None:
         self.input_mode = "fen"
@@ -795,6 +979,9 @@ class BitfishGui:
 
     def update_static_eval_display(self) -> None:
         try:
+            if self.engine is None:
+                self.last_engine_score_from_white = 0
+                return
             self.last_engine_score_from_white = self.engine.quick_white_eval(self.chess_board)
         except Exception:
             self.last_engine_score_from_white = 0
@@ -815,38 +1002,52 @@ class BitfishGui:
     def draw_menu(self) -> None:
         self.screen.fill(BACKGROUND)
 
-        title = self.large_font.render("Bitfish C++", True, TEXT)
-        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 70)))
+        title = self.large_font.render("Ruk", True, TEXT)
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 58)))
 
-        subtitle = self.small_font.render("Choose how you want to play", True, MUTED_TEXT)
-        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 110)))
+        subtitle = self.small_font.render("Choose your opponent and how you want to play", True, MUTED_TEXT)
+        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 96)))
 
         mouse_pos = pygame.mouse.get_pos()
 
         for button in self.menu_buttons:
             label = button.label
 
-            if button.action == "noop_depth":
+            if button.action == "toggle_engine":
+                label = f"Opponent: {self.engine_label}"
+            elif button.action == "noop_depth":
                 label = f"Max depth: {self.engine_depth}"
             elif button.action == "noop_time":
                 label = f"Time: {self.engine_time_limit:.1f}s"
             elif button.action == "toggle_auto_flip":
                 label = f"Auto-flip as Black: {self.auto_flip_as_black}"
 
-            colour = BUTTON_HOVER if button.rect.collidepoint(mouse_pos) else BUTTON
+            hovered = button.rect.collidepoint(mouse_pos)
+            colour = BUTTON_HOVER if hovered else BUTTON
             pygame.draw.rect(self.screen, colour, button.rect, border_radius=10)
-            pygame.draw.rect(self.screen, (120, 120, 120), button.rect, 2, border_radius=10)
+
+            border_colour = ACCENT if button.action == "toggle_engine" else (120, 120, 120)
+            pygame.draw.rect(self.screen, border_colour, button.rect, 2, border_radius=10)
 
             font = self.small_font if button.rect.height < 45 else self.medium_font
             rendered = font.render(label, True, BUTTON_TEXT)
             self.screen.blit(rendered, rendered.get_rect(center=button.rect.center))
+
+        # Surface load/start errors on the menu, where there is no side panel.
+        status_lower = self.status.lower()
+        if any(key in status_lower for key in ("could not", "invalid", "error")):
+            ey = 590
+            for line in self.wrap_text(self.status, 72)[:2]:
+                err = self.small_font.render(line, True, ERROR_TEXT)
+                self.screen.blit(err, err.get_rect(center=(WINDOW_WIDTH // 2, ey)))
+                ey += 20
 
         hint = self.small_font.render(
             "In game: F flip, R restart, U undo, L load FEN, P export PGN, Esc quit",
             True,
             MUTED_TEXT,
         )
-        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 620)))
+        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 645)))
 
         if self.input_mode == "fen":
             self.draw_text_input_overlay()
@@ -973,7 +1174,7 @@ class BitfishGui:
 
             y += 20
 
-        draw_line("Bitfish C++", TEXT)
+        draw_line(self.engine_label, TEXT)
         y += 8
 
         draw_line(f"Max depth: {self.engine_depth}", MUTED_TEXT)
@@ -1173,10 +1374,12 @@ class BitfishGui:
             self.start_game(chess.BLACK)
         elif action == "watch":
             self.start_game(None)
+        elif action == "toggle_engine":
+            self.toggle_engine()
         elif action == "depth_down":
             self.engine_depth = max(1, self.engine_depth - 1)
         elif action == "depth_up":
-            self.engine_depth = min(MAX_ENGINE_DEPTH, self.engine_depth + 1)
+            self.engine_depth = min(self.max_engine_depth, self.engine_depth + 1)
         elif action == "time_down":
             self.engine_time_limit = self.previous_time_option()
         elif action == "time_up":
@@ -1184,7 +1387,6 @@ class BitfishGui:
         elif action == "toggle_auto_flip":
             self.auto_flip_as_black = not self.auto_flip_as_black
         elif action == "load_fen":
-            self.game_started = True
             self.human_colour = chess.WHITE
             self.begin_fen_input()
 
@@ -1299,7 +1501,7 @@ class BitfishGui:
 
 
 def main() -> None:
-    gui = BitfishGui()
+    gui = RukGui()
     gui.run()
 
 
