@@ -16,7 +16,7 @@ from Ruk_python.Ruk_board import (
 INF = 10_000_000
 MATE = 1_000_000
 
-MAX_DEPTH = 5
+MAX_DEPTH = 8
 MAX_PLY = 128
 NULL_MOVE_REDUCTION = 2
 
@@ -813,7 +813,7 @@ def uci_loop() -> None:
             break
 
         if command == "uci":
-            print("id name BitGarry")
+            print("id name Ruk")
             print("id author Tom")
             print("uciok")
 

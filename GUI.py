@@ -39,7 +39,7 @@ SQUARE_SIZE = BOARD_SIZE // 8
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 
 # --- Engine selection -------------------------------------------------------
-# The C++ port is the strong (~2550) engine; the original pure-Python engine is
+# The C++ port is the strong (~2520) engine; the original pure-Python engine is
 # the weaker (~1800) one. Each profile carries sensible defaults, because the
 # two engines have very different speed characteristics.
 ENGINE_CPP = "cpp"
@@ -49,7 +49,7 @@ DEFAULT_ENGINE_CHOICE = ENGINE_CPP
 ENGINE_PROFILES = {
     ENGINE_CPP: {
         "short_name": "Ruk C++",
-        "label": "Ruk C++ (~2550)",
+        "label": "Ruk C++ (~2520)",
         "pgn_name": "RukCPP",
         "default_depth": 30,
         "default_time": 0.5,
@@ -163,7 +163,7 @@ def score_to_white_centipawns(score: chess.engine.PovScore | None) -> int:
 
 
 class CppRukEngine:
-    """Small wrapper that calls the C++ Ruk UCI executable (~2550 elo).
+    """Small wrapper that calls the C++ Ruk UCI executable (~2520 elo).
 
     A fresh process is used for each move. This is slightly slower than keeping
     one process alive, but it avoids unsafe persistent search state while the

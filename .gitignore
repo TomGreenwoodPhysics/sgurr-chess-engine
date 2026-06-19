@@ -33,3 +33,6 @@ stockfish/
 *_file_list.txt
 
 benchmarks/
+*.jsonl
+*.csv
+*.pgn
