@@ -43,7 +43,12 @@ Two unfinished games were counted as draws. Excluding them gives:
 
 which gives essentially the same estimate.
 
-**Legacy Python version:** benchmark pending.
+**Legacy Python version** - benchmarked against **Stockfish limited to 1500 Elo**
+at equal **0.50 s/move**. Across **1000 games**, it scored approximately
+**495.5/1000 = 49.6%**, corresponding to roughly **1500 Elo in this benchmark
+setup**, with an estimated **95% confidence interval of about ±20 Elo**.
+
+**NOTE** - Stated playing strengths will vary with time per move and max depth conditions. This mostly affects the Python prototype.
 
 ---
 

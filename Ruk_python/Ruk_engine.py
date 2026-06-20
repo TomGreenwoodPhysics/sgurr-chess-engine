@@ -37,24 +37,24 @@ TIME_CHECK_INTERVAL = 512
 # Extend forcing check lines slightly to reduce quick mate blindness.
 CHECK_EXTENSION_MAX_DEPTH = 4
 
-# ------------------------------------------------------------------
+
 # Futility pruning margins, indexed by remaining depth (1 or 2).
 # If static eval + margin <= alpha we skip the node.
-# ------------------------------------------------------------------
+
 FUTILITY_MARGIN = [0, 150, 300]
 
-# ------------------------------------------------------------------
+
 # Aspiration window: initial half-width around the previous score.
 # If the search fails high or low we widen to a full [-INF, INF]
 # window and re-search.
-# ------------------------------------------------------------------
+
 ASPIRATION_WINDOW = 50
 
-# ------------------------------------------------------------------
+
 # Delta pruning in quiescence search.
 # Skip a capture entirely if stand_pat + captured_value + DELTA_MARGIN
 # still can't raise alpha.  Avoids wasting time on hopeless captures.
-# ------------------------------------------------------------------
+
 DELTA_MARGIN = 200
 
 
@@ -135,10 +135,10 @@ class Engine:
         completed_depth = 0
 
         for depth in range(1, max_depth + 1):
-            # ----------------------------------------------------------
+
             # Aspiration windows: narrow search around previous score.
             # On the very first iteration use a full window.
-            # ----------------------------------------------------------
+
             if depth == 1 or completed_depth == 0:
                 score, move = self.negamax_root(board, depth, -INF, INF)
             else:
@@ -367,11 +367,11 @@ class Engine:
             else:
                 return self.quiescence(board, alpha, beta, ply)
 
-        # ------------------------------------------------------------------
+
         # Futility pruning: at shallow depths, if the static eval is so far
         # below alpha that no single move can realistically recover, skip to
         # quiescence.  Only when not in check and not a PV node.
-        # ------------------------------------------------------------------
+
         if (
             depth <= 2
             and not in_check_node
@@ -542,10 +542,10 @@ class Engine:
         if stand_pat >= beta:
             return beta
 
-        # ------------------------------------------------------------------
+
         # Delta pruning: if even capturing the most valuable piece imaginable
         # plus a safety margin cannot raise alpha, give up immediately.
-        # ------------------------------------------------------------------
+
         if stand_pat + _MAX_PIECE_VALUE + DELTA_MARGIN < alpha:
             return alpha
 

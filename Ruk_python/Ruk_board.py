@@ -113,9 +113,8 @@ OPENING_QUEENSIDE_KNIGHT_BONUS = 8
 OPENING_BISHOP_DEVELOPMENT_BONUS = 5
 OPENING_CASTLED_BONUS = 25
 
-# ------------------------------------------------------------------
+
 # Pawn structure / passed pawn evaluation constants
-# ------------------------------------------------------------------
 
 # Bonus for a passed pawn, indexed by rank (0-7). Rank 0/7 unused.
 # White passed pawn on rank 6 (one step from queening) is very valuable.
@@ -131,9 +130,8 @@ ISOLATED_PAWN_PENALTY = 15
 # square in front controlled by enemy pawn)
 BACKWARD_PAWN_PENALTY = 15
 
-# ------------------------------------------------------------------
+
 # King safety evaluation constants
-# ------------------------------------------------------------------
 
 # Penalty per attacker aimed at the squares around the king
 KING_ATTACKER_PENALTY = 28
@@ -141,9 +139,8 @@ KING_ATTACKER_PENALTY = 28
 # Penalty per open or semi-open file adjacent to the king
 KING_OPEN_FILE_PENALTY = 22
 
-# ------------------------------------------------------------------
+
 # Mobility evaluation constants
-# ------------------------------------------------------------------
 
 # Bonus per legal move available to bishops
 BISHOP_MOBILITY_BONUS = 3
@@ -154,10 +151,10 @@ ROOK_MOBILITY_BONUS = 2
 # Bonus per legal move available to queens
 QUEEN_MOBILITY_BONUS = 1
 
-# ------------------------------------------------------------------
+
 # Precomputed file masks (each entry is a 64-bit mask of all squares
 # on a given file, indexed 0=A .. 7=H)
-# ------------------------------------------------------------------
+
 FILE_MASKS: list[int] = []
 for _f in range(8):
     _mask = 0
@@ -976,9 +973,8 @@ class Board:
             - self.evaluate_opening_principles_for_colour(BLACK)
         )
 
-    # ------------------------------------------------------------------
-    # NEW: Pawn structure evaluation
-    # ------------------------------------------------------------------
+
+    # Pawn structure evaluation
 
     def evaluate_pawn_structure_for_colour(self, colour: int) -> int:
         # returns a score where positive is good for `colour`
@@ -1082,9 +1078,8 @@ class Board:
             - self.evaluate_pawn_structure_for_colour(BLACK)
         )
 
-    # ------------------------------------------------------------------
-    # NEW: King safety evaluation
-    # ------------------------------------------------------------------
+
+    # King safety evaluation
 
     def evaluate_king_safety_for_colour(self, colour: int) -> int:
         """
@@ -1121,7 +1116,7 @@ class Board:
         for f in range(max(0, king_file - 1), min(8, king_file + 2)):
             pawns_on_file = own_pawns & FILE_MASKS[f]
             if not pawns_on_file:
-                # Fully open file — bigger penalty
+                # Fully open file - bigger penalty
                 score -= KING_OPEN_FILE_PENALTY
             else:
                 # Semi-open: check if pawn is far from king (rank distance > 2)
@@ -1141,9 +1136,8 @@ class Board:
             - self.evaluate_king_safety_for_colour(BLACK)
         )
 
-    # ------------------------------------------------------------------
-    # NEW: Piece mobility evaluation
-    # ------------------------------------------------------------------
+
+    # Piece mobility evaluation
 
     def evaluate_mobility_for_colour(self, colour: int) -> int:
         """
@@ -1189,9 +1183,8 @@ class Board:
             - self.evaluate_mobility_for_colour(BLACK)
         )
 
-    # ------------------------------------------------------------------
+
     # Main evaluation
-    # ------------------------------------------------------------------
 
     def evaluate_fast(self) -> int:
         # cheap evaluation for quiescence search

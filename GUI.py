@@ -38,10 +38,9 @@ SQUARE_SIZE = BOARD_SIZE // 8
 
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 
-# --- Engine selection -------------------------------------------------------
+# Engine selection
 # The C++ port is the strong (~2520) engine; the original pure-Python engine is
-# the weaker (~1800) one. Each profile carries sensible defaults, because the
-# two engines have very different speed characteristics.
+# the weaker (~1500) one.
 ENGINE_CPP = "cpp"
 ENGINE_PYTHON = "python"
 DEFAULT_ENGINE_CHOICE = ENGINE_CPP
@@ -57,7 +56,7 @@ ENGINE_PROFILES = {
     },
     ENGINE_PYTHON: {
         "short_name": "Ruk Python",
-        "label": "Ruk Python (~1800)",
+        "label": "Ruk Python (~1500)",
         "pgn_name": "RukPython",
         "default_depth": 30,
         "default_time": 0.5,
@@ -227,7 +226,7 @@ class CppRukEngine:
 
 
 class PythonRukEngine:
-    """Adapter around the original pure-Python Ruk engine (~1800 elo).
+    """Adapter around the original pure-Python Ruk engine (~1500 elo).
 
     The GUI uses python-chess for display and input, while the engine still
     searches using the RukBoard/RukEngine classes. The Ruk_python
@@ -389,7 +388,7 @@ class RukGui:
 
         self.main_menu_button = pygame.Rect(0, 0, 0, 0)
 
-    # --- engine selection helpers ------------------------------------------
+    # engine selection helpers
 
     @property
     def engine_profile(self) -> dict:
@@ -419,7 +418,7 @@ class RukGui:
             return PythonRukEngine()
         return CppRukEngine()
 
-    # -----------------------------------------------------------------------
+
 
     def load_sounds(self) -> dict[str, pygame.mixer.Sound]:
         try:
@@ -583,7 +582,7 @@ class RukGui:
         self.human_colour = human_colour
         self.flip_board = bool(self.auto_flip_as_black and human_colour == chess.BLACK)
 
-        pygame.display.set_caption(f"Ruk — {self.engine_name}")
+        pygame.display.set_caption(f"Ruk - {self.engine_name}")
 
         self.reset_runtime_state()
         self.game_started = True
@@ -643,7 +642,7 @@ class RukGui:
         self.input_mode = None
         self.text_input = ""
         self.input_error = ""
-        pygame.display.set_caption(f"Ruk — {self.engine_name}")
+        pygame.display.set_caption(f"Ruk - {self.engine_name}")
         self.update_static_eval_display()
         self.status = "Loaded FEN"
         self.play_sound("game_start")
