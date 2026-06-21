@@ -40,43 +40,13 @@ struct SearchResult {
     double time_taken = 0.0;
 };
 
-struct MoveKey {
-    int from_sq = 0;
-    int to_sq = 0;
-    int promotion = -1;
-    bool is_en_passant = false;
-    bool is_castling = false;
-
-    bool operator==(const MoveKey& other) const {
-        return from_sq == other.from_sq
-            && to_sq == other.to_sq
-            && promotion == other.promotion
-            && is_en_passant == other.is_en_passant
-            && is_castling == other.is_castling;
-    }
-};
-
-struct MoveKeyHash {
-    std::size_t operator()(const MoveKey& key) const {
-        std::size_t h = 17;
-        h = h * 31 + std::hash<int>{}(key.from_sq);
-        h = h * 31 + std::hash<int>{}(key.to_sq);
-        h = h * 31 + std::hash<int>{}(key.promotion);
-        h = h * 31 + std::hash<bool>{}(key.is_en_passant);
-        h = h * 31 + std::hash<bool>{}(key.is_castling);
-        return h;
-    }
-};
-
 struct TTEntry {
     U64 key = 0;                 // full hash for collision detection; 0 = empty
     int depth = -1;
     int score = 0;
     int flag = TT_EXACT;
-    std::optional<MoveKey> best_move_key = std::nullopt;
+    std::optional<Move> best_move = std::nullopt;
 };
-
-MoveKey move_key(const Move& move);
 
 class Engine {
 public:
@@ -100,14 +70,14 @@ public:
 
     int evaluate_position(const Board& board) const;
     int evaluate_quiet_position(const Board& board) const;
-    std::vector<Move> generate_moves(Board& board) const;
+    MoveList generate_moves(Board& board) const;
 
 private:
     std::chrono::steady_clock::time_point start_time;
     std::optional<double> time_limit = std::nullopt;
     bool stop_search = false;
 
-    std::array<std::array<std::optional<MoveKey>, 2>, MAX_PLY> killer_moves{};
+    std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};
     std::array<std::array<int, 64>, 64> history{};
 
     bool time_is_up() const;
@@ -115,9 +85,9 @@ private:
     void reset_killers();
     void reset_history();
 
-    std::optional<MoveKey> valid_tt_move_key(
+    std::optional<Move> valid_tt_move_key(
         U64 board_hash,
-        const std::vector<Move>& moves
+        const MoveList& moves
     ) const;
 
     std::pair<int, std::optional<Move>> negamax_root(
@@ -145,7 +115,7 @@ private:
         int depth,
         int ply,
         int legal_moves_searched,
-        const std::optional<MoveKey>& tt_move_key,
+        const std::optional<Move>& tt_move_key,
         bool in_check
     ) const;
 
@@ -157,10 +127,10 @@ private:
 
     void store_killer(int ply, const Move& move);
 
-    std::vector<Move> order_moves(
+    MoveList order_moves(
         Board& board,
-        const std::vector<Move>& moves,
-        const std::optional<MoveKey>& tt_move_key,
+        const MoveList& moves,
+        const std::optional<Move>& tt_move_key,
         int ply,
         bool split_bad_captures = true
     ) const;
@@ -172,8 +142,8 @@ private:
         int depth,
         int score,
         int flag,
-        std::optional<MoveKey> best_move_key
+        std::optional<Move> best_move_key
     );
 
-    std::optional<MoveKey> get_tt_move_key(U64 board_hash) const;
+    std::optional<Move> get_tt_move(U64 board_hash) const;
 };

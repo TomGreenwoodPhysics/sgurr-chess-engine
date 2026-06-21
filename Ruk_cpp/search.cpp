@@ -25,16 +25,6 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
 
 } // namespace
 
-MoveKey move_key(const Move& move) {
-    return MoveKey{
-        move.from_sq,
-        move.to_sq,
-        move.promotion.has_value() ? *move.promotion : -1,
-        move.is_en_passant,
-        move.is_castling
-    };
-}
-
 Engine::Engine() {
     transposition_table.assign(TT_SIZE, TTEntry{});
     reset_killers();
@@ -115,9 +105,9 @@ void Engine::clear_for_new_game() {
     clear_search_heuristics();
 }
 
-std::optional<MoveKey> Engine::valid_tt_move_key(
+std::optional<Move> Engine::valid_tt_move_key(
     U64 board_hash,
-    const std::vector<Move>& moves
+    const MoveList& moves
 ) const {
     const TTEntry& slot = transposition_table[board_hash & TT_MASK];
 
@@ -125,14 +115,14 @@ std::optional<MoveKey> Engine::valid_tt_move_key(
         return std::nullopt;
     }
 
-    if (!slot.best_move_key.has_value()) {
+    if (!slot.best_move.has_value()) {
         return std::nullopt;
     }
 
-    const MoveKey& key = *slot.best_move_key;
+    const Move& key = *slot.best_move;
 
     for (const Move& move : moves) {
-        if (move_key(move) == key) {
+        if (move == key) {
             return key;
         }
     }
@@ -153,13 +143,13 @@ SearchResult Engine::search_best_move(
 
     reset_killers();
 
-    std::vector<Move> legal_moves = board.generate_legal_moves();
+    MoveList legal_moves = board.generate_legal_moves();
     std::optional<Move> best_move = std::nullopt;
 
     if (!legal_moves.empty()) {
         auto tt_key = valid_tt_move_key(board.hash_key, legal_moves);
         auto ordered = order_moves(board, legal_moves, tt_key, 0);
-        best_move = ordered.front();
+        best_move = ordered[0];
     }
 
     int best_score = best_move.has_value() ? board.evaluate() : -INF;
@@ -246,7 +236,7 @@ int Engine::evaluate_quiet_position(const Board& board) const {
     return board.evaluate_quiet();
 }
 
-std::vector<Move> Engine::generate_moves(Board& board) const {
+MoveList Engine::generate_moves(Board& board) const {
     return board.generate_pseudo_legal_moves();
 }
 
@@ -261,9 +251,10 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 
     U64 board_hash = board.hash_key;
 
-    std::vector<Move> moves = generate_moves(board);
+    MoveList moves = generate_moves(board);
     auto tt_move_key = valid_tt_move_key(board_hash, moves);
     moves = order_moves(board, moves, tt_move_key, 0);
+    LegalityInfo li = board.legality_info();
 
     int original_alpha = alpha;
     int us = board.side_to_move;
@@ -275,14 +266,12 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
             break;
         }
 
-        UndoInfo undo = board.make_move(move);
-
-        if (board.in_check(us)) {
-            board.unmake_move(undo);
+        if (!board.is_legal(move, li)) {
             continue;
         }
 
         legal_found = true;
+        UndoInfo undo = board.make_move(move);
         int score = -negamax(board, depth - 1, -beta, -alpha, 1);
         board.unmake_move(undo);
 
@@ -319,7 +308,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
             flag = TT_LOWER;
         }
 
-        store_tt(board_hash, depth, score_to_tt(best_score, 0), flag, move_key(*best_move));
+        store_tt(board_hash, depth, score_to_tt(best_score, 0), flag, *best_move);
     }
 
     return {best_score, best_move};
@@ -330,7 +319,7 @@ bool Engine::is_killer_move(int ply, const Move& move) const {
         return false;
     }
 
-    MoveKey key = move_key(move);
+    Move key = move;
 
     return (killer_moves[ply][0].has_value() && *killer_moves[ply][0] == key)
         || (killer_moves[ply][1].has_value() && *killer_moves[ply][1] == key);
@@ -342,7 +331,7 @@ bool Engine::can_reduce_late_move(
     int depth,
     int ply,
     int legal_moves_searched,
-    const std::optional<MoveKey>& tt_move_key,
+    const std::optional<Move>& tt_move_key,
     bool in_check
 ) const {
     if (depth < LMR_MIN_DEPTH) {
@@ -357,7 +346,7 @@ bool Engine::can_reduce_late_move(
         return false;
     }
 
-    if (tt_move_key.has_value() && move_key(move) == *tt_move_key) {
+    if (tt_move_key.has_value() && move == *tt_move_key) {
         return false;
     }
 
@@ -505,16 +494,21 @@ int Engine::negamax(
         }
     }
 
-    std::vector<Move> moves = generate_moves(board);
-    std::optional<MoveKey> tt_move_key = valid_tt_move_key(board_hash, moves);
+    MoveList moves = generate_moves(board);
+    std::optional<Move> tt_move_key = valid_tt_move_key(board_hash, moves);
     moves = order_moves(board, moves, tt_move_key, ply);
+    LegalityInfo li = board.legality_info();
 
     int best_score = -INF;
-    std::optional<MoveKey> best_move_key = std::nullopt;
+    std::optional<Move> best_move_key = std::nullopt;
     bool legal_found = false;
     int legal_moves_searched = 0;
 
     for (const Move& move : moves) {
+        if (!board.is_legal(move, li)) {
+            continue;
+        }
+
         bool reduce_late_move = can_reduce_late_move(
             board,
             move,
@@ -525,15 +519,10 @@ int Engine::negamax(
             in_check_node
         );
 
-        UndoInfo undo = board.make_move(move);
-
-        if (board.in_check(us)) {
-            board.unmake_move(undo);
-            continue;
-        }
-
         legal_found = true;
         legal_moves_searched += 1;
+
+        UndoInfo undo = board.make_move(move);
 
         bool gives_check = board.in_check(board.side_to_move);
         int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
@@ -572,7 +561,7 @@ int Engine::negamax(
 
         if (score > best_score) {
             best_score = score;
-            best_move_key = move_key(move);
+            best_move_key = move;
         }
 
         alpha = std::max(alpha, score);
@@ -580,7 +569,7 @@ int Engine::negamax(
         if (alpha >= beta) {
             if (!is_noisy_move(board, move)) {
                 store_killer(ply, move);
-                int& hist = history[move.from_sq][move.to_sq];
+                int& hist = history[move.from()][move.to()];
                 hist = std::min(hist + depth * depth, 1'000'000);
             }
 
@@ -624,20 +613,19 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     int us = board.side_to_move;
 
     if (board.in_check(us)) {
-        std::vector<Move> moves = generate_moves(board);
+        MoveList moves = generate_moves(board);
         moves = order_moves(board, moves, std::nullopt, ply, false);
+        LegalityInfo li = board.legality_info();
 
         bool legal_found = false;
 
         for (const Move& move : moves) {
-            UndoInfo undo = board.make_move(move);
-
-            if (board.in_check(us)) {
-                board.unmake_move(undo);
+            if (!board.is_legal(move, li)) {
                 continue;
             }
 
             legal_found = true;
+            UndoInfo undo = board.make_move(move);
             int score = -quiescence(board, -beta, -alpha, ply + 1);
             board.unmake_move(undo);
 
@@ -671,18 +659,19 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     alpha = std::max(alpha, stand_pat);
 
-    std::vector<Move> noisy_moves;
+    MoveList noisy_moves;
 
     for (const Move& move : generate_moves(board)) {
         if (is_noisy_move(board, move)) {
-            noisy_moves.push_back(move);
+            noisy_moves.add(move);
         }
     }
 
     noisy_moves = order_moves(board, noisy_moves, std::nullopt, ply, false);
+    LegalityInfo li = board.legality_info();
 
     for (const Move& move : noisy_moves) {
-        auto captured = board.piece_at(move.to_sq);
+        auto captured = board.piece_at(move.to());
 
         if (captured.has_value()) {
             int captured_value = PIECE_VALUE[*captured];
@@ -696,17 +685,15 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         // Only reached when not in check (evasions take the path above), so it
         // is always safe to discard a losing capture here. Promotions are
         // excluded from SEE and never pruned.
-        if (!move.promotion.has_value() && !board.see_ge(move, 0)) {
+        if (!move.is_promotion() && !board.see_ge(move, 0)) {
+            continue;
+        }
+
+        if (!board.is_legal(move, li)) {
             continue;
         }
 
         UndoInfo undo = board.make_move(move);
-
-        if (board.in_check(us)) {
-            board.unmake_move(undo);
-            continue;
-        }
-
         int score = -quiescence(board, -beta, -alpha, ply + 1);
         board.unmake_move(undo);
 
@@ -721,15 +708,15 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 }
 
 bool Engine::is_noisy_move(const Board& board, const Move& move) const {
-    if (move.promotion.has_value()) {
+    if (move.is_promotion()) {
         return true;
     }
 
-    if (move.is_en_passant) {
+    if (move.is_en_passant()) {
         return true;
     }
 
-    return board.piece_at(move.to_sq).has_value();
+    return board.piece_at(move.to()).has_value();
 }
 
 void Engine::store_killer(int ply, const Move& move) {
@@ -737,7 +724,7 @@ void Engine::store_killer(int ply, const Move& move) {
         return;
     }
 
-    MoveKey key = move_key(move);
+    Move key = move;
 
     if (killer_moves[ply][0].has_value() && *killer_moves[ply][0] == key) {
         return;
@@ -747,10 +734,10 @@ void Engine::store_killer(int ply, const Move& move) {
     killer_moves[ply][0] = key;
 }
 
-std::vector<Move> Engine::order_moves(
+MoveList Engine::order_moves(
     Board& board,
-    const std::vector<Move>& moves,
-    const std::optional<MoveKey>& tt_move_key,
+    const MoveList& moves,
+    const std::optional<Move>& tt_move_key,
     int ply,
     bool split_bad_captures
 ) const {
@@ -759,18 +746,16 @@ std::vector<Move> Engine::order_moves(
     std::optional<Move> killer_two = std::nullopt;
 
     // Score each move exactly once; the sorts below compare cached values
-    // instead of recomputing scores inside the comparator.
-    std::vector<std::pair<Move, int>> captures;
-    std::vector<std::pair<Move, int>> bad_captures;
-    std::vector<std::pair<Move, int>> good_quiets;
-    std::vector<Move> other_quiets;
+    // instead of recomputing scores inside the comparator. Fixed stack buffers
+    // replace the heap vectors this used to allocate every node.
+    struct Scored { Move move; int score; };
+    Scored captures[256];     int n_cap = 0;
+    Scored bad_captures[256]; int n_bad = 0;
+    Scored good_quiets[256];  int n_gq  = 0;
+    Move   other_quiets[256]; int n_oq  = 0;
 
-    captures.reserve(moves.size());
-    good_quiets.reserve(moves.size());
-    other_quiets.reserve(moves.size());
-
-    std::optional<MoveKey> killer_key_one = std::nullopt;
-    std::optional<MoveKey> killer_key_two = std::nullopt;
+    std::optional<Move> killer_key_one = std::nullopt;
+    std::optional<Move> killer_key_two = std::nullopt;
 
     if (ply < MAX_PLY) {
         killer_key_one = killer_moves[ply][0];
@@ -778,7 +763,7 @@ std::vector<Move> Engine::order_moves(
     }
 
     for (const Move& move : moves) {
-        MoveKey key = move_key(move);
+        Move key = move;
 
         if (tt_move_key.has_value() && key == *tt_move_key) {
             tt_move = move;
@@ -794,11 +779,11 @@ std::vector<Move> Engine::order_moves(
             // in the main capture bucket. Only the main search splits; quiescence
             // orders captures as before (it prunes losing captures itself, so a
             // split there would just pay for SEE twice in the hottest path).
-            if (split_bad_captures && !move.promotion.has_value()
+            if (split_bad_captures && !move.is_promotion()
                     && !board.see_ge(move, 0)) {
-                bad_captures.emplace_back(move, cscore);
+                bad_captures[n_bad++] = {move, cscore};
             } else {
-                captures.emplace_back(move, cscore);
+                captures[n_cap++] = {move, cscore};
             }
             continue;
         }
@@ -813,56 +798,39 @@ std::vector<Move> Engine::order_moves(
             continue;
         }
 
-        int hist = history[move.from_sq][move.to_sq];
+        int hist = history[move.from()][move.to()];
 
         if (hist > 0) {
-            good_quiets.emplace_back(move, hist);
+            good_quiets[n_gq++] = {move, hist};
         } else {
-            other_quiets.push_back(move);
+            other_quiets[n_oq++] = move;
         }
     }
 
-    std::sort(
-        captures.begin(),
-        captures.end(),
-        [](const std::pair<Move, int>& a, const std::pair<Move, int>& b) {
-            return a.second > b.second;
-        }
-    );
+    auto by_score = [](const Scored& a, const Scored& b) {
+        return a.score > b.score;
+    };
 
-    std::sort(
-        bad_captures.begin(),
-        bad_captures.end(),
-        [](const std::pair<Move, int>& a, const std::pair<Move, int>& b) {
-            return a.second > b.second;
-        }
-    );
+    std::sort(captures, captures + n_cap, by_score);
+    std::sort(bad_captures, bad_captures + n_bad, by_score);
+    std::sort(good_quiets, good_quiets + n_gq, by_score);
 
-    std::sort(
-        good_quiets.begin(),
-        good_quiets.end(),
-        [](const std::pair<Move, int>& a, const std::pair<Move, int>& b) {
-            return a.second > b.second;
-        }
-    );
-
-    std::vector<Move> ordered;
-    ordered.reserve(moves.size());
+    MoveList ordered;
 
     if (tt_move.has_value()) {
-        ordered.push_back(*tt_move);
+        ordered.add(*tt_move);
     }
 
-    for (const auto& [move, score] : captures) {
-        ordered.push_back(move);
+    for (int i = 0; i < n_cap; ++i) {
+        ordered.add(captures[i].move);
     }
 
     if (killer_one.has_value()) {
-        ordered.push_back(*killer_one);
+        ordered.add(*killer_one);
     }
 
     if (killer_two.has_value()) {
-        ordered.push_back(*killer_two);
+        ordered.add(*killer_two);
     }
 
     // Losing captures: tried after the TT move, winning captures, and killers,
@@ -871,30 +839,32 @@ std::vector<Move> Engine::order_moves(
     // measured clearly better than demoting them below all quiets (the latter
     // raised fixed-depth node counts, since SEE is pin-blind and sometimes
     // mislabels a tactically winning capture as losing).
-    for (const auto& [move, score] : bad_captures) {
-        ordered.push_back(move);
+    for (int i = 0; i < n_bad; ++i) {
+        ordered.add(bad_captures[i].move);
     }
 
-    for (const auto& [move, score] : good_quiets) {
-        ordered.push_back(move);
+    for (int i = 0; i < n_gq; ++i) {
+        ordered.add(good_quiets[i].move);
     }
 
-    ordered.insert(ordered.end(), other_quiets.begin(), other_quiets.end());
+    for (int i = 0; i < n_oq; ++i) {
+        ordered.add(other_quiets[i]);
+    }
 
     return ordered;
 }
 
 int Engine::capture_score(const Board& board, const Move& move) const {
-    if (move.promotion.has_value()) {
-        return 8'000 + PIECE_VALUE[*move.promotion];
+    if (move.is_promotion()) {
+        return 8'000 + PIECE_VALUE[move.promo_piece(board.side_to_move)];
     }
 
-    if (move.is_en_passant) {
+    if (move.is_en_passant()) {
         return 10'100;
     }
 
-    auto attacker = board.piece_at(move.from_sq);
-    auto victim = board.piece_at(move.to_sq);
+    auto attacker = board.piece_at(move.from());
+    auto victim = board.piece_at(move.to());
 
     if (!attacker.has_value() || !victim.has_value()) {
         return 0;
@@ -908,7 +878,7 @@ void Engine::store_tt(
     int depth,
     int score,
     int flag,
-    std::optional<MoveKey> best_move_key
+    std::optional<Move> best_move_key
 ) {
     TTEntry& slot = transposition_table[board_hash & TT_MASK];
 
@@ -919,12 +889,12 @@ void Engine::store_tt(
     }
 }
 
-std::optional<MoveKey> Engine::get_tt_move_key(U64 board_hash) const {
+std::optional<Move> Engine::get_tt_move(U64 board_hash) const {
     const TTEntry& slot = transposition_table[board_hash & TT_MASK];
 
     if (slot.key != board_hash) {
         return std::nullopt;
     }
 
-    return slot.best_move_key;
+    return slot.best_move;
 }
