@@ -7,7 +7,7 @@ legality), and runs a sequential probability ratio test, stopping as soon as
 the log-likelihood ratio crosses an acceptance bound.
 
 Example:
-  python3 sprt.py --new ./ruk_new --base ./ruk_old \\
+  python3 sprt.py --new ./sgr_new --base ./sgr_old \\
       --tc 8+0.08 --book book.epd --concurrency 6 \\
       --elo0 0 --elo1 5 --alpha 0.05 --beta 0.05
 """

@@ -15,9 +15,9 @@ import chess.pgn
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from Ruk_python.Ruk_board import Board as RukBoard
-from Ruk_python.Ruk_board import Move as RukMove
-from Ruk_python.Ruk_engine import Engine as RukEngine
+from sgurr_python.sgurr_board import Board as SgurrBoard
+from sgurr_python.sgurr_board import Move as SgurrMove
+from sgurr_python.sgurr_engine import Engine as SgurrEngine
 
 
 STOCKFISH_PATH = r"C:\Users\Tom Greenwood\Desktop\Coding Projects\Chess Bot\stockfish\stockfish-windows-x86-64-avx2.exe"
@@ -26,14 +26,14 @@ STOCKFISH_ELO = 1500
 NUM_GAMES = 500
 MAX_PLIES = 400
 
-Ruk_MAX_DEPTH = 100
-Ruk_TIME_PER_MOVE = 2
+Sgurr_MAX_DEPTH = 100
+Sgurr_TIME_PER_MOVE = 2
 STOCKFISH_TIME_PER_MOVE = 0.5
 
 OUTPUT_DIR = Path("analysis_games")
-PGN_FILE = OUTPUT_DIR / "Ruk_benchmark_games.pgn"
-MOVE_LOG_FILE = OUTPUT_DIR / "Ruk_move_log.jsonl"
-DIAGNOSTICS_FILE = OUTPUT_DIR / "Ruk_diagnostics.csv"
+PGN_FILE = OUTPUT_DIR / "Sgurr_benchmark_games.pgn"
+MOVE_LOG_FILE = OUTPUT_DIR / "Sgurr_move_log.jsonl"
+DIAGNOSTICS_FILE = OUTPUT_DIR / "Sgurr_diagnostics.csv"
 
 LOW_DEPTH_LIMIT = 3
 WORST_CASES_TO_PRINT = 20
@@ -49,32 +49,32 @@ def get_game_phase(ply: int) -> str:
     return "endgame"
 
 
-def chess_board_to_Ruk_board(board: chess.Board) -> RukBoard:
-    return RukBoard(board.fen())
+def chess_board_to_sgurr_board(board: chess.Board) -> SgurrBoard:
+    return SgurrBoard(board.fen())
 
 
-def Ruk_move_to_chess_move(move: RukMove | None) -> chess.Move | None:
+def Sgurr_move_to_chess_move(move: SgurrMove | None) -> chess.Move | None:
     if move is None:
         return None
 
     return chess.Move.from_uci(str(move))
 
 
-def choose_Ruk_move(
-    engine: RukEngine,
+def choose_Sgurr_move(
+    engine: SgurrEngine,
     board: chess.Board,
 ) -> tuple[chess.Move | None, dict[str, Any]]:
-    Ruk_board = chess_board_to_Ruk_board(board)
-    legal_move_count = len(Ruk_board.generate_legal_moves())
+    sgurr_board = chess_board_to_sgurr_board(board)
+    legal_move_count = len(sgurr_board.generate_legal_moves())
 
     result = engine.search_best_move(
-        Ruk_board,
-        max_depth=Ruk_MAX_DEPTH,
-        time_limit=Ruk_TIME_PER_MOVE,
+        sgurr_board,
+        max_depth=Sgurr_MAX_DEPTH,
+        time_limit=Sgurr_TIME_PER_MOVE,
     )
 
-    best_move: RukMove | None = result.best_move
-    move = Ruk_move_to_chess_move(best_move)
+    best_move: SgurrMove | None = result.best_move
+    move = Sgurr_move_to_chess_move(best_move)
     nodes_per_second = result.nodes / result.time_taken if result.time_taken > 0 else 0
 
     stats: dict[str, Any] = {
@@ -110,20 +110,20 @@ def choose_Ruk_move(
 def save_game_pgn(
     board: chess.Board,
     game_number: int,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
     result: str,
 ) -> None:
     game = chess.pgn.Game.from_board(board)
 
-    game.headers["Event"] = "Ruk Benchmark"
+    game.headers["Event"] = "Sgurr Benchmark"
     game.headers["Round"] = str(game_number)
-    game.headers["White"] = "Ruk" if Ruk_colour == chess.WHITE else "Stockfish"
-    game.headers["Black"] = "Ruk" if Ruk_colour == chess.BLACK else "Stockfish"
+    game.headers["White"] = "Sgurr" if Sgurr_colour == chess.WHITE else "Stockfish"
+    game.headers["Black"] = "Sgurr" if Sgurr_colour == chess.BLACK else "Stockfish"
     game.headers["Result"] = result
     game.headers["StockfishElo"] = str(STOCKFISH_ELO)
-    game.headers["RukTimePerMove"] = f"{Ruk_TIME_PER_MOVE:.2f}"
+    game.headers["SgurrTimePerMove"] = f"{Sgurr_TIME_PER_MOVE:.2f}"
     game.headers["StockfishTimePerMove"] = f"{STOCKFISH_TIME_PER_MOVE:.2f}"
-    game.headers["RukMaxDepth"] = str(Ruk_MAX_DEPTH)
+    game.headers["SgurrMaxDepth"] = str(Sgurr_MAX_DEPTH)
 
     with open(PGN_FILE, "a", encoding="utf-8") as file:
         print(game, file=file, end="\n\n")
@@ -131,31 +131,31 @@ def save_game_pgn(
 
 def play_game(
     stockfish: chess.engine.SimpleEngine,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
     game_number: int,
 ) -> tuple[str, int, str, list[dict], str]:
     board = chess.Board()
 
     # fresh engine each game so the transposition table does not carry over
-    Ruk = RukEngine()
+    Sgurr = SgurrEngine()
 
     move_stats = []
-    Ruk_move_logs = []
+    Sgurr_move_logs = []
     stop_reason = "normal_game_over"
 
     while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
-        if board.turn == Ruk_colour:
+        if board.turn == Sgurr_colour:
             phase = get_game_phase(board.ply())
             fen_before = board.fen()
 
-            move, stats = choose_Ruk_move(Ruk, board)
+            move, stats = choose_Sgurr_move(Sgurr, board)
 
             move_stats.append({
                 "game": game_number,
                 "ply": board.ply(),
                 "fen_before": fen_before,
                 "move": move.uci() if move is not None else None,
-                "Ruk_colour": "white" if Ruk_colour == chess.WHITE else "black",
+                "Sgurr_colour": "white" if Sgurr_colour == chess.WHITE else "black",
                 "phase": phase,
                 "depth": stats["depth"],
                 "nodes": stats["nodes"],
@@ -183,7 +183,7 @@ def play_game(
                 "time_checks": stats["time_checks"],
             })
 
-            Ruk_move_logs.append({
+            Sgurr_move_logs.append({
                 "game": game_number,
                 "ply": board.ply(),
                 "fen_before": fen_before,
@@ -213,7 +213,7 @@ def play_game(
                 "lmr_researches": stats["lmr_researches"],
                 "beta_cutoffs": stats["beta_cutoffs"],
                 "time_checks": stats["time_checks"],
-                "Ruk_colour": "white" if Ruk_colour == chess.WHITE else "black",
+                "Sgurr_colour": "white" if Sgurr_colour == chess.WHITE else "black",
             })
 
         else:
@@ -244,10 +244,10 @@ def play_game(
 
     result = board.result(claim_draw=True)
 
-    save_game_pgn(board, game_number, Ruk_colour, result)
+    save_game_pgn(board, game_number, Sgurr_colour, result)
 
     with open(MOVE_LOG_FILE, "a", encoding="utf-8") as file:
-        for log in Ruk_move_logs:
+        for log in Sgurr_move_logs:
             log["result"] = result
             log["stop_reason"] = stop_reason
             file.write(json.dumps(log) + "\n")
@@ -272,7 +272,7 @@ def play_game(
     else:
         return "unfinished", board.ply(), result, move_stats, stop_reason
 
-    if winner == Ruk_colour:
+    if winner == Sgurr_colour:
         return "win", board.ply(), result, move_stats, stop_reason
 
     return "loss", board.ply(), result, move_stats, stop_reason
@@ -350,7 +350,7 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
     fieldnames = [
         "game",
         "ply",
-        "Ruk_colour",
+        "Sgurr_colour",
         "phase",
         "move",
         "depth",
@@ -390,7 +390,7 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
             writer.writerow({
                 "game": stat.get("game"),
                 "ply": stat.get("ply"),
-                "Ruk_colour": stat.get("Ruk_colour"),
+                "Sgurr_colour": stat.get("Sgurr_colour"),
                 "phase": stat.get("phase"),
                 "move": stat.get("move"),
                 "depth": stat.get("depth"),
@@ -494,7 +494,7 @@ def print_diagnostic_reports(all_move_stats: list[dict]) -> None:
         highest_legal_moves,
     )
     print_position_report(
-        "Longest Ruk searches",
+        "Longest Sgurr searches",
         longest_searches,
     )
 
@@ -518,14 +518,14 @@ def main() -> None:
         start_time = time.time()
 
         for game_number in range(1, NUM_GAMES + 1):
-            Ruk_colour = chess.WHITE if game_number % 2 == 1 else chess.BLACK
-            colour_name = "White" if Ruk_colour == chess.WHITE else "Black"
+            Sgurr_colour = chess.WHITE if game_number % 2 == 1 else chess.BLACK
+            colour_name = "White" if Sgurr_colour == chess.WHITE else "Black"
 
-            print(f"Game {game_number}/{NUM_GAMES}: Ruk as {colour_name}")
+            print(f"Game {game_number}/{NUM_GAMES}: Sgurr as {colour_name}")
 
             result, plies, raw_result, move_stats, stop_reason = play_game(
                 stockfish,
-                Ruk_colour,
+                Sgurr_colour,
                 game_number,
             )
 
@@ -549,8 +549,8 @@ def main() -> None:
     print()
     print("Benchmark complete")
     print("------------------")
-    print(f"Ruk max depth: {Ruk_MAX_DEPTH}")
-    print(f"Ruk time per move: {Ruk_TIME_PER_MOVE:.2f}s")
+    print(f"Sgurr max depth: {Sgurr_MAX_DEPTH}")
+    print(f"Sgurr time per move: {Sgurr_TIME_PER_MOVE:.2f}s")
     print(f"Stockfish Elo setting: {STOCKFISH_ELO}")
     print(f"Stockfish time per move: {STOCKFISH_TIME_PER_MOVE:.2f}s")
     completed_games = wins + draws + losses

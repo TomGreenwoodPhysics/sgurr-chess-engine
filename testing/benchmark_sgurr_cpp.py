@@ -20,7 +20,7 @@ import chess.pgn
 PROJECT_DIR = Path(__file__).resolve().parent
 
 STOCKFISH_PATH = r"C:\Users\Tom Greenwood\Desktop\Coding Projects\Chess Bot\stockfish\stockfish-windows-x86-64-avx2.exe"
-Ruk_CPP_PATH = PROJECT_DIR.parent / "Ruk_cpp" / "Ruk_cpp.exe"
+Sgurr_CPP_PATH = PROJECT_DIR.parent / "sgurr_cpp" / "sgr.exe"
 
 # allows a dynamically linked MSYS2 build to run when launched from PowerShell/Anaconda
 MSYS2_UCRT64_BIN = r"C:\msys64\ucrt64\bin"
@@ -36,20 +36,20 @@ NUM_GAMES = 1000
 MAX_PLIES = 400
 
 # depth is a safety cap; time is the main limit
-Ruk_MAX_DEPTH = 100
-Ruk_TIME_PER_MOVE = 0.5
+Sgurr_MAX_DEPTH = 100
+Sgurr_TIME_PER_MOVE = 0.5
 STOCKFISH_TIME_PER_MOVE = 0.5
 
 # true = most stable while debugging; avoids carrying C++ TT/history across positions
 # false = faster and closer to a normal engine game, but currently more likely to expose state bugs
-USE_FRESH_Ruk_PROCESS_EACH_MOVE = False
+USE_FRESH_Sgurr_PROCESS_EACH_MOVE = False
 
 ENGINE_STARTUP_TIMEOUT = 20.0
 
 OUTPUT_DIR = PROJECT_DIR / "analysis_games"
-PGN_FILE = OUTPUT_DIR / "Ruk_cpp_benchmark_games.pgn"
-MOVE_LOG_FILE = OUTPUT_DIR / "Ruk_cpp_move_log.jsonl"
-DIAGNOSTICS_FILE = OUTPUT_DIR / "Ruk_cpp_diagnostics.csv"
+PGN_FILE = OUTPUT_DIR / "sgurr_cpp_benchmark_games.pgn"
+MOVE_LOG_FILE = OUTPUT_DIR / "sgurr_cpp_move_log.jsonl"
+DIAGNOSTICS_FILE = OUTPUT_DIR / "sgurr_cpp_diagnostics.csv"
 CRASH_POSITION_FILE = PROJECT_DIR / "cpp_crash_position.json"
 CRASH_UCI_FILE = PROJECT_DIR / "cpp_crash_uci_command.txt"
 
@@ -80,24 +80,24 @@ def score_to_centipawns(score: chess.engine.PovScore, turn: chess.Color) -> int:
     return cp if cp is not None else 0
 
 
-def launch_Ruk() -> chess.engine.SimpleEngine:
+def launch_Sgurr() -> chess.engine.SimpleEngine:
     return chess.engine.SimpleEngine.popen_uci(
-        [str(Ruk_CPP_PATH), "uci"],
+        [str(Sgurr_CPP_PATH), "uci"],
         timeout=ENGINE_STARTUP_TIMEOUT,
     )
 
 
-def choose_Ruk_cpp_move(
-    Ruk: chess.engine.SimpleEngine,
+def choose_sgurr_cpp_move(
+    Sgurr: chess.engine.SimpleEngine,
     board: chess.Board,
 ) -> tuple[chess.Move | None, dict[str, Any]]:
     start = time.time()
 
-    result = Ruk.play(
+    result = Sgurr.play(
         board,
         chess.engine.Limit(
-            time=Ruk_TIME_PER_MOVE,
-            depth=Ruk_MAX_DEPTH,
+            time=Sgurr_TIME_PER_MOVE,
+            depth=Sgurr_MAX_DEPTH,
         ),
         info=chess.engine.INFO_ALL,
     )
@@ -134,21 +134,21 @@ def choose_Ruk_cpp_move(
 def write_crash_report(
     board: chess.Board,
     game_number: int,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
 ) -> None:
     move_history = " ".join(move.uci() for move in board.move_stack)
 
     crash_report = {
         "game": game_number,
         "ply": board.ply(),
-        "Ruk_colour": "white" if Ruk_colour == chess.WHITE else "black",
+        "Sgurr_colour": "white" if Sgurr_colour == chess.WHITE else "black",
         "fen": board.fen(),
         "legal_moves": [move.uci() for move in board.legal_moves],
         "move_history": move_history,
         "settings": {
-            "Ruk_max_depth": Ruk_MAX_DEPTH,
-            "Ruk_time_per_move": Ruk_TIME_PER_MOVE,
-            "fresh_process_each_move": USE_FRESH_Ruk_PROCESS_EACH_MOVE,
+            "Sgurr_max_depth": Sgurr_MAX_DEPTH,
+            "Sgurr_time_per_move": Sgurr_TIME_PER_MOVE,
+            "fresh_process_each_move": USE_FRESH_Sgurr_PROCESS_EACH_MOVE,
         },
     }
 
@@ -161,7 +161,7 @@ def write_crash_report(
         "uci\n"
         "isready\n"
         f"position fen {board.fen()}\n"
-        f"go depth {Ruk_MAX_DEPTH} movetime {int(Ruk_TIME_PER_MOVE * 1000)}\n"
+        f"go depth {Sgurr_MAX_DEPTH} movetime {int(Sgurr_TIME_PER_MOVE * 1000)}\n"
         "quit\n",
         encoding="utf-8",
     )
@@ -171,7 +171,7 @@ def write_crash_report(
     print("-------------------")
     print(f"game: {crash_report['game']}")
     print(f"ply: {crash_report['ply']}")
-    print(f"colour: {crash_report['Ruk_colour']}")
+    print(f"colour: {crash_report['Sgurr_colour']}")
     print(f"fen: {crash_report['fen']}")
     print(f"crash position written to {CRASH_POSITION_FILE.name}")
     print(f"uci reproduction written to {CRASH_UCI_FILE.name}")
@@ -180,74 +180,74 @@ def write_crash_report(
 def save_game_pgn(
     board: chess.Board,
     game_number: int,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
     result: str,
 ) -> None:
     game = chess.pgn.Game.from_board(board)
 
-    game.headers["Event"] = "Ruk C++ Benchmark"
+    game.headers["Event"] = "Sgurr C++ Benchmark"
     game.headers["Round"] = str(game_number)
-    game.headers["White"] = "RukCPP" if Ruk_colour == chess.WHITE else "Stockfish"
-    game.headers["Black"] = "RukCPP" if Ruk_colour == chess.BLACK else "Stockfish"
+    game.headers["White"] = "Sgurr" if Sgurr_colour == chess.WHITE else "Stockfish"
+    game.headers["Black"] = "Sgurr" if Sgurr_colour == chess.BLACK else "Stockfish"
     game.headers["Result"] = result
     game.headers["StockfishElo"] = str(STOCKFISH_ELO)
-    game.headers["RukTimePerMove"] = f"{Ruk_TIME_PER_MOVE:.2f}"
-    game.headers["RukMaxDepth"] = str(Ruk_MAX_DEPTH)
-    game.headers["FreshRukProcessEachMove"] = str(USE_FRESH_Ruk_PROCESS_EACH_MOVE)
+    game.headers["SgurrTimePerMove"] = f"{Sgurr_TIME_PER_MOVE:.2f}"
+    game.headers["SgurrMaxDepth"] = str(Sgurr_MAX_DEPTH)
+    game.headers["FreshSgurrProcessEachMove"] = str(USE_FRESH_Sgurr_PROCESS_EACH_MOVE)
     game.headers["StockfishTimePerMove"] = f"{STOCKFISH_TIME_PER_MOVE:.2f}"
 
     with PGN_FILE.open("a", encoding="utf-8") as file:
         print(game, file=file, end="\n\n")
 
 
-def choose_Ruk_move_safely(
+def choose_Sgurr_move_safely(
     board: chess.Board,
     game_number: int,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
     persistent_engine: chess.engine.SimpleEngine | None,
 ) -> tuple[chess.Move | None, dict[str, Any]]:
     try:
-        if USE_FRESH_Ruk_PROCESS_EACH_MOVE:
-            with launch_Ruk() as Ruk:
-                return choose_Ruk_cpp_move(Ruk, board)
+        if USE_FRESH_Sgurr_PROCESS_EACH_MOVE:
+            with launch_Sgurr() as Sgurr:
+                return choose_sgurr_cpp_move(Sgurr, board)
 
         if persistent_engine is None:
             raise RuntimeError("persistent_engine is None while fresh-process mode is disabled")
 
-        return choose_Ruk_cpp_move(persistent_engine, board)
+        return choose_sgurr_cpp_move(persistent_engine, board)
 
     except Exception:
-        write_crash_report(board, game_number, Ruk_colour)
+        write_crash_report(board, game_number, Sgurr_colour)
         raise
 
 
 def play_game(
     stockfish: chess.engine.SimpleEngine,
-    Ruk_colour: chess.Color,
+    Sgurr_colour: chess.Color,
     game_number: int,
 ) -> tuple[str, int, str, list[dict], str]:
     board = chess.Board()
 
     move_stats: list[dict] = []
-    Ruk_move_logs: list[dict] = []
+    Sgurr_move_logs: list[dict] = []
     stop_reason = "normal_game_over"
 
-    persistent_Ruk: chess.engine.SimpleEngine | None = None
+    persistent_Sgurr: chess.engine.SimpleEngine | None = None
 
     try:
-        if not USE_FRESH_Ruk_PROCESS_EACH_MOVE:
-            persistent_Ruk = launch_Ruk()
+        if not USE_FRESH_Sgurr_PROCESS_EACH_MOVE:
+            persistent_Sgurr = launch_Sgurr()
 
         while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
-            if board.turn == Ruk_colour:
+            if board.turn == Sgurr_colour:
                 phase = get_game_phase(board.ply())
                 fen_before = board.fen()
 
-                move, stats = choose_Ruk_move_safely(
+                move, stats = choose_Sgurr_move_safely(
                     board,
                     game_number,
-                    Ruk_colour,
-                    persistent_Ruk,
+                    Sgurr_colour,
+                    persistent_Sgurr,
                 )
 
                 row = {
@@ -255,7 +255,7 @@ def play_game(
                     "ply": board.ply(),
                     "fen_before": fen_before,
                     "move": move.uci() if move is not None else None,
-                    "Ruk_colour": "white" if Ruk_colour == chess.WHITE else "black",
+                    "Sgurr_colour": "white" if Sgurr_colour == chess.WHITE else "black",
                     "phase": phase,
                     "depth": stats["depth"],
                     "nodes": stats["nodes"],
@@ -267,7 +267,7 @@ def play_game(
                 }
 
                 move_stats.append(row)
-                Ruk_move_logs.append(row.copy())
+                Sgurr_move_logs.append(row.copy())
 
             else:
                 result = stockfish.play(
@@ -293,18 +293,18 @@ def play_game(
             board.push(move)
 
     finally:
-        if persistent_Ruk is not None:
-            persistent_Ruk.quit()
+        if persistent_Sgurr is not None:
+            persistent_Sgurr.quit()
 
     if board.ply() >= MAX_PLIES and not board.is_game_over(claim_draw=True):
         stop_reason = "max_plies"
 
     result = board.result(claim_draw=True)
 
-    save_game_pgn(board, game_number, Ruk_colour, result)
+    save_game_pgn(board, game_number, Sgurr_colour, result)
 
     with MOVE_LOG_FILE.open("a", encoding="utf-8") as file:
-        for log in Ruk_move_logs:
+        for log in Sgurr_move_logs:
             log["result"] = result
             log["stop_reason"] = stop_reason
             file.write(json.dumps(log) + "\n")
@@ -329,7 +329,7 @@ def play_game(
     else:
         return "unfinished", board.ply(), result, move_stats, stop_reason
 
-    if winner == Ruk_colour:
+    if winner == Sgurr_colour:
         return "win", board.ply(), result, move_stats, stop_reason
 
     return "loss", board.ply(), result, move_stats, stop_reason
@@ -407,7 +407,7 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
     fieldnames = [
         "game",
         "ply",
-        "Ruk_colour",
+        "Sgurr_colour",
         "phase",
         "move",
         "depth",
@@ -430,7 +430,7 @@ def write_diagnostics_csv(all_move_stats: list[dict]) -> None:
             writer.writerow({
                 "game": stat.get("game"),
                 "ply": stat.get("ply"),
-                "Ruk_colour": stat.get("Ruk_colour"),
+                "Sgurr_colour": stat.get("Sgurr_colour"),
                 "phase": stat.get("phase"),
                 "move": stat.get("move"),
                 "depth": stat.get("depth"),
@@ -517,16 +517,16 @@ def print_diagnostic_reports(all_move_stats: list[dict]) -> None:
         highest_legal_moves,
     )
     print_position_report(
-        "Longest Ruk C++ searches",
+        "Longest Sgurr C++ searches",
         longest_searches,
     )
 
 
 def check_paths() -> None:
-    if not Ruk_CPP_PATH.exists():
+    if not Sgurr_CPP_PATH.exists():
         raise FileNotFoundError(
-            f"Could not find {Ruk_CPP_PATH}. "
-            "Compile the C++ engine first from Ruk_cpp/."
+            f"Could not find {Sgurr_CPP_PATH}. "
+            "Compile the C++ engine first from sgurr_cpp/."
         )
 
     if not Path(STOCKFISH_PATH).exists():
@@ -553,14 +553,14 @@ def main() -> None:
         start_time = time.time()
 
         for game_number in range(1, NUM_GAMES + 1):
-            Ruk_colour = chess.WHITE if game_number % 2 == 1 else chess.BLACK
-            colour_name = "White" if Ruk_colour == chess.WHITE else "Black"
+            Sgurr_colour = chess.WHITE if game_number % 2 == 1 else chess.BLACK
+            colour_name = "White" if Sgurr_colour == chess.WHITE else "Black"
 
-            print(f"Game {game_number}/{NUM_GAMES}: Ruk C++ as {colour_name}")
+            print(f"Game {game_number}/{NUM_GAMES}: Sgurr C++ as {colour_name}")
 
             result, plies, raw_result, move_stats, stop_reason = play_game(
                 stockfish,
-                Ruk_colour,
+                Sgurr_colour,
                 game_number,
             )
 
@@ -584,10 +584,10 @@ def main() -> None:
     print()
     print("Benchmark complete")
     print("------------------")
-    print("Engine: Ruk C++")
-    print(f"Fresh engine each move: {USE_FRESH_Ruk_PROCESS_EACH_MOVE}")
-    print(f"Ruk time per move: {Ruk_TIME_PER_MOVE:.2f}s")
-    print(f"Ruk max depth: {Ruk_MAX_DEPTH}")
+    print("Engine: Sgurr C++")
+    print(f"Fresh engine each move: {USE_FRESH_Sgurr_PROCESS_EACH_MOVE}")
+    print(f"Sgurr time per move: {Sgurr_TIME_PER_MOVE:.2f}s")
+    print(f"Sgurr max depth: {Sgurr_MAX_DEPTH}")
     print(f"Stockfish Elo setting: {STOCKFISH_ELO}")
     print(f"Stockfish time per move: {STOCKFISH_TIME_PER_MOVE:.2f}s")
 

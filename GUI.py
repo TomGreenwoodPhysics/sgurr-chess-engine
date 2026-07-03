@@ -16,17 +16,17 @@ import pygame
 PROJECT_DIR = Path(__file__).resolve().parent
 
 # The compiled C++ UCI engine executable. Needs to be an NNUE-capable build
-# (one that honours RUK_EVALFILE). Override with the RUK_ENGINE_EXE
+# (one that honours SGR_EVALFILE). Override with the SGR_ENGINE_EXE
 # environment variable.
 ENGINE_EXE_PATH = Path(
-    os.environ.get("RUK_ENGINE_EXE", str(PROJECT_DIR / "engines" / "ruk_gen1.exe"))
+    os.environ.get("SGR_ENGINE_EXE", str(PROJECT_DIR / "engines" / "sgr_gen1.exe"))
 )
 
 # Trained NNUE network the engine loads in NNUE mode.
 GEN1_NET_PATH = PROJECT_DIR / "nets" / "gen1.nnue"
 
-# Deliberately missing path: pointing RUK_EVALFILE here forces the engine's
-# hand-crafted-eval fallback even if a ruk.nnue sits in the working directory.
+# Deliberately missing path: pointing SGR_EVALFILE here forces the engine's
+# hand-crafted-eval fallback even if a sgurr.nnue sits in the working directory.
 NO_NET_PATH = PROJECT_DIR / "nets" / "__no_net__.nnue"
 
 SOUND_DIR = PROJECT_DIR / "assets" / "sounds"
@@ -52,7 +52,7 @@ SQUARE_SIZE = BOARD_SIZE // 8
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 
 # Engine selection. HCE and NNUE are the same C++ executable with different
-# evaluation (selected via RUK_EVALFILE); the pure-Python engine is the
+# evaluation (selected via SGR_EVALFILE); the pure-Python engine is the
 # weaker (~1500) original.
 ENGINE_CPP = "cpp"             # C++ engine, hand-crafted eval (classical)
 ENGINE_CPP_NNUE = "cpp_nnue"   # same C++ engine, NNUE eval (gen1 net)
@@ -64,27 +64,27 @@ ENGINE_CYCLE = [ENGINE_CPP, ENGINE_CPP_NNUE, ENGINE_PYTHON]
 
 ENGINE_PROFILES = {
     ENGINE_CPP: {
-        "short_name": "Ruk C++ HCE",
-        "label": "Ruk C++ HCE (~2516)",
-        "pgn_name": "RukCPP-HCE",
+        "short_name": "Sgurr C++ HCE",
+        "label": "Sgurr C++ HCE (~2516)",
+        "pgn_name": "Sgurr-HCE",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
         "net": None,            # None -> hand-crafted eval (classical)
     },
     ENGINE_CPP_NNUE: {
-        "short_name": "Ruk C++ NNUE",
-        "label": "Ruk C++ NNUE (gen1)",
-        "pgn_name": "RukCPP-NNUE",
+        "short_name": "Sgurr C++ NNUE",
+        "label": "Sgurr C++ NNUE (gen1)",
+        "pgn_name": "Sgurr-NNUE",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
-        "net": GEN1_NET_PATH,   # load this net via RUK_EVALFILE
+        "net": GEN1_NET_PATH,   # load this net via SGR_EVALFILE
     },
     ENGINE_PYTHON: {
-        "short_name": "Ruk Python",
-        "label": "Ruk Python (~1500)",
-        "pgn_name": "RukPython",
+        "short_name": "Sgurr Python",
+        "label": "Sgurr Python (~1500)",
+        "pgn_name": "SgurrPython",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
@@ -189,12 +189,12 @@ def score_to_white_centipawns(score: chess.engine.PovScore | None) -> int:
     return cp if cp is not None else 0
 
 
-class CppRukEngine:
-    """Wrapper around the C++ Ruk UCI executable.
+class CppSgurrEngine:
+    """Wrapper around the C++ Sgurr UCI executable.
 
     The same executable runs in classical (hand-crafted eval) or NNUE mode
     depending on net_path, which is passed to the child process as
-    RUK_EVALFILE. None points the engine at a missing file, forcing the
+    SGR_EVALFILE. None points the engine at a missing file, forcing the
     classical fallback. A fresh process is launched for each move.
     """
 
@@ -208,10 +208,10 @@ class CppRukEngine:
 
     def _child_env(self) -> dict[str, str]:
         # Keep the full environment (PATH includes the MSYS2 bin the engine's
-        # DLLs need) and set RUK_EVALFILE for the chosen mode.
+        # DLLs need) and set SGR_EVALFILE for the chosen mode.
         env = dict(os.environ)
         target = self.net_path if self.net_path is not None else NO_NET_PATH
-        env["RUK_EVALFILE"] = str(target)
+        env["SGR_EVALFILE"] = str(target)
         return env
 
     def search_best_move(
@@ -223,7 +223,7 @@ class CppRukEngine:
         if not self.engine_path.exists():
             raise FileNotFoundError(
                 f"Engine executable not found: {self.engine_path}. Build the C++ "
-                f"engine (with nnue.cpp) or set RUK_ENGINE_EXE to its location."
+                f"engine (with nnue.cpp) or set SGR_ENGINE_EXE to its location."
             )
 
         if self.net_path is not None and not self.net_path.exists():
@@ -274,26 +274,26 @@ class CppRukEngine:
         return material
 
 
-class PythonRukEngine:
-    """Adapter around the original pure-Python Ruk engine (~1500 elo).
+class PythonSgurrEngine:
+    """Adapter around the original pure-Python Sgurr engine (~1500 elo).
 
     The GUI uses python-chess for display and input while the engine searches
-    with its own RukBoard/RukEngine classes. Ruk_python is imported lazily so
+    with its own SgurrBoard/SgurrEngine classes. sgurr_python is imported lazily so
     the GUI still runs with the C++ engine if the package isn't importable.
     """
 
     def __init__(self) -> None:
         try:
-            from Ruk_python.Ruk_board import Board as RukBoard
-            from Ruk_python.Ruk_engine import Engine as RukEngine
+            from sgurr_python.sgurr_board import Board as SgurrBoard
+            from sgurr_python.sgurr_engine import Engine as SgurrEngine
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
-                "Could not import Ruk_python. Put this script in the project "
-                "folder or one folder below it so that Ruk_python is importable."
+                "Could not import sgurr_python. Put this script in the project "
+                "folder or one folder below it so that sgurr_python is importable."
             ) from exc
 
-        self._RukBoard = RukBoard
-        self.engine = RukEngine()
+        self._SgurrBoard = SgurrBoard
+        self.engine = SgurrEngine()
 
     def search_best_move(
         self,
@@ -301,11 +301,11 @@ class PythonRukEngine:
         max_depth: int,
         time_limit: float,
     ) -> SearchResult:
-        Ruk_board = self._RukBoard(board.fen())
+        sgurr_board = self._SgurrBoard(board.fen())
 
         start = time.time()
         result = self.engine.search_best_move(
-            Ruk_board,
+            sgurr_board,
             max_depth=max_depth,
             time_limit=time_limit,
         )
@@ -336,9 +336,9 @@ class PythonRukEngine:
             return 0
 
         try:
-            Ruk_board = self._RukBoard(board.fen())
-            score = self.safe_int(Ruk_board.evaluate())
-            return score if getattr(Ruk_board, "side_to_move", 0) == 0 else -score
+            sgurr_board = self._SgurrBoard(board.fen())
+            score = self.safe_int(sgurr_board.evaluate())
+            return score if getattr(sgurr_board, "side_to_move", 0) == 0 else -score
         except Exception:
             return self.material_only_eval(board)
 
@@ -360,11 +360,11 @@ class PythonRukEngine:
             return 0
 
 
-class RukGui:
+class SgurrGui:
     def __init__(self) -> None:
         pygame.init()
         self.sounds = self.load_sounds()
-        pygame.display.set_caption("Ruk")
+        pygame.display.set_caption("Sgurr")
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.clock = pygame.time.Clock()
@@ -384,7 +384,7 @@ class RukGui:
         self.auto_flip_as_black = AUTO_FLIP_AS_BLACK
 
         self.chess_board = chess.Board()
-        self.engine: CppRukEngine | PythonRukEngine | None = None
+        self.engine: CppSgurrEngine | PythonSgurrEngine | None = None
 
         self.human_colour: chess.Color | None = None
         self.flip_board = False
@@ -423,7 +423,7 @@ class RukGui:
             ButtonRect(centred_rect(340, 124, 44), "Opponent", "toggle_engine"),
             ButtonRect(centred_rect(340, 186, 50), "Play as White", "play_white"),
             ButtonRect(centred_rect(340, 246, 50), "Play as Black", "play_black"),
-            ButtonRect(centred_rect(340, 306, 50), "Watch Ruk vs itself", "watch"),
+            ButtonRect(centred_rect(340, 306, 50), "Watch Sgurr vs itself", "watch"),
             ButtonRect(pygame.Rect(left_x, 386, 70, 38), "- Max", "depth_down"),
             ButtonRect(pygame.Rect(mid_x, 386, 176, 38), "Max depth", "noop_depth"),
             ButtonRect(pygame.Rect(right_x, 386, 70, 38), "+ Max", "depth_up"),
@@ -465,11 +465,11 @@ class RukGui:
         self.apply_engine_defaults()
         self.status = f"Opponent: {self.engine_label}"
 
-    def make_engine(self) -> CppRukEngine | PythonRukEngine:
+    def make_engine(self) -> CppSgurrEngine | PythonSgurrEngine:
         if self.engine_choice == ENGINE_PYTHON:
-            return PythonRukEngine()
+            return PythonSgurrEngine()
         net = ENGINE_PROFILES[self.engine_choice]["net"]
-        return CppRukEngine(net_path=net)
+        return CppSgurrEngine(net_path=net)
 
 
 
@@ -635,7 +635,7 @@ class RukGui:
         self.human_colour = human_colour
         self.flip_board = bool(self.auto_flip_as_black and human_colour == chess.BLACK)
 
-        pygame.display.set_caption(f"Ruk - {self.engine_name}")
+        pygame.display.set_caption(f"Sgurr - {self.engine_name}")
 
         self.reset_runtime_state()
         self.game_started = True
@@ -667,7 +667,7 @@ class RukGui:
         self.engine_thinking = False
         self.status = "Choose a side"
         self.reset_runtime_state()
-        pygame.display.set_caption("Ruk")
+        pygame.display.set_caption("Sgurr")
 
     def load_fen(self, fen: str) -> None:
         try:
@@ -695,7 +695,7 @@ class RukGui:
         self.input_mode = None
         self.text_input = ""
         self.input_error = ""
-        pygame.display.set_caption(f"Ruk - {self.engine_name}")
+        pygame.display.set_caption(f"Sgurr - {self.engine_name}")
         self.update_static_eval_display()
         self.status = "Loaded FEN"
         self.play_sound("game_start")
@@ -959,7 +959,7 @@ class RukGui:
         out_dir.mkdir(exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = out_dir / f"Ruk_{self.engine_choice}_gui_game_{timestamp}.pgn"
+        path = out_dir / f"Sgurr_{self.engine_choice}_gui_game_{timestamp}.pgn"
 
         game = chess.pgn.Game.from_board(self.chess_board)
         game.headers["Event"] = f"{self.engine_name} GUI Game"
@@ -1054,7 +1054,7 @@ class RukGui:
     def draw_menu(self) -> None:
         self.screen.fill(BACKGROUND)
 
-        title = self.large_font.render("Ruk", True, TEXT)
+        title = self.large_font.render("Sgurr", True, TEXT)
         self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 58)))
 
         subtitle = self.small_font.render("Choose your opponent and how you want to play", True, MUTED_TEXT)
@@ -1553,7 +1553,7 @@ class RukGui:
 
 
 def main() -> None:
-    gui = RukGui()
+    gui = SgurrGui()
     gui.run()
 
 

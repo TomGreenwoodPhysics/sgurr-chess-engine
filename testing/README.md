@@ -1,4 +1,4 @@
-# Ruk engine match / SPRT testing
+# Sgurr engine match / SPRT testing
 
 ## Plain match between two engines (`match.py`)
 
@@ -22,10 +22,10 @@ once a result is statistically settled.
 Each patch is tested against the previous accepted version, not a fixed
 opponent:
 
-1. Build the current `main` as `ruk_base` and keep it.
-2. Make one change. Build it as `ruk_new`.
-3. Run SPRT `ruk_new` vs `ruk_base`.
-4. If it passes (H1), `ruk_new` becomes the new `ruk_base`. If it fails (H0),
+1. Build the current `main` as `sgr_base` and keep it.
+2. Make one change. Build it as `sgr_new`.
+3. Run SPRT `sgr_new` vs `sgr_base`.
+4. If it passes (H1), `sgr_new` becomes the new `sgr_base`. If it fails (H0),
    discard the change. One idea per test.
 
 ### Reading the result
@@ -43,7 +43,7 @@ opponent:
 
 No dependencies beyond Python 3:
 
-    python3 sprt.py --new ./ruk_new --base ./ruk_base \
+    python3 sprt.py --new ./sgr_new --base ./sgr_base \
         --tc 8+0.08 --book book.epd --concurrency 8 \
         --elo0 0 --elo1 5 --alpha 0.05 --beta 0.05
 
@@ -62,9 +62,9 @@ higher throughput and a pentanomial SPRT. Use the same book and bounds.
 ## The opening book
 
 `book.epd` is a starter book of balanced positions (each ~8 plies in, filtered
-to within +/-70 cp by Ruk's own eval). Regenerate or enlarge it with:
+to within +/-70 cp by Sgurr's own eval). Regenerate or enlarge it with:
 
-    python3 book_gen.py --engine ./ruk_new --out book.epd --count 1000
+    python3 book_gen.py --engine ./sgr_new --out book.epd --count 1000
 
 For serious testing, a large curated book such as UHO (unbalanced human
 openings) or a Pohl book reduces draw rates and variance.

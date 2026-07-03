@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Train a Ruk NNUE ((768 -> HL) x2 -> 1) from datagen output and export a .nnue.
+"""Train a Sgurr NNUE ((768 -> HL) x2 -> 1) from datagen output and export a .nnue.
 
   pip install torch numpy
-  python3 train.py --data data.bin --out ruk.nnue --epochs 40
+  python3 train.py --data data.bin --out sgurr.nnue --epochs 40
 
 Runs on CPU or GPU (CUDA auto-detected). The exported file is the format the
 engine loads; the format and feature indexing are shared with nnue_tools.py.
@@ -189,7 +189,7 @@ def eval_loss(model, WF, BF, STM, SC, RES, idx, batch, dev, lambda_):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
-    ap.add_argument("--out", default="ruk.nnue")
+    ap.add_argument("--out", default="sgurr.nnue")
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)

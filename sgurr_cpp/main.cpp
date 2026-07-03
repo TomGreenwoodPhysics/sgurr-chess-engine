@@ -150,7 +150,7 @@ void uci_loop() {
 
     while (std::getline(std::cin, command)) {
         if (command == "uci") {
-            std::cout << "id name RukCPP\n";
+            std::cout << "id name Sgurr\n";
             std::cout << "id author Tom\n";
             std::cout << "uciok\n";
         } else if (command == "isready") {
@@ -325,14 +325,14 @@ int main(int argc, char* argv[]) {
     // Load an NNUE network if one is available; otherwise use the hand-crafted
     // evaluation.
     {
-        // $RUK_EVALFILE overrides the compile-time default (-DRUK_DEFAULT_NET),
+        // $SGR_EVALFILE overrides the compile-time default (-DSGR_DEFAULT_NET),
         // which is empty unless set at build time. An HCE build therefore never
         // picks up a stray net, whatever the working directory.
-#ifndef RUK_DEFAULT_NET
-#define RUK_DEFAULT_NET ""
+#ifndef SGR_DEFAULT_NET
+#define SGR_DEFAULT_NET ""
 #endif
-        const char* env = std::getenv("RUK_EVALFILE");
-        std::string net_path = env ? env : RUK_DEFAULT_NET;
+        const char* env = std::getenv("SGR_EVALFILE");
+        std::string net_path = env ? env : SGR_DEFAULT_NET;
         if (!net_path.empty() && nnue::load(net_path)) {
             std::cerr << "info string nnue: loaded " << net_path << "\n";
         } else {

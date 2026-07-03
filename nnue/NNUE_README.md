@@ -1,8 +1,8 @@
-# Ruk NNUE pipeline
+# Sgurr NNUE pipeline
 
 Replaces the hand-crafted evaluation with a trained network while keeping all
 of the search. The engine side (loading and running nets) lives in
-`Ruk_cpp/nnue.cpp`; this folder is the tooling for producing a net.
+`sgurr_cpp/nnue.cpp`; this folder is the tooling for producing a net.
 
 ## The loop
 
@@ -14,7 +14,7 @@ of the search. The engine side (loading and running nets) lives in
 ## 1. Generate data
 
 Build the generator against the engine (use clang, not the broken ucrt64 gcc,
-see `../Ruk_cpp/BUILD.md`):
+see `../sgurr_cpp/BUILD.md`):
 
     /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
         datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o datagen.exe
@@ -44,11 +44,11 @@ checks a file.
 ## 2. Train
 
     pip install torch numpy
-    python3 train.py --data data.bin --out ruk.nnue --epochs 40
+    python3 train.py --data data.bin --out sgurr.nnue --epochs 40
 
 CUDA is used automatically if present (CPU works but is slow). Key options:
 `--lambda_` blends the eval-score target with the game result (0.7 = mostly
-eval), plus `--batch`, `--lr`, `--epochs`. The output `ruk.nnue` is the file
+eval), plus `--batch`, `--lr`, `--epochs`. The output `sgurr.nnue` is the file
 the engine loads.
 
 ## 3. Test
@@ -56,10 +56,10 @@ the engine loads.
 Point the engine at the net and SPRT it against the HCE baseline (same binary,
 no net = HCE):
 
-    RUK_EVALFILE=ruk.nnue ./ruk_nnue        # uses the net
-    ./ruk_hce                               # no net found, hand-crafted eval
+    SGR_EVALFILE=sgurr.nnue ./sgr_nnue        # uses the net
+    ./sgr_hce                               # no net found, hand-crafted eval
 
-    python3 ../testing/sprt.py --new ./ruk_nnue --base ./ruk_hce \
+    python3 ../testing/sprt.py --new ./sgr_nnue --base ./sgr_hce \
         --tc 8+0.08 --book ../testing/book.epd --elo0 0 --elo1 5
 
 ## Notes
@@ -85,4 +85,4 @@ no net = HCE):
 - `train.py`        PyTorch trainer, writes a .nnue
 - `nnue_tools.py`   format I/O, feature indexing, quantise + export, references
 - `verify_data.py`  sanity-checks a datagen file
-- `ruk.nnue`        random placeholder net (tests the loading path only)
+- `sgurr.nnue`        random placeholder net (tests the loading path only)

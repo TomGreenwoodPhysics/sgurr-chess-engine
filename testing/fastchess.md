@@ -20,8 +20,8 @@ On Windows the release `.exe` is the easiest path, or build under MSYS2/MinGW.
 ## Run an SPRT (new vs previous version)
 
     fastchess \
-      -engine cmd=./ruk_new  name=new \
-      -engine cmd=./ruk_base name=base \
+      -engine cmd=./sgr_new  name=new \
+      -engine cmd=./sgr_base name=base \
       -each tc=8+0.08 \
       -rounds 5000 -repeat -concurrency 8 \
       -openings file=book.epd format=epd order=random \
@@ -47,10 +47,10 @@ Every `ratinginterval` games fastchess prints the running score, an Elo
 estimate with error bars, and the LLR with its bounds, then `Finished match`
 with the SPRT verdict.
 
-## Notes specific to Ruk
+## Notes specific to Sgurr
 
-- Ruk has no UCI options, so no `option.Hash=...` etc. is needed.
-- Ruk does not currently clear its transposition table on `ucinewgame`, so
+- Sgurr has no UCI options, so no `option.Hash=...` etc. is needed.
+- Sgurr does not currently clear its transposition table on `ucinewgame`, so
   games within one process share TT state. Both engines are affected equally,
   but clearing it would remove a minor source of noise.
 - Use the same book and TC as the Python harness so numbers are comparable
@@ -59,8 +59,8 @@ with the SPRT verdict.
 ## cutechess-cli equivalent
 
     cutechess-cli \
-      -engine cmd=./ruk_new  name=new  proto=uci \
-      -engine cmd=./ruk_base name=base proto=uci \
+      -engine cmd=./sgr_new  name=new  proto=uci \
+      -engine cmd=./sgr_base name=base proto=uci \
       -each tc=8+0.08 \
       -rounds 5000 -repeat -concurrency 8 \
       -openings file=book.epd format=epd order=random \

@@ -1,4 +1,4 @@
-# Building Ruk C++
+# Building Sgurr C++
 
 ## Compiler
 
@@ -16,21 +16,21 @@ Use **clang** from the MSYS2 `clang64` environment:
 
 There is a single engine binary. It uses the hand-crafted evaluation (HCE)
 when no network loads, and the NNUE when a network is provided via
-`$RUK_EVALFILE` (default `ruk.nnue` in the working dir). `nnue.cpp` must
+`$SGR_EVALFILE` (default `sgurr.nnue` in the working dir). `nnue.cpp` must
 always be linked, since the evaluation references `nnue::` symbols even when
 no net is loaded.
 
     /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
         -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
-        -o Ruk.exe
+        -o sgr.exe
 
 `-static` makes the binary standalone (no clang64 DLLs needed on PATH), which
 is convenient for the SPRT harness.
 
 Run as HCE (no net) vs NNUE (net) with the same binary:
 
-    ./Ruk.exe uci                                  # HCE (no RUK_EVALFILE, no ruk.nnue)
-    RUK_EVALFILE=../nets/gen1.nnue ./Ruk.exe uci   # NNUE
+    ./sgr.exe uci                                  # HCE (no SGR_EVALFILE, no sgurr.nnue)
+    SGR_EVALFILE=../nets/gen1.nnue ./sgr.exe uci   # NNUE
 
 ## Datagen
 

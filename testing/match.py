@@ -2,21 +2,21 @@
 """Plain head-to-head match between two pre-compiled UCI engines.
 
 Default setup:
-  A = Ruk NNUE executable, loading nets/gen1.nnue
-  B = classical/base Ruk executable, forced to HCE
+  A = Sgurr NNUE executable, loading nets/gen1.nnue
+  B = classical/base Sgurr executable, forced to HCE
 
 Run:
   python3 match.py
 
 Or override:
-  python3 match.py ./engines/ruk_gen1.exe ./engines/baselines/ruk_base.exe --games 200
+  python3 match.py ./engines/sgr_gen1.exe ./engines/baselines/sgr_base.exe --games 200
 """
 
 # ---------------------------------------------------------------------------
-ENGINE_A = "../engines/ruk_gen1.exe"
+ENGINE_A = "../engines/sgr_gen1.exe"
 ENGINE_A_NET = "../nets/gen1.nnue"
 
-ENGINE_B = "../engines/baselines/ruk_base.exe"
+ENGINE_B = "../engines/baselines/sgr_base.exe"
 ENGINE_B_NET = ""
 
 NO_NET_PATH = "../nets/__no_net__.nnue"          # intentionally absent
@@ -60,10 +60,10 @@ class Engine:
 
         env = dict(os.environ)
 
-        # RUK_EVALFILE selects the eval: a real net path for NNUE, or a
+        # SGR_EVALFILE selects the eval: a real net path for NNUE, or a
         # missing path so an NNUE-capable binary falls back to HCE.
         if spec.net_path is not None:
-            env["RUK_EVALFILE"] = spec.net_path
+            env["SGR_EVALFILE"] = spec.net_path
 
         self.p = subprocess.Popen(
             [self.path, "uci"],

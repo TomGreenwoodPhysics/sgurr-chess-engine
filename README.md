@@ -1,18 +1,33 @@
-# Ruk
+# Sgurr
 
-A UCI chess engine written primarily in modern C++.
+A UCI chess engine written primarily in modern C++, with an NNUE evaluation
+trained on self-play data.
 
-Ruk was formerly called **Bitfish**. The repository also includes an earlier
-pure-Python version as a legacy/reference implementation.
+Sgurr was formerly called **Ruk**, and before that **Bitfish**. The name comes
+from the Gaelic *Sgùrr* — a rocky mountain peak (the engine name itself is
+plain-ASCII `Sgurr`; the binary is `sgr`). The repository also includes an
+earlier pure-Python version as a legacy/reference implementation.
+
+## Releases
+
+Versions are named after Sgùrr peaks in ascending height. Version numbers are
+the canonical identifiers; peak names are codenames only.
+
+| version | codename | peak | summary |
+|---|---|---|---|
+| v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
+| v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 Elo vs v1.0 (300 games, 8+0.08) |
+
+See `CHANGELOG.md` for details and measured results with error bars.
 
 ---
 
 ## Strength
 
-**Ruk (C++)** has been benchmarked against **Stockfish limited to ~2400 Elo**
+**Sgurr (C++)** has been benchmarked against **Stockfish limited to ~2400 Elo**
 with both engines using **0.50 s/move**.
 
-Across **1000 games**, Ruk scored:
+Across **1000 games**, Sgurr scored:
 
 ```text
 575 wins, 182 draws, 243 losses
@@ -27,8 +42,8 @@ rather than an official rating; see the notes at the end of this file.
 Colour split:
 
 ```text
-Ruk as White: 360.5/500 = 72.1%
-Ruk as Black: 305.5/500 = 61.1%
+Sgurr as White: 360.5/500 = 72.1%
+Sgurr as Black: 305.5/500 = 61.1%
 ```
 
 Two unfinished games were counted as draws. Excluding them gives:
@@ -52,7 +67,7 @@ setup**, with an estimated **95% confidence interval of about ±20 Elo**.
 
 ### C++ engine
 
-The C++ engine is the primary version of Ruk and is the full-strength engine in
+The C++ engine is the primary version of Sgurr and is the full-strength engine in
 this repository.
 
 It uses:
@@ -143,16 +158,16 @@ the project.
 Requires a C++20 compiler. From the C++ source folder:
 
 ```bash
-clang++ -std=c++20 -O3 -march=native -DNDEBUG -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o Ruk_cpp.exe
+clang++ -std=c++20 -O3 -march=native -DNDEBUG -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o sgr.exe
 ```
 
-See `Ruk_cpp/BUILD.md` for the recommended toolchain on Windows (MSYS2 clang64)
+See `sgurr_cpp/BUILD.md` for the recommended toolchain on Windows (MSYS2 clang64)
 and for building the NNUE data generator.
 
 Run in UCI mode:
 
 ```bash
-./Ruk_cpp.exe uci
+./sgr.exe uci
 ```
 
 A quick manual UCI session:
@@ -181,19 +196,19 @@ bestmove g1f3
 Run the built-in general test mode:
 
 ```bash
-./Ruk_cpp.exe
+./sgr.exe
 ```
 
 Run SEE tests:
 
 ```bash
-./Ruk_cpp.exe seetest
+./sgr.exe seetest
 ```
 
 Search a specific FEN:
 
 ```bash
-./Ruk_cpp.exe fen "<FEN string>"
+./sgr.exe fen "<FEN string>"
 ```
 
 ---
@@ -205,13 +220,13 @@ Requires Python 3.10+.
 From the repository root:
 
 ```bash
-python -m Ruk_python.Ruk_engine uci
+python -m sgurr_python.sgurr_engine uci
 ```
 
 For interactive terminal mode:
 
 ```bash
-python -m Ruk_python.Ruk_engine
+python -m sgurr_python.sgurr_engine
 ```
 
 Useful interactive commands:
@@ -251,7 +266,7 @@ configuration, on specific hardware, at a specific time control, not an
 official rating. The safest interpretation is simply:
 
 ```text
-In this test setup, Ruk scored 66.6% against Stockfish limited to ~2400 Elo.
+In this test setup, Sgurr scored 66.6% against Stockfish limited to ~2400 Elo.
 ```
 
 The approximate 2520 Elo figure is a translation of that match score.
