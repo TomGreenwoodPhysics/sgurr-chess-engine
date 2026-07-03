@@ -32,7 +32,7 @@ stockfish/
 
 # nnue training data
 *.bin
-data/
+data/**/*.zip
 
 *_file_list.txt
 

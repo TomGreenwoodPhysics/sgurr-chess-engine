@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "dataset_version": "v1.0",
+  "codename": "Fox",
+  "engine": "Sgurr",
+  "source": "self-play",
+  "positions": 16701312,
+  "record_format": {
+    "record_bytes": 32,
+    "fields": "u64 occupancy (LSB=a1) | u8[16] piece nibbles (0..11, low nibble first, ascending squares) | u8 side_to_move | i16 score_cp (stm-relative) | u8 result (0 stm loss / 1 draw / 2 stm win) | u8[4] pad",
+    "reference": "sgurr_cpp/datagen.cpp header; decoder in nnue/nnue_tools.py"
+  },
+  "generation": {
+    "labeller": "classical (hand-crafted) evaluation",
+    "search_limit": "depth 8 per move",
+    "openings": "fixed start position + 1-4 random plies (no book)",
+    "filters": "quiet positions only (not in check, best move not capture/promo/EP), |score| < 2000cp, first 8 plies skipped, win adjudication at 2000cp sustained 6 plies",
+    "engine_code": "pre-v1.0 working tree, ~2026-06-24; exact commit not recorded (predates manifest discipline)",
+    "dates": "2026-06-24",
+    "hardware": "6 logical cores, Windows 10; depth-based limits are hardware-sensitive"
+  },
+  "provenance_notes": "Recovered retroactively: this dataset was believed deleted but was found intact (sgurr_cpp/data_1..6.bin) and audited 2026-07-01: 97.0% unique positions, ~0.5% cross-shard overlap. nnue/data.bin is the byte-exact concatenation of these six shards (derivable, not archived separately).",
+  "trained_net": {
+    "weights": "nets/gen1.nnue (arch 768->256->1 perspective, RUKN format)",
+    "measured_result": "+9.3 +/- 36.3 Elo vs classical eval (300 games, 8+0.08s, 2026-07-01)"
+  },
+  "shards": [
+    {
+      "name": "data_1.bin",
+      "bytes": 89321472,
+      "positions": 2791296,
+      "sha256": "5a2c98de360c0bab794125a25f6b7d45be8703703d32d1c0ed671357ea652afd"
+    },
+    {
+      "name": "data_2.bin",
+      "bytes": 88731648,
+      "positions": 2772864,
+      "sha256": "62c7640cb24570242c07d46fce5b7776023332854ce1edec90180d6eadc984fd"
+    },
+    {
+      "name": "data_3.bin",
+      "bytes": 89210880,
+      "positions": 2787840,
+      "sha256": "f04b3fef38be2cd54691856d645ceaaa74d207d16e03b81919040f4d8c9e2697"
+    },
+    {
+      "name": "data_4.bin",
+      "bytes": 88915968,
+      "positions": 2778624,
+      "sha256": "8afdb7a1b0dc89eac3634082ddfd5ab44a41d99c2a6e5d2589ee67cf3ff94e5a"
+    },
+    {
+      "name": "data_5.bin",
+      "bytes": 89116672,
+      "positions": 2784896,
+      "sha256": "27122fdc618e59bfdead9469be69d119cceee79c1c899d25d8be683a324ff8f4"
+    },
+    {
+      "name": "data_6.bin",
+      "bytes": 89145344,
+      "positions": 2785792,
+      "sha256": "19eb585c65bc419df1e8041f1038fad4cc6d34dbb49ef5b4d602c82d8404c0b7"
+    }
+  ],
+  "archive": {
+    "name": "positions_v1.0.zip",
+    "bytes": 184927742,
+    "sha256": "4f7e9230c96a9c41271261eb8a79de9e5069a10d5128cd39f5f2559217484ee4"
+  },
+  "manifest_written": "2026-07-03"
+}

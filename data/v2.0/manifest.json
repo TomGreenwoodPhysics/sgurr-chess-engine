@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "dataset_version": "v2.0",
+  "codename": "Notches",
+  "engine": "Sgurr",
+  "source": "self-play",
+  "positions": 14507405,
+  "record_format": {
+    "record_bytes": 32,
+    "fields": "u64 occupancy (LSB=a1) | u8[16] piece nibbles (0..11, low nibble first, ascending squares) | u8 side_to_move | i16 score_cp (stm-relative) | u8 result (0 stm loss / 1 draw / 2 stm win) | u8[4] pad",
+    "reference": "sgurr_cpp/datagen.cpp header; decoder in nnue/nnue_tools.py"
+  },
+  "generation": {
+    "labeller": "v1.0 NNUE (nets/gen1.nnue)",
+    "search_limit": "nodes:50000 per move (hardware-independent)",
+    "openings": "testing/book.epd (150 balanced lines, +/-70cp) + 1-4 random plies; 5% random-move injection during games",
+    "filters": "quiet positions only (not in check, best move not capture/promo/EP), |score| < 2000cp, first 8 plies skipped, win adjudication at 2000cp sustained 6 plies",
+    "engine_code": "uncommitted working tree based on 53800b6; code state captured post-hoc in commit 16e9a8d (datagen.cpp as run)",
+    "dates": "2026-07-01 to 2026-07-03, 5 stop/resume sessions, 6 parallel processes (one shard per process per session)",
+    "hardware": "6 logical cores, Windows 10; node-based limits make labels hardware-independent"
+  },
+  "provenance_notes": "Audited 2026-07-03: 97.5% unique positions, no torn records, label distribution stationary across all 30 shards. Shards are game-disjoint by construction (one writer process per shard) -- hold out whole shards for leakage-free validation. True (game-disjoint) scaling for the 256-wide net saturates at ~3M positions; the full 14.5M supports larger future nets.",
+  "trained_net": {
+    "weights": "nets/gen2.nnue (arch 768->256->1 perspective, RUKN format)",
+    "measured_result": "+77.7 +/- 37.4 Elo vs v1.0 (+162 =42 -96, 300 games, 8+0.08s, 2026-07-03)"
+  },
+  "shards": [
+    {
+      "name": "data_0000_2e61cc34.bin",
+      "bytes": 12947424,
+      "positions": 404607,
+      "sha256": "bf65db995ffe4905e218dd49ca6527b9e5b9277e246f4208b911c97eca3a3622"
+    },
+    {
+      "name": "data_0001_588606f7.bin",
+      "bytes": 12914016,
+      "positions": 403563,
+      "sha256": "c97dd68b4786d15f6c9576dfbe85fd5c87c6f5d9e627910652856228726c4757"
+    },
+    {
+      "name": "data_0002_b3f2c63c.bin",
+      "bytes": 12839712,
+      "positions": 401241,
+      "sha256": "607b8e54c5f4384444cfa94927fadfdebeff588bc18000276c62c4e2bc6d6e63"
+    },
+    {
+      "name": "data_0003_7eed4d70.bin",
+      "bytes": 12970656,
+      "positions": 405333,
+      "sha256": "af176a45c63621e71e0f4cc1e64aa17a072f1b6050cea63000ea50cb86dcbb7b"
+    },
+    {
+      "name": "data_0004_d77b68ee.bin",
+      "bytes": 12942656,
+      "positions": 404458,
+      "sha256": "19972dec4e062629acb68f16b8894fdfd4dcdedf17b9b658f4afde97ec74dd09"
+    },
+    {
+      "name": "data_0005_2439986a.bin",
+      "bytes": 12929856,
+      "positions": 404058,
+      "sha256": "19ab3b131105f7a2617d87c41d236b6df3e4a0fd30f088ff4d7a5af4d2085f8e"
+    },
+    {
+      "name": "data_0006_9f807acf.bin",
+      "bytes": 17110560,
+      "positions": 534705,
+      "sha256": "1326dea1da2df5d76698a2c545dbbf28c939f83c666cc0f71088e0fd78237a94"
+    },
+    {
+      "name": "data_0007_31be0b84.bin",
+      "bytes": 17147648,
+      "positions": 535864,
+      "sha256": "fc2e95ca1a6c8dfa4dbf76235704415a45bf705f643a38491ac77cfcda9047a8"
+    },
+    {
+      "name": "data_0008_33bb2b92.bin",
+      "bytes": 17097920,
+      "positions": 534310,
+      "sha256": "5a06846f7301e82103c4f946327a54a236397da9e713b9262efc1a2effbbf31d"
+    },
+    {
+      "name": "data_0009_05322f27.bin",
+      "bytes": 17168640,
+      "positions": 536520,
+      "sha256": "793700449bfeccbb7843640dfe919fa8f411f9591ded2b78248c9504d313d7b2"
+    },
+    {
+      "name": "data_0010_4894d670.bin",
+      "bytes": 17128064,
+      "positions": 535252,
+      "sha256": "fbe282042b0dcbd082695548436535aaad78ff78e12bcf9c31bd29817e6e0d8f"
+    },
+    {
+      "name": "data_0011_d50b12fa.bin",
+      "bytes": 17206240,
+      "positions": 537695,
+      "sha256": "9c234b83eba509a92914582d5de0c904aa013f3ecc54a4a2542a9a14c839e99f"
+    },
+    {
+      "name": "data_0012_81e98b19.bin",
+      "bytes": 6656928,
+      "positions": 208029,
+      "sha256": "6adb70f96edebfaa36bd31d97c313642634b7e11c5fc419cc9222e0cc09bc885"
+    },
+    {
+      "name": "data_0013_d9dfece0.bin",
+      "bytes": 6695904,
+      "positions": 209247,
+      "sha256": "e4c351d9c853be6a08045a6d643938985d24837ad1c7613783ed56bb9526f939"
+    },
+    {
+      "name": "data_0014_de6d4d50.bin",
+      "bytes": 6697856,
+      "positions": 209308,
+      "sha256": "ed2d49079afe3a2607777b268350cb5ace2a7cf36ffa9b181e5a5c84f9e3718d"
+    },
+    {
+      "name": "data_0015_3272978b.bin",
+      "bytes": 6675392,
+      "positions": 208606,
+      "sha256": "d62a7f1d4f870686d27cde52021439d1be44bf844cbc654bfac0af7b8cff1646"
+    },
+    {
+      "name": "data_0016_c09a9367.bin",
+      "bytes": 6735200,
+      "positions": 210475,
+      "sha256": "3f2c3a76a5c7321f835adb41be0c528e806bd1209e980d82a2ef913f2521d1e7"
+    },
+    {
+      "name": "data_0017_eb1f54e8.bin",
+      "bytes": 6723872,
+      "positions": 210121,
+      "sha256": "f33c8407ac0bb0b12f668e070821b6d11fc13762fc707169c11b7ce20f48e594"
+    },
+    {
+      "name": "data_0018_5ffeb043.bin",
+      "bytes": 13892640,
+      "positions": 434145,
+      "sha256": "c3faca043b24c2870ad7a401ac101f5bceb2af036eba101d7c9a7d1ca3550e0b"
+    },
+    {
+      "name": "data_0019_fc823722.bin",
+      "bytes": 13901984,
+      "positions": 434437,
+      "sha256": "1e75865e51571ba6c971fabedee58b59df95dc932a1539c07c806813bf45d588"
+    },
+    {
+      "name": "data_0020_b84fbea3.bin",
+      "bytes": 13973120,
+      "positions": 436660,
+      "sha256": "53399e5a5c616888adb6b146bf39e0c6faf31ac7bcb2d6213f67318652f22d5e"
+    },
+    {
+      "name": "data_0021_f6255334.bin",
+      "bytes": 13984896,
+      "positions": 437028,
+      "sha256": "e1fea59d58444775f7b85d9f4bff16063b07e91c3f5939962e6f47747b6ad8e0"
+    },
+    {
+      "name": "data_0022_8f4756ff.bin",
+      "bytes": 14019424,
+      "positions": 438107,
+      "sha256": "20960c4ebd48238147f39515dc49e14b89127b1fa507067c911680536fb6f794"
+    },
+    {
+      "name": "data_0023_a843338d.bin",
+      "bytes": 14000640,
+      "positions": 437520,
+      "sha256": "5214468f67edc9192fb9e0265620cc9c096b1e140ecfee31d2595ffd2f22cedc"
+    },
+    {
+      "name": "data_0024_4c204fa3.bin",
+      "bytes": 26635232,
+      "positions": 832351,
+      "sha256": "819375d000789bda058fe381d0880f4088bb043ee361ceb10dedd89cda9769a6"
+    },
+    {
+      "name": "data_0024_83d02e1d.bin",
+      "bytes": 26617568,
+      "positions": 831799,
+      "sha256": "f05201d5c6181e3bf0e165d35aeb4987031dcf0369546ffae5083f3766a878f6"
+    },
+    {
+      "name": "data_0025_f60b4535.bin",
+      "bytes": 26738688,
+      "positions": 835584,
+      "sha256": "81d0b0ec93f5b4cf17b72ceada4269e06cf918ca06b44223ecc19f8d01870136"
+    },
+    {
+      "name": "data_0026_277ec8d1.bin",
+      "bytes": 26672032,
+      "positions": 833501,
+      "sha256": "442c5917abda1e991de631b443c9eadabe5dcf00b7ce5f0bf2b32fec709a48c2"
+    },
+    {
+      "name": "data_0026_b8134593.bin",
+      "bytes": 26621952,
+      "positions": 831936,
+      "sha256": "626201ca5dfd6cdd8a5122b53b2529a7527c1f8e346a3be828327fca0678c939"
+    },
+    {
+      "name": "data_0027_da253479.bin",
+      "bytes": 26590240,
+      "positions": 830945,
+      "sha256": "2dbb9e091a14216b3bc954ef5b07f6b57b975195226f5d839ec0327e34547817"
+    }
+  ],
+  "archive": {
+    "name": "positions_v2.0.zip",
+    "bytes": 159213198,
+    "sha256": "0803348216cab0bc7bac1f6d43156e9c28048ed41b24470f61e04325fefd1546"
+  },
+  "manifest_written": "2026-07-03"
+}
