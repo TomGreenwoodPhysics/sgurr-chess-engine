@@ -146,7 +146,7 @@ class Engine:
                 beta = best_score + ASPIRATION_WINDOW
                 score, move = self.negamax_root(board, depth, alpha, beta)
 
-                # Failed low or high → re-search with full window
+                # Failed low or high: re-search with full window
                 if not self.stop_search and (score <= alpha or score >= beta):
                     score, move = self.negamax_root(board, depth, -INF, INF)
 

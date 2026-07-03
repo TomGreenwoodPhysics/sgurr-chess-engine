@@ -1,4 +1,5 @@
 #include "evaluation.hpp"
+#include "nnue.hpp"
 
 #include <array>
 #include <bit>
@@ -7,10 +8,9 @@
 
 namespace {
 
-// Tunable evaluation parameters. In the normal engine build EVAL_PARAM is
-// constexpr (identical codegen to before). The Texel tuner compiles this
-// translation unit with -DTUNING, which makes the marked parameters mutable
-// so they can be adjusted at runtime.
+// Tunable evaluation parameters. Normally constexpr; the Texel tuner compiles
+// this file with -DTUNING to make them mutable so they can be adjusted at
+// runtime.
 #ifdef TUNING
 #define EVAL_PARAM
 #else
@@ -314,10 +314,9 @@ int Board::evaluate_fast() const {
 }
 
 int Board::evaluate_quiet() const {
-    // Stand-pat must use the full evaluation: quiescence terminates almost
-    // every search line, so whatever this returns IS the engine's effective
-    // positional knowledge. Routing it to material+PST only made pawn
-    // structure, king safety, mobility and mop-up invisible to the search.
+    // Stand-pat uses the full evaluation: quiescence terminates almost every
+    // search line, so whatever this returns is the positional knowledge the
+    // search actually sees.
     return evaluate();
 }
 
@@ -561,8 +560,8 @@ int Board::evaluate_pawn_structure() const {
     U64 wp = bitboards[WP];
     U64 bp = bitboards[BP];
 
-    // Pawn structure changes on a small minority of moves, so cache the
-    // result keyed on the exact pawn bitboards (full-key check: no aliasing).
+    // Pawn structure only changes on a minority of moves, so cache the result
+    // keyed on the exact pawn bitboards.
     std::size_t index = mix64(wp ^ mix64(bp)) & PAWN_CACHE_MASK;
     PawnCacheEntry& entry = pawn_cache[index];
 
@@ -589,9 +588,8 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
 
     U64 zone = king_attacks(king_sq) | bit(king_sq);
 
-    // Weighted pressure: one pass over enemy pieces, each contributing
-    // weight x (attack squares inside the king zone). Replaces 9 separate
-    // is_square_attacked calls (each up to two ray walks) per king.
+    // Weighted pressure: each enemy piece contributes
+    // weight x (attacked squares inside the king zone).
     int pressure = 0;
     U64 occ = occupancy();
 
@@ -776,6 +774,10 @@ constexpr int EVAL_UNBOUNDED = 100'000'000;
 }
 
 int Board::evaluate(int alpha, int beta) const {
+    if (nnue::active()) {
+        return nnue::evaluate(*this);   // side-relative centipawns
+    }
+
     int score = evaluate_fast();             // side-relative
 
     if (side_to_move == BLACK) {
@@ -783,8 +785,8 @@ int Board::evaluate(int alpha, int beta) const {
     }
 
     // Mop-up stays in the cheap stage: it is nearly free in normal positions
-    // (two bitboard tests) and its swings are far larger than any margin, so
-    // it must never be skipped or endgame conversion breaks.
+    // and its swings are far larger than the lazy margin, so it can't be
+    // skipped without breaking endgame conversion.
     score += evaluate_mop_up();
 
     int side_relative = side_to_move == WHITE ? score : -score;

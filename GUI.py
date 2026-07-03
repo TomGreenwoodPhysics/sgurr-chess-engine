@@ -15,7 +15,20 @@ import pygame
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-Ruk_CPP_PATH = PROJECT_DIR / "Ruk_cpp" / "Ruk_cpp.exe"
+# The compiled C++ UCI engine executable. Needs to be an NNUE-capable build
+# (one that honours RUK_EVALFILE). Override with the RUK_ENGINE_EXE
+# environment variable.
+ENGINE_EXE_PATH = Path(
+    os.environ.get("RUK_ENGINE_EXE", str(PROJECT_DIR / "engines" / "ruk_gen1.exe"))
+)
+
+# Trained NNUE network the engine loads in NNUE mode.
+GEN1_NET_PATH = PROJECT_DIR / "nets" / "gen1.nnue"
+
+# Deliberately missing path: pointing RUK_EVALFILE here forces the engine's
+# hand-crafted-eval fallback even if a ruk.nnue sits in the working directory.
+NO_NET_PATH = PROJECT_DIR / "nets" / "__no_net__.nnue"
+
 SOUND_DIR = PROJECT_DIR / "assets" / "sounds"
 ANALYSIS_DIR = PROJECT_DIR / "analysis_games"
 
@@ -38,21 +51,35 @@ SQUARE_SIZE = BOARD_SIZE // 8
 
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 
-# Engine selection
-# The C++ port is the strong (~2520) engine; the original pure-Python engine is
-# the weaker (~1500) one.
-ENGINE_CPP = "cpp"
-ENGINE_PYTHON = "python"
-DEFAULT_ENGINE_CHOICE = ENGINE_CPP
+# Engine selection. HCE and NNUE are the same C++ executable with different
+# evaluation (selected via RUK_EVALFILE); the pure-Python engine is the
+# weaker (~1500) original.
+ENGINE_CPP = "cpp"             # C++ engine, hand-crafted eval (classical)
+ENGINE_CPP_NNUE = "cpp_nnue"   # same C++ engine, NNUE eval (gen1 net)
+ENGINE_PYTHON = "python"       # original pure-Python engine
+DEFAULT_ENGINE_CHOICE = ENGINE_CPP_NNUE
+
+# Order the opponent toggle cycles through.
+ENGINE_CYCLE = [ENGINE_CPP, ENGINE_CPP_NNUE, ENGINE_PYTHON]
 
 ENGINE_PROFILES = {
     ENGINE_CPP: {
-        "short_name": "Ruk C++",
-        "label": "Ruk C++ (~2520)",
-        "pgn_name": "RukCPP",
+        "short_name": "Ruk C++ HCE",
+        "label": "Ruk C++ HCE (~2516)",
+        "pgn_name": "RukCPP-HCE",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
+        "net": None,            # None -> hand-crafted eval (classical)
+    },
+    ENGINE_CPP_NNUE: {
+        "short_name": "Ruk C++ NNUE",
+        "label": "Ruk C++ NNUE (gen1)",
+        "pgn_name": "RukCPP-NNUE",
+        "default_depth": 30,
+        "default_time": 0.5,
+        "max_depth": 100,
+        "net": GEN1_NET_PATH,   # load this net via RUK_EVALFILE
     },
     ENGINE_PYTHON: {
         "short_name": "Ruk Python",
@@ -61,6 +88,7 @@ ENGINE_PROFILES = {
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
+        "net": None,
     },
 }
 
@@ -162,15 +190,29 @@ def score_to_white_centipawns(score: chess.engine.PovScore | None) -> int:
 
 
 class CppRukEngine:
-    """Small wrapper that calls the C++ Ruk UCI executable (~2520 elo).
+    """Wrapper around the C++ Ruk UCI executable.
 
-    A fresh process is used for each move. This is slightly slower than keeping
-    one process alive, but it avoids unsafe persistent search state while the
-    C++ port is still being stabilised.
+    The same executable runs in classical (hand-crafted eval) or NNUE mode
+    depending on net_path, which is passed to the child process as
+    RUK_EVALFILE. None points the engine at a missing file, forcing the
+    classical fallback. A fresh process is launched for each move.
     """
 
-    def __init__(self, engine_path: Path = Ruk_CPP_PATH) -> None:
+    def __init__(
+        self,
+        engine_path: Path = ENGINE_EXE_PATH,
+        net_path: Path | None = None,
+    ) -> None:
         self.engine_path = engine_path
+        self.net_path = net_path
+
+    def _child_env(self) -> dict[str, str]:
+        # Keep the full environment (PATH includes the MSYS2 bin the engine's
+        # DLLs need) and set RUK_EVALFILE for the chosen mode.
+        env = dict(os.environ)
+        target = self.net_path if self.net_path is not None else NO_NET_PATH
+        env["RUK_EVALFILE"] = str(target)
+        return env
 
     def search_best_move(
         self,
@@ -180,7 +222,13 @@ class CppRukEngine:
     ) -> SearchResult:
         if not self.engine_path.exists():
             raise FileNotFoundError(
-                f"Could not find {self.engine_path}. Compile the C++ engine first."
+                f"Engine executable not found: {self.engine_path}. Build the C++ "
+                f"engine (with nnue.cpp) or set RUK_ENGINE_EXE to its location."
+            )
+
+        if self.net_path is not None and not self.net_path.exists():
+            raise FileNotFoundError(
+                f"NNUE net not found: {self.net_path}. Train it or fix the path."
             )
 
         start = time.time()
@@ -188,6 +236,7 @@ class CppRukEngine:
         with chess.engine.SimpleEngine.popen_uci(
             [str(self.engine_path), "uci"],
             timeout=ENGINE_TIMEOUT,
+            env=self._child_env(),
         ) as engine:
             result = engine.play(
                 board,
@@ -228,10 +277,9 @@ class CppRukEngine:
 class PythonRukEngine:
     """Adapter around the original pure-Python Ruk engine (~1500 elo).
 
-    The GUI uses python-chess for display and input, while the engine still
-    searches using the RukBoard/RukEngine classes. The Ruk_python
-    package is imported lazily so the C++ GUI still runs (with the C++ engine)
-    even when the Python package is not importable.
+    The GUI uses python-chess for display and input while the engine searches
+    with its own RukBoard/RukEngine classes. Ruk_python is imported lazily so
+    the GUI still runs with the C++ engine if the package isn't importable.
     """
 
     def __init__(self) -> None:
@@ -409,14 +457,19 @@ class RukGui:
         self.max_engine_depth = profile["max_depth"]
 
     def toggle_engine(self) -> None:
-        self.engine_choice = ENGINE_PYTHON if self.engine_choice == ENGINE_CPP else ENGINE_CPP
+        try:
+            idx = ENGINE_CYCLE.index(self.engine_choice)
+        except ValueError:
+            idx = -1
+        self.engine_choice = ENGINE_CYCLE[(idx + 1) % len(ENGINE_CYCLE)]
         self.apply_engine_defaults()
         self.status = f"Opponent: {self.engine_label}"
 
     def make_engine(self) -> CppRukEngine | PythonRukEngine:
         if self.engine_choice == ENGINE_PYTHON:
             return PythonRukEngine()
-        return CppRukEngine()
+        net = ENGINE_PROFILES[self.engine_choice]["net"]
+        return CppRukEngine(net_path=net)
 
 
 
@@ -859,10 +912,10 @@ class RukGui:
         self.play_move_sound(move, was_capture, was_castle, was_promotion, by_human=False)
         self.last_move = move
 
-        # The C++ engine returns a deep, white-relative search score, so use it
-        # directly for the eval bar. The Python engine's score sign convention is
-        # unknown, so fall back to its (white-relative) static eval there.
-        if self.engine_choice == ENGINE_CPP:
+        # Both C++ modes report a white-relative search score, so the eval bar
+        # can use it directly; for the Python engine fall back to its static
+        # eval instead.
+        if self.engine_choice in (ENGINE_CPP, ENGINE_CPP_NNUE):
             self.last_engine_score_from_white = result.score
         else:
             self.update_static_eval_display()

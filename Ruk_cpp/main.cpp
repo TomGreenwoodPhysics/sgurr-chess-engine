@@ -1,8 +1,10 @@
 #include "board.hpp"
 #include "evaluation.hpp"
 #include "search.hpp"
+#include "nnue.hpp"
 
 #include <iostream>
+#include <cstdlib>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -162,16 +164,19 @@ void uci_loop() {
         } else if (command.rfind("go", 0) == 0) {
             std::optional<int> requested_depth = parse_go_depth(command);
             std::optional<double> movetime = parse_go_movetime(command, board);
+            std::optional<long long> node_limit = parse_go_value(command, "nodes");
 
-            // With a clock or movetime, depth is bounded by time, not a cap.
+            // With a clock, movetime, or a node budget, depth is bounded by that
+            // limit rather than the default cap.
             int depth = requested_depth.value_or(
-                movetime.has_value() ? MAX_PLY - 1 : MAX_DEPTH
+                (movetime.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
             );
 
             SearchResult result = engine.search_best_move(
                 board,
                 depth,
-                movetime
+                movetime,
+                node_limit
             );
 
             if (result.best_move.has_value()) {
@@ -317,6 +322,24 @@ int run_see_tests() {
 }
 
 int main(int argc, char* argv[]) {
+    // Load an NNUE network if one is available; otherwise use the hand-crafted
+    // evaluation.
+    {
+        // $RUK_EVALFILE overrides the compile-time default (-DRUK_DEFAULT_NET),
+        // which is empty unless set at build time. An HCE build therefore never
+        // picks up a stray net, whatever the working directory.
+#ifndef RUK_DEFAULT_NET
+#define RUK_DEFAULT_NET ""
+#endif
+        const char* env = std::getenv("RUK_EVALFILE");
+        std::string net_path = env ? env : RUK_DEFAULT_NET;
+        if (!net_path.empty() && nnue::load(net_path)) {
+            std::cerr << "info string nnue: loaded " << net_path << "\n";
+        } else {
+            std::cerr << "info string nnue: no network, using hand-crafted eval\n";
+        }
+    }
+
     if (argc > 1 && std::string(argv[1]) == "uci") {
         uci_loop();
     } else if (argc > 1 && std::string(argv[1]) == "seetest") {

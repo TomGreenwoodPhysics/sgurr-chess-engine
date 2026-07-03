@@ -20,13 +20,9 @@ Across **1000 games**, Ruk scored:
 ```
 
 This corresponds to approximately **+120 Elo** against the limited Stockfish
-opponent, or roughly **2520 Elo in this benchmark setup**.
-
-The estimated statistical uncertainty is about **±20 Elo at 95% confidence**
-under a simple independent-games model. This should be treated as benchmark
-strength rather than an official rating, since engine ratings depend strongly on
-hardware, time control, opening selection, opponent calibration, and match
-conditions.
+opponent, or roughly **2520 Elo in this benchmark setup**, with an estimated
+uncertainty of about **±20 Elo at 95% confidence**. This is benchmark strength
+rather than an official rating; see the notes at the end of this file.
 
 Colour split:
 
@@ -144,13 +140,14 @@ the project.
 
 ### C++ engine
 
-Requires a C++20 compiler.
-
-From the C++ source folder:
+Requires a C++20 compiler. From the C++ source folder:
 
 ```bash
-g++ -std=c++20 -O3 -march=native -DNDEBUG -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp -o Ruk_cpp.exe
+clang++ -std=c++20 -O3 -march=native -DNDEBUG -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o Ruk_cpp.exe
 ```
+
+See `Ruk_cpp/BUILD.md` for the recommended toolchain on Windows (MSYS2 clang64)
+and for building the NNUE data generator.
 
 Run in UCI mode:
 
@@ -236,8 +233,6 @@ depth or movetime is supplied.
 
 ## Testing and validation
 
-Correctness and strength are tested rather than assumed.
-
 * Move generation is checked using `perft`.
 * Make/unmake logic is tested by verifying that board state and hash keys are
   restored correctly.
@@ -251,15 +246,12 @@ Correctness and strength are tested rather than assumed.
 
 ## Notes on rating estimates
 
-The quoted Elo estimate is not an official rating. It is a benchmark estimate
-against a specific Stockfish configuration, on specific hardware, at a specific
-time control.
-
-The most reliable interpretation is:
+The quoted Elo is a benchmark estimate against a specific Stockfish
+configuration, on specific hardware, at a specific time control, not an
+official rating. The safest interpretation is simply:
 
 ```text
 In this test setup, Ruk scored 66.6% against Stockfish limited to ~2400 Elo.
 ```
 
-The approximate 2520 Elo figure is a convenient translation of that match score,
-not an official rating.
+The approximate 2520 Elo figure is a translation of that match score.

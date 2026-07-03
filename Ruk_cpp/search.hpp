@@ -60,7 +60,8 @@ public:
     SearchResult search_best_move(
         Board& board,
         int max_depth = MAX_DEPTH,
-        std::optional<double> time_limit = std::nullopt
+        std::optional<double> time_limit = std::nullopt,
+        std::optional<long long> node_limit = std::nullopt
     );
 
     void clear_transposition_table();
@@ -75,6 +76,7 @@ public:
 private:
     std::chrono::steady_clock::time_point start_time;
     std::optional<double> time_limit = std::nullopt;
+    std::optional<long long> node_limit = std::nullopt;
     bool stop_search = false;
 
     std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};

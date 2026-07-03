@@ -1,4 +1,5 @@
 #include "board.hpp"
+#include "nnue.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -14,13 +15,11 @@ const std::vector<int> BISHOP_DELTAS = {9, 7, -9, -7};
 const std::vector<int> ROOK_DELTAS = {8, -8, 1, -1};
 const std::vector<int> QUEEN_DELTAS = {9, 7, -9, -7, 8, -8, 1, -1};
 
-// Static-exchange-evaluation piece values, indexed by piece *type* (0..5 =
-// P,N,B,R,Q,K). These mirror the canonical material scale used by search.cpp's
-// MVV-LVA / delta pruning rather than the Texel-tuned eval values: SEE is a
-// search heuristic and should stay on the same scale as the other ordering
-// terms, and decoupled from eval re-tuning. The king gets a large sentinel so
-// it is never profitably "captured"; in practice the explicit king-legality
-// guard in see() means this sentinel is never actually read into a gain.
+// SEE piece values, indexed by piece type (0..5 = P,N,B,R,Q,K). Same simple
+// material scale as the MVV-LVA / delta pruning values in search.cpp, not the
+// tuned eval values, so SEE stays consistent with the other ordering terms.
+// The king value is a sentinel; the king-legality guard in see() stops it
+// ever being counted as captured.
 constexpr std::array<int, 6> SEE_VALUE = {100, 320, 330, 500, 900, 100000};
 
 // Castling rights as a 4-bit mask. The bit layout matches the index used by
@@ -225,18 +224,11 @@ bool step_ok(int a, int b, int delta) {
     return same_row_or_col_or_diag(a, b, delta);
 }
 
-// ---------------------------------------------------------------------------
-// Magic bitboards for sliding pieces.
-//
-// Slider attacks were previously computed by walking rays one square at a time
-// on every call. That ray-walk is the hottest primitive in the whole engine
-// (move generation, is_square_attacked, and the SEE swap-off all lean on it),
-// so it is replaced here with magic lookups: one multiply-shift indexes a
-// per-square table of precomputed attack sets. The magics are searched for at
-// startup with a fixed PRNG seed, so the tables are identical on every run and
-// no precomputed constants need to be embedded. Plain (non-PEXT) magics are
-// used so the binary runs on any 64-bit CPU regardless of -march.
-// ---------------------------------------------------------------------------
+// Magic bitboards for sliding pieces: one multiply-shift indexes a per-square
+// table of precomputed attack sets. The magics are searched for at startup
+// with a fixed PRNG seed, so the tables are identical on every run and no
+// precomputed constants need embedding. Plain (non-PEXT) magics, so the binary
+// runs on any 64-bit CPU regardless of -march.
 
 namespace {
 
@@ -612,8 +604,7 @@ int Board::king_square(int colour) const {
 }
 
 U64 Board::attacks_from_slider(int sq, const std::vector<int>& deltas, U64 occ) const {
-    // Kept for callers (including evaluation) that pass delta vectors. The ray
-    // direction set identifies the piece, then the work goes to magic lookups.
+    // The delta set identifies the piece type; the lookup itself is magic-based.
     if (deltas.size() >= 8) {
         return bishop_attacks(sq, occ) | rook_attacks(sq, occ);   // queen
     }
@@ -836,11 +827,10 @@ bool Board::is_legal(const Move& move, const LegalityInfo& li) const {
 }
 
 int Board::see(const Move& move) const {
-    // Static exchange evaluation of a capture: the net material the side to
-    // move wins on `move.to()`, in centipawns, assuming both sides keep
-    // recapturing with their least valuable attacker while it is profitable.
-    // Pin-blind by design (standard for SEE). Castling is never a capture and
-    // never reaches here; promotions are handled by the caller, not SEE.
+    // Static exchange evaluation of a capture: net material won on move.to()
+    // if both sides keep recapturing with their least valuable attacker while
+    // it is profitable. Pin-blind, as SEE usually is. Promotions are handled
+    // by the caller, not here.
     int to = move.to();
     int from = move.from();
     int mover = mailbox[from];
@@ -935,12 +925,10 @@ int Board::see(const Move& move) const {
 }
 
 bool Board::see_ge(const Move& move, int threshold) const {
-    // Returns whether the static exchange evaluation of `move` is at least
-    // `threshold`, without computing the exact value. Equivalent to
-    // see(move) >= threshold, but exits early in the common case: a capture
-    // whose victim already covers the threshold (after risking the moving
-    // piece) needs no swap-off at all. Same geometry, x-ray handling, and
-    // king-legality rule as see(); only the running balance differs.
+    // Equivalent to see(move) >= threshold but without computing the exact
+    // value: exits early when the victim already covers the threshold even
+    // after conceding the moving piece. Same geometry, x-ray handling and
+    // king-legality rule as see().
     int from = move.from();
     int to = move.to();
     int mover = mailbox[from];
@@ -963,8 +951,8 @@ bool Board::see_ge(const Move& move, int threshold) const {
         }
     }
 
-    // If winning the victim still falls short of the threshold, fail. If even
-    // after conceding the moving piece we clear it, succeed. Both are O(1).
+    // Fail if winning the victim still falls short of the threshold; succeed
+    // if we clear it even after conceding the moving piece.
     int balance = victim_value - threshold;
     if (balance < 0) {
         return false;
@@ -1043,8 +1031,7 @@ void Board::add_pawn_move(MoveList& moves, int from_sq, int to_sq, int colour) {
     int promotion_rank = colour == WHITE ? 7 : 0;
 
     if (rank_of(to_sq) == promotion_rank) {
-        // Order preserved as Q, R, B, N so move ordering matches the previous
-        // generator exactly.
+        // queen first: promotions are generated in likely-best order
         moves.add(Move(from_sq, to_sq, PROMO_Q, MT_PROMO));
         moves.add(Move(from_sq, to_sq, PROMO_R, MT_PROMO));
         moves.add(Move(from_sq, to_sq, PROMO_B, MT_PROMO));
@@ -1357,7 +1344,7 @@ UndoInfo Board::make_move(const Move& move) {
 
     position_history.push_back(undo.old_hash_key);
 
-    // Incremental Zobrist update (replaces full compute_hash()).
+    // Incremental Zobrist update.
     U64 h = undo.old_hash_key;
 
     h ^= ZOBRIST_PIECES[piece][move.from()];
@@ -1394,11 +1381,17 @@ UndoInfo Board::make_move(const Move& move) {
 
     hash_key = h;
 
+    if (nnue::active()) nnue::on_make(undo, hash_key);
+
     return undo;
 }
 
 void Board::unmake_move(const UndoInfo& undo) {
     const Move& move = undo.move;
+
+    // hash_key is still the post-move key here; on_unmake reverses the feature
+    // deltas before the board state below is restored.
+    if (nnue::active()) nnue::on_unmake(undo, hash_key);
 
     side_to_move ^= 1;
     position_history.pop_back();
@@ -1475,6 +1468,8 @@ NullMoveUndo Board::make_null_move() {
 
     hash_key = h;
 
+    if (nnue::active()) nnue::note_hash(hash_key);
+
     return undo;
 }
 
@@ -1485,6 +1480,8 @@ void Board::unmake_null_move(const NullMoveUndo& undo) {
     halfmove_clock = undo.old_halfmove_clock;
     fullmove_number = undo.old_fullmove_number;
     hash_key = undo.old_hash_key;
+
+    if (nnue::active()) nnue::note_hash(hash_key);
 }
 
 bool Board::has_non_pawn_material(int colour) const {

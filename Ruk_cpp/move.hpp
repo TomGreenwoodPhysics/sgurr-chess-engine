@@ -36,9 +36,7 @@ enum MoveType {
 //   bits 12-13 promotion type (only meaningful when kind == MT_PROMO)
 //   bits 14-15 move kind (MoveType)
 //
-// The whole move fits in a register and is its own transposition / killer key,
-// so the previous separate MoveKey type is gone. Accessors keep call sites
-// readable; everything inlines away.
+// The packed value doubles as the transposition / killer key.
 struct Move {
     std::uint16_t data = 0;
 
@@ -74,9 +72,8 @@ struct Move {
 
 constexpr Move NO_MOVE{};   // the null sentinel (a1a1, never generated)
 
-// Fixed-capacity, allocation-free move container. A chess position has at most
-// 218 legal moves, so 256 slots can never overflow. Replaces the per-node
-// std::vector<Move> that movegen and ordering used to allocate and return.
+// Fixed-capacity, allocation-free move container. A chess position has at
+// most 218 legal moves, so 256 slots can never overflow.
 struct MoveList {
     Move moves[256];
     int count = 0;

@@ -1,4 +1,5 @@
 #include "search.hpp"
+#include "nnue.hpp"
 
 #include <algorithm>
 #include <array>
@@ -88,9 +89,8 @@ void Engine::clear_search_heuristics() {
 }
 
 void Engine::clear_for_new_position() {
-    // Keep the transposition table: entries are keyed by position hash and
-    // remain valid as the game advances. Killers are ply-indexed and reset;
-    // history is square-indexed and stays valid, so age it instead.
+    // Keep the TT (entries stay valid as the game advances). Killers are
+    // ply-indexed, so reset them; history stays useful, so halve it instead.
     reset_killers();
 
     for (auto& row : history) {
@@ -133,13 +133,19 @@ std::optional<Move> Engine::valid_tt_move_key(
 SearchResult Engine::search_best_move(
     Board& board,
     int max_depth,
-    std::optional<double> limit
+    std::optional<double> limit,
+    std::optional<long long> nodes_arg
 ) {
     nodes = 0;
     tt_hits = 0;
     start_time = std::chrono::steady_clock::now();
     time_limit = limit;
+    node_limit = nodes_arg;
     stop_search = false;
+
+    // Build the accumulators for the root position; make/unmake keep them in
+    // sync through the tree.
+    if (nnue::active()) nnue::refresh(board);
 
     reset_killers();
 
@@ -261,7 +267,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     bool legal_found = false;
 
     for (const Move& move : moves) {
-        if (time_is_up()) {
+        if (time_is_up() || (node_limit.has_value() && nodes >= *node_limit)) {
             stop_search = true;
             break;
         }
@@ -401,6 +407,11 @@ int Engine::negamax(
     }
 
     nodes += 1;
+
+    if (node_limit.has_value() && nodes >= *node_limit) {
+        stop_search = true;
+        return 0;
+    }
 
     if (nodes % TIME_CHECK_INTERVAL == 0 && time_is_up()) {
         stop_search = true;
@@ -605,6 +616,11 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     nodes += 1;
 
+    if (node_limit.has_value() && nodes >= *node_limit) {
+        stop_search = true;
+        return 0;
+    }
+
     if (nodes % TIME_CHECK_INTERVAL == 0 && time_is_up()) {
         stop_search = true;
         return 0;
@@ -682,9 +698,8 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         }
 
         // SEE pruning: skip captures that lose material by static exchange.
-        // Only reached when not in check (evasions take the path above), so it
-        // is always safe to discard a losing capture here. Promotions are
-        // excluded from SEE and never pruned.
+        // Never reached while in check (evasions take the path above), and
+        // promotions are never pruned.
         if (!move.is_promotion() && !board.see_ge(move, 0)) {
             continue;
         }
@@ -745,9 +760,8 @@ MoveList Engine::order_moves(
     std::optional<Move> killer_one = std::nullopt;
     std::optional<Move> killer_two = std::nullopt;
 
-    // Score each move exactly once; the sorts below compare cached values
-    // instead of recomputing scores inside the comparator. Fixed stack buffers
-    // replace the heap vectors this used to allocate every node.
+    // Score each move once; the sorts below compare cached values instead of
+    // recomputing scores inside the comparator.
     struct Scored { Move move; int score; };
     Scored captures[256];     int n_cap = 0;
     Scored bad_captures[256]; int n_bad = 0;
@@ -773,12 +787,10 @@ MoveList Engine::order_moves(
         if (is_noisy_move(board, move)) {
             int cscore = capture_score(board, move);
 
-            // Split captures by static exchange: losing captures (SEE < 0) are
-            // demoted to their own bucket, placed below killers but above quiets
-            // during assembly. Promotions are excluded from SEE and always stay
-            // in the main capture bucket. Only the main search splits; quiescence
-            // orders captures as before (it prunes losing captures itself, so a
-            // split there would just pay for SEE twice in the hottest path).
+            // Losing captures (SEE < 0) get their own bucket, placed below
+            // killers but above quiets. Promotions always stay in the main
+            // capture bucket. Quiescence doesn't split: it SEE-prunes losing
+            // captures itself, so splitting would pay for SEE twice.
             if (split_bad_captures && !move.is_promotion()
                     && !board.see_ge(move, 0)) {
                 bad_captures[n_bad++] = {move, cscore};
@@ -833,12 +845,10 @@ MoveList Engine::order_moves(
         ordered.add(*killer_two);
     }
 
-    // Losing captures: tried after the TT move, winning captures, and killers,
-    // but ahead of quiet moves. A forcing capture, even one that loses material
-    // by static exchange, is usually worth trying before a random quiet --
-    // measured clearly better than demoting them below all quiets (the latter
-    // raised fixed-depth node counts, since SEE is pin-blind and sometimes
-    // mislabels a tactically winning capture as losing).
+    // Losing captures go after the killers but ahead of quiet moves. SEE is
+    // pin-blind and sometimes mislabels a winning capture, and a forcing
+    // capture is usually worth trying before a random quiet; demoting them
+    // below all quiets tested worse.
     for (int i = 0; i < n_bad; ++i) {
         ordered.add(bad_captures[i].move);
     }
