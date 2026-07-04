@@ -55,6 +55,8 @@ constexpr int ADJ_SCORE = 2000;        // adjudicate a win above this (white POV
 constexpr int ADJ_PLIES = 6;           // ... sustained for this many plies
 constexpr int MAX_PLIES = 400;
 constexpr int OPENING_SKIP = 8;        // don't record the first few plies
+constexpr int OPENING_BALANCE_CAP = 200;  // reject openings a probe rates beyond +/- this (cp)
+constexpr int OPENING_PROBE_NODES = 5000; // cheap node budget for that opening probe
 
 // Set by the Ctrl+C handler; polled at safe points so we stop on a clean game
 // boundary rather than mid-write.
@@ -199,8 +201,9 @@ int main(int argc, char** argv) {
               << "\n";
 
     Engine engine;
-    long long written = 0;     // positions written this run
+    long long written = 0;          // positions written this run
     long long games = 0;
+    long long skipped_openings = 0; // openings rejected by the balance filter
 
     while (!g_stop.load()) {
         // Check the on-disk total so parallel processes collectively stop at
@@ -212,14 +215,33 @@ int main(int argc, char** argv) {
             : book[rng() % book.size()];
         Board board(start);
 
-        // random plies for opening diversity: the book gives only ~150 starts,
-        // so a slightly wider random prefix spreads them into more middlegames
-        // without pushing so many openings into already-decided territory.
-        int rand_plies = 2 + (rng() % 4);   // 2..5
+        // Random plies for opening diversity. The book has only ~150 starts, so
+        // a wide random prefix is what actually spreads the data across distinct
+        // middlegames. We can randomise hard because the balance filter below
+        // discards any opening that came out lopsided.
+        int rand_plies = 4 + (rng() % 6);   // 4..9
+        bool dead = false;
         for (int i = 0; i < rand_plies; ++i) {
             MoveList ms = board.generate_legal_moves();
-            if (ms.size() == 0) break;
+            if (ms.size() == 0) { dead = true; break; }   // random plies mated/stalemated
             board.make_move(ms[rng() % ms.size()]);
+        }
+        if (dead) continue;
+
+        // Opening balance filter: cheaply probe the post-opening position and
+        // start a game only if it is a genuine contest. This keeps every
+        // recorded game competitive (meaningful WDL, hard-fought middlegames)
+        // despite the heavy opening randomisation -- we reject imbalanced
+        // *starts* only; in-game play still yields plenty of imbalanced
+        // positions across the eval spectrum.
+        {
+            SearchResult probe = engine.search_best_move(
+                board, MAX_PLY - 1, std::nullopt, OPENING_PROBE_NODES);
+            if (!probe.best_move.has_value()
+                    || std::abs(probe.score) > OPENING_BALANCE_CAP) {
+                ++skipped_openings;
+                continue;
+            }
         }
 
         std::vector<std::pair<Sample, int>> recorded;   // sample + stm
@@ -294,7 +316,8 @@ int main(int argc, char** argv) {
         if (games % 50 == 0)
             std::cerr << "games=" << games << "  run_positions=" << written
                       << "  total=" << total_positions(out_dir)
-                      << (target ? ("/" + std::to_string(target)) : "") << "\n";
+                      << (target ? ("/" + std::to_string(target)) : "")
+                      << "  (openings rejected=" << skipped_openings << ")\n";
     }
 
     out.flush();
@@ -306,7 +329,7 @@ int main(int argc, char** argv) {
 
     std::cerr << "\nstopped" << (g_stop.load() ? " (Ctrl+C)" : "")
               << ": this run wrote " << written << " positions in " << games
-              << " games";
+              << " games (rejected " << skipped_openings << " lopsided openings)";
     if (written > 0) std::cerr << " -> " << shard.filename().string();
     std::cerr << "\ntotal in " << out_dir.string() << ": " << total_positions(out_dir)
               << (target ? ("/" + std::to_string(target)) : "") << " positions\n";
