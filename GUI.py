@@ -19,11 +19,11 @@ PROJECT_DIR = Path(__file__).resolve().parent
 # (one that honours SGR_EVALFILE). Override with the SGR_ENGINE_EXE
 # environment variable.
 ENGINE_EXE_PATH = Path(
-    os.environ.get("SGR_ENGINE_EXE", str(PROJECT_DIR / "engines" / "sgr_gen1.exe"))
+    os.environ.get("SGR_ENGINE_EXE", str(PROJECT_DIR / "engines" / "sgr_gen2.exe"))
 )
 
 # Trained NNUE network the engine loads in NNUE mode.
-GEN1_NET_PATH = PROJECT_DIR / "nets" / "gen1.nnue"
+gen2_NET_PATH = PROJECT_DIR / "nets" / "gen2.nnue"
 
 # Deliberately missing path: pointing SGR_EVALFILE here forces the engine's
 # hand-crafted-eval fallback even if a sgurr.nnue sits in the working directory.
@@ -55,7 +55,7 @@ TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 # evaluation (selected via SGR_EVALFILE); the pure-Python engine is the
 # weaker (~1500) original.
 ENGINE_CPP = "cpp"             # C++ engine, hand-crafted eval (classical)
-ENGINE_CPP_NNUE = "cpp_nnue"   # same C++ engine, NNUE eval (gen1 net)
+ENGINE_CPP_NNUE = "cpp_nnue"   # same C++ engine, NNUE eval (gen2 net)
 ENGINE_PYTHON = "python"       # original pure-Python engine
 DEFAULT_ENGINE_CHOICE = ENGINE_CPP_NNUE
 
@@ -74,12 +74,12 @@ ENGINE_PROFILES = {
     },
     ENGINE_CPP_NNUE: {
         "short_name": "Sgurr C++ NNUE",
-        "label": "Sgurr C++ NNUE (gen1)",
+        "label": "Sgurr C++ NNUE (gen2)",
         "pgn_name": "Sgurr-NNUE",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
-        "net": GEN1_NET_PATH,   # load this net via SGR_EVALFILE
+        "net": gen2_NET_PATH,   # load this net via SGR_EVALFILE
     },
     ENGINE_PYTHON: {
         "short_name": "Sgurr Python",
