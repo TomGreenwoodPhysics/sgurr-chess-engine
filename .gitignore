@@ -43,3 +43,4 @@ benchmarks/games/
 *.csv
 *.pgnbenchmarks/config.json
 benchmarks/ratings.csv
+runs/

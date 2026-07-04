@@ -246,6 +246,26 @@ depth or movetime is supplied.
 
 ---
 
+## Training pipeline
+
+Each NNUE generation is produced by a single resumable command:
+
+```bash
+python pipeline.py pipeline_gen3.json          # run / resume the whole cycle
+python pipeline.py pipeline_gen3.json --status # stage progress
+```
+
+Stages: parallel self-play **datagen** (resumable, balance-filtered openings)
+→ **freeze** into a versioned dataset + manifest (`data/vX.Y/`) → NNUE
+**train**ing with logged loss curves (optionally a lambda grid) → engine
+**build** → **select**ion of the best variant by games → **SPRT** vs the
+previous generation → pool **calibrat**ion against CCRL-anchored engines
+(Ordo) → append to the results **ledger** (`benchmarks/ledger.md`). Every
+stage checkpoints to `runs/`, so the pipeline can be interrupted and re-run
+at any point; datasets, weights, and ledger rows are append-only artifacts.
+
+---
+
 ## Testing and validation
 
 * Move generation is checked using `perft`.

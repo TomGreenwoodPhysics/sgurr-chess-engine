@@ -1,0 +1,40 @@
+{
+  "generation": 3,
+  "version": "v3.0",
+  "codename": "Blackpeak",
+  "raw_dir": "data/gen3_raw",
+  "target_positions": 3000000,
+
+  "datagen": {
+    "nodes": 150000,
+    "book": "testing/book.epd",
+    "labeller": "nets/gen2.nnue",
+    "processes": null
+  },
+
+  "train": {
+    "epochs": 40,
+    "val_frac": 0,
+    "lambda": [0.6, 0.7, 0.8, 1.0]
+  },
+
+  "select": {
+    "tc": "8+0.08",
+    "rounds": 30,
+    "concurrency": 5
+  },
+
+  "sprt": {
+    "tc": "8+0.08",
+    "elo0": 0,
+    "elo1": 5,
+    "max_rounds": 500,
+    "concurrency": 5
+  },
+
+  "calibrate": {
+    "tc": "10+0.1",
+    "rounds": 15,
+    "concurrency": 5
+  }
+}
