@@ -22,8 +22,12 @@ ENGINE_EXE_PATH = Path(
     os.environ.get("SGR_ENGINE_EXE", str(PROJECT_DIR / "engines" / "sgr_gen2.exe"))
 )
 
-# Trained NNUE network the engine loads in NNUE mode.
-gen2_NET_PATH = PROJECT_DIR / "nets" / "gen2.nnue"
+# Trained NNUE networks the engine loads in NNUE mode (chosen per opponent via
+# SGR_EVALFILE). Ratings shown in the UI are the measured CCRL-Blitz-anchored
+# Ordo estimates from benchmarks/ledger.md (2026-07-04); update them there and
+# here together.
+GEN1_NET_PATH = PROJECT_DIR / "nets" / "gen1.nnue"
+GEN2_NET_PATH = PROJECT_DIR / "nets" / "gen2.nnue"
 
 # Deliberately missing path: pointing SGR_EVALFILE here forces the engine's
 # hand-crafted-eval fallback even if a sgurr.nnue sits in the working directory.
@@ -51,39 +55,50 @@ SQUARE_SIZE = BOARD_SIZE // 8
 
 TIME_OPTIONS = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]
 
-# Engine selection. HCE and NNUE are the same C++ executable with different
-# evaluation (selected via SGR_EVALFILE); the pure-Python engine is the
-# weaker (~1500) original.
-ENGINE_CPP = "cpp"             # C++ engine, hand-crafted eval (classical)
-ENGINE_CPP_NNUE = "cpp_nnue"   # same C++ engine, NNUE eval (gen2 net)
-ENGINE_PYTHON = "python"       # original pure-Python engine
-DEFAULT_ENGINE_CHOICE = ENGINE_CPP_NNUE
+# Engine selection. HCE and both NNUE generations are the same C++ executable
+# with a different net (selected via SGR_EVALFILE); the pure-Python engine is
+# the weaker (~1500) original.
+ENGINE_CPP = "cpp"                       # C++ engine, hand-crafted eval (classical)
+ENGINE_CPP_NNUE_GEN1 = "cpp_nnue_gen1"   # C++ engine, gen1 NNUE (v1.0 "Fox")
+ENGINE_CPP_NNUE_GEN2 = "cpp_nnue_gen2"   # C++ engine, gen2 NNUE (v2.0 "Notches")
+ENGINE_PYTHON = "python"                 # original pure-Python engine
+DEFAULT_ENGINE_CHOICE = ENGINE_CPP_NNUE_GEN2
 
-# Order the opponent toggle cycles through.
-ENGINE_CYCLE = [ENGINE_CPP, ENGINE_CPP_NNUE, ENGINE_PYTHON]
+# Order the opponent toggle cycles through (classical, then the NNUE ladder,
+# then the legacy Python engine).
+ENGINE_CYCLE = [ENGINE_CPP, ENGINE_CPP_NNUE_GEN1, ENGINE_CPP_NNUE_GEN2, ENGINE_PYTHON]
 
 ENGINE_PROFILES = {
     ENGINE_CPP: {
-        "short_name": "Sgurr C++ HCE",
-        "label": "Sgurr C++ HCE (~2516)",
+        "short_name": "Sgurr HCE",
+        "label": "Sgurr HCE (2398 ±34)",
         "pgn_name": "Sgurr-HCE",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
-        "net": None,            # None -> hand-crafted eval (classical)
+        "net": None,               # None -> hand-crafted eval (classical)
     },
-    ENGINE_CPP_NNUE: {
-        "short_name": "Sgurr C++ NNUE",
-        "label": "Sgurr C++ NNUE (gen2)",
-        "pgn_name": "Sgurr-NNUE",
+    ENGINE_CPP_NNUE_GEN1: {
+        "short_name": "Sgurr NNUE gen1",
+        "label": "Sgurr NNUE gen1 (2407 ±35)",
+        "pgn_name": "Sgurr-NNUE-gen1",
         "default_depth": 30,
         "default_time": 0.5,
         "max_depth": 100,
-        "net": gen2_NET_PATH,   # load this net via SGR_EVALFILE
+        "net": GEN1_NET_PATH,      # v1.0 "Fox"
+    },
+    ENGINE_CPP_NNUE_GEN2: {
+        "short_name": "Sgurr NNUE gen2",
+        "label": "Sgurr NNUE gen2 (2489 ±34)",
+        "pgn_name": "Sgurr-NNUE-gen2",
+        "default_depth": 30,
+        "default_time": 0.5,
+        "max_depth": 100,
+        "net": GEN2_NET_PATH,      # v2.0 "Notches"
     },
     ENGINE_PYTHON: {
         "short_name": "Sgurr Python",
-        "label": "Sgurr Python (~1500)",
+        "label": "Sgurr Python (~1500 est)",
         "pgn_name": "SgurrPython",
         "default_depth": 30,
         "default_time": 0.5,
@@ -912,10 +927,10 @@ class SgurrGui:
         self.play_move_sound(move, was_capture, was_castle, was_promotion, by_human=False)
         self.last_move = move
 
-        # Both C++ modes report a white-relative search score, so the eval bar
+        # All C++ modes report a white-relative search score, so the eval bar
         # can use it directly; for the Python engine fall back to its static
         # eval instead.
-        if self.engine_choice in (ENGINE_CPP, ENGINE_CPP_NNUE):
+        if self.engine_choice in (ENGINE_CPP, ENGINE_CPP_NNUE_GEN1, ENGINE_CPP_NNUE_GEN2):
             self.last_engine_score_from_white = result.score
         else:
             self.update_static_eval_display()
