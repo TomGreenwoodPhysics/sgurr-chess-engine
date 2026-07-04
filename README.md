@@ -18,7 +18,10 @@ the canonical identifiers; peak names are codenames only.
 | v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
 | v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 Elo vs v1.0 (300 games, 8+0.08) |
 
-See `CHANGELOG.md` for details and measured results with error bars.
+See `CHANGELOG.md` for details and measured results with error bars,
+`benchmarks/ledger.md` for the append-only record of measured ratings, and
+`DEVLOG.md` for the dated engineering log — findings, bugs, and the
+methodology decisions behind them.
 
 ---
 
