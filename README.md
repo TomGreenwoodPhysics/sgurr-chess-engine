@@ -164,7 +164,7 @@ clang++ -std=c++20 -O3 -march=native -DNDEBUG -Wall -Wextra main.cpp board.cpp e
 See `sgurr_cpp/BUILD.md` for the recommended toolchain on Windows (MSYS2 clang64)
 and for building the NNUE data generator.
 
-Run in UCI mode:
+Run in UCI mode (bare launch also defaults to UCI):
 
 ```bash
 ./sgr.exe uci
@@ -196,7 +196,7 @@ bestmove g1f3
 Run the built-in general test mode:
 
 ```bash
-./sgr.exe
+./sgr.exe test
 ```
 
 Run SEE tests:

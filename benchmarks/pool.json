@@ -1,0 +1,16 @@
+{
+  "pool_id": "pool-2026-07-A",
+  "description": "CCRL-Blitz-anchored opponent pool for absolute Sgurr calibration. Names must match fastchess PGN tags and anchors.txt exactly.",
+  "time_control": "10+0.1",
+  "book": "../testing/book.epd (150 balanced lines, colour-reversed pairs)",
+  "engines": [
+    {"name": "Blunder-6.1.0", "cmd": "engines/blunder-6.1.0.exe", "ccrl_blitz": 2155, "source": "https://github.com/deanmchris/blunder/releases/tag/v6.1.0"},
+    {"name": "Blunder-7.2.0", "cmd": "engines/blunder-7.2.0.exe", "ccrl_blitz": 2425, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.2.0"},
+    {"name": "Blunder-7.4.0", "cmd": "engines/blunder-7.4.0.exe", "ccrl_blitz": 2532, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.4.0"},
+    {"name": "Zahak-4.0",     "cmd": "engines/zahak-4.0.exe",     "ccrl_blitz": 2601, "source": "https://github.com/amanjpro/zahak/releases/tag/4.0"},
+    {"name": "Blunder-7.6.0", "cmd": "engines/blunder-7.6.0.exe", "ccrl_blitz": 2631, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.6.0"},
+    {"name": "Blunder-8.0.0", "cmd": "engines/blunder-8.0.0.exe", "ccrl_blitz": 2674, "source": "https://github.com/deanmchris/blunder/releases/tag/v8.0.0"},
+    {"name": "Zahak-5.0",     "cmd": "engines/zahak-5.0.exe",     "ccrl_blitz": 2763, "source": "https://github.com/amanjpro/zahak/releases/tag/5.0"}
+  ],
+  "notes": "Ratings are CCRL Blitz (2'+1\") as published in each engine's README. Two engine families (Blunder, Zahak); extend with a third family when convenient. Pool is append-only: never remove or re-rate an engine within a pool_id -- create a new pool_id instead."
+}

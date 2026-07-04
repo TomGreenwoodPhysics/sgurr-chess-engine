@@ -340,8 +340,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (argc > 1 && std::string(argv[1]) == "uci") {
+    // Bare launch = UCI, like every standard engine, so GUIs and tournament
+    // runners (fastchess/cutechess) work without arguments. The old bare-launch
+    // test mode moved behind an explicit "test" argument.
+    if (argc <= 1 || std::string(argv[1]) == "uci") {
         uci_loop();
+    } else if (argc > 1 && std::string(argv[1]) == "test") {
+        test_mode();
     } else if (argc > 1 && std::string(argv[1]) == "seetest") {
         return run_see_tests();
     } else if (argc > 2 && std::string(argv[1]) == "fen") {
@@ -377,7 +382,9 @@ int main(int argc, char* argv[]) {
         std::cout << "nodes: " << result.nodes << "\n";
         std::cout << "time: " << result.time_taken << "s\n";
     } else {
-        test_mode();
+        // Unknown argument: behave like a normal engine rather than surprising
+        // a GUI that passed something unexpected.
+        uci_loop();
     }
 
     return 0;

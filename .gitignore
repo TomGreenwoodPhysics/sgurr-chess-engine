@@ -36,7 +36,10 @@ data/**/*.zip
 
 *_file_list.txt
 
-benchmarks/
+benchmarks/engines/
+benchmarks/tools/
+benchmarks/games/
 *.jsonl
 *.csv
-*.pgn
+*.pgnbenchmarks/config.json
+benchmarks/ratings.csv
