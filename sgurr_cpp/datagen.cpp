@@ -212,8 +212,10 @@ int main(int argc, char** argv) {
             : book[rng() % book.size()];
         Board board(start);
 
-        // a couple of random plies for opening diversity
-        int rand_plies = 1 + (rng() % 4);
+        // random plies for opening diversity: the book gives only ~150 starts,
+        // so a slightly wider random prefix spreads them into more middlegames
+        // without pushing so many openings into already-decided territory.
+        int rand_plies = 2 + (rng() % 4);   // 2..5
         for (int i = 0; i < rand_plies; ++i) {
             MoveList ms = board.generate_legal_moves();
             if (ms.size() == 0) break;
