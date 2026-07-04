@@ -210,6 +210,18 @@ int main(int argc, char** argv) {
         // the shared target rather than each writing the full amount.
         if (target > 0 && total_positions(out_dir) >= target) break;
 
+        // The Engine is reused across the whole run (probes, rejected
+        // openings, and every game), but killer moves are the only heuristic
+        // search_best_move() resets on its own; the history table otherwise
+        // accumulates across totally unrelated positions -- most consequentially
+        // the ~48% of opening probes that get rejected, whose shallow 5000-node
+        // search would otherwise pollute the move ordering that the next
+        // (unrelated) attempt's real 150k-node search relies on. For a
+        // node-budgeted search, worse ordering directly costs effective depth,
+        // so a full reset before every attempt keeps every position's label
+        // independent of whatever came before it in this process.
+        engine.clear_for_new_game();
+
         std::string start = book.empty()
             ? std::string(START_FEN)
             : book[rng() % book.size()];
