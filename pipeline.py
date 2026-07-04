@@ -39,6 +39,7 @@ import argparse
 import glob
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -119,7 +120,7 @@ def git_describe():
 # --------------------------------------------------------------------------
 
 class Pipeline:
-    STAGES = ["datagen", "freeze", "train", "build", "select", "sprt",
+    STAGES = ["datagen", "probe", "freeze", "train", "build", "select", "sprt",
               "calibrate", "ledger"]
 
     def __init__(self, cfg_path):
@@ -138,9 +139,24 @@ class Pipeline:
         if not isinstance(self.lambdas, list):
             self.lambdas = [self.lambdas]
 
+    def _save_state(self):
+        # atomic: a crash mid-write must never corrupt the resume state
+        tmp = self.state_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state, indent=2), encoding="utf-8")
+        os.replace(tmp, self.state_path)
+
     def mark(self, stage, **info):
         self.state[stage] = {"completed_at": datetime.now().isoformat(), **info}
-        self.state_path.write_text(json.dumps(self.state, indent=2), encoding="utf-8")
+        self._save_state()
+
+    def assert_idle(self, stage):
+        """Timed games are only valid on an otherwise-idle machine."""
+        n = datagen_running()
+        if n:
+            raise RuntimeError(
+                f"{stage}: {n} datagen.exe process(es) running -- game results "
+                f"under CPU load are invalid. Stop them (taskkill /IM "
+                f"datagen.exe /F) and re-run.")
 
     def done(self, stage):
         return stage in self.state
@@ -167,8 +183,13 @@ class Pipeline:
     # ----------------------------------------------------------------------
     # stage: datagen
     # ----------------------------------------------------------------------
+    def target(self):
+        # the probe stage may raise the target beyond the config value when it
+        # measures that the net is still data-limited
+        return self.state.get("target_override", self.cfg["target_positions"])
+
     def stage_datagen(self, wait=True):
-        target = self.cfg["target_positions"]
+        target = self.target()
         dg = self.cfg["datagen"]
         have = positions_in(self.raw_dir)
         if have >= target:
@@ -212,6 +233,49 @@ class Pipeline:
         subprocess.run(["taskkill", "/IM", "datagen.exe", "/F"], capture_output=True)
         time.sleep(2)
         self.mark("datagen", positions=positions_in(self.raw_dir))
+
+    # ----------------------------------------------------------------------
+    # stage: probe  (is this much data actually enough for the net?)
+    # ----------------------------------------------------------------------
+    def stage_probe(self):
+        pr = self.cfg.get("probe", {})
+        if not pr.get("enabled", True):
+            self.mark("probe", skipped=True)
+            return
+        log("probe: measuring data sufficiency (half vs full, game-disjoint val)")
+        out = run(
+            [sys.executable, "probe_scaling.py", "--raw-dir", self.raw_dir,
+             "--epochs", str(pr.get("epochs", 15)),
+             "--threshold-pct", str(pr.get("threshold_pct", 0.75))],
+            log_path=self.run_dir / "probe.log",
+            cwd=ROOT / "nnue", env={"KMP_DUPLICATE_LIB_OK": "TRUE"})
+        result = json.loads(out.strip().splitlines()[-1])
+        if "error" in result:
+            raise RuntimeError(f"probe: {result['error']}")
+        log(f"probe: half->full improvement {result['rel_improvement_pct']:+.2f}% "
+            f"-> {result['verdict']}")
+
+        extensions = self.state.get("probe_extensions", 0)
+        max_ext = pr.get("max_extensions", 2)
+        needs_more = result["verdict"] in ("data-limited", "anomalous")
+        if needs_more and extensions < max_ext:
+            new_target = int(self.target() * pr.get("extend_factor", 1.5))
+            log(f"probe: verdict '{result['verdict']}' -- extending target to "
+                f"{new_target:,} (extension {extensions + 1}/{max_ext}) and "
+                f"resuming datagen"
+                + (" [anomalous = unstable measurement; generating more rather "
+                   "than trusting noise]" if result["verdict"] == "anomalous"
+                   else ""))
+            self.state["target_override"] = new_target
+            self.state["probe_extensions"] = extensions + 1
+            self.state.pop("datagen", None)          # loop back to generation
+            self._save_state()
+            self.restart = True
+            return
+        if needs_more:
+            log(f"probe: verdict '{result['verdict']}' but extension cap "
+                f"({max_ext}) reached -- proceeding; noted in state")
+        self.mark("probe", **result, extensions_used=extensions)
 
     # ----------------------------------------------------------------------
     # stage: freeze  (versioned dataset + manifest)
@@ -325,7 +389,13 @@ class Pipeline:
             curve = [float(m.group(1)) for m in
                      re.finditer(r"epoch\s+\d+/\d+\s+(?:loss|train)\s+([\d.]+)", out)]
             curves[str(lam)] = curve
-            log(f"train: lambda={lam} final loss {curve[-1] if curve else '?'}")
+            # divergence gate: a NaN/absurd loss means a broken net -- fail here,
+            # not after hours of games downstream
+            if not curve or not math.isfinite(curve[-1]) or curve[-1] > 0.1:
+                raise RuntimeError(
+                    f"train: lambda={lam} produced implausible final loss "
+                    f"{curve[-1] if curve else 'none'} -- see train log")
+            log(f"train: lambda={lam} final loss {curve[-1]}")
 
         (self.data_dir / "training_log.json").write_text(json.dumps({
             "epochs": tr["epochs"], "val_frac": tr.get("val_frac", 0),
@@ -351,6 +421,26 @@ class Pipeline:
                            capture_output=True, text=True, timeout=15)
         if "uciok" not in p.stdout:
             raise RuntimeError(f"build: {exe_path.name} failed UCI handshake")
+        self._verify_net(net_path)
+
+    def _verify_net(self, net_path):
+        """Bit-exactness gate: nnue_selfcheck loads the net and verifies the
+        incremental accumulator against a from-scratch refresh across every
+        special move type plus thousands of random game chains. Catches a
+        corrupt or mis-exported net for seconds of CPU, before hours of games."""
+        sc = ROOT / "sgurr_cpp" / "nnue_selfcheck.exe"
+        if not getattr(self, "_selfcheck_built", False):
+            run([CLANG, "-std=c++20", "-O3", "-march=native", "-DNDEBUG", "-static",
+                 "nnue_selfcheck.cpp", "board.cpp", "evaluation.cpp", "search.cpp",
+                 "nnue.cpp", "-o", sc.name],
+                log_path=self.run_dir / "build.log", cwd=ROOT / "sgurr_cpp")
+            self._selfcheck_built = True
+        out = run([sc, net_path], log_path=self.run_dir / "build.log",
+                  cwd=ROOT / "sgurr_cpp")
+        if "-> PASS" not in out:
+            raise RuntimeError(f"net verification FAILED for {net_path.name}: "
+                               f"{out.splitlines()[-1] if out else 'no output'}")
+        log(f"build: {net_path.name} verified (selfcheck PASS)")
 
     def stage_build(self):
         if len(self.lambdas) > 1:
@@ -367,6 +457,7 @@ class Pipeline:
         if len(self.lambdas) == 1:
             self.mark("select", skipped=True, winner=str(self.lambdas[0]))
             return
+        self.assert_idle("select")
         sel = self.cfg.get("select", {})
         fc = ROOT / "benchmarks" / "tools" / "fastchess.exe"
         cmd = [fc, "-tournament", "roundrobin"]
@@ -403,6 +494,7 @@ class Pipeline:
     # stage: sprt  (new gen vs previous gen)
     # ----------------------------------------------------------------------
     def stage_sprt(self):
+        self.assert_idle("sprt")
         sp = self.cfg.get("sprt", {})
         fc = ROOT / "benchmarks" / "tools" / "fastchess.exe"
         out = run(
@@ -421,12 +513,14 @@ class Pipeline:
             log_path=self.run_dir / "sprt.log", cwd=ROOT / "benchmarks")
 
         elo = re.findall(r"Elo\s*:?\s*(-?[\d.]+)\s*\+/-\s*([\d.]+)", out)
+        if not elo:
+            raise RuntimeError("sprt: could not parse an Elo estimate from "
+                               "fastchess output -- see sprt.log (format drift?)")
         verdict = ("H1" if re.search(r"H1 was accepted", out)
                    else "H0" if re.search(r"H0 was accepted", out)
                    else "inconclusive")
         result = {"verdict": verdict,
-                  "elo": float(elo[-1][0]) if elo else None,
-                  "pm": float(elo[-1][1]) if elo else None}
+                  "elo": float(elo[-1][0]), "pm": float(elo[-1][1])}
         log(f"sprt: {result}")
         self.mark("sprt", **result)
 
@@ -434,6 +528,7 @@ class Pipeline:
     # stage: calibrate  (pool gauntlet + Ordo over all accumulated PGNs)
     # ----------------------------------------------------------------------
     def stage_calibrate(self):
+        self.assert_idle("calibrate")
         cal = self.cfg.get("calibrate", {})
         bm = ROOT / "benchmarks"
         pool = json.loads((bm / "pool.json").read_text(encoding="utf-8"))
@@ -498,6 +593,13 @@ class Pipeline:
         ledger = ROOT / "benchmarks" / "ledger.md"
         text = ledger.read_text(encoding="utf-8")
 
+        # idempotency: a crash between the ledger write and the state mark must
+        # not duplicate the row on re-run
+        if f"| Sgurr {self.version} " in text:
+            log(f"ledger: row for {self.version} already present -- not duplicating")
+            self.mark("ledger", already_present=True)
+            return
+
         row = (f"| {date.today().isoformat()} | Sgurr {self.version} "
                f"\"{self.cfg.get('codename', '')}\" | {cal['rating']:.0f} | "
                f"{cal['error']:.0f} | {cal['games']} | "
@@ -543,7 +645,7 @@ class Pipeline:
         print(f"generation {self.gen} ({self.version} "
               f"\"{self.cfg.get('codename', '')}\")")
         have = positions_in(self.raw_dir)
-        print(f"  raw positions : {have:,} / {self.cfg['target_positions']:,} "
+        print(f"  raw positions : {have:,} / {self.target():,} "
               f"({datagen_running()} datagen procs running)")
         for s in self.STAGES:
             info = self.state.get(s)
@@ -555,15 +657,42 @@ class Pipeline:
             print(f"  [{mark_}] {s:10s} {extra}")
 
     def execute(self, until=None, wait=True):
-        for s in self.STAGES:
-            if self.done(s):
-                log(f"skip {s} (done)")
-            else:
-                log(f"=== stage: {s} ===")
-                getattr(self, f"stage_{s}")(**({"wait": wait} if s == "datagen" else {}))
-            if until == s:
-                log(f"stopped after '{s}' (--until)")
-                return
+        # single-instance lock: two pipelines on one generation would race on
+        # state, nets, and engine processes
+        lock = self.run_dir / ".lock"
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"pid={os.getpid()} {datetime.now().isoformat()}".encode())
+            os.close(fd)
+        except FileExistsError:
+            raise SystemExit(
+                f"another pipeline instance appears to be running for gen{self.gen} "
+                f"(lock: {lock}). If that's stale (crash/reboot), delete the file "
+                f"and re-run.")
+        try:
+            self._execute(until=until, wait=wait)
+        finally:
+            lock.unlink(missing_ok=True)
+
+    def _execute(self, until=None, wait=True):
+        # outer loop supports the probe stage sending execution back to datagen
+        # when it measures the dataset as still data-limited
+        while True:
+            self.restart = False
+            for s in self.STAGES:
+                if self.done(s):
+                    log(f"skip {s} (done)")
+                else:
+                    log(f"=== stage: {s} ===")
+                    getattr(self, f"stage_{s}")(
+                        **({"wait": wait} if s == "datagen" else {}))
+                    if self.restart:
+                        break
+                if until == s:
+                    log(f"stopped after '{s}' (--until)")
+                    return
+            if not self.restart:
+                break
         log("pipeline complete")
 
 
@@ -586,7 +715,7 @@ def main():
         idx = Pipeline.STAGES.index(args.force)
         for s in Pipeline.STAGES[idx:]:
             p.state.pop(s, None)
-        p.state_path.write_text(json.dumps(p.state, indent=2), encoding="utf-8")
+        p._save_state()
         log(f"cleared stages from '{args.force}' onward")
     p.execute(until=args.until, wait=not args.no_wait)
 

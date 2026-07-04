@@ -12,6 +12,14 @@
     "processes": null
   },
 
+  "probe": {
+    "enabled": true,
+    "epochs": 15,
+    "threshold_pct": 0.75,
+    "extend_factor": 1.5,
+    "max_extensions": 2
+  },
+
   "train": {
     "epochs": 40,
     "val_frac": 0,
