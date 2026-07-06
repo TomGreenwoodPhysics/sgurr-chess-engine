@@ -168,3 +168,97 @@ continued flywheel); stretch **2750-2850** (scaled net + SMP + tuning hours);
 continuation history + malus (best Elo/effort), then architecture
 (king-relative features / properly-trained wider net — now priority per the
 capacity evidence), with Lazy SMP as the biggest but riskiest single item.
+
+## 2026-07-05 — Datagen fix confirmed; which diagnostic to trust
+
+At 610k clean post-fix positions, re-ran both diagnostics (datagen left
+running — these are loss comparisons, not timed games; only shard snapshots
+need byte-exact care):
+
+- **Within-gen3 half-vs-full** (426k pool, whole-shard game-disjoint val):
+  full trained **10.8% better** than half. Pre-fix the same probe had full
+  3-6% *worse*. Verdict flipped from anomalous to healthy → the
+  `clear_for_new_game()` fix worked; generation continues to 3M.
+- **Cross-domain 2x2 matrix**: the gen2-trained net *still* wins on gen3-val
+  (0.02073 vs 0.02315). With the within-gen probe now healthy, this residual
+  inversion is explained by a confound, not a bug: gen3's labeller (gen2-net
+  at nodes:150000) differs from gen2's (gen1-net at nodes:50000), and sharper
+  labels are higher-variance targets — harder to fit, so the net trained on
+  smoother gen2 labels can win on *loss* without being better at chess.
+
+Methodology correction: the cross-domain matrix detects "distributions
+differ", not "data broken" — it was over-credited in the 07-04 diagnosis
+(the probe's anomalous verdict was the trustworthy signal all along).
+Standing rule: **within-generation scaling (same labeller) is the
+data-health diagnostic; loss is not comparable across labellers; games
+(SPRT) remain ground truth.**
+
+## 2026-07-06 — The probe was measuring the optimiser, not the data
+
+At 3M the sufficiency probe went anomalous AGAIN (full +5.6% worse than
+half), and seed replicates agreed to 0.1% — real, not noise. Yet every audit
+came back clean: session-2 shards statistically identical to session-1
+(distributions, generation rates), no RNG replay (random_device-seeded),
+duplicates *lower* than healthy gen2 at the same scale (0.95% vs 1.34%, same
+label spread). The data looked innocent because it was.
+
+A 2x2 step-matched control found the real culprit: **fixed-epoch training
+gives bigger datasets proportionally more optimiser steps, and constant
+LR 1e-3 with the per-step WCLIP clamp degrades the net ~9% per step-doubling
+past ~2k steps.** At *matched* steps, more data won every single comparison.
+Every fixed-epoch constant-LR cross-size comparison ever run was confounded
+— including the pre-fix "anomalous" verdicts, the gen2-era "saturates ~3M"
+point, and the "HL=512 is worse" result (all now suspect, to be redone under
+the corrected protocol before being believed).
+
+Two consequences, tested the same night:
+
+- **Cosine decay (1e-3 → 1e-5) is free strength:** identical data and
+  epochs, 5-8% lower val loss across the board. Best recipe found for the
+  gen3 deploy net: all data, cosine, ~12 epochs (~2k steps total) →
+  val 0.01935 vs 0.02068 for the old protocol's best. `train.py` now has
+  `--schedule cosine --lr_min 1e-5`.
+- **Quarantine retrial — GUILTY confirmed:** the original conviction rested
+  on the broken probe, so it was re-tried cleanly (matched n=1.07M, matched
+  steps, cosine, both nets scored on both vals). The clean-trained net beat
+  the quarantine-trained net *on the quarantine's own val* (0.01924 vs
+  0.02055, ~60x seed noise) — the history-leak bug genuinely damaged labels.
+  Right verdict originally, wrong evidence; now both are right.
+
+Standing rules: **cross-size loss comparisons only at matched optimiser
+steps; deploy training uses cosine decay with a step budget (~2k steps for
+HL=256), not a fixed epoch count.** gen3 is unblocked: 3M positions healthy,
+still mildly data-limited at 2.5M (more data keeps helping at matched
+steps), freeze and train.
+
+## 2026-07-06 — v3.0 "Blackpeak": +119.8 ±26.3, 2616 CCRL-anchored
+
+The whole release cycle ran in one evening (manually, as a dry run of the
+pipeline stages). Frozen `data/v3.0` (3,016,181 positions, manifest +
+round-trip sha256). Trained the lambda sweep {0.6, 0.7, 0.8, 1.0} under the
+corrected recipe (cosine 1e-3→1e-5, 12 epochs ≈ 2.2k steps); all four built,
+selfcheck PASS.
+
+**Selection (600-game round-robin): lambda=1.0 won decisively** (+117 ±41 vs
+the field; monotonic in lambda, 0.6 collapsed at −140). With a strong
+labeller at nodes:150000, pure search-score targets beat every WDL blend —
+the game-result term that helped when labels were shallow now only dilutes
+them. gen2 finished 4th, behind three of the four gen3 variants.
+
+**SPRT vs v2.0: H1 accepted — +119.8 ±26.3** (+357 =109 −152, 618 games,
+8+0.08). Largest generational gain yet (gen2's was +77.7), at fixed
+architecture, from a *smaller* dataset than gen2's (3M vs 14.5M): label
+quality and training protocol, not volume.
+
+**Calibration: 2616 ±37** (210-game gauntlet, Ordo re-solved over all 930
+accumulated calibration games; earlier versions moved ≤2.4 points).
+Trajectory: 2400 → 2408 → 2491 → 2616. The pool gap (+125) reproduces the
+SPRT independently. v3.0 now sits above Zahak-4.0 (2601) — inside the
+2600-2700 near-term window predicted on 07-04, one generation in. White
+advantage again negative (−20 ±9); book side-to-move question still open.
+
+Attribution of the +120: three compounding fixes — clean labels (deeper
+searches by a stronger labeller, post history-leak fix), lambda=1.0 targets
+(+~90 of it, per the round-robin gap to lambda=0.7 which matches the old
+recipe), and the cosine schedule. The flywheel plus honest measurement is
+the story of this release.

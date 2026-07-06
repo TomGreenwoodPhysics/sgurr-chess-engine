@@ -17,6 +17,7 @@ the canonical identifiers; peak names are codenames only.
 |---|---|---|---|
 | v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
 | v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 Elo vs v1.0 (300 games, 8+0.08) |
+| v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 Elo vs v2.0 (618 games, SPRT); 2616 ±37 CCRL-Blitz-anchored |
 
 See `CHANGELOG.md` for details and measured results with error bars,
 `benchmarks/ledger.md` for the append-only record of measured ratings, and
@@ -27,42 +28,28 @@ methodology decisions behind them.
 
 ## Strength
 
-**Sgurr (C++)** has been benchmarked against **Stockfish limited to ~2400 Elo**
-with both engines using **0.50 s/move**.
+Ratings are measured with a fixed pool of open-source UCI engines with
+published CCRL Blitz ratings (Blunder 6.1–8.0, Zahak 4.0/5.0), solved with
+Ordo anchored to those ratings — estimates on the CCRL Blitz scale, not
+official CCRL ratings. Full method and append-only history:
+`benchmarks/ledger.md`.
 
-Across **1000 games**, Sgurr scored:
+| engine | rating (CCRL-Blitz-anchored) |
+|---|---|
+| Sgurr v3.0 "Blackpeak" | **2616 ±37** |
+| Sgurr v2.0 "Notches" | 2491 ±33 |
+| Sgurr v1.0 "Fox" | 2408 ±34 |
+| Sgurr classical (HCE) | 2400 ±35 |
 
-```text
-575 wins, 182 draws, 243 losses
-666/1000 = 66.6%
-```
+Each generational gap in the pool table independently reproduces the direct
+SPRT match result between those versions (e.g. v3.0 vs v2.0: +125 in the
+pool vs +119.8 ±26.3 in a 618-game SPRT), so the self-play gains are real
+rather than self-play-inflated.
 
-This corresponds to approximately **+120 Elo** against the limited Stockfish
-opponent, or roughly **2520 Elo in this benchmark setup**, with an estimated
-uncertainty of about **±20 Elo at 95% confidence**. This is benchmark strength
-rather than an official rating; see the notes at the end of this file.
-
-Colour split:
-
-```text
-Sgurr as White: 360.5/500 = 72.1%
-Sgurr as Black: 305.5/500 = 61.1%
-```
-
-Two unfinished games were counted as draws. Excluding them gives:
-
-```text
-665/998 = 66.6%
-```
-
-which gives essentially the same estimate.
-
-**Legacy Python version** - benchmarked against **Stockfish limited to 1500 Elo**
-at equal **0.50 s/move**. Across **1000 games**, it scored approximately
-**495.5/1000 = 49.6%**, corresponding to roughly **1500 Elo in this benchmark
-setup**, with an estimated **95% confidence interval of about ±20 Elo**.
-
-**NOTE** - Stated playing strengths will vary with time per move and max depth conditions. This mostly affects the Python prototype.
+**Legacy Python version** — benchmarked against Stockfish limited to 1500
+Elo at equal 0.50 s/move: ~49.6% over 1000 games, i.e. roughly 1500 in that
+benchmark setup (±20 at 95%). Playing strength varies with time controls;
+this mostly affects the Python prototype.
 
 ---
 
@@ -265,7 +252,7 @@ Stages: parallel self-play **datagen** (resumable, balance-filtered openings)
 previous generation → pool **calibrat**ion against CCRL-anchored engines
 (Ordo) → append to the results **ledger** (`benchmarks/ledger.md`). Every
 stage checkpoints to `runs/`, so the pipeline can be interrupted and re-run
-at any point; datasets, weights, and ledger rows are append-only artifacts.
+at any point; datasets, weights, and ledger rows are append-only artefacts.
 
 ---
 
@@ -284,12 +271,9 @@ at any point; datasets, weights, and ledger rows are append-only artifacts.
 
 ## Notes on rating estimates
 
-The quoted Elo is a benchmark estimate against a specific Stockfish
-configuration, on specific hardware, at a specific time control, not an
-official rating. The safest interpretation is simply:
-
-```text
-In this test setup, Sgurr scored 66.6% against Stockfish limited to ~2400 Elo.
-```
-
-The approximate 2520 Elo figure is a translation of that match score.
+The quoted ratings are Ordo estimates anchored to the pool engines'
+published CCRL Blitz values, measured on one machine at one time control —
+not official CCRL ratings. The absolute scale is only as accurate as the
+anchor values; the *gaps* between Sgurr versions are anchor-independent and
+are cross-checked against direct SPRT matches. Method, caveats, and every
+measurement: `benchmarks/ledger.md`.

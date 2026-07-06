@@ -4,6 +4,31 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v3.0 "Blackpeak" (Sgùrr Dubh Mòr) — 2026-07-06
+
+The gen3 NNUE: corrected training methodology, same architecture.
+
+- **Strength: +119.8 ±26.3 Elo vs v2.0** (+357 =109 −152, 618 games, 8+0.08s,
+  SPRT [0, 5] H1 accepted) — the largest generational gain so far.
+  **CCRL-Blitz-anchored: 2616 ±37** (see `benchmarks/ledger.md`); the +125
+  pool gap independently reproduces the SPRT.
+- Net: 768→256→1 perspective NNUE trained on 3.0M self-play positions
+  labelled by the v2.0 net at 150,000 nodes/move (dataset `data/v3.0`).
+- Data quality: openings from the balanced book + 4-9 random plies, gated by
+  an eval-balance filter (±200cp at a 5,000-node probe); engine state fully
+  cleared between unrelated datagen searches (history-heuristic leakage fix —
+  damaged pre-fix labels quarantined, damage confirmed by matched-protocol
+  retrial).
+- Training targets: lambda swept {0.6, 0.7, 0.8, 1.0} and decided by a
+  600-game round-robin — **pure search-score targets (lambda=1.0) won**
+  (+117 over the field); the WDL blend that helped when labels were shallow
+  now dilutes them.
+- Corrected training protocol: cosine LR decay (1e-3→1e-5) over a ~2k-step
+  budget (12 epochs at 3M). Fixed-epoch constant-LR training was found to
+  degrade nets as data (and therefore step count) grew, invalidating earlier
+  scaling verdicts; probes now compare at matched optimiser steps
+  (`nnue/probe_scaling.py`).
+
 ## v2.0 "Notches" (Sgùrr nan Eag) — 2026-07-03
 
 The gen2 NNUE and the training pipeline around it.

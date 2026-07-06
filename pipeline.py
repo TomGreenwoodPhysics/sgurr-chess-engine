@@ -245,7 +245,7 @@ class Pipeline:
         log("probe: measuring data sufficiency (half vs full, game-disjoint val)")
         out = run(
             [sys.executable, "probe_scaling.py", "--raw-dir", self.raw_dir,
-             "--epochs", str(pr.get("epochs", 15)),
+             "--steps", str(pr.get("steps", 1900)),
              "--threshold-pct", str(pr.get("threshold_pct", 0.75))],
             log_path=self.run_dir / "probe.log",
             cwd=ROOT / "nnue", env={"KMP_DUPLICATE_LIB_OK": "TRUE"})
@@ -383,6 +383,8 @@ class Pipeline:
             out = run(
                 [sys.executable, "train.py", "--data", concat,
                  "--out", net, "--epochs", str(tr["epochs"]),
+                 "--schedule", tr.get("schedule", "cosine"),
+                 "--lr_min", str(tr.get("lr_min", 1e-5)),
                  "--lambda_", str(lam), "--val_frac", str(tr.get("val_frac", 0))],
                 log_path=self.run_dir / f"train_{self.lam_tag(lam)}.log",
                 cwd=ROOT / "nnue", env={"KMP_DUPLICATE_LIB_OK": "TRUE"})

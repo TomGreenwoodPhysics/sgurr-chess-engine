@@ -86,7 +86,7 @@ def _decode_chunk(arr):
 
 
 def load_dataset(path, chunk=1_000_000):
-    """Chunked vectorized loader -> (wf, bf, stm, score, result, n)."""
+    """Chunked vectorised loader -> (wf, bf, stm, score, result, n)."""
     raw = np.fromfile(path, dtype=np.uint8)
     n = raw.size // 32
     arr = raw[: n * 32].reshape(n, 32)
@@ -193,6 +193,11 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--schedule", choices=["constant", "cosine"], default="constant",
+                    help="cosine decays lr to --lr_min over the whole run; "
+                         "constant lr degrades the net past ~2k steps")
+    ap.add_argument("--lr_min", type=float, default=1e-5,
+                    help="final lr for --schedule cosine")
     ap.add_argument("--lambda_", type=float, default=0.7,
                     help="target = lambda*eval_winprob + (1-lambda)*game_result")
     ap.add_argument("--wclip", type=float, default=127.0 / nt.QA,
@@ -227,6 +232,11 @@ def main():
 
     model = NNUE().to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sched = None
+    if args.schedule == "cosine":
+        steps_per_epoch = (n_train + args.batch - 1) // args.batch
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=args.epochs * steps_per_epoch, eta_min=args.lr_min)
 
     for epoch in range(args.epochs):
         order = torch.randperm(n_train)        # shuffle the train indices only
@@ -237,6 +247,8 @@ def main():
             sel = ti[i:i + args.batch]
             loss = batch_loss(model, WF, BF, STM, SC, RES, sel, dev, args.lambda_)
             opt.zero_grad(); loss.backward(); opt.step()
+            if sched is not None:
+                sched.step()
             with torch.no_grad():
                 model.ft.weight[:INPUT].clamp_(-args.wclip, args.wclip)
             total += loss.item() * sel.numel()

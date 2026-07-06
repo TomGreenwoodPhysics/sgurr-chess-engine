@@ -14,14 +14,16 @@
 
   "probe": {
     "enabled": true,
-    "epochs": 15,
+    "steps": 1900,
     "threshold_pct": 0.75,
     "extend_factor": 1.5,
     "max_extensions": 2
   },
 
   "train": {
-    "epochs": 40,
+    "epochs": 12,
+    "schedule": "cosine",
+    "lr_min": 1e-5,
     "val_frac": 0,
     "lambda": [0.6, 0.7, 0.8, 1.0]
   },

@@ -1,0 +1,561 @@
+{
+    "resign": {
+        "move_count": 1,
+        "score": 0,
+        "twosided": false,
+        "enabled": false
+    },
+    "draw": {
+        "move_number": 0,
+        "move_count": 1,
+        "score": 0,
+        "enabled": false
+    },
+    "maxmoves": {
+        "move_count": 1,
+        "enabled": false
+    },
+    "tb_adjudication": {
+        "syzygy_dirs": "",
+        "max_pieces": 0,
+        "ignore_50_move_rule": false,
+        "enabled": false
+    },
+    "opening": {
+        "file": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/testing/book.epd",
+        "format": 0,
+        "order": 0,
+        "plies": -1,
+        "start": 1
+    },
+    "pgn": {
+        "additional_lines_rgx": [],
+        "event_name": "Fastchess Tournament",
+        "site": "?",
+        "file": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/games/calib-v3.0-2026-07-06.pgn",
+        "notation": 0,
+        "append_file": true,
+        "track_nodes": false,
+        "track_seldepth": false,
+        "track_nps": false,
+        "track_hashfull": false,
+        "track_tbhits": false,
+        "track_timeleft": false,
+        "track_latency": false,
+        "track_pv": false,
+        "min": false,
+        "crc": false
+    },
+    "epd": {
+        "file": "",
+        "append_file": true
+    },
+    "sprt": {
+        "alpha": 0.0,
+        "beta": 0.0,
+        "elo0": 0.0,
+        "elo1": 0.0,
+        "model": "normalized",
+        "enabled": false
+    },
+    "config_name": "config.json",
+    "output": 0,
+    "seed": 2193467665681188369,
+    "variant": 0,
+    "type": 1,
+    "gauntlet_seeds": 1,
+    "ratinginterval": 60,
+    "scoreinterval": 1,
+    "wait": 0,
+    "autosaveinterval": 20,
+    "games": 2,
+    "rounds": 15,
+    "concurrency": 5,
+    "force_concurrency": false,
+    "recover": false,
+    "noswap": false,
+    "reverse": false,
+    "report_penta": true,
+    "affinity": false,
+    "show_latency": false,
+    "log": {
+        "file": "",
+        "level": 2,
+        "append_file": true,
+        "compress": false,
+        "realtime": true,
+        "engine_coms": false
+    },
+    "engines": [
+        {
+            "name": "Sgurr-v3.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/sgurr_cpp/sgr_gen3.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Blunder-6.1.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/blunder-6.1.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Blunder-7.2.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/blunder-7.2.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Blunder-7.4.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/blunder-7.4.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Zahak-4.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/zahak-4.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Blunder-7.6.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/blunder-7.6.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Blunder-8.0.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/blunder-8.0.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "Zahak-5.0",
+            "dir": "",
+            "cmd": "C:/Users/Tom Greenwood/Desktop/Coding Projects/Sgurr/benchmarks/engines/zahak-5.0.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        }
+    ],
+    "stats": {
+        "Blunder-8.0.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.6.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.6.0 vs Blunder-8.0.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Zahak-4.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.2.0 vs Blunder-7.6.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.2.0 vs Blunder-7.4.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Blunder-6.1.0": {
+            "wins": 23,
+            "losses": 3,
+            "draws": 4,
+            "penta_WW": 9,
+            "penta_WD": 2,
+            "penta_WL": 3,
+            "penta_DD": 1,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-6.1.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Blunder-7.6.0": {
+            "wins": 10,
+            "losses": 15,
+            "draws": 5,
+            "penta_WW": 2,
+            "penta_WD": 1,
+            "penta_WL": 5,
+            "penta_DD": 1,
+            "penta_LD": 2,
+            "penta_LL": 4
+        },
+        "Zahak-4.0 vs Blunder-7.6.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.2.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Blunder-7.4.0": {
+            "wins": 16,
+            "losses": 12,
+            "draws": 2,
+            "penta_WW": 2,
+            "penta_WD": 2,
+            "penta_WL": 10,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 1
+        },
+        "Blunder-7.4.0 vs Zahak-4.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Zahak-4.0": {
+            "wins": 16,
+            "losses": 12,
+            "draws": 2,
+            "penta_WW": 3,
+            "penta_WD": 0,
+            "penta_WL": 10,
+            "penta_DD": 0,
+            "penta_LD": 2,
+            "penta_LL": 0
+        },
+        "Zahak-4.0 vs Blunder-8.0.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Blunder-8.0.0": {
+            "wins": 10,
+            "losses": 13,
+            "draws": 7,
+            "penta_WW": 1,
+            "penta_WD": 3,
+            "penta_WL": 5,
+            "penta_DD": 0,
+            "penta_LD": 4,
+            "penta_LL": 2
+        },
+        "Blunder-7.4.0 vs Blunder-7.6.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.2.0 vs Blunder-8.0.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.2.0 vs Zahak-4.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Zahak-5.0": {
+            "wins": 6,
+            "losses": 17,
+            "draws": 7,
+            "penta_WW": 0,
+            "penta_WD": 2,
+            "penta_WL": 4,
+            "penta_DD": 0,
+            "penta_LD": 5,
+            "penta_LL": 4
+        },
+        "Blunder-6.1.0 vs Blunder-7.6.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-6.1.0 vs Blunder-7.2.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.4.0 vs Zahak-5.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-6.1.0 vs Blunder-7.4.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-7.4.0 vs Blunder-8.0.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Sgurr-v3.0 vs Blunder-7.2.0": {
+            "wins": 24,
+            "losses": 4,
+            "draws": 2,
+            "penta_WW": 10,
+            "penta_WD": 1,
+            "penta_WL": 3,
+            "penta_DD": 0,
+            "penta_LD": 1,
+            "penta_LL": 0
+        },
+        "Blunder-6.1.0 vs Zahak-4.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        },
+        "Blunder-6.1.0 vs Blunder-8.0.0": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 0,
+            "penta_LD": 0,
+            "penta_LL": 0
+        }
+    }
+}

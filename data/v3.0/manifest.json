@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "dataset_version": "v3.0",
+  "codename": "Blackpeak",
+  "engine": "Sgurr",
+  "source": "self-play",
+  "positions": 3016181,
+  "record_format": {
+    "record_bytes": 32,
+    "reference": "sgurr_cpp/datagen.cpp header; decoder in nnue/nnue_tools.py"
+  },
+  "generation": {
+    "labeller": "v2.0 NNUE (nets/gen2.nnue)",
+    "search_limit": "nodes:150000 per move (hardware-independent)",
+    "openings": "testing/book.epd + 4-9 random plies, eval-balance filter (reject openings beyond +/-200cp at a 5000-node probe)",
+    "filters": "quiet positions only, |score| < 2000cp, first 8 plies skipped, win adjudication at 2000cp sustained 6 plies",
+    "engine_code": "62c9c07 (dirty)",
+    "dates": "2026-07-05 to 2026-07-05",
+    "pipeline": "generated and frozen manually (gen3 dry run of the pipeline stages); datagen binary includes the clear_for_new_game fix (commit 88d9498)"
+  },
+  "provenance_notes": "All positions generated AFTER the engine-state leakage fix (DEVLOG 2026-07-04); 1.6M pre-fix positions are quarantined separately in data/gen3_raw_prefix_history_bug/ and excluded (label damage confirmed by matched-protocol retrial, DEVLOG 2026-07-06). Two generation sessions (12 shards, one per process per session), identical recipe, verified statistically indistinguishable. Shards are game-disjoint by construction: hold out whole shards for leakage-free validation. Scaling verified healthy at matched optimiser steps; ~3M sufficient for HL=256.",
+  "shards": [
+    {
+      "name": "data_0000_0aede22f.bin",
+      "bytes": 11850272,
+      "positions": 370321,
+      "sha256": "6c04d630d485e076fbe9377ecc9fd5a87ef77c9172f4171e166a28f9cce4331f"
+    },
+    {
+      "name": "data_0001_cf357f6a.bin",
+      "bytes": 11805120,
+      "positions": 368910,
+      "sha256": "55a12516efd85629d42345803ab6316b334ba1a060d8fd8e2a53186513821b3a"
+    },
+    {
+      "name": "data_0002_265ca849.bin",
+      "bytes": 11815296,
+      "positions": 369228,
+      "sha256": "82f350f3f46c059ff96c6e3a6a3affca4fb1f2d80850b994dc30a17b572096af"
+    },
+    {
+      "name": "data_0003_5f9cb870.bin",
+      "bytes": 11799040,
+      "positions": 368720,
+      "sha256": "6c713efeec446d9169faa5946e3df9fdbc0be0b78e99d4cb35f002526f923da7"
+    },
+    {
+      "name": "data_0004_1f5ee2a0.bin",
+      "bytes": 11775104,
+      "positions": 367972,
+      "sha256": "bb6f0fed51e7bbaff6af767e0ff836c52782ff4fee82dd57266cd8c1e72cace6"
+    },
+    {
+      "name": "data_0005_d6ca4523.bin",
+      "bytes": 11805952,
+      "positions": 368936,
+      "sha256": "3703c28a7a66f1d3f09852b0bd090304e17a6436a6666d63cfbe488960726246"
+    },
+    {
+      "name": "data_0006_b018bd55.bin",
+      "bytes": 4552736,
+      "positions": 142273,
+      "sha256": "cfa7a0b8ae7e984b2750288eaa25c6a0d9cb872f15f0ebcaa4ac5315693806ee"
+    },
+    {
+      "name": "data_0007_e0af395b.bin",
+      "bytes": 4501184,
+      "positions": 140662,
+      "sha256": "bf7d53fcb89119de03ca52eb3449b6ccdc1ba80f58aac89e5d98e57b8334001b"
+    },
+    {
+      "name": "data_0008_b68f8a89.bin",
+      "bytes": 3012832,
+      "positions": 94151,
+      "sha256": "be29f640c6ebed7a5954fb58f82e0c448392a14684586a3f95563aa19a33a6e3"
+    },
+    {
+      "name": "data_0009_1609e80f.bin",
+      "bytes": 4519392,
+      "positions": 141231,
+      "sha256": "2c440cf3f994d4bb1a7c6adb0018d3c244b78d6dedcdd82a84fd4599ce338fe0"
+    },
+    {
+      "name": "data_0010_ad2cb73f.bin",
+      "bytes": 4536704,
+      "positions": 141772,
+      "sha256": "5b7f68f24e4583f57d5b7d72bdb785d8d95e6b2d3de5dbf54940d5d3944d94cd"
+    },
+    {
+      "name": "data_0011_3168cafe.bin",
+      "bytes": 4544160,
+      "positions": 142005,
+      "sha256": "afa7c836f2a6d353168dcc07c984f1dbdc348dc317938642adec32c29ad71264"
+    }
+  ],
+  "archive": {
+    "name": "positions_v3.0.zip",
+    "bytes": 33566899,
+    "sha256": "f80ce00ac3d2e76af20eb6784fd507479e46dd71634c0acb38b9d2f34da294fb"
+  },
+  "manifest_written": "2026-07-06"
+}
