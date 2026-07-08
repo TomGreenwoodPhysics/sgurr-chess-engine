@@ -15,6 +15,17 @@ scale, not official CCRL ratings.
 
 ## Run log
 
+### 2026-07-08 — v3.1 shipped WITHOUT calibration (deferred)
+
+No rating row above: **v3.1 has not been pool-calibrated.** It is a search-only
+release (soft/hard time management) on the unchanged gen3 net, shipped for
+immediate play on the strength of an interim head-to-head SPRT vs the v3.0
+engine only — same gen3 net on both sides, 8+0.08, stopped early at 706 games:
+**+24.6 ±22.7** (+300 =156 −250, LLR +0.84, no bound crossed). This is not a
+completed measurement. A full gauntlet (a v3.1 row here, on the same
+pool-2026-07-A scale) is planned before the next generation; until then v3.1
+has no absolute CCRL figure of its own.
+
 ### 2026-07-06 — v3.0 calibration (pool-2026-07-A)
 
 - **Tool:** fastchess 1.8.0-alpha, gauntlet (Sgurr v3.0 vs the 7-engine pool), 210 games, 15 openings × colours-reversed pairs, `testing/book.epd`, TC 10+0.1, concurrency 5.

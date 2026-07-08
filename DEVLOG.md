@@ -377,3 +377,14 @@ track flagged on 07-07 as the way forward now the label flywheel is tapped out
 at HL=256; if the pool confirms it, it becomes the search half of the next
 release. Follow-ups once confirmed: sweep `SOFT_TIME_FRACTION` (0.5/0.6/0.7)
 and expose `Move Overhead` as a real UCI option for lichess-bot.
+
+**Update (same day) — shipped as v3.1 "Blackpeak".** Overriding the "no version
+bump" line above: at the maintainer's call it is released now because it is
+wanted in play, as a **search-only point release on the unchanged gen3 net**
+(hence still "Blackpeak" — same peak, same generation, no new NNUE). The
+release deliberately breaks the usual measured-ledger discipline for this one
+version: it ships on the interim SPRT (+24.6 ±22.7, stopped early, no bound
+crossed) with **no pool calibration** — CHANGELOG/README/ledger all flag the
+figure as provisional, and a full gauntlet + a completed SPRT are deferred to
+before the next generation. Engine self-reports `id name Sgurr 3.1`; deploy
+binary `sgurr_cpp/sgr_v3_1.exe` (gen3 net via `SGR_EVALFILE`).

@@ -4,6 +4,29 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v3.1 "Blackpeak" (Sgùrr Dubh Mòr) — 2026-07-08
+
+A search-only point release on the **unchanged gen3 net** — time-management
+only, no NNUE change. First result off the search track.
+
+- **Time management: soft/hard search limits.** The clock path was hard-limit
+  only, so iterative deepening always started a depth it could not finish and
+  aborted it mid-search, discarding the roughly 30–40% of each move's thinking
+  spent on that unfinished pass. A soft limit (`SOFT_TIME_FRACTION`) now stops
+  a new iteration from starting once the budget is mostly gone, so the last
+  pass completes and the banked time funds deeper later searches. A
+  `MOVE_OVERHEAD_MS` margin is held back for transmission latency (Lichess).
+  Explicit `go movetime` and node limits are unchanged, so datagen and
+  fixed-time analysis stay bit-identical.
+- Engine now reports `id name Sgurr 3.1`.
+- **Strength — provisional, not yet a completed test:** an interim SPRT vs the
+  v3.0 engine (same gen3 net on both sides, so only the time code differs;
+  8+0.08s) was stopped early at 706 games: **+24.6 ±22.7** (+300 =156 −250,
+  LLR +0.84, bounds ±2.94). Encouraging and consistently positive, but no SPRT
+  bound was crossed and no CCRL calibration was run — full Elo testing is
+  deferred to before the next generation. This is the one release whose Elo
+  figure is an interim estimate rather than a completed measurement.
+
 ## v3.0 "Blackpeak" (Sgùrr Dubh Mòr) — 2026-07-06
 
 The gen3 NNUE: corrected training methodology, same architecture.
