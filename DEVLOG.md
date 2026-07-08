@@ -262,3 +262,74 @@ searches by a stronger labeller, post history-leak fix), lambda=1.0 targets
 (+~90 of it, per the round-robin gap to lambda=0.7 which matches the old
 recipe), and the cosine schedule. The flywheel plus honest measurement is
 the story of this release.
+
+## 2026-07-06 — Architecture width re-test: "HL=512 is worse" was the artefact
+
+With the protocol confound understood, re-ran HL=256 vs 384 vs 512 the fair
+way: matched optimiser budgets (1900 and 3800 steps, cosine to 1e-5),
+identical 2.5M-pool / game-disjoint val, lambda=1.0. On v3.0 data:
+
+| budget | HL=256 | HL=384 | HL=512 |
+|---|---|---|---|
+| 1900 steps | 0.00558 | 0.00541 (−3.0%) | 0.00537 (−3.8%) |
+| 3800 steps | 0.00522 | 0.00518 (−0.8%) | 0.00520 (−0.4%) |
+
+The gen2-era "HL=512 is 6.4% worse under clean eval" is **retired** — it was
+the fixed-epoch constant-LR artefact, not a property of the net. Under the
+corrected protocol wider is at worst neutral, modestly better at the standard
+budget.
+
+But the effect is small and mostly *faster convergence, not a lower floor*:
+double the steps and 256 nearly closes the gap, and 512 stops beating 384.
+On 2.5M positions the extra capacity is only mildly exploited (wider nets are
+data-hungry — gen4's 6M is the better testbed). **384 is the pick over 512**
+(wins at 3800 steps, cheaper NPS).
+
+Not a green light yet, for the two reasons this project keeps relearning:
+(1) **loss ≠ Elo** — a 3% val-loss edge could be +30 Elo or ~0; (2) a wider
+net **costs NPS**, giving Elo back in search depth. Verdict: wider-net is a
+justified *gen5* experiment targeting HL=384, gated on a real SPRT of an
+HL=384 engine vs the HL=256 engine (needs the C++ HL constant parameterised
+and the accumulator re-verified), ideally trained on the 6M gen4 data.
+
+## 2026-07-07 — gen4 (HL=256): the label flywheel is tapped out
+
+gen4 = 6.0M positions, labelled by the gen3 net at nodes:150000 (same node
+budget as gen3, stronger labeller), lambda sweep {0.9, 1.0}, cosine 6 epochs
+(~2.2k steps — step-matched to gen3's deploy net). Ran the full pipeline
+autonomously.
+
+- **Probe: saturated** (+0.56% half→full at matched steps). A clean,
+  protocol-correct confirmation that the 256-net is essentially saturated by
+  ~3–6M — the retired gen2-era "~3M" number, re-measured properly, lands in a
+  similar place. So generating 6M was for the *gen5 384 experiment*, not for
+  gen4's own 256 net.
+- **Select round-robin: lambda=0.9 "won"** (+11.6 vs gen3 +5.8 vs gen4-l100
+  −17.4) — but only ~60 games/pairing, i.e. within noise. Note the apparent
+  optimum moved 1.0 (gen3) → 0.9 (gen4); underpowered, but a reminder the
+  lambda optimum is not a constant.
+- **SPRT vs gen3 (stopped early at 750 games): +270 =148 −332, 45.9%,
+  −28.8 ±22.3 — a genuine REGRESSION.** The select round-robin's slight
+  positive was small-sample noise; with 750 games gen4 is clearly *behind*
+  gen3.
+
+Interpretation: both gen3 and gen4 probes say the 256-net is saturated, and
+gen3→gen4 (better labeller, more data) delivered *nothing* — slightly
+negative. **The label-quality flywheel has run out of road at HL=256.** The
+net is full; better labels can't be expressed, and recipe/lambda differences
+nudge it negative. (Secondary possibility not yet excluded: gen4's labels are
+genuinely a touch worse than gen3's — −29 is a bit more than a pure ceiling
+would predict. Optional diagnostic: retrain on gen3 data with gen4's exact
+recipe, SPRT vs gen4; equal ⇒ ceiling, gen3-data wins ⇒ label regression.)
+
+Decisions:
+- **v4.0 is NOT released** — not stronger than gen3. No version bump, no
+  ledger row (calibration skipped — pointless for a regression). All
+  artefacts kept per the nothing-deleted rule: `data/v4.0` (frozen, 6.0M),
+  `nets/gen4*.nnue`, `sgr_gen4*.exe`. Pipeline stopped mid-SPRT on purpose.
+- **The next Elo must come from architecture or search, not labels.**
+  gen4 is the empirical proof. Critical path is now the **HL=384** experiment
+  (C++ HL parameterisation + accumulator re-verify + train on the 6M gen4
+  data + SPRT vs the 256 net), with the untouched **search track**
+  (continuation history + malus, LMP, RFP) as the parallel lever. Another
+  256 generation is off the table.
