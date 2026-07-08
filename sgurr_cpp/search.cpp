@@ -134,12 +134,14 @@ SearchResult Engine::search_best_move(
     Board& board,
     int max_depth,
     std::optional<double> limit,
-    std::optional<long long> nodes_arg
+    std::optional<long long> nodes_arg,
+    std::optional<double> soft_arg
 ) {
     nodes = 0;
     tt_hits = 0;
     start_time = std::chrono::steady_clock::now();
     time_limit = limit;
+    soft_time_limit = soft_arg;
     node_limit = nodes_arg;
     stop_search = false;
 
@@ -162,6 +164,15 @@ SearchResult Engine::search_best_move(
     int completed_depth = 0;
 
     for (int depth = 1; depth <= max_depth; ++depth) {
+        // Soft limit: once this far into the budget a deeper pass almost never
+        // finishes before the hard deadline, so keep the last completed depth
+        // rather than spending the rest of the clock on a search we discard.
+        // Depth 1 always runs so a searched move is available.
+        if (depth > 1 && soft_time_limit.has_value()
+                && elapsed_seconds(start_time) >= *soft_time_limit) {
+            break;
+        }
+
         int score;
         std::optional<Move> move;
 

@@ -113,9 +113,18 @@ std::optional<long long> parse_go_value(const std::string& command, const std::s
     return std::nullopt;
 }
 
-std::optional<double> parse_go_movetime(const std::string& command, const Board& board) {
+// A move's time allowance, in seconds. `hard` is the deadline at which the
+// search is aborted mid-iteration; `soft`, when present, is the point past
+// which no new iterative-deepening pass is started. Fixed `movetime` uses the
+// whole allotment (no soft limit); a clock-based budget carries both.
+struct TimeBudget {
+    double hard;
+    std::optional<double> soft;
+};
+
+std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const Board& board) {
     if (auto movetime = parse_go_value(command, "movetime")) {
-        return *movetime / 1000.0;
+        return TimeBudget{ *movetime / 1000.0, std::nullopt };
     }
 
     // Clock-based allocation from wtime/btime/winc/binc/movestogo.
@@ -133,13 +142,19 @@ std::optional<double> parse_go_movetime(const std::string& command, const Board&
         mtg = 1;
     }
 
-    // Budget one slice of the remaining time plus half the increment, never
-    // more than half the clock, with a small safety floor.
-    long long budget = *time_left / mtg + inc / 2;
-    budget = std::min(budget, *time_left / 2);
-    budget = std::max(budget, 10LL);
+    // Hold back a margin for GUI/network latency so the move is transmitted
+    // before the flag falls, then budget one slice of the remaining time plus
+    // half the increment, never more than half the clock, with a safety floor.
+    long long usable = std::max(1LL, *time_left - MOVE_OVERHEAD_MS);
+    long long hard = usable / mtg + inc / 2;
+    hard = std::min(hard, usable / 2);
+    hard = std::max(hard, 10LL);
 
-    return budget / 1000.0;
+    // Stop starting fresh iterations partway through the budget: the final
+    // pass then completes instead of being aborted, unused, at the hard limit.
+    long long soft = std::max(10LL, static_cast<long long>(hard * SOFT_TIME_FRACTION));
+
+    return TimeBudget{ hard / 1000.0, soft / 1000.0 };
 }
 
 void uci_loop() {
@@ -163,20 +178,26 @@ void uci_loop() {
             engine.clear_for_new_position();
         } else if (command.rfind("go", 0) == 0) {
             std::optional<int> requested_depth = parse_go_depth(command);
-            std::optional<double> movetime = parse_go_movetime(command, board);
+            std::optional<TimeBudget> budget = parse_go_time_budget(command, board);
             std::optional<long long> node_limit = parse_go_value(command, "nodes");
+
+            std::optional<double> hard_limit =
+                budget.has_value() ? std::optional<double>(budget->hard) : std::nullopt;
+            std::optional<double> soft_limit =
+                budget.has_value() ? budget->soft : std::nullopt;
 
             // With a clock, movetime, or a node budget, depth is bounded by that
             // limit rather than the default cap.
             int depth = requested_depth.value_or(
-                (movetime.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
+                (budget.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
             );
 
             SearchResult result = engine.search_best_move(
                 board,
                 depth,
-                movetime,
-                node_limit
+                hard_limit,
+                node_limit,
+                soft_limit
             );
 
             if (result.best_move.has_value()) {

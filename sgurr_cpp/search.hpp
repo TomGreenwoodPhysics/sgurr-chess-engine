@@ -28,6 +28,15 @@ constexpr U64 TT_MASK = TT_SIZE - 1;
 constexpr int TIME_CHECK_INTERVAL = 512;
 constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
 
+// Time-management knobs (clock play only; explicit `movetime` and node limits
+// are unaffected). MOVE_OVERHEAD_MS is the clock margin held back for GUI and
+// network latency so the move always arrives before the flag falls.
+// SOFT_TIME_FRACTION is how far into the budget a new iterative-deepening pass
+// may still be started; past it the last completed depth is kept rather than
+// starting an iteration that would be aborted, unfinished, at the hard limit.
+constexpr long long MOVE_OVERHEAD_MS = 30;
+constexpr double SOFT_TIME_FRACTION = 0.6;
+
 constexpr int ASPIRATION_WINDOW = 50;
 constexpr int DELTA_MARGIN = 200;
 
@@ -61,7 +70,8 @@ public:
         Board& board,
         int max_depth = MAX_DEPTH,
         std::optional<double> time_limit = std::nullopt,
-        std::optional<long long> node_limit = std::nullopt
+        std::optional<long long> node_limit = std::nullopt,
+        std::optional<double> soft_limit = std::nullopt
     );
 
     void clear_transposition_table();
@@ -75,7 +85,8 @@ public:
 
 private:
     std::chrono::steady_clock::time_point start_time;
-    std::optional<double> time_limit = std::nullopt;
+    std::optional<double> time_limit = std::nullopt;         // hard deadline: abort mid-search
+    std::optional<double> soft_time_limit = std::nullopt;    // don't start a new iteration past this
     std::optional<long long> node_limit = std::nullopt;
     bool stop_search = false;
 

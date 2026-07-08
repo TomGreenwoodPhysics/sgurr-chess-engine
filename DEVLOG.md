@@ -333,3 +333,47 @@ Decisions:
   data + SPRT vs the 256 net), with the untouched **search track**
   (continuation history + malus, LMP, RFP) as the parallel lever. Another
   256 generation is off the table.
+
+## 2026-07-08 — Search track opens: soft time limit + move overhead
+
+Connected the engine to Lichess and audited the clock code, which was
+**hard-limit only**: `parse_go_movetime` computed a single budget
+(`time_left/30 + inc/2`, capped at half the clock) and the iterative-deepening
+loop always started the next depth, stopping only when the in-search deadline
+aborted it mid-pass. Because each depth costs roughly 2–3x the cumulative time
+before it, the final (aborted) iteration is pure waste — its result is
+discarded and the previous depth's move is returned regardless. Modelled over
+a geometric iteration cost that is ~1 − ln(r)/(r−1) of the budget lost per
+move: ~30% at r=2, ~39% at r=2.5.
+
+Changes (search/time only; net untouched):
+- **Soft limit** (`SOFT_TIME_FRACTION = 0.6`): checked at the top of the ID
+  loop — do not *start* a new iteration once past this fraction of the hard
+  budget, so the last pass completes instead of being thrown away. The banked
+  time raises `time_left/mtg` on later moves, so the reclaimed effort is spent
+  as extra depth where it counts. Depth 1 always runs so a searched move
+  always exists.
+- **Move overhead** (`MOVE_OVERHEAD_MS = 30`): held back before allocating so
+  the move is transmitted before the flag falls — chiefly Lichess-latency
+  insurance; ~0 Elo in local SPRT.
+- Explicit `go movetime` and node limits get **no** soft limit, so datagen and
+  fixed-time analysis stay bit-identical to before.
+
+Verified: clean clang64 build; a UCI smoke test shows the clock path stopping
+at an iteration boundary (~198 ms, depth 9 complete) instead of burning to the
+hard cap (~305 ms) and returning the same move, while `go movetime 1000` still
+uses the full second.
+
+Evidence (interim, **not** a completed test): SPRT vs gen3 at 8+0.08, same
+gen3 net on both sides so only the time code differs, stopped early by choice
+at 706 games: +300 =156 −250, **+24.6 ±22.7**, LLR +0.84 (bounds ±2.94 for
+elo0=0/elo1=5). A small effect against a [0,5]-Elo band needs ~2000+ games to
+cross a bound; the point estimate stayed stable and positive across the run
+but its CI still reaches down near zero. Encouraging, not confirmed.
+
+Decision: **no version bump, no ledger row, no CHANGELOG entry** — gated on a
+proper pool calibration (to be run). This is the first result off the search
+track flagged on 07-07 as the way forward now the label flywheel is tapped out
+at HL=256; if the pool confirms it, it becomes the search half of the next
+release. Follow-ups once confirmed: sweep `SOFT_TIME_FRACTION` (0.5/0.6/0.7)
+and expose `Move Overhead` as a real UCI option for lichess-bot.
