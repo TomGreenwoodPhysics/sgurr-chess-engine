@@ -4,7 +4,7 @@ that mirrors the C++ integer math exactly -- used to verify the engine's NNUE.
 import struct, sys
 import numpy as np
 
-INPUT, HL, QA, QB, SCALE = 768, 256, 255, 64, 400
+INPUT, HL, QA, QB, SCALE = 768, 384, 255, 64, 400   # HL=384 since v4.0 (gen5)
 MAGIC = b"RUKN"
 
 def gen_random(path, seed=20260621):

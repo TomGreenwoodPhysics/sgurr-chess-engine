@@ -18,7 +18,8 @@ the canonical identifiers; peak names are codenames only.
 | v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
 | v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 Elo vs v1.0 (300 games, 8+0.08) |
 | v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 Elo vs v2.0 (618 games, SPRT); 2616 ±37 CCRL-Blitz-anchored |
-| v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only on the gen3 net: soft/hard time management; interim +24.6 ±22.7 vs v3.0 (706 games, SPRT stopped early), full calibration pending |
+| v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only on the gen3 net: soft/hard time management; calibrated 2564 ±26 — below v3.0 (the flat soft limit loses at 10+0.1; superseded in v4.0) |
+| v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT); plus history malus and best-move-stability time management; 2627 ±27 CCRL-Blitz-anchored |
 
 See `CHANGELOG.md` for details and measured results with error bars,
 `benchmarks/ledger.md` for the append-only record of measured ratings, and
@@ -37,20 +38,21 @@ official CCRL ratings. Full method and append-only history:
 
 | engine | rating (CCRL-Blitz-anchored) |
 |---|---|
-| Sgurr v3.0 "Blackpeak" | **2616 ±37** |
-| Sgurr v2.0 "Notches" | 2491 ±33 |
-| Sgurr v1.0 "Fox" | 2408 ±34 |
-| Sgurr classical (HCE) | 2400 ±35 |
+| Sgurr v4.0 "MacKenzie" | **2627 ±27** |
+| Sgurr v3.0 "Blackpeak" | 2613 ±36 |
+| Sgurr v3.1 "Blackpeak" | 2564 ±27 |
+| Sgurr v2.0 "Notches" | 2490 ±32 |
+| Sgurr v1.0 "Fox" | 2408 ±35 |
+| Sgurr classical (HCE) | 2399 ±35 |
 
 Each generational gap in the pool table independently reproduces the direct
-SPRT match result between those versions (e.g. v3.0 vs v2.0: +125 in the
-pool vs +119.8 ±26.3 in a 618-game SPRT), so the self-play gains are real
-rather than self-play-inflated.
+SPRT match result between those versions (e.g. v4.0's net change vs the gen3
+engine: +54 in the pool vs +55.5 ±17.0 in a 1,194-game SPRT), so the
+self-play gains are real rather than self-play-inflated.
 
-**v3.1** shares v3.0's gen3 net (it is a search-only release) and has no
-separate pool calibration yet, so it is not listed above; its only figure is
-the interim head-to-head SPRT vs v3.0 (+24.6 ±22.7, stopped early). A full
-calibration is planned before the next generation.
+**v3.1** sits *below* v3.0 despite its positive interim SPRT at 8+0.08: its
+flat soft time limit loses at the pool's 10+0.1. v4.0 replaces it with
+best-move-stability scaling, which measures positive at both time controls.
 
 **Legacy Python version** — benchmarked against Stockfish limited to 1500
 Elo at equal 0.50 s/move: ~49.6% over 1000 games, i.e. roughly 1500 in that
@@ -85,7 +87,7 @@ It uses:
 * quiescence search
 * delta pruning
 * static exchange evaluation
-* killer/history move ordering
+* killer/history/continuation-history move ordering with malus
 * tapered evaluation
 * tuned evaluation weights
 
@@ -117,7 +119,8 @@ the project.
 ### Search
 
 * Iterative deepening
-* Time management: soft/hard clock limits with a move-overhead margin
+* Time management: soft/hard clock limits with a move-overhead margin and
+  best-move-stability scaling of the soft limit
 * Negamax with alpha-beta pruning
 * Principal variation search
 * Aspiration windows
@@ -130,7 +133,9 @@ the project.
 * Delta pruning
 * Static exchange evaluation for capture pruning and move ordering
 * Killer move heuristic
-* History heuristic
+* History heuristic with malus (failed quiets are penalised, not just
+  cutoff moves rewarded)
+* Continuation history (follow-up move ordering)
 * Draw detection by repetition and the fifty-move rule
 
 ### Evaluation

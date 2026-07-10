@@ -388,3 +388,113 @@ crossed) with **no pool calibration** — CHANGELOG/README/ledger all flag the
 figure as provisional, and a full gauntlet + a completed SPRT are deferred to
 before the next generation. Engine self-reports `id name Sgurr 3.1`; deploy
 binary `sgurr_cpp/sgr_v3_1.exe` (gen3 net via `SGR_EVALFILE`).
+
+## 2026-07-10 — gen5: HL=384 is the first architecture win (+55.5 ±17.0)
+
+The width experiment flagged on 07-06 as the critical path ran overnight and
+delivered. Trainer side: `train.py` gained `--hl` (one override sets both the
+model width and `nnue_tools.HL`, so the exported header always matches the
+weights). Trained on the frozen 6.0M `data/v4.0` positions — generated for
+exactly this experiment, no new datagen — with the corrected recipe (cosine
+1e-3→1e-5, 10 epochs ≈ 3.7k steps, the budget at which the 07-06 re-test had
+384 winning; lambda 1.0). ~5 minutes on the GPU. Engine side: `nnue::HL`
+became a `-DSGR_HL` build define; `nnue.cpp` was already width-clean (the
+literal 384 in `feature_index` is INPUT/2, the colour stride — unrelated).
+`nnue_selfcheck` rebuilt at 384 against the new net: **PASS, 4,468 checks, 0
+mismatches** — the incremental accumulator is provably bit-exact at the new
+width, so games can be trusted.
+
+**SPRT vs the gen3/256 engine: H1 accepted at 1,194 games — +580 =223 −391,
++55.5 ±17.0** (8+0.08, [0,5] band, LLR crossed +2.94). The point estimate sat
+at +47…+55 the whole run. The punchline writes itself: the same 6M positions
+that gave the saturated 256 net *minus* 29 Elo (gen4) gave the 384 net +55.
+Capacity, not label quality, was the wall — the gen4 post-mortem's conclusion,
+now proved from both sides. The label flywheel is dead at 256 but the
+architecture lever is alive, and wider nets really are data-hungry.
+
+## 2026-07-10 — Calibration day: v3.1's debt paid, and a soft-limit surprise
+
+The v3.1 calibration owed since 07-08 ran first: **2565.8 ±25.9** (420 games
+@ 10+0.1), and ~2564 in every later combined re-solve. That is ~50 points
+**below** v3.0's 2616 on the same scale — despite the +24.6 ±22.7 interim
+head-to-head at 8+0.08 that v3.1 shipped on. The finding reproduced across
+independent Ordo solves as more games accumulated, so it is believed: **the
+flat soft limit loses Elo at 10+0.1 even though it measured positive at
+8+0.08.** Lesson (the time-management cousin of loss≠Elo): mechanism ≠ Elo,
+and a time-management result at one TC does not transfer to another — test at
+the TC you care about.
+
+The gen5 nets were then calibrated as a two-seed gauntlet (both
+time-management variants, 900 games @ 10+0.1, ~480 games/seed):
+**gen5-bmstab 2635.7 ±24.9, gen5-soft 2618.7 ±23.3**. Cross-checks all landed:
+gen5-soft − v3.1 = +54, reproducing the +55.5 SPRT at a different TC (the
+anchoring is consistent session to session); best-move stability — a
+same-day addition that scales the soft budget by how long the root move has
+held (`BM_STABILITY_FACTOR`, stretch while unsettled, trim once stable,
+clamped to the hard deadline) — measured +17 here and +6/+23 (gen5/gen3) in a
+1,436-game 8+0.08 round-robin. Positive at both TCs, never negative; and it
+is exactly the mechanism that un-does the flat limit's damage (stretch when
+stopping early would be wrong). **Champion call: gen5 + stability**, on the
+pragmatic rule that the nominal #1 which is at-worst-equal gets taken.
+
+## 2026-07-10 — History 2x2: malus is worth +33, continuation history ±0
+
+Two move-ordering upgrades, tested factorially the same evening on the new
+champion: **history malus** (on a quiet beta cutoff, the quiets already tried
+get −depth², floored at −HISTORY_MAX — the mirror of the existing +depth²
+bonus; the previously-unsorted zero-history bucket became a scored, sorted
+bucket so negative scores actually demote) and **continuation history**
+(a [prev_piece][prev_to][piece][to] follow-up table added into quiet
+ordering, per-ply previous-move stack, cleared across null moves, fully reset
+by `clear_for_new_game()` per the 07-04 datagen rule). Both behind build
+toggles (`-DSGR_HMALUS`, `-DSGR_CONTHIST`, default on) so all four
+combinations build from one tree.
+
+Methodology note that earned its keep: the toggles-off build was verified
+**node-for-node identical** to the champion binary (two positions, exact node
+counts) before any games — the baseline provably is the champion, so any gap
+is attributable to the toggles alone. Fixed-depth node counts then showed the
+ordering effect directly: −39% nodes to depth 9 (malus), −22% (conthist).
+
+Round-robin (8+0.08, stopped at 2,158 games / 1,020 per engine):
+mch +19.4, malus +14.0, base −14.3, ch −19.1 (all ±18). Factorial
+decomposition: **malus main effect ≈ +33** (the two malus arms separate
+cleanly from the two non-malus arms; pooled split SE ≈ ±9), **continuation
+history ≈ 0** (−4.8 alone, +5.5 with malus — noise). Interpretation: a
+bonus-only butterfly table accumulates stale flattery that malus corrects,
+while 1-ply continuation history has nothing to feed at Sgurr's current
+search — its value elsewhere comes through history-informed LMR/LMP, which
+do not exist here yet. The plumbing stays (default-on, ~free, and those
+consumers are next on the search list). Champion: base + malus + conthist.
+
+## 2026-07-10 — v4.0 "MacKenzie" (Sgùrr MhicChoinnich): released
+
+One day, three measured gains, one release: the gen5 NNUE (768→384→1, the
+first architecture change since NNUE arrived), best-move-stability time
+management, and history malus. Deploy binary `sgurr_cpp/sgr_v4_0.exe`
+(canonical `nets/gen5.nnue` baked), verified node-identical to the pooled
+champion and selfcheck-PASS. Source defaults now describe the shipped engine:
+`SGR_HL` 384 in both engine and trainer (256-net builds need `-DSGR_HL=256`),
+search toggles (`SGR_BMSTAB`/`SGR_HMALUS`/`SGR_CONTHIST`) default-on.
+
+**Release calibration: Sgurr-v4.0 = 2627 ±27** (+216 =60 −144, 420-game
+gauntlet @ 10+0.1, 58.6%; Ordo over all ~3,600 accumulated calibration
+games). Ladder: 2399 → 2408 → 2490 → 2613 → **2627** (v3.0 drifted 2616 →
+2613 in the combined re-solve, inside its bars). On the pool scale the
+one-day v3.1 → v4.0 jump is **+63**.
+
+Honest footnote: 2627 is statistically level with the same engine measured
+*without* the history changes (gen5-bmstab, 2635.5 ±25.5) — the self-play
++33 from malus did not express against the pool (difference −8.5 with ~±37
+joint error). Self-play gains compressing against a diverse pool is the
+expected direction, and the factorial malus result stands as a self-play
+measurement; but the pool-scale claim for v4.0 is +63 over v3.1, not the
++105 the isolated measurements would sum to. loss ≠ Elo, self-play Elo ≠
+pool Elo — same lesson, next scale up. Also noted: the white-advantage
+anomaly (−23 ±10 on 07-04, −20 ±9 on 07-06) has washed out to −2.3 ±5.3
+over the full 3,600-game set — it was small-sample noise, and the book
+side-to-move question can close.
+
+Next levers, in order: LMP/RFP (which may activate conthist), then gen6
+datagen labelled by this ~+60-stronger engine — the flywheel is alive again
+at 384.

@@ -35,7 +35,15 @@ struct UndoInfo;   // defined in board.hpp
 namespace nnue {
 
 constexpr int INPUT = 768;
-constexpr int HL    = 256;
+// Hidden-layer width. Overridable at build time with -DSGR_HL=<n> so a
+// different width can be built without touching the default. Must match the
+// trainer's --hl (nnue_tools.HL) for the net that is loaded, or nnue::load
+// rejects it as an architecture mismatch. 384 since v4.0 (gen5); 256 nets
+// (gen1-gen4) need -DSGR_HL=256.
+#ifndef SGR_HL
+#define SGR_HL 384
+#endif
+constexpr int HL    = SGR_HL;
 constexpr int QA    = 255;
 constexpr int QB    = 64;
 constexpr int SCALE = 400;

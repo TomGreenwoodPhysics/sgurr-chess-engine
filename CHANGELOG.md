@@ -4,6 +4,44 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v4.0 "MacKenzie" (Sgùrr MhicChoinnich) — 2026-07-10
+
+The gen5 NNUE — the first architecture change since NNUE arrived — plus two
+measured search improvements, all landed and tested in one day.
+
+- **Strength: +55.5 ±17.0 Elo vs the gen3 engine from the net alone**
+  (+580 =223 −391, 1,194 games, 8+0.08s, SPRT [0, 5] H1 accepted), with the
+  search changes measured separately on top (below).
+  **CCRL-Blitz-anchored: 2627 ±27** (+216 =60 −144, 420-game gauntlet @
+  10+0.1, Ordo over all accumulated calibration games — see
+  `benchmarks/ledger.md`). +63 over v3.1 on the pool scale; statistically
+  level with the same engine measured before the history changes
+  (2635 ±26) — the self-play malus gain compresses against a diverse pool.
+- Net: 768→**384**→1 perspective NNUE (hidden layer widened from 256), trained
+  on 6.0M self-play positions labelled by the v3.0 net at 150,000 nodes/move
+  (dataset `data/v4.0`). The same dataset retrained at 256 (gen4) had
+  *regressed* −28.8 ±22.3 and was never released: the 256 net was saturated,
+  and the +55.5 confirms capacity, not label quality, was the wall.
+- Search: **history malus** — on a quiet beta cutoff the quiets already tried
+  are penalised, not just the cutoff move rewarded. Measured **≈ +33 Elo**
+  (2×2 factorial round-robin, 2,158 games, malus arms vs non-malus arms,
+  split error ≈ ±9). Continuation history landed alongside it (≈ 0 Elo alone
+  at the current search — kept, toggleable, feeds the next round of pruning
+  work).
+- Time management: **best-move-stability scaling** of the soft limit (stretch
+  while the root best move keeps changing, trim once it has held). +17 at
+  10+0.1 / +6 at 8+0.08 versus the flat soft limit — and the flat v3.1 soft
+  limit itself measured **−48 vs v3.0 at 10+0.1** (see below), so the
+  adaptive version replaces it.
+- v3.1's deferred calibration debt settled: **2564 ±26**, *below* v3.0's
+  2613 ±38 — the flat soft limit loses at the pool time control despite its
+  positive interim SPRT at 8+0.08. Lesson recorded: time-management results
+  do not transfer across TCs; test at the TC that matters.
+- Engine reports `id name Sgurr 4.0`. Build defaults now describe the shipped
+  engine: `SGR_HL=384` in engine and trainer (rebuild older 256-wide nets
+  with `-DSGR_HL=256`); search features behind default-on toggles
+  (`SGR_BMSTAB`, `SGR_HMALUS`, `SGR_CONTHIST`).
+
 ## v3.1 "Blackpeak" (Sgùrr Dubh Mòr) — 2026-07-08
 
 A search-only point release on the **unchanged gen3 net** — time-management

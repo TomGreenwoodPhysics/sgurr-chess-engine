@@ -190,6 +190,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", default="sgurr.nnue")
+    ap.add_argument("--hl", type=int, default=nt.HL,
+                    help="hidden-layer width; must match the engine's nnue::HL "
+                         "at deploy time (default 256). Overrides nt.HL so the "
+                         "model AND the exported file header agree.")
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -207,6 +211,14 @@ def main():
     ap.add_argument("--seed", type=int, default=0,
                     help="seed for the train/val split and weight init")
     args = ap.parse_args()
+
+    # HL is read at model-construction time (NNUE.__init__ looks up the module
+    # global) and by nt.export for the file header; set both so a --hl override
+    # produces a self-consistent net.
+    global HL
+    HL = args.hl
+    nt.HL = args.hl
+    print(f"HL = {HL}")
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print("device:", dev)

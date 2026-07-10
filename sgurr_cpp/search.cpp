@@ -43,6 +43,10 @@ void Engine::reset_history() {
     for (auto& row : history) {
         row.fill(0);
     }
+
+#if SGR_CONTHIST
+    conthist.assign(12 * 64 * 12 * 64, 0);
+#endif
 }
 
 namespace {
@@ -98,6 +102,12 @@ void Engine::clear_for_new_position() {
             value /= 2;
         }
     }
+
+#if SGR_CONTHIST
+    for (int& value : conthist) {
+        value /= 2;
+    }
+#endif
 }
 
 void Engine::clear_for_new_game() {
@@ -151,6 +161,10 @@ SearchResult Engine::search_best_move(
 
     reset_killers();
 
+#if SGR_CONTHIST
+    ss_piece.fill(-1);   // no previous move anywhere until a make records one
+#endif
+
     MoveList legal_moves = board.generate_legal_moves();
     std::optional<Move> best_move = std::nullopt;
 
@@ -163,14 +177,29 @@ SearchResult Engine::search_best_move(
     int best_score = best_move.has_value() ? board.evaluate() : -INF;
     int completed_depth = 0;
 
+#if SGR_BMSTAB
+    std::optional<Move> prev_root_best = std::nullopt;
+    int bm_stable = 0;   // consecutive iterations the root best move has held
+#endif
+
     for (int depth = 1; depth <= max_depth; ++depth) {
         // Soft limit: once this far into the budget a deeper pass almost never
         // finishes before the hard deadline, so keep the last completed depth
         // rather than spending the rest of the clock on a search we discard.
-        // Depth 1 always runs so a searched move is available.
-        if (depth > 1 && soft_time_limit.has_value()
-                && elapsed_seconds(start_time) >= *soft_time_limit) {
-            break;
+        // The budget is scaled by best-move stability (stretched while the root
+        // move is still changing, trimmed once it has settled) and clamped to
+        // the hard deadline. Depth 1 always runs so a searched move exists.
+        if (depth > 1 && soft_time_limit.has_value()) {
+            double soft = *soft_time_limit;
+#if SGR_BMSTAB
+            soft *= BM_STABILITY_FACTOR[std::min(bm_stable, BM_STABILITY_COUNT - 1)];
+#endif
+            if (time_limit.has_value()) {
+                soft = std::min(soft, *time_limit);
+            }
+            if (elapsed_seconds(start_time) >= soft) {
+                break;
+            }
         }
 
         int score;
@@ -212,6 +241,11 @@ SearchResult Engine::search_best_move(
         }
 
         if (move.has_value()) {
+#if SGR_BMSTAB
+            bm_stable = (prev_root_best.has_value() && *move == *prev_root_best)
+                            ? bm_stable + 1 : 0;
+            prev_root_best = move;
+#endif
             best_move = move;
             best_score = score;
             completed_depth = depth;
@@ -289,6 +323,10 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 
         legal_found = true;
         UndoInfo undo = board.make_move(move);
+#if SGR_CONTHIST
+        ss_piece[0] = undo.placed_piece;
+        ss_to[0] = move.to();
+#endif
         int score = -negamax(board, depth - 1, -beta, -alpha, 1);
         board.unmake_move(undo);
 
@@ -488,6 +526,9 @@ int Engine::negamax(
 
     if (can_try_null_move(board, depth, beta, ply)) {
         NullMoveUndo undo = board.make_null_move();
+#if SGR_CONTHIST
+        ss_piece[ply] = -1;   // a null move is no follow-up context
+#endif
 
         int score = -negamax(
             board,
@@ -526,10 +567,23 @@ int Engine::negamax(
     bool legal_found = false;
     int legal_moves_searched = 0;
 
+#if SGR_HMALUS
+    // Quiets searched at this node, in order; on a quiet beta cutoff every
+    // earlier entry is a quiet that failed where the cutoff move succeeded.
+    Move tried_quiets[256];
+    int n_tried = 0;
+#endif
+
     for (const Move& move : moves) {
         if (!board.is_legal(move, li)) {
             continue;
         }
+
+#if SGR_HMALUS
+        if (!is_noisy_move(board, move)) {
+            tried_quiets[n_tried++] = move;
+        }
+#endif
 
         bool reduce_late_move = can_reduce_late_move(
             board,
@@ -545,6 +599,10 @@ int Engine::negamax(
         legal_moves_searched += 1;
 
         UndoInfo undo = board.make_move(move);
+#if SGR_CONTHIST
+        ss_piece[ply] = undo.placed_piece;
+        ss_to[ply] = move.to();
+#endif
 
         bool gives_check = board.in_check(board.side_to_move);
         int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
@@ -591,8 +649,47 @@ int Engine::negamax(
         if (alpha >= beta) {
             if (!is_noisy_move(board, move)) {
                 store_killer(ply, move);
+
+                int bonus = depth * depth;
                 int& hist = history[move.from()][move.to()];
-                hist = std::min(hist + depth * depth, 1'000'000);
+                hist = std::min(hist + bonus, HISTORY_MAX);
+
+#if SGR_CONTHIST
+                // The move has been unmade, so piece_at(from) is the mover.
+                int prev_piece = ply > 0 ? ss_piece[ply - 1] : -1;
+                int prev_to = ply > 0 ? ss_to[ply - 1] : 0;
+
+                if (prev_piece >= 0) {
+                    auto piece = board.piece_at(move.from());
+                    if (piece.has_value()) {
+                        int& ch = conthist[conthist_index(
+                            prev_piece, prev_to, *piece, move.to())];
+                        ch = std::min(ch + bonus, HISTORY_MAX);
+                    }
+                }
+#endif
+
+#if SGR_HMALUS
+                // Penalise the quiets tried before the cutoff move (the last
+                // entry is the cutoff move itself), so moves that keep failing
+                // sink in the ordering instead of staying at a flattering peak.
+                for (int i = 0; i < n_tried - 1; ++i) {
+                    const Move& q = tried_quiets[i];
+                    int& qh = history[q.from()][q.to()];
+                    qh = std::max(qh - bonus, -HISTORY_MAX);
+
+#if SGR_CONTHIST
+                    if (prev_piece >= 0) {
+                        auto qp = board.piece_at(q.from());
+                        if (qp.has_value()) {
+                            int& qch = conthist[conthist_index(
+                                prev_piece, prev_to, *qp, q.to())];
+                            qch = std::max(qch - bonus, -HISTORY_MAX);
+                        }
+                    }
+#endif
+                }
+#endif
             }
 
             break;
@@ -777,7 +874,7 @@ MoveList Engine::order_moves(
     Scored captures[256];     int n_cap = 0;
     Scored bad_captures[256]; int n_bad = 0;
     Scored good_quiets[256];  int n_gq  = 0;
-    Move   other_quiets[256]; int n_oq  = 0;
+    Scored other_quiets[256]; int n_oq  = 0;
 
     std::optional<Move> killer_key_one = std::nullopt;
     std::optional<Move> killer_key_two = std::nullopt;
@@ -823,10 +920,23 @@ MoveList Engine::order_moves(
 
         int hist = history[move.from()][move.to()];
 
+#if SGR_CONTHIST
+        // Add the follow-up score for the previous ply's move. Quiescence
+        // passes split_bad_captures=false and skips this: it neither records
+        // moves on the ply stack nor benefits from quiet ordering.
+        if (split_bad_captures && ply > 0 && ss_piece[ply - 1] >= 0) {
+            auto piece = board.piece_at(move.from());
+            if (piece.has_value()) {
+                hist += conthist[conthist_index(
+                    ss_piece[ply - 1], ss_to[ply - 1], *piece, move.to())];
+            }
+        }
+#endif
+
         if (hist > 0) {
             good_quiets[n_gq++] = {move, hist};
         } else {
-            other_quiets[n_oq++] = move;
+            other_quiets[n_oq++] = {move, hist};
         }
     }
 
@@ -837,6 +947,12 @@ MoveList Engine::order_moves(
     std::sort(captures, captures + n_cap, by_score);
     std::sort(bad_captures, bad_captures + n_bad, by_score);
     std::sort(good_quiets, good_quiets + n_gq, by_score);
+#if SGR_HMALUS || SGR_CONTHIST
+    // With malus / continuation scores these can be genuinely negative, so
+    // order them least-bad first. Without either feature every score here is
+    // exactly zero and the sort would be a no-op, so it is compiled out.
+    std::sort(other_quiets, other_quiets + n_oq, by_score);
+#endif
 
     MoveList ordered;
 
@@ -869,7 +985,7 @@ MoveList Engine::order_moves(
     }
 
     for (int i = 0; i < n_oq; ++i) {
-        ordered.add(other_quiets[i]);
+        ordered.add(other_quiets[i].move);
     }
 
     return ordered;

@@ -1,0 +1,23 @@
+{
+  "epochs": 6,
+  "val_frac": 0,
+  "loss_curves_by_lambda": {
+    "0.9": [
+      0.0187,
+      0.00796,
+      0.00704,
+      0.00663,
+      0.00644,
+      0.00637
+    ],
+    "1.0": [
+      0.01761,
+      0.0066,
+      0.00573,
+      0.00536,
+      0.00519,
+      0.00513
+    ]
+  },
+  "note": "train loss per epoch (deploy nets use val_frac 0; model selection is by games, not loss)"
+}

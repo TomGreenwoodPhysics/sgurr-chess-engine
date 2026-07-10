@@ -165,7 +165,7 @@ void uci_loop() {
 
     while (std::getline(std::cin, command)) {
         if (command == "uci") {
-            std::cout << "id name Sgurr 3.1\n";
+            std::cout << "id name Sgurr 4.0\n";
             std::cout << "id author Tom\n";
             std::cout << "uciok\n";
         } else if (command == "isready") {

@@ -37,6 +37,41 @@ constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
 constexpr long long MOVE_OVERHEAD_MS = 30;
 constexpr double SOFT_TIME_FRACTION = 0.6;
 
+// Best-move stability scaling for the soft limit (clock play only). The soft
+// budget is stretched while the root best move is still changing (the position
+// has not settled, so more search is likely to change the move) and trimmed
+// once it has held for several iterations. Indexed by the number of consecutive
+// iterations the root best move has been unchanged, capped at the final entry;
+// the scaled soft limit is always still clamped to the hard deadline. These are
+// starting values, to be swept before they are believed.
+constexpr double BM_STABILITY_FACTOR[] = {2.20, 1.30, 1.00, 0.85, 0.75};
+constexpr int BM_STABILITY_COUNT = 5;
+
+// Compile-time toggle for the scaling above (default on). Build with
+// -DSGR_BMSTAB=0 to fall back to the flat v3.1 soft limit, so the feature can
+// be A/B-tested from one source tree.
+#ifndef SGR_BMSTAB
+#define SGR_BMSTAB 1
+#endif
+
+// History malus and continuation history (both default on; -DSGR_HMALUS=0 /
+// -DSGR_CONTHIST=0 revert them, as with SGR_BMSTAB). Malus: on a quiet beta
+// cutoff, the quiets already tried at that node are penalised, not just the
+// cutoff move rewarded, so consistently useless moves sink in the ordering.
+// Continuation history: quiets are also scored by how well they have done as
+// the follow-up to the previous ply's move (indexed by that move's piece/to
+// and this move's piece/to), which captures reply patterns the from/to
+// butterfly table cannot see.
+#ifndef SGR_HMALUS
+#define SGR_HMALUS 1
+#endif
+#ifndef SGR_CONTHIST
+#define SGR_CONTHIST 1
+#endif
+
+// History scores (butterfly and continuation) are clamped to +/-HISTORY_MAX.
+constexpr int HISTORY_MAX = 1'000'000;
+
 constexpr int ASPIRATION_WINDOW = 50;
 constexpr int DELTA_MARGIN = 200;
 
@@ -92,6 +127,23 @@ private:
 
     std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};
     std::array<std::array<int, 64>, 64> history{};
+
+#if SGR_CONTHIST
+    // Continuation history, [prev_piece][prev_to][piece][to] flattened. At
+    // 12*64*12*64 ints (~2.3 MB) it lives on the heap, unlike the small
+    // butterfly table above.
+    std::vector<int> conthist;
+
+    // Which (piece, to) moved at each ply of the current line; -1 piece means
+    // "no previous move" (root, or a null move). Written on make, read one ply
+    // deeper for ordering and at cutoffs for the conthist update.
+    std::array<int, MAX_PLY> ss_piece{};
+    std::array<int, MAX_PLY> ss_to{};
+
+    static int conthist_index(int prev_piece, int prev_to, int piece, int to) {
+        return ((prev_piece * 64 + prev_to) * 12 + piece) * 64 + to;
+    }
+#endif
 
     bool time_is_up() const;
 
