@@ -498,3 +498,57 @@ side-to-move question can close.
 Next levers, in order: LMP/RFP (which may activate conthist), then gen6
 datagen labelled by this ~+60-stronger engine — the flywheel is alive again
 at 384.
+
+## 2026-07-10 → 07-11 — Post-release verification and the search seam
+
+**Time management is a wash on gen5 (07-10).** The question was whether v4.0
+still carried v3.1's regressive flat soft limit. A three-way on the *release
+engine* at 10+0.1 — stability (shipped) vs flat 0.6 vs hard-only
+(`SGR_SOFT_TIME_FRACTION=1.0`), all node-identical at fixed depth, so only the
+clock policy differs — settled it: at 457 games stab+hard led and flat trailed
+−26; at 963 games the ranking had *reversed* (flat +9, hard −1, stab −8), the
+whole spread inside ±23. A ranking that flips between checks is noise, not
+signal: the three policies are statistically equal on gen5. So **v3.1's −48 at
+10+0.1 did not reproduce** in a clean same-net direct test — it was a
+cross-session gauntlet artefact (v3.1's 420-game gauntlet vs v3.0's 210-game
+one from another day; the "three solves" reused the same games, not
+independent replication). No time-management Elo was left on the table, and
+the shipped stability config is fine. Stopped at 963 games. Added
+`-DSGR_SOFT_TIME_FRACTION` as a build override along the way.
+
+**LMP + RFP: reverse futility is a monster (07-11).** A 2x2 factorial on the
+v4.0 baseline (base / LMP / RFP / both; toggles `SGR_LMP`, `SGR_RFP`, gen5 net
+baked, base verified node-identical to `sgr_v4_0`), 8+0.08, full 3,600 games:
+**both +96.0, RFP +79.1, base −80.4, LMP −94.7 (all ±15).** Factorial
+decomposition: **RFP ≈ +175 self-play Elo** — both RFP arms tower over both
+non-RFP arms with ~11σ of separation, the largest single search gain the
+project has measured; reverse futility (stand pat when the static eval beats
+beta by a per-ply margin at shallow depth) was simply missing. **LMP ≈ 0**
+(−14 alone, +17 with RFP — noise), the passenger again, kept default-on for
+the pruning interactions it may yet feed. Fixed-depth node counts confirmed
+the mechanism before any game: LMP −63%, both −67%. As always self-play Elo
+overstates pool Elo, but +96 is far too large to vanish, and for a *labeller*
+self-play depth-per-node is exactly the currency that matters.
+
+## 2026-07-11 — gen6 datagen launched (flywheel restarts at HL=384)
+
+The label flywheel, dead at 256, restarts on the wider net with a much
+stronger labeller. gen6 datagen kicked off toward **8.0M positions**
+(`data/gen6_raw`, dataset v5.0 "Gillean") labelled by **`nets/gen5.nnue`** at
+**nodes:150000** — the node budget held *identical* to gen3/gen4 on purpose,
+so the generation-over-generation comparison stays controlled at one variable
+(labeller strength). The labeller upgrade is itself a large free depth
+increase: the labelling engine is now the full v4.0 + RFP build (net +55,
+malus ordering, RFP pruning — together ~1.5–2 plies deeper per 150k nodes than
+gen4's gen3-labeller), so keeping 150k already delivers the biggest
+label-quality jump of any generation at zero throughput cost. Volume is left
+to the pipeline's data-sufficiency probe (384 has never been probed — gen4's
+"saturated ~3–6M" was the 256 net), which auto-extends 8M→12M if
+data-limited. gen4's 6M is deliberately *not* mixed in (gen3-labelled = weaker
+targets; the lambda=1.0 lesson says don't dilute). Config `pipeline_gen6.json`,
+detached via `resume_gen6.bat` / paused by `stop_gen6.bat` (append-only shards,
+fully resumable). ~2.5–3 days to 8M on ~6 cores, then the pipeline runs
+probe→freeze→train→build→select→sprt→calibrate on its own. Note for the SPRT
+stage (days out): `sgr_gen5.exe` is a stale pre-RFP build — rebuild the gen5
+comparison engine from current source before gen6-vs-gen5 so the net is the
+only variable.

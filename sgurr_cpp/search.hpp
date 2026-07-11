@@ -35,7 +35,13 @@ constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
 // may still be started; past it the last completed depth is kept rather than
 // starting an iteration that would be aborted, unfinished, at the hard limit.
 constexpr long long MOVE_OVERHEAD_MS = 30;
-constexpr double SOFT_TIME_FRACTION = 0.6;
+// Overridable at build time (-DSGR_SOFT_TIME_FRACTION=<f>) so time-management
+// policies can be A/B-tested from one tree; 1.0 makes the soft limit coincide
+// with the hard deadline, i.e. v3.0-style hard-limit-only behaviour.
+#ifndef SGR_SOFT_TIME_FRACTION
+#define SGR_SOFT_TIME_FRACTION 0.6
+#endif
+constexpr double SOFT_TIME_FRACTION = SGR_SOFT_TIME_FRACTION;
 
 // Best-move stability scaling for the soft limit (clock play only). The soft
 // budget is stretched while the root best move is still changing (the position
@@ -71,6 +77,25 @@ constexpr int BM_STABILITY_COUNT = 5;
 
 // History scores (butterfly and continuation) are clamped to +/-HISTORY_MAX.
 constexpr int HISTORY_MAX = 1'000'000;
+
+// Reverse futility pruning and late move pruning (both default on;
+// -DSGR_RFP=0 / -DSGR_LMP=0 revert, as with the other search toggles).
+// RFP: at shallow depth, if the static eval sits so far above beta that a
+// conservative margin per remaining ply cannot pull it back under, trust it
+// and stand pat instead of searching. LMP: at shallow depth, once enough
+// quiet moves have been searched without a cutoff, skip the remaining quiets
+// (they are ordered worst-by-history and almost never matter). Margins and
+// counts are starting values, to be swept before they are believed.
+#ifndef SGR_RFP
+#define SGR_RFP 1
+#endif
+#ifndef SGR_LMP
+#define SGR_LMP 1
+#endif
+constexpr int RFP_MAX_DEPTH = 6;
+constexpr int RFP_MARGIN = 100;               // centipawns per remaining ply
+constexpr int LMP_MAX_DEPTH = 3;
+constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning, by depth
 
 constexpr int ASPIRATION_WINDOW = 50;
 constexpr int DELTA_MARGIN = 200;

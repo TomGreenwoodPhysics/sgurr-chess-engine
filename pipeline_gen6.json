@@ -1,0 +1,50 @@
+{
+  "generation": 6,
+  "version": "v5.0",
+  "codename": "Gillean",
+  "raw_dir": "data/gen6_raw",
+  "target_positions": 8000000,
+
+  "datagen": {
+    "nodes": 150000,
+    "book": "testing/book.epd",
+    "labeller": "nets/gen5.nnue",
+    "processes": null
+  },
+
+  "probe": {
+    "enabled": true,
+    "steps": 1900,
+    "threshold_pct": 0.75,
+    "extend_factor": 1.5,
+    "max_extensions": 1
+  },
+
+  "train": {
+    "epochs": 8,
+    "schedule": "cosine",
+    "lr_min": 1e-5,
+    "val_frac": 0,
+    "lambda": [0.9, 1.0]
+  },
+
+  "select": {
+    "tc": "8+0.08",
+    "rounds": 30,
+    "concurrency": 5
+  },
+
+  "sprt": {
+    "tc": "8+0.08",
+    "elo0": 0,
+    "elo1": 5,
+    "max_rounds": 500,
+    "concurrency": 5
+  },
+
+  "calibrate": {
+    "tc": "10+0.1",
+    "rounds": 15,
+    "concurrency": 5
+  }
+}

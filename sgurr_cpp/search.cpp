@@ -511,6 +511,25 @@ int Engine::negamax(
         }
     }
 
+#if SGR_RFP
+    // Reverse futility: the mirror of the futility block below. If the static
+    // eval is so far above beta that a conservative margin per remaining ply
+    // cannot pull it back under, trust it and stand pat. Same mate and check
+    // guards as futility; like the futility return, nothing is TT-stored.
+    if (
+        depth <= RFP_MAX_DEPTH
+        && !in_check_node
+        && std::abs(alpha) < MATE - 1000
+        && std::abs(beta) < MATE - 1000
+    ) {
+        int rfp_eval = evaluate_position(board);
+
+        if (rfp_eval - RFP_MARGIN * depth >= beta) {
+            return rfp_eval;
+        }
+    }
+#endif
+
     if (
         depth <= 2
         && !in_check_node
@@ -578,6 +597,25 @@ int Engine::negamax(
         if (!board.is_legal(move, li)) {
             continue;
         }
+
+#if SGR_LMP
+        // Late move pruning: enough quiets have been searched at this shallow
+        // depth without a cutoff; the rest are ordered worst-by-history and
+        // almost never matter. Killers are exempt, captures and promotions
+        // are never pruned, and the threshold guarantees legal_found is
+        // already true. Placed before the malus recording below so a pruned
+        // (never-searched) quiet cannot be penalised at a cutoff.
+        if (
+            depth <= LMP_MAX_DEPTH
+            && !in_check_node
+            && legal_moves_searched >= LMP_COUNT[depth]
+            && std::abs(alpha) < MATE - 1000
+            && !is_noisy_move(board, move)
+            && !is_killer_move(ply, move)
+        ) {
+            continue;
+        }
+#endif
 
 #if SGR_HMALUS
         if (!is_noisy_move(board, move)) {
