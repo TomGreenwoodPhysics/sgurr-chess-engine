@@ -1,16 +1,26 @@
 {
-  "pool_id": "pool-2026-07-A",
+  "pool_id": "pool-2026-07-B",
   "description": "CCRL-Blitz-anchored opponent pool for absolute Sgurr calibration. Names must match fastchess PGN tags and anchors.txt exactly.",
   "time_control": "10+0.1",
   "book": "../testing/book.epd (150 balanced lines, colour-reversed pairs)",
   "engines": [
-    {"name": "Blunder-6.1.0", "cmd": "engines/blunder-6.1.0.exe", "ccrl_blitz": 2155, "source": "https://github.com/deanmchris/blunder/releases/tag/v6.1.0"},
-    {"name": "Blunder-7.2.0", "cmd": "engines/blunder-7.2.0.exe", "ccrl_blitz": 2425, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.2.0"},
-    {"name": "Blunder-7.4.0", "cmd": "engines/blunder-7.4.0.exe", "ccrl_blitz": 2532, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.4.0"},
-    {"name": "Zahak-4.0",     "cmd": "engines/zahak-4.0.exe",     "ccrl_blitz": 2601, "source": "https://github.com/amanjpro/zahak/releases/tag/4.0"},
-    {"name": "Blunder-7.6.0", "cmd": "engines/blunder-7.6.0.exe", "ccrl_blitz": 2631, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.6.0"},
-    {"name": "Blunder-8.0.0", "cmd": "engines/blunder-8.0.0.exe", "ccrl_blitz": 2674, "source": "https://github.com/deanmchris/blunder/releases/tag/v8.0.0"},
-    {"name": "Zahak-5.0",     "cmd": "engines/zahak-5.0.exe",     "ccrl_blitz": 2763, "source": "https://github.com/amanjpro/zahak/releases/tag/5.0"}
+    {"name": "Blunder-7.4.0", "cmd": "engines/blunder-7.4.0.exe", "ccrl_blitz": 2520, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.4.0"},
+    {"name": "Zahak-4.0",     "cmd": "engines/zahak-4.0.exe",     "ccrl_blitz": 2551, "source": "https://github.com/amanjpro/zahak/releases/tag/4.0"},
+    {"name": "Blunder-7.6.0", "cmd": "engines/blunder-7.6.0.exe", "ccrl_blitz": 2618, "source": "https://github.com/deanmchris/blunder/releases/tag/v7.6.0"},
+    {"name": "Blunder-8.0.0", "cmd": "engines/blunder-8.0.0.exe", "ccrl_blitz": 2651, "source": "https://github.com/deanmchris/blunder/releases/tag/v8.0.0"},
+    {"name": "Zahak-5.0",     "cmd": "engines/zahak-5.0.exe",     "ccrl_blitz": 2726, "source": "https://github.com/amanjpro/zahak/releases/tag/5.0"},
+    {"name": "Weiss-1.0",     "cmd": "engines/weiss-1.0.exe",     "ccrl_blitz": 2896, "source": "https://github.com/TerjeKir/weiss/releases/tag/v1.0"},
+    {"name": "Igel-2.2.2",    "cmd": "engines/igel-2.2.2.exe",    "ccrl_blitz": 2982, "source": "https://github.com/vshcherbyna/igel/releases/tag/2.2.2"},
+    {"name": "Weiss-1.2",     "cmd": "engines/weiss-1.2.exe",     "ccrl_blitz": 3055, "source": "https://github.com/TerjeKir/weiss/releases/tag/v1.2"}
   ],
-  "notes": "Ratings are CCRL Blitz (2'+1\") as published in each engine's README. Two engine families (Blunder, Zahak); extend with a third family when convenient. Pool is append-only: never remove or re-rate an engine within a pool_id -- create a new pool_id instead."
+  "notes": [
+    "Ratings are single-CPU CCRL Blitz (2'+1\"), re-sourced from the live list on 2026-07-15.",
+    "SUPERSEDES pool-2026-07-A. An audit found every pool-A anchor inflated vs the current list by 12-50 Elo (mean ~31; Zahak-5.0 was 2763 vs 2726 today), because those values came from each engine's README rather than the live list. Every value here is re-sourced, so this scale is internally consistent but sits ~31 below pool-A's. Sgurr ratings measured on pool-B are therefore NOT comparable to the pool-A ledger rows: compare versions only within a single Ordo solve, which re-solves all accumulated PGNs onto one scale. Internal gaps between Sgurr versions are anchor-independent and unaffected.",
+    "Mixing fresh and stale anchor values would be worse than either alone: Ordo pins all anchors, so an inconsistent set fits a compromise, inflating residuals and error bars.",
+    "Four engine families (Blunder, Zahak, Weiss, Igel). Weiss and Igel were added to bracket Sgurr v5.0 from above -- the search update (+173 self-play SPRT) plus the gen6 net projects the strongest variant near the old pool's ceiling -- and to reduce family-specific style bias in the absolute scale.",
+    "Blunder-6.1.0 is dropped from this gauntlet roster (it scored 93% vs v4.0: no Elo signal) but is RETAINED in anchors.txt at 2105. anchors.txt and this roster serve different roles: this roster is who the new gauntlet plays, anchors.txt is who Ordo pins across ALL accumulated PGNs. Blunder-6.1.0 remains the only anchor below ~2500 and brackets the historical Sgurr classical (2398) and v1.0 (2407) rows via its existing games.",
+    "Blunder-7.2.0 is removed entirely, including from anchors.txt: it has no CCRL Blitz rating at any version (the list has 7.1.0 = 2387 and 7.4.0 = 2520, but no 7.2.0), so its former 2425 was a README figure and was never CCRL-anchored. It now floats as a free node in the Ordo solve, still connected through its historical games.",
+    "Binaries: Weiss uses the pext build (fast BMI2 on the i5-9400F, matching Sgurr's -march=native); Igel uses the x64_popcnt Windows build. All three added engines are classical-eval and need no external network file.",
+    "Pool is append-only: never remove or re-rate an engine within a pool_id -- create a new pool_id instead."
+  ]
 }
