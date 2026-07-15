@@ -80,6 +80,12 @@ constexpr int HISTORY_MAX = 1'000'000;
 
 // Reverse futility pruning and late move pruning (both default on;
 // -DSGR_RFP=0 / -DSGR_LMP=0 revert, as with the other search toggles).
+// WARNING: labeller/datagen builds must pass -DSGR_RFP=0. RFP returns the raw
+// static eval where a search score is expected; under datagen's fixed node
+// budget its speed win buys nothing, so labels drift toward the labeller
+// net's own opinions -- this is what flattened gen6 (probe "saturated",
+// net-isolated A/B +6 +/-20; see ledger 2026-07-15). RFP belongs in the
+// playing engine, not in the labeller.
 // RFP: at shallow depth, if the static eval sits so far above beta that a
 // conservative margin per remaining ply cannot pull it back under, trust it
 // and stand pat instead of searching. LMP: at shallow depth, once enough
@@ -96,6 +102,41 @@ constexpr int RFP_MAX_DEPTH = 6;
 constexpr int RFP_MARGIN = 100;               // centipawns per remaining ply
 constexpr int LMP_MAX_DEPTH = 3;
 constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning, by depth
+
+// Improving flag, history-adjusted LMR, and singular extensions (v6.0
+// CANDIDATES -- default OFF until they pass SPRT, so a bare rebuild stays the
+// shipped v5.0 engine; -DSGR_IMPROVING=1 / -DSGR_HISTLMR=1 / -DSGR_SINGULAR=1
+// enable them for testing).
+// Improving: the static eval is recorded at each ply and compared with the
+// same side's eval two plies up. A rising eval makes the static eval a more
+// trustworthy bound, so RFP prunes with a one-ply-smaller margin; a falling
+// one means the worst-ordered quiets are even less likely to rescue the
+// position, so LMP halves its quiet budget.
+// History-adjusted LMR: a quiet's reduction is nudged by its history record
+// (butterfly + continuation), one ply per HISTLMR_DIV of score, clamped to
+// +/-HISTLMR_MAX -- proven quiets are reduced less, serial failures more.
+// Singular extensions: when the TT move carries a lower-bound score from a
+// search nearly as deep as this node, the REMAINING moves are searched at
+// reduced depth against a window a margin below that score; if none reaches
+// it, the TT move is the position's only good move and is extended one ply so
+// the forcing line it carries is not cut short by reductions elsewhere.
+// Margins and divisors are starting values, to be swept before they are
+// believed.
+#ifndef SGR_IMPROVING
+#define SGR_IMPROVING 0
+#endif
+#ifndef SGR_HISTLMR
+#define SGR_HISTLMR 0
+#endif
+#ifndef SGR_SINGULAR
+#define SGR_SINGULAR 0
+#endif
+constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
+constexpr int HISTLMR_DIV = 400'000;          // history per ply of adjustment
+constexpr int HISTLMR_MAX = 2;                // adjustment cap, plies
+constexpr int SINGULAR_MIN_DEPTH = 7;
+constexpr int SINGULAR_TT_DEPTH_SLACK = 3;    // TT depth must be >= depth - this
+constexpr int SINGULAR_MARGIN = 2;            // cp per ply below the TT score
 
 constexpr int ASPIRATION_WINDOW = 50;
 constexpr int DELTA_MARGIN = 200;
@@ -153,6 +194,12 @@ private:
     std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};
     std::array<std::array<int, 64>, 64> history{};
 
+#if SGR_IMPROVING
+    // Static eval recorded at each ply of the current line (NO_STATIC_EVAL at
+    // in-check plies), read two plies up for the improving flag.
+    std::array<int, MAX_PLY> ss_static_eval{};
+#endif
+
 #if SGR_CONTHIST
     // Continuation history, [prev_piece][prev_to][piece][to] flattened. At
     // 12*64*12*64 ints (~2.3 MB) it lives on the heap, unlike the small
@@ -187,12 +234,18 @@ private:
         int beta
     );
 
+    // `excluded` is set only by the singular-extension test: the node is
+    // searched as if that move did not exist, with its own TT probe, null
+    // move, and TT store disabled (the stored result would describe a
+    // different position, and the null-move verdict would not be about the
+    // remaining moves).
     int negamax(
         Board& board,
         int depth,
         int alpha,
         int beta,
-        int ply
+        int ply,
+        std::optional<Move> excluded = std::nullopt
     );
 
     int quiescence(Board& board, int alpha, int beta, int ply);

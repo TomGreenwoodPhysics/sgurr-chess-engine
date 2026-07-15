@@ -311,6 +311,13 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     int us = board.side_to_move;
     bool legal_found = false;
 
+#if SGR_IMPROVING
+    // Seed ply 0 so interior nodes at ply 2 have a same-side reference.
+    ss_static_eval[0] = board.in_check(us)
+        ? NO_STATIC_EVAL
+        : evaluate_position(board);
+#endif
+
     for (const Move& move : moves) {
         if (time_is_up() || (node_limit.has_value() && nodes >= *node_limit)) {
             stop_search = true;
@@ -449,7 +456,8 @@ int Engine::negamax(
     int depth,
     int alpha,
     int beta,
-    int ply
+    int ply,
+    std::optional<Move> excluded
 ) {
     if (ply >= MAX_PLY - 1) {
         return evaluate_quiet_position(board);
@@ -479,7 +487,10 @@ int Engine::negamax(
 
     const TTEntry& tt_slot = transposition_table[board_hash & TT_MASK];
 
-    if (tt_slot.key == board_hash && tt_slot.depth >= depth) {
+    // With a move excluded the stored entry describes a different search, so
+    // no TT cutoff (and no store below); the entry is still read for the
+    // singular test's own conditions.
+    if (!excluded.has_value() && tt_slot.key == board_hash && tt_slot.depth >= depth) {
         const TTEntry& entry = tt_slot;
         tt_hits += 1;
 
@@ -511,6 +522,24 @@ int Engine::negamax(
         }
     }
 
+#if SGR_IMPROVING
+    // Record the static eval for this ply and compare with the same side's
+    // eval two plies up. An in-check ply records the sentinel: it has no
+    // meaningful static eval, and a comparison through one counts as not
+    // improving (the conservative side -- full RFP margin, halved LMP budget).
+    int node_static_eval = NO_STATIC_EVAL;
+    bool improving = false;
+
+    if (!in_check_node) {
+        node_static_eval = evaluate_position(board);
+        improving = ply >= 2
+            && ss_static_eval[ply - 2] != NO_STATIC_EVAL
+            && node_static_eval > ss_static_eval[ply - 2];
+    }
+
+    ss_static_eval[ply] = node_static_eval;
+#endif
+
 #if SGR_RFP
     // Reverse futility: the mirror of the futility block below. If the static
     // eval is so far above beta that a conservative margin per remaining ply
@@ -522,9 +551,17 @@ int Engine::negamax(
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
     ) {
+#if SGR_IMPROVING
+        // A rising eval is a more trustworthy bound, so one ply of margin is
+        // waived; at depth 1 improving this prunes on eval >= beta alone.
+        int rfp_eval = node_static_eval;
+
+        if (rfp_eval - RFP_MARGIN * (depth - (improving ? 1 : 0)) >= beta) {
+#else
         int rfp_eval = evaluate_position(board);
 
         if (rfp_eval - RFP_MARGIN * depth >= beta) {
+#endif
             return rfp_eval;
         }
     }
@@ -536,14 +573,20 @@ int Engine::negamax(
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
     ) {
+#if SGR_IMPROVING
+        int static_eval = node_static_eval;   // already computed above
+#else
         int static_eval = evaluate_position(board);
+#endif
 
         if (static_eval + FUTILITY_MARGIN[depth] <= alpha) {
             return quiescence(board, alpha, beta, ply);
         }
     }
 
-    if (can_try_null_move(board, depth, beta, ply)) {
+    // No null move with a move excluded: the verdict must come from the
+    // remaining moves themselves.
+    if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)) {
         NullMoveUndo undo = board.make_null_move();
 #if SGR_CONTHIST
         ss_piece[ply] = -1;   // a null move is no follow-up context
@@ -581,6 +624,46 @@ int Engine::negamax(
     moves = order_moves(board, moves, tt_move_key, ply);
     LegalityInfo li = board.legality_info();
 
+#if SGR_SINGULAR
+    // Singular extension test: the TT move carries a lower-bound score from a
+    // search nearly as deep as this node. Search the OTHER moves, reduced,
+    // against a window a margin below that score; if none reaches it, the TT
+    // move is the position's only good move and earns one extra ply in the
+    // loop below.
+    int singular_extension = 0;
+
+    if (
+        depth >= SINGULAR_MIN_DEPTH
+        && !excluded.has_value()
+        && tt_move_key.has_value()
+        && ply < MAX_PLY - 2
+        && tt_slot.key == board_hash
+        && tt_slot.flag != TT_UPPER
+        && tt_slot.depth >= depth - SINGULAR_TT_DEPTH_SLACK
+    ) {
+        // Copy out of the TT before recursing: the helper search may replace
+        // this slot.
+        int tt_score = score_from_tt(tt_slot.score, ply);
+
+        if (std::abs(tt_score) < MATE_THRESHOLD) {
+            int singular_beta = tt_score - SINGULAR_MARGIN * depth;
+
+            int singular_score = negamax(
+                board,
+                (depth - 1) / 2,
+                singular_beta - 1,
+                singular_beta,
+                ply,
+                tt_move_key
+            );
+
+            if (!stop_search && singular_score < singular_beta) {
+                singular_extension = 1;
+            }
+        }
+    }
+#endif
+
     int best_score = -INF;
     std::optional<Move> best_move_key = std::nullopt;
     bool legal_found = false;
@@ -598,6 +681,10 @@ int Engine::negamax(
             continue;
         }
 
+        if (excluded.has_value() && move == *excluded) {
+            continue;
+        }
+
 #if SGR_LMP
         // Late move pruning: enough quiets have been searched at this shallow
         // depth without a cutoff; the rest are ordered worst-by-history and
@@ -605,10 +692,21 @@ int Engine::negamax(
         // are never pruned, and the threshold guarantees legal_found is
         // already true. Placed before the malus recording below so a pruned
         // (never-searched) quiet cannot be penalised at a cutoff.
+        // The depth guard must precede the LMP_COUNT[] lookup: the table only
+        // covers depths 0..LMP_MAX_DEPTH.
+#if SGR_IMPROVING
+        // A falling eval halves the quiet budget: the worst-ordered quiets
+        // are even less likely to rescue a position trending downward.
+        int lmp_budget = depth <= LMP_MAX_DEPTH
+            ? (improving ? LMP_COUNT[depth] : LMP_COUNT[depth] / 2)
+            : 0;
+#else
+        int lmp_budget = depth <= LMP_MAX_DEPTH ? LMP_COUNT[depth] : 0;
+#endif
         if (
             depth <= LMP_MAX_DEPTH
             && !in_check_node
-            && legal_moves_searched >= LMP_COUNT[depth]
+            && legal_moves_searched >= lmp_budget
             && std::abs(alpha) < MATE - 1000
             && !is_noisy_move(board, move)
             && !is_killer_move(ply, move)
@@ -644,6 +742,15 @@ int Engine::negamax(
 
         bool gives_check = board.in_check(board.side_to_move);
         int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
+#if SGR_SINGULAR
+        if (
+            singular_extension
+            && tt_move_key.has_value()
+            && move == *tt_move_key
+        ) {
+            extension = std::max(extension, singular_extension);
+        }
+#endif
         int next_depth = depth - 1 + extension;
 
         int score;
@@ -658,6 +765,25 @@ int Engine::negamax(
             int reduction = reduce_late_move
                 ? lmr_reduction(depth, legal_moves_searched)
                 : 0;
+
+#if SGR_HISTLMR
+            // The quiet's history record adjusts its reduction: proven quiets
+            // are reduced less, serial failures more. can_reduce_late_move has
+            // already filtered to non-TT, non-killer quiets.
+            if (reduction > 0) {
+                int hist_score = history[move.from()][move.to()];
+#if SGR_CONTHIST
+                if (ply > 0 && ss_piece[ply - 1] >= 0) {
+                    hist_score += conthist[conthist_index(
+                        ss_piece[ply - 1], ss_to[ply - 1],
+                        ss_piece[ply], move.to())];
+                }
+#endif
+                reduction -= std::clamp(
+                    hist_score / HISTLMR_DIV, -HISTLMR_MAX, HISTLMR_MAX);
+                reduction = std::max(0, std::min(reduction, next_depth - 1));
+            }
+#endif
             int reduced_depth = std::max(0, next_depth - reduction);
 
             score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1);
@@ -750,7 +876,11 @@ int Engine::negamax(
         flag = TT_LOWER;
     }
 
-    store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
+    // An excluded-move search describes a position minus one move; storing it
+    // would poison later probes of the real position.
+    if (!excluded.has_value()) {
+        store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
+    }
 
     return best_score;
 }
