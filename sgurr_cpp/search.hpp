@@ -22,8 +22,13 @@ constexpr int TT_EXACT = 0;
 constexpr int TT_LOWER = 1;
 constexpr int TT_UPPER = 2;
 
-constexpr int TT_SIZE_BITS = 21;
-constexpr std::size_t TT_SIZE = std::size_t(1) << TT_SIZE_BITS;   // ~2M entries
+// Overridable at build time (-DSGR_TT_SIZE_BITS=<n>) so table size can be
+// A/B-tested from one tree; 21 = ~2M entries is the shipped v5.0 default.
+#ifndef SGR_TT_SIZE_BITS
+#define SGR_TT_SIZE_BITS 21
+#endif
+constexpr int TT_SIZE_BITS = SGR_TT_SIZE_BITS;
+constexpr std::size_t TT_SIZE = std::size_t(1) << TT_SIZE_BITS;   // 2^21 = ~2M
 constexpr U64 TT_MASK = TT_SIZE - 1;
 constexpr int TIME_CHECK_INTERVAL = 512;
 constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
