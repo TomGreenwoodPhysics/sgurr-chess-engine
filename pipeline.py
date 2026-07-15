@@ -180,6 +180,34 @@ class Pipeline:
     def prev_exe(self):
         return ROOT / "sgurr_cpp" / f"sgr_gen{self.prev}.exe"
 
+    # ---- SPRT baseline ----
+    # Generation and version numbers have diverged (gen5 shipped as v4.0, gen6
+    # as v5.0), so the baseline cannot be derived from self.prev: doing so named
+    # both SPRT engines "Sgurr-v5.0" and fastchess rejected the pair. Config
+    # names the baseline explicitly; the fallback is the previous generation's
+    # build, labelled by generation so it can never collide with the version.
+    def sprt_baseline_exe(self):
+        rel = self.cfg.get("sprt", {}).get("baseline_exe")
+        return (ROOT / rel) if rel else self.prev_exe()
+
+    def sprt_baseline_name(self):
+        return (self.cfg.get("sprt", {}).get("baseline_name")
+                or f"Sgurr-gen{self.prev}")
+
+    def sprt_baseline_label(self):
+        """Ledger-facing form of the baseline name: 'Sgurr-v4.0' -> 'v4.0'."""
+        return self.sprt_baseline_name().replace("Sgurr-", "")
+
+    # ---- release engine ----
+    # Normally the release IS this generation's net (final_exe). It is not when
+    # a generation turns out to be a wash: gen6 measured +6 +/-20 vs gen5 over
+    # 1200 games (net isolated, search held constant), so v5.0 ships the gen5
+    # net with the new search -- a search-only release, as v3.1 was on gen3.
+    # Config names the binary; default is this generation's build.
+    def release_exe(self):
+        rel = self.cfg.get("release_exe")
+        return (ROOT / rel) if rel else self.final_exe()
+
     # ----------------------------------------------------------------------
     # stage: datagen
     # ----------------------------------------------------------------------
@@ -499,10 +527,20 @@ class Pipeline:
         self.assert_idle("sprt")
         sp = self.cfg.get("sprt", {})
         fc = ROOT / "benchmarks" / "tools" / "fastchess.exe"
+        base_exe, base_name = self.sprt_baseline_exe(), self.sprt_baseline_name()
+        # fail fast and legibly: fastchess rejects duplicate engine names, and a
+        # missing baseline binary fails deep inside CreateProcess
+        if base_name == f"Sgurr-{self.version}":
+            raise RuntimeError(
+                f"sprt: baseline name '{base_name}' collides with the new "
+                f"engine's -- set sprt.baseline_name in the config.")
+        if not base_exe.exists():
+            raise RuntimeError(f"sprt: baseline engine not found: {base_exe}")
+        log(f"sprt: Sgurr-{self.version} vs {base_name} ({base_exe.name})")
         out = run(
             [fc,
              "-engine", f"cmd={self.final_exe()}", f"name=Sgurr-{self.version}",
-             "-engine", f"cmd={self.prev_exe()}", f"name=Sgurr-v{self.prev}.0",
+             "-engine", f"cmd={base_exe}", f"name={base_name}",
              "-each", f"tc={sp.get('tc', '8+0.08')}",
              "-rounds", str(sp.get("max_rounds", 1000)), "-repeat",
              "-concurrency", str(sp.get("concurrency", 5)),
@@ -514,7 +552,11 @@ class Pipeline:
              "-ratinginterval", "50"],
             log_path=self.run_dir / "sprt.log", cwd=ROOT / "benchmarks")
 
-        elo = re.findall(r"Elo\s*:?\s*(-?[\d.]+)\s*\+/-\s*([\d.]+)", out)
+        # \b matters: fastchess prints "Elo: 155.00 +/- 28.55, nElo: 190.30 +/-
+        # 30.70" and an unanchored "Elo" also matches inside "nElo". Taking
+        # elo[-1] then recorded the NORMALISED Elo -- a silent ~35-point
+        # overstatement headed for the ledger.
+        elo = re.findall(r"\bElo\s*:?\s*(-?[\d.]+)\s*\+/-\s*([\d.]+)", out)
         if not elo:
             raise RuntimeError("sprt: could not parse an Elo estimate from "
                                "fastchess output -- see sprt.log (format drift?)")
@@ -537,8 +579,11 @@ class Pipeline:
         fc = bm / "tools" / "fastchess.exe"
         pgn = bm / "games" / f"calib-{self.version}-{date.today().isoformat()}.pgn"
 
+        rel_exe = self.release_exe()
+        if not rel_exe.exists():
+            raise RuntimeError(f"calibrate: release engine not found: {rel_exe}")
         cmd = [fc, "-tournament", "gauntlet", "-seeds", "1",
-               "-engine", f"cmd={self.final_exe()}", f"name=Sgurr-{self.version}"]
+               "-engine", f"cmd={rel_exe}", f"name=Sgurr-{self.version}"]
         for e in pool["engines"]:
             cmd += ["-engine", f"cmd={bm / e['cmd']}", f"name={e['name']}"]
         cmd += ["-each", f"tc={cal.get('tc', '10+0.1')}",
@@ -547,8 +592,8 @@ class Pipeline:
                 "-openings", f"file={ROOT / 'testing' / 'book.epd'}",
                 "format=epd", "order=random",
                 "-pgnout", f"file={pgn}", "-ratinginterval", "60"]
-        log(f"calibrate: gauntlet Sgurr-{self.version} vs {len(pool['engines'])} "
-            f"pool engines")
+        log(f"calibrate: gauntlet Sgurr-{self.version} ({rel_exe.name}) vs "
+            f"{len(pool['engines'])} pool engines [{pool['pool_id']}]")
         run(cmd, log_path=self.run_dir / "calibrate.log", cwd=bm)
 
         combined = self.run_dir / "all_calib.pgn"
@@ -608,7 +653,8 @@ class Pipeline:
                f"+{cal['wdl'][0]} ={cal['wdl'][1]} -{cal['wdl'][2]} | "
                f"{self.cfg.get('calibrate', {}).get('tc', '10+0.1')} | "
                f"{json.loads((ROOT / 'benchmarks' / 'pool.json').read_text())['pool_id']} | "
-               f"i5-9400F, 5 threads | Pipeline run; SPRT vs v{self.prev}.0: "
+               f"i5-9400F, 5 threads | Pipeline run; SPRT vs "
+               f"{self.sprt_baseline_label()}: "
                f"{sprt['elo']:+.1f} +/-{sprt['pm']:.1f} ({sprt['verdict']})"
                + (f"; lambda sweep winner {sel.get('winner')}"
                   if not sel.get("skipped") else "") + " |")
@@ -632,7 +678,7 @@ class Pipeline:
             f"final losses {self.state['train']['final_losses']}"
             + (f"; selection round-robin winner lambda={sel.get('winner')}."
                if not sel.get("skipped") else "."),
-            f"- SPRT vs v{self.prev}.0 @ "
+            f"- SPRT vs {self.sprt_baseline_label()} @ "
             f"{self.cfg.get('sprt', {}).get('tc', '8+0.08')}: "
             f"{sprt['elo']:+.1f} +/-{sprt['pm']:.1f}, verdict {sprt['verdict']}.",
             f"- Pool calibration: {cal['rating']:.0f} +/-{cal['error']:.0f} "
