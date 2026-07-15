@@ -20,6 +20,7 @@ the canonical identifiers; peak names are codenames only.
 | v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 Elo vs v2.0 (618 games, SPRT); 2616 ±37 CCRL-Blitz-anchored |
 | v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only on the gen3 net: soft/hard time management; calibrated 2564 ±26 — below v3.0 (the flat soft limit loses at 10+0.1; superseded in v4.0) |
 | v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT); plus history malus and best-move-stability time management; 2627 ±27 CCRL-Blitz-anchored |
+| v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) + LMP; 2724 ±36 on the re-anchored pool-2026-07-B, +119 vs v4.0 same-solve (gen6 net measured flat and was not shipped — see CHANGELOG) |
 
 See `CHANGELOG.md` for details and measured results with error bars,
 `benchmarks/ledger.md` for the append-only record of measured ratings, and
@@ -31,19 +32,23 @@ methodology decisions behind them.
 ## Strength
 
 Ratings are measured with a fixed pool of open-source UCI engines with
-published CCRL Blitz ratings (Blunder 6.1–8.0, Zahak 4.0/5.0), solved with
-Ordo anchored to those ratings — estimates on the CCRL Blitz scale, not
-official CCRL ratings. Full method and append-only history:
+published CCRL Blitz ratings (Blunder, Zahak, Weiss, Igel — four families,
+2105–3055), solved with Ordo anchored to those ratings — estimates on the
+CCRL Blitz scale, not official CCRL ratings. Anchors were re-sourced from the
+live CCRL Blitz list on 2026-07-15 (pool-2026-07-B); earlier published rows
+sat ~22 higher on pool-A's inflated anchors, so all versions below are from
+one consistent solve. Full method and append-only history:
 `benchmarks/ledger.md`.
 
-| engine | rating (CCRL-Blitz-anchored) |
+| engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v4.0 "MacKenzie" | **2627 ±27** |
-| Sgurr v3.0 "Blackpeak" | 2613 ±36 |
-| Sgurr v3.1 "Blackpeak" | 2564 ±27 |
-| Sgurr v2.0 "Notches" | 2490 ±32 |
-| Sgurr v1.0 "Fox" | 2408 ±35 |
-| Sgurr classical (HCE) | 2399 ±35 |
+| Sgurr v5.0 "Gillean" | **2724 ±36** |
+| Sgurr v4.0 "MacKenzie" | 2604 ±27 |
+| Sgurr v3.0 "Blackpeak" | 2590 ±39 |
+| Sgurr v3.1 "Blackpeak" | 2541 ±27 |
+| Sgurr v2.0 "Notches" | 2467 ±34 |
+| Sgurr v1.0 "Fox" | 2386 ±34 |
+| Sgurr classical (HCE) | 2377 ±35 |
 
 Each generational gap in the pool table independently reproduces the direct
 SPRT match result between those versions (e.g. v4.0's net change vs the gen3

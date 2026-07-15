@@ -4,6 +4,46 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v5.0 "Gillean" (Sgùrr nan Gillean) — 2026-07-15
+
+A search-only release: reverse futility pruning (with LMP) on the unchanged
+gen5 net. The gen6 net was trained but measured flat and is not shipped; the
+release also moves absolute ratings onto a re-anchored pool.
+
+- **Strength: +176.4 ±15 self-play vs v4.0** (the 07-11 factorial's `both`
+  arm — this exact configuration; 3,600 games at 8+0.08).
+  **CCRL-Blitz-anchored: 2724 ±36** on pool-2026-07-B (+97 =34 −109, 240-game
+  gauntlet @ 10+0.1), **+119 vs v4.0 in the same solve** (2604 ±27) — the
+  first large search gain this project has pool-measured, expressing about
+  two-thirds of its self-play value where small search gains had compressed
+  to nothing.
+- **Scale note: pool-2026-07-B re-anchors every opponent to the live CCRL
+  Blitz list.** An audit found pool-A's values were README figures, inflated
+  by ~31 on average, and Blunder-7.2.0 was never CCRL-Blitz-rated at all (it
+  now floats, and solves to 2431 — validating the method). All historical
+  rows shift ~−22; compare within one Ordo solve only, never across pools.
+  New upper anchors Weiss 1.0 (2896), Igel 2.2.2 (2982), Weiss 1.2 (3055):
+  v5.0 landed level with Zahak 5.0 (2726), the old ceiling, so the headroom
+  was necessary rather than cosmetic.
+- **gen6 NNUE: not shipped.** The full pipeline ran (8.0M positions, gen5
+  labeller @ 150k nodes, probe "saturated" at 0.441%, λ=1.0 won selection,
+  SPRT vs v4.0 +155.0 ±28.6 H1 accepted) but a 1,200-game net-isolated A/B —
+  identical search, only the net swapped — measured the net itself at
+  **+6 ±20, a wash**. Diagnosis: **RFP poisons fixed-node labels.** It
+  returns the raw static eval where a search score is expected, and at a
+  fixed node budget its speed win buys nothing, so gen6's labels echoed the
+  gen5 labeller's own opinions. Rule adopted: labeller/datagen builds get
+  `-DSGR_RFP=0`; RFP belongs in the playing engine, not the labeller.
+- Pipeline hardening from the run: the SPRT baseline and the calibrated
+  release engine are now explicit config keys (generation and version
+  numbering diverged at gen5/v4.0, which left both SPRT engines named
+  identically — fastchess refused to start); the Elo parser is anchored
+  `\bElo` (it had also matched fastchess's `nElo` and recorded the normalised
+  value, ~35 points flattering).
+- Engine reports `id name Sgurr 5.0`. Bare-build defaults still describe the
+  shipped engine; the v6.0 search candidates (`SGR_IMPROVING`,
+  `SGR_HISTLMR`, `SGR_SINGULAR`) are in-tree but default off pending SPRT.
+
 ## v4.0 "MacKenzie" (Sgùrr MhicChoinnich) — 2026-07-10
 
 The gen5 NNUE — the first architecture change since NNUE arrived — plus two

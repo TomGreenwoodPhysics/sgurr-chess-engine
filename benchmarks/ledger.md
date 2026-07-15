@@ -8,6 +8,7 @@ scale, not official CCRL ratings.
 
 | date | engine | rating | ±95% | games | W-D-L | TC | pool | hardware | notes |
 |------|--------|--------|------|-------|-------|----|------|----------|-------|
+| 2026-07-15 | Sgurr v5.0 "Gillean" | 2724 | 36 | 240 | +97 =34 -109 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games (~2,900). Search-only release: LMP + RFP on the unchanged gen5 net — the gen6 net was a wash (+6 ±20, 1,200-game net-isolated A/B) and is not shipped. +119 vs v4.0 **same-solve** (2604); the +176.4 ±15 self-play factorial gain expressed ~2/3 against the pool. Level with Zahak-5.0 (2726). **Scale note: pool-B re-anchor — all rows sit ~22 below their published pool-A values; compare within one solve only.** |
 | 2026-07-10 | Sgurr v4.0 "MacKenzie" | 2627 | 27 | 420 | +216 =60 -144 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all ~3,600 accumulated calibration games. gen5 net (768→384) + best-move stability + history malus/conthist. +63 vs v3.1 on the pool scale; statistically level with the pre-malus gen5-bmstab measurement (2635.5 ±25.5) — self-play search gains compress vs the pool. |
 | 2026-07-10 | Sgurr v3.1 "Blackpeak" | 2564 | 27 | 420 | +140 =150 -130 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Deferred debt from the 07-08 release, settled. **Below v3.0 (2613)**: the flat soft limit loses at 10+0.1 despite the +24.6 ±22.7 interim SPRT at 8+0.08 — TC-dependent; superseded by v4.0's stability scaling. Finding reproduced across three independent solves. |
 | 2026-07-06 | Sgurr v3.0 "Blackpeak" | 2616 | 37 | 210 | +105 =29 -76 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. +125 vs v2.0 — reproduces the direct SPRT (+119.8 ±26.3), so the self-play gain was not inflated. Above Zahak-4.0 (2601). |
@@ -16,6 +17,53 @@ scale, not official CCRL ratings.
 | 2026-07-04 | Sgurr classical (HCE) | 2398 | 34 | 270 | +80 =30 -160 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. Supersedes the old ~2520 SF-limited estimate (flawed method + different scale). |
 
 ## Run log
+
+### 2026-07-15 — v5.0 "Gillean" release calibration on the re-anchored pool-2026-07-B
+
+- **Pool supersession:** an audit against the live CCRL Blitz list found every
+  pool-A anchor inflated by 12–50 (mean ≈31) — the values had come from each
+  engine's README, not the list — and Blunder-7.2.0 has no CCRL Blitz rating
+  at any version, so one "CCRL-anchored" anchor never was. pool-2026-07-B
+  re-sources every anchor from the live list (2026-07-15), drops
+  Blunder-6.1.0 from the roster (93% score, no signal; still pinned in
+  anchors.txt at 2105 to bracket the historical rows), floats Blunder-7.2.0
+  as a free node, and adds two families above the old ceiling: Weiss-1.0
+  (2896), Igel-2.2.2 (2982), Weiss-1.2 (3055).
+- **Tool:** fastchess 1.8.0-alpha gauntlet, 240 games (8 opponents × 30),
+  10+0.1, `testing/book.epd`, concurrency 5, idle machine. Ordo 1.0 over ALL
+  accumulated calibration PGNs, `-m anchors.txt`, `-W`, `-s 1500`.
+- **Result:** **Sgurr v5.0 = 2724 ±36** (+97 =34 −109, 47.5%) — level with
+  Zahak-5.0 (2726) and bracketed from above by the three new anchors, i.e.
+  measured, not extrapolated. **+119 vs v4.0 on the same solve** (2604 ±27).
+- **Provenance:** `sgr_v5_0.exe` = gen5 net (`nets/gen5.nnue`) baked into the
+  current source (LMP + RFP on); selfcheck PASS; UCI-verified. A search-only
+  release, as v3.1 was: **the gen6 net is not shipped.** The full gen6
+  pipeline ran (8,000,353 positions, gen5 labeller @150k nodes; probe verdict
+  "saturated" at 0.441% half→full; λ∈{0.9,1.0} trained; λ=1.0 won selection),
+  but a 1,200-game net-isolated A/B (identical search, only the net swapped)
+  measured the gen6 net at **+6 ±20 vs gen5 — a wash.**
+- **Why the gen6 data was dead: RFP poisons fixed-node labels.** RFP returns
+  the raw static eval where a search result is expected; under datagen's
+  fixed nodes:150000 budget its speed benefit is worth nothing, so labels
+  drifted toward the gen5 labeller's own opinions. The probe's "saturated"
+  verdict caught this independently. Rule adopted: **the labeller build gets
+  `-DSGR_RFP=0`; RFP belongs in the playing engine, not in the labeller.**
+- **Cross-checks:** the self-play SPRT vs v4.0 (8+0.08, H1 accepted) was
+  **+155.0 ±28.6** on the gen6-net build; the shipped configuration equals
+  the 07-11 factorial's `both` arm, **+176.4 ±15** self-play. Pooled +119
+  means the first large search gain this project has measured expressed
+  ~two-thirds against a diverse pool — unlike malus (+33 → ~0) and the v3.1
+  soft limit (+24.6 → negative), large pruning gains survive.
+- **Re-anchor validation:** historical rows shifted uniformly (v4.0
+  2627→2604, v3.0 2616→2590, v3.1 2564→2541, v2.0 2489→2467, v1.0 2407→2386,
+  classical 2398→2377 — all −21 to −26, inside error), and unanchored
+  Blunder-7.2.0 solved to 2430.6 ±31 vs its README 2425. White advantage
+  −0.3 ±5.2 — stays closed.
+- **Pipeline bugs found and fixed this run:** (1) the SPRT stage named both
+  engines from the generation number ("Sgurr-v5.0" twice — gen and version
+  numbering diverged at gen5/v4.0); baseline is now explicit in the config.
+  (2) The Elo regex also matched fastchess's `nElo` and recorded the
+  normalised value (190.3 for 155.0); anchored with `\bElo`, state corrected.
 
 ### 2026-07-10 — v4.0 release calibration + v3.1 debt settled
 

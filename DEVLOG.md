@@ -552,3 +552,70 @@ probe→freeze→train→build→select→sprt→calibrate on its own. Note for 
 stage (days out): `sgr_gen5.exe` is a stale pre-RFP build — rebuild the gen5
 comparison engine from current source before gen6-vs-gen5 so the net is the
 only variable.
+
+## 2026-07-15 — the anchor audit: pool-2026-07-A was ~31 Elo optimistic
+
+Sourcing higher anchors for the v5.0 calibration (the projected release sat at
+the old pool's ceiling) forced a check of `anchors.txt` against the live CCRL
+Blitz list — and every anchor was high: Blunder-6.1.0 −50, Zahak-4.0 −50,
+Zahak-5.0 −37, Blunder-8.0.0 −23, the rest −12..−13. The values had been taken
+from each engine's README rather than the list. Worse, **Blunder-7.2.0 has no
+CCRL Blitz rating at any version** — one of seven "CCRL-anchored" anchors
+never was. **pool-2026-07-B** re-sources every value (2026-07-15), adds two
+families above the ceiling (Weiss 1.0 @2896, Igel 2.2.2 @2982, Weiss 1.2
+@3055, all UCI-verified pext/popcnt builds), drops Blunder-6.1.0 from the
+roster (93% score = no signal) while keeping it pinned in `anchors.txt` to
+bracket the historical rows, and floats Blunder-7.2.0 as a free node.
+Validation came out clean twice: historical Sgurr rows shifted uniformly
+−21..−26 (a scale translation, nothing structural), and the floating
+Blunder-7.2.0 solved to 2430.6 ±31 against its README 2425. Mixing fresh and
+stale anchors would have been worse than either alone (Ordo pins all anchors
+and fits a compromise), hence the full re-source. Rule: anchor values come
+from the live list, dated, never from READMEs.
+
+## 2026-07-15 — gen6 is a wash: RFP poisons fixed-node labels
+
+The 07-11 entry predicted the v4.0+RFP labeller would deliver "the biggest
+label-quality jump of any generation". It delivered nothing, and the reason
+is instructive. The pipeline ran gen6 end-to-end (8,000,353 positions, probe
+**"saturated"** at 0.441% half→full — no 12M extension; λ=1.0 won selection
++107.5 vs +49.6; SPRT vs v4.0 **+155.0 ±28.6**, H1). But a 1,200-game
+**net-isolated A/B** — same HEAD source both sides, only the baked net
+differing — measured gen6-net vs gen5-net at **+6 ±20: a wash.** Mechanism:
+RFP *returns the raw static eval* where a search score is expected. At
+datagen's fixed nodes:150000 the speed win that makes RFP +175 in play buys
+nothing, so shallow subtrees resolve to the gen5 net's own opinions and the
+labels teach the student its teacher's prejudices. The probe's "saturated"
+verdict was the same fact seen from the data side. **Rule: labeller builds
+get `-DSGR_RFP=0`** (LMR/NMP return searched scores and are safe; RFP is
+uniquely toxic). Two pipeline bugs surfaced en route, both now fixed:
+`stage_sprt` derived the baseline name from the *generation* number, naming
+both engines "Sgurr-v5.0" once gen/version numbering diverged (fastchess
+refused; baseline exe+name are now config keys, with a fail-fast collision
+check), and the Elo regex also matched `nElo`, silently recording normalised
+Elo (190.3 for a true 155.0 — anchored with `\bElo`, state corrected before
+the ledger saw it).
+
+## 2026-07-15 — v5.0 "Gillean" released (search-only); v6.0 package staged
+
+**v5.0 = the factorial's `both` arm shipped:** LMP+RFP search on the
+unchanged gen5 net, `sgr_v5_0.exe`, id "Sgurr 5.0" (binary rebuilt for the id
+string after calibration; node-identity to the calibrated build re-verified
+on four fixed-depth positions, selfcheck PASS). Calibration on pool-B:
+**2724 ±36** (240 games @10+0.1, 47.5% — bracketed, not extrapolated; level
+with Zahak-5.0, the old pool's ceiling). **+119 vs v4.0 same-solve** against
++176.4 ±15 self-play: the first large search gain the project has
+pool-measured, and it expressed ~two-thirds — unlike malus (+33→~0) and the
+v3.1 soft limit (+24.6→negative). Compression is category- and
+magnitude-dependent; big pruning gains survive. White advantage −0.3 ±5.2 —
+stays closed. Next: **v6.0 search-refinement candidates implemented behind
+default-OFF toggles** (`SGR_IMPROVING`: static-eval stack, RFP margin −1 ply
+when improving, LMP budget halved when not; `SGR_HISTLMR`: reduction nudged
+±2 by butterfly+conthist — the interaction conthist has been waiting for;
+`SGR_SINGULAR`: excluded-move test at depth ≥7, TT/NMP correctly disabled in
+the helper search). Bare build verified node-identical to `sgr_v5_0`
+(161334/252602/6224/104475 at depth 10); package-on build sane (fewer nodes
+on quiet positions, more on the tactical one — extensions doing their job).
+SPRT `sgr_x_all` vs `sgr_v5_0` next, then factorial decomposition only if
+the package number warrants it. After that, the big lever: gen7
+king-bucketed features, with the RFP-free labeller.
