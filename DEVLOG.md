@@ -619,3 +619,32 @@ on quiet positions, more on the tactical one — extensions doing their job).
 SPRT `sgr_x_all` vs `sgr_v5_0` next, then factorial decomposition only if
 the package number warrants it. After that, the big lever: gen7
 king-bucketed features, with the RFP-free labeller.
+
+## 2026-07-15 — negative result: TT size buys nothing at blitz, and the tree was never bloated
+
+Two speculations tested and killed, both cheap, both worth recording so they
+are not re-run. **(1) "RFP's +176 means the tree is bloated."** It isn't: the
+effective branching factor measured **1.2–2.9, mostly ~1.5–2.5** across
+startpos/kiwipete/middlegame at depths 8–15 — healthy, well-pruned,
+mature-engine territory. The likelier reading of RFP's outsized gain is
+mundane: RFP leans on eval quality, and a strong NNUE with little overlapping
+pruning to compete with harvests its full value, where the "+20–30" folklore
+comes from mature engines adding it on top of everything else.
+**(2) "The 64MB TT is thrashing."** A fixed-depth probe (2^21 vs 2^24, same
+source, only the table size differing) showed *textbook threshold behaviour* —
+**0% node savings below ~2M nodes, then up to 44% above it** (kiwipete d15
++28.7%, middlegame d14/d15 +35.4%/+43.9%; startpos noisy and sometimes
+negative, since changing TT contents reshuffles move ordering chaotically).
+So the table *is* undersized for deep searches. But at 8+0.08 the engine runs
+~1.3M NPS and spends ~350k nodes per move — **an order of magnitude below the
+threshold** — so the only available mechanism was cross-move reuse (the TT
+survives `clear_for_new_position`; a game pushes ~14M cumulative nodes through
+2M slots). SPRT tt24 vs tt21 settled it: **−12.0 ±15.7 after 1,270 games**,
+LLR drifting to H0, stopped early. If anything the bigger table is *worse* at
+this TC — plausibly the TLB/cache tax of randomly probing 512MB versus 64MB,
+neither of which fits the 9MB L3 anyway. **Conclusion: keep 2^21. Node
+savings are real but live at analysis depths, not blitz.** The build knob is
+reverted; a proper `Hash` UCI option remains worth adding on standards
+grounds (there is no `setoption` infra at all), not for Elo. Rule of thumb
+banked: at ~2700 with a +150-class lever untouched, sub-20 Elo questions are
+not worth the complexity they carry.
