@@ -4,6 +4,43 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v6.0 "Banachdaich" (Sgùrr na Banachdaich) — 2026-07-16
+
+A search-refinement package on the unchanged gen5 net — the second search-only
+release in a row, and the first version to pass the old pool's ceiling.
+
+- **Strength: +57.3 ±17.0 Elo vs v5.0** (+505 =316 −318, 1,139 games, 8+0.08s,
+  SPRT [0, 5] H1 accepted). **CCRL-Blitz-anchored: 2807 ±36** on
+  pool-2026-07-B (+117 =38 −85, 240-game gauntlet @ 10+0.1), **+83 vs v5.0 in
+  the same solve** — statistically indistinguishable from the self-play
+  figure, so the package expressed at least fully. New project high.
+- **Improving flag** (`SGR_IMPROVING`): the static eval is recorded at each
+  ply and compared with the same side's eval two plies up. A rising eval is a
+  more trustworthy bound, so reverse futility prunes with one ply less margin;
+  a falling one means the worst-ordered quiets are even less likely to rescue
+  the position, so late move pruning halves its quiet budget. Also removes a
+  double `evaluate_position` at depth ≤ 2.
+- **History-adjusted LMR** (`SGR_HISTLMR`): a quiet's late-move reduction is
+  nudged ±2 plies by its butterfly + continuation history — proven quiets
+  reduced less, serial failures more. This is the pruning interaction
+  continuation history has been waiting for since it measured ≈ 0 alone.
+- **Singular extensions** (`SGR_SINGULAR`): at depth ≥ 7, when the TT move
+  carries a lower-bound score from a nearly-as-deep search, the remaining
+  moves are searched reduced against a window below it; if none reaches it,
+  the TT move is extended a ply. TT cutoff/store and null move are disabled
+  inside the excluded-move helper search.
+- The three shipped together and are **not decomposed** — the +57 is the
+  package. Each is individually toggleable (`-DSGR_IMPROVING=0` etc.).
+- Engine reports `id name Sgurr 6.0`. All three toggles default on, so a bare
+  rebuild is the shipped engine; the release binary was verified
+  node-identical at fixed depth to the build that took the SPRT.
+- Also recorded this cycle, both negative: **HL=512 on the gen6 8M is flat**
+  (−5.5 ±22, stopped early — third confirmation those labels are exhausted,
+  after the probe's "saturated" and the gen6-net wash), and **a larger
+  transposition table buys nothing at blitz** (−12.0 ±15.7; the fixed-depth
+  node savings are real but live above ~2M nodes, which 8+0.08 never reaches).
+  See `DEVLOG.md`.
+
 ## v5.0 "Gillean" (Sgùrr nan Gillean) — 2026-07-15
 
 A search-only release: reverse futility pruning (with LMP) on the unchanged

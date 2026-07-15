@@ -103,10 +103,11 @@ constexpr int RFP_MARGIN = 100;               // centipawns per remaining ply
 constexpr int LMP_MAX_DEPTH = 3;
 constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning, by depth
 
-// Improving flag, history-adjusted LMR, and singular extensions (v6.0
-// CANDIDATES -- default OFF until they pass SPRT, so a bare rebuild stays the
-// shipped v5.0 engine; -DSGR_IMPROVING=1 / -DSGR_HISTLMR=1 / -DSGR_SINGULAR=1
-// enable them for testing).
+// Improving flag, history-adjusted LMR, and singular extensions (the v6.0
+// package -- SPRT vs v5.0: +57.3 +/-17.3, H1 at 1,139 games, undecomposed.
+// All default on since v6.0; -DSGR_IMPROVING=0 / -DSGR_HISTLMR=0 /
+// -DSGR_SINGULAR=0 revert, as with the other search toggles. All three return
+// searched scores, so unlike RFP they are labeller-safe).
 // Improving: the static eval is recorded at each ply and compared with the
 // same side's eval two plies up. A rising eval makes the static eval a more
 // trustworthy bound, so RFP prunes with a one-ply-smaller margin; a falling
@@ -123,13 +124,13 @@ constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning,
 // Margins and divisors are starting values, to be swept before they are
 // believed.
 #ifndef SGR_IMPROVING
-#define SGR_IMPROVING 0
+#define SGR_IMPROVING 1
 #endif
 #ifndef SGR_HISTLMR
-#define SGR_HISTLMR 0
+#define SGR_HISTLMR 1
 #endif
 #ifndef SGR_SINGULAR
-#define SGR_SINGULAR 0
+#define SGR_SINGULAR 1
 #endif
 constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 constexpr int HISTLMR_DIV = 400'000;          // history per ply of adjustment

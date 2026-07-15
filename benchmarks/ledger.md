@@ -8,6 +8,7 @@ scale, not official CCRL ratings.
 
 | date | engine | rating | ±95% | games | W-D-L | TC | pool | hardware | notes |
 |------|--------|--------|------|-------|-------|----|------|----------|-------|
+| 2026-07-16 | Sgurr v6.0 "Banachdaich" | 2807 | 36 | 240 | +117 =38 -85 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. Search-only release on the unchanged gen5 net: improving flag + history-adjusted LMR + singular extensions (SPRT vs v5.0 **+57.3 ±17.3**, H1 at 1,139 games, package undecomposed). **+83 vs v5.0 same-solve** (2724) — joint error ±51, so consistent with the self-play +57; no compression evident. New project high, first version above Zahak-5.0 (2726); bracketed from above by Weiss-1.0 (2896) at 56.7%, i.e. measured, not extrapolated — pool-B's new anchors were load-bearing here. |
 | 2026-07-15 | Sgurr v5.0 "Gillean" | 2724 | 36 | 240 | +97 =34 -109 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games (~2,900). Search-only release: LMP + RFP on the unchanged gen5 net — the gen6 net was a wash (+6 ±20, 1,200-game net-isolated A/B) and is not shipped. +119 vs v4.0 **same-solve** (2604); the +176.4 ±15 self-play factorial gain expressed ~2/3 against the pool. Level with Zahak-5.0 (2726). **Scale note: pool-B re-anchor — all rows sit ~22 below their published pool-A values; compare within one solve only.** |
 | 2026-07-10 | Sgurr v4.0 "MacKenzie" | 2627 | 27 | 420 | +216 =60 -144 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all ~3,600 accumulated calibration games. gen5 net (768→384) + best-move stability + history malus/conthist. +63 vs v3.1 on the pool scale; statistically level with the pre-malus gen5-bmstab measurement (2635.5 ±25.5) — self-play search gains compress vs the pool. |
 | 2026-07-10 | Sgurr v3.1 "Blackpeak" | 2564 | 27 | 420 | +140 =150 -130 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Deferred debt from the 07-08 release, settled. **Below v3.0 (2613)**: the flat soft limit loses at 10+0.1 despite the +24.6 ±22.7 interim SPRT at 8+0.08 — TC-dependent; superseded by v4.0's stability scaling. Finding reproduced across three independent solves. |
@@ -17,6 +18,38 @@ scale, not official CCRL ratings.
 | 2026-07-04 | Sgurr classical (HCE) | 2398 | 34 | 270 | +80 =30 -160 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. Supersedes the old ~2520 SF-limited estimate (flawed method + different scale). |
 
 ## Run log
+
+### 2026-07-16 — v6.0 "Banachdaich" release calibration (search refinement package)
+
+- **Tool:** fastchess 1.8.0-alpha gauntlet, 240 games (8 opponents × 30),
+  10+0.1, `testing/book.epd`, concurrency 5, idle machine. Ordo 1.0 over ALL
+  accumulated calibration PGNs, `-m anchors.txt`, `-W`, `-s 1500`.
+- **Result:** **Sgurr v6.0 = 2807 ±36** (+117 =38 −85, 56.7%). **+83 vs v5.0
+  in the same solve** (2724 ±36; joint error ±51). Ladder on the pool-B
+  scale: 2376 → 2385 → 2468 → 2589 → 2604 → 2724 → **2807**.
+- **Provenance:** `sgr_v6_0.exe` = gen5 net (`nets/gen5.nnue`) with
+  `SGR_IMPROVING` / `SGR_HISTLMR` / `SGR_SINGULAR` now default-on, id
+  "Sgurr 6.0"; verified node-identical at fixed depth to the exact
+  `sgr_x_all` build that took the SPRT (133679 / 194912 / 4641 / 141838).
+  Search-only release on the unchanged net, as v5.0 and v3.1 were.
+- **Compression, second data point:** self-play **+57.3 ±17.3** → pooled
+  **+83 ±51**. The two are statistically indistinguishable, so the package
+  expressed *at least* fully. With RFP's +176 → +119 (~2/3), the pattern so
+  far is that **large pruning gains and this refinement package both survive
+  the pool**, unlike the small tweaks that vanished (malus +33 → ~0; v3.1
+  soft limit +24.6 → negative). Magnitude, not category, looks like the
+  predictor — but two points is not a curve, and ±51 is wide.
+- **pool-B earned its keep immediately.** v6.0 is the first Sgurr version
+  above Zahak-5.0 (2726) — pool-A's ceiling. On the old pool this number
+  would have had no anchor above it and would have been an extrapolation;
+  instead Weiss-1.0 (2896) brackets it at 56.7%. The upgrade was argued as
+  insurance for gen7-8 and was needed one release later.
+- **Package NOT decomposed.** The +57 is improving + histLMR + singular
+  together; leave-one-out builds (~3,600 games each) would isolate them, and
+  the open question is whether `SGR_HISTLMR` is what finally makes
+  continuation history pay (it measured ~0 alone on 07-10). Deferred — a
+  passenger left default-on is permanent complexity.
+- **White advantage +2.5 ±4.9** — stays closed.
 
 ### 2026-07-15 — v5.0 "Gillean" release calibration on the re-anchored pool-2026-07-B
 

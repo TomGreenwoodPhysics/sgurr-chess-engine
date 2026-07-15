@@ -664,3 +664,42 @@ flat), which is the RFP-poisoned-labels diagnosis confirmed from a third
 angle. Net kept as `nets/gen7_hl512_l10.nnue` (nothing deleted); engine
 `sgr_hl512.exe`. Consequence: **no architecture work on this dataset — clean
 RFP-free regen first, then king buckets (and re-test width on clean data).**
+
+## 2026-07-16 — v6.0 "Banachdaich": the refinement package pools at +83, and pool-B pays off early
+
+**2807 ±36** (240 games @10+0.1 vs pool-B, 56.7%), **+83 vs v5.0 same-solve** —
+a new project high and the first Sgurr above Zahak-5.0 (2726). Shipped
+`sgr_v6_0.exe`: gen5 net, `SGR_IMPROVING` + `SGR_HISTLMR` + `SGR_SINGULAR`
+default-on, id "Sgurr 6.0", verified node-identical at fixed depth to the
+`sgr_x_all` build that took the SPRT (+57.3 ±17.3, H1 at 1,139 games).
+
+**Compression, second data point — and the category theory is wobbling.**
+Self-play +57.3 ±17.3 → pooled +83 ±51. Indistinguishable, so the package
+expressed *at least* fully; the point estimate is if anything higher.
+Alongside RFP (+176 → +119, ~2/3), that is now two large-ish search gains
+that survived the pool, against two small ones that did not (malus +33 → ~0;
+v3.1 soft limit +24.6 → negative). The working rule shifts from "search
+compresses, nets don't" to something closer to **"magnitude predicts
+survival"** — small self-play deltas are the ones that evaporate, regardless
+of category. Two points is not a curve and ±51 is wide; do not over-fit this.
+
+**pool-2026-07-B was load-bearing within one release of being built.** The
+morning's argument for adding anchors above Zahak-5.0 was insurance for
+gen7-8; v6.0 needed it the same night. At 2807 on pool-A there would have
+been nothing above the engine and the headline number would have been an
+extrapolation with inflated bars. Instead Weiss-1.0 (2896) brackets it at
+56.7% — measured. The re-anchor also keeps the whole ladder on one scale:
+2376 → 2385 → 2468 → 2589 → 2604 → 2724 → 2807.
+
+**Not decomposed.** The +57 is the package; leave-one-out builds (~3,600
+games each) remain owed, and the live question is whether `SGR_HISTLMR` is
+what finally makes continuation history pay after it measured ~0 alone on
+07-10. A passenger left default-on is permanent complexity — but the machine
+is now needed for the clean regen, and that outranks a diagnostic.
+
+**Next: the datagen bottleneck, not the search.** Three measurements say the
+gen6 8M is exhausted (probe "saturated", gen6-net A/B +6 ±20, HL=512 flat
+−5.5 ±22), so both width and king buckets gate on an RFP-free regen. v6.0
+shipping first is a bonus for it: the labeller becomes the new engine minus
+RFP, and improving/histLMR/singular all return *searched* scores, so unlike
+RFP they are labeller-safe and their depth gain lands in the labels for free.

@@ -21,6 +21,7 @@ the canonical identifiers; peak names are codenames only.
 | v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only on the gen3 net: soft/hard time management; calibrated 2564 ±26 — below v3.0 (the flat soft limit loses at 10+0.1; superseded in v4.0) |
 | v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT); plus history malus and best-move-stability time management; 2627 ±27 CCRL-Blitz-anchored |
 | v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) + LMP; 2724 ±36 on the re-anchored pool-2026-07-B, +119 vs v4.0 same-solve (gen6 net measured flat and was not shipped — see CHANGELOG) |
+| v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package on the gen5 net: improving flag + history-adjusted LMR + singular extensions, +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); **2807 ±36**, +83 vs v5.0 same-solve — first version above the old pool's ceiling |
 
 See `CHANGELOG.md` for details and measured results with error bars,
 `benchmarks/ledger.md` for the append-only record of measured ratings, and
@@ -42,7 +43,8 @@ one consistent solve. Full method and append-only history:
 
 | engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v5.0 "Gillean" | **2724 ±36** |
+| Sgurr v6.0 "Banachdaich" | **2807 ±36** |
+| Sgurr v5.0 "Gillean" | 2724 ±36 |
 | Sgurr v4.0 "MacKenzie" | 2604 ±27 |
 | Sgurr v3.0 "Blackpeak" | 2590 ±39 |
 | Sgurr v3.1 "Blackpeak" | 2541 ±27 |
