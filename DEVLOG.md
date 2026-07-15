@@ -648,3 +648,19 @@ reverted; a proper `Hash` UCI option remains worth adding on standards
 grounds (there is no `setoption` infra at all), not for Elo. Rule of thumb
 banked: at ~2700 with a +150-class lever untouched, sub-20 Elo questions are
 not worth the complexity they carry.
+
+## 2026-07-15 — HL=512 on the gen6 8M: flat. Third witness against the labels
+
+The gen4→gen5 playbook (same data, wider net) did not repeat. HL=512 trained
+on the gen6 8M (12 epochs cosine, λ=1.0, loss 0.00475 vs gen6-384's 0.00522 —
+loss ≠ Elo, and the step budgets differ), selfcheck PASS at 512 (4,468
+checks), NPS tax ~20% (1.06M vs 1.32M). SPRT vs v5.0 stopped early at ~820
+games: **−5.5 ±22**, LLR −0.26. The +40–60 the 256→384 precedent predicted
+would have been visible by then; it is not there. Reading: the wider net's
+eval gain roughly cancels its speed tax — the capacity finds nothing more in
+these labels. That is now **three independent measurements agreeing the gen6
+8M is exhausted** (probe "saturated" 0.441%, gen6-net A/B +6 ±20, HL=512
+flat), which is the RFP-poisoned-labels diagnosis confirmed from a third
+angle. Net kept as `nets/gen7_hl512_l10.nnue` (nothing deleted); engine
+`sgr_hl512.exe`. Consequence: **no architecture work on this dataset — clean
+RFP-free regen first, then king buckets (and re-test width on clean data).**
