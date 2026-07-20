@@ -1,0 +1,184 @@
+@keyframes core-absorb-flash {
+  0% {
+    filter: brightness(2.4) saturate(1.7);
+    transform: scale(1.4);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+/* The human's version of the absorb pop: the whole player card takes a
+   gentler flash sized for a wide text plate rather than a small core. */
+.card-absorb-flash {
+  animation: card-absorb-flash 0.45s ease-out;
+}
+
+@keyframes card-absorb-flash {
+  0% {
+    filter: brightness(1.85) saturate(1.4);
+    transform: scale(1.045);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent), transparent 45%);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+/* Live search readout while Sgurr thinks. */
+.eval-meta.thinking-live {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  animation: thinking-live-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes thinking-live-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Intro enhancements: staggered title reveal, drifting dust motes, a  */
+/* breathing halo behind the seal, and a burst + ring spin-up on wake. */
+/* All gated on data-motion="on" so reduced-motion users see none.     */
+/* ------------------------------------------------------------------ */
+
+.intro-bosscard h1 .intro-letter {
+  display: inline-block;
+}
+
+/* Letters stay hidden until the naming phase declares the boss. With motion
+   off the letters are simply always visible and the card fades as a whole. */
+.intro-screen[data-motion="on"] .intro-bosscard h1 .intro-letter {
+  opacity: 0;
+}
+
+.intro-screen[data-motion="on"][data-state="naming"] .intro-bosscard h1 .intro-letter {
+  animation: intro-letter-rise 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: calc(0.2s + var(--i) * 0.09s);
+}
+
+@keyframes intro-letter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(1.08);
+    filter: blur(10px);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+.intro-mote {
+  position: absolute;
+  z-index: 6;
+  left: var(--mx);
+  top: var(--my);
+  width: var(--ms);
+  height: var(--ms);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent), transparent 30%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro-screen[data-motion="on"] .intro-mote {
+  animation: intro-mote-drift var(--md) linear infinite;
+  animation-delay: var(--mdelay);
+}
+
+@keyframes intro-mote-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  14% {
+    opacity: 0.55;
+  }
+  60% {
+    opacity: 0.28;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(12px, -52px, 0);
+  }
+}
+
+.intro-screen[data-state="waking"] .intro-mote,
+.intro-screen[data-state="naming"] .intro-mote {
+  animation-duration: calc(var(--md) / 4);
+}
+
+.intro-sanctum::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent), transparent 55%),
+    transparent 70%
+  );
+  opacity: 0.16;
+  filter: blur(18px);
+}
+
+.intro-screen[data-motion="on"] .intro-sanctum::after {
+  animation: intro-halo-breathe 5.4s ease-in-out infinite;
+}
+
+@keyframes intro-halo-breathe {
+  0%, 100% {
+    opacity: 0.1;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.08);
+  }
+}
+
+.intro-screen[data-state="waking"] .intro-sanctum::after,
+.intro-screen[data-state="naming"] .intro-sanctum::after {
+  animation: intro-halo-burst 1.3s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes intro-halo-burst {
+  0% {
+    opacity: 0.38;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+/* The seal spins up as the core wakes and keeps racing through the naming. */
+.intro-screen[data-state="waking"] .intro-seal-ring.ring-one,
+.intro-screen[data-state="naming"] .intro-seal-ring.ring-one {
+  animation: intro-seal-turn 3.2s linear infinite;
+}
+
+.intro-screen[data-state="waking"] .intro-seal-ring.ring-two,
+.intro-screen[data-state="naming"] .intro-seal-ring.ring-two {
+  animation: intro-seal-turn-reverse 2.4s linear infinite;
+}
+
+.intro-screen[data-state="waking"] .intro-seal-ring.ring-three,
+.intro-screen[data-state="naming"] .intro-seal-ring.ring-three {
+  animation: intro-seal-breathe 1.2s ease-in-out infinite;
+}
+
+.intro-screen[data-state="waking"] .intro-copy {
+  transform: translateX(-50%) translateY(-8px);
+}

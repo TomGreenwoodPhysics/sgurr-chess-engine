@@ -1,0 +1,14 @@
+/* Sgurr web styles — modular cascade. Partials load in this order; the
+   ordering IS the cascade, so keep it stable when adding sections. */
+@import "styles/base.css";
+@import "styles/intro.css";
+@import "styles/menu.css";
+@import "styles/board.css";
+@import "styles/sidepanel.css";
+@import "styles/core.css";
+@import "styles/panels.css";
+@import "styles/editor.css";
+@import "styles/modals.css";
+@import "styles/result.css";
+@import "styles/responsive.css";
+@import "styles/animations.css";

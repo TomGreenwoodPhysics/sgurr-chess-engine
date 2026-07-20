@@ -1,0 +1,518 @@
+.menu-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  min-height: 100vh;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  opacity: 1;
+  background:
+    linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg), #000 28%)),
+    var(--bg);
+  transition: opacity 820ms cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.menu-screen::before,
+.menu-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.menu-screen::before {
+  opacity: 0.95;
+  background:
+    radial-gradient(circle at 38% 48%, color-mix(in srgb, var(--accent), transparent 80%) 0 15rem, transparent 15.4rem),
+    radial-gradient(circle at 38% 48%, color-mix(in srgb, var(--accent-2), transparent 88%) 0 25rem, transparent 25.5rem),
+    radial-gradient(ellipse at 38% 48%, color-mix(in srgb, var(--text), transparent 95%) 0 34rem, transparent 34.5rem),
+    linear-gradient(90deg, color-mix(in srgb, var(--bg), #000 12%) 0 52%, transparent 70%);
+}
+
+.menu-screen::after {
+  opacity: 0.72;
+}
+
+:root[data-theme="highland"] .menu-screen::after,
+:root[data-theme="highland"] body::after {
+  background:
+    radial-gradient(circle at 18% 17%, color-mix(in srgb, var(--text), transparent 86%) 0 1.3rem, transparent 1.35rem),
+    radial-gradient(circle at 28% 25%, color-mix(in srgb, var(--text), transparent 90%) 0 2.4rem, transparent 2.45rem),
+    radial-gradient(circle at 74% 18%, color-mix(in srgb, var(--accent), transparent 88%) 0 2.1rem, transparent 2.15rem),
+    linear-gradient(158deg, transparent 0 64%, color-mix(in srgb, var(--accent), transparent 90%) 64.1% 64.4%, transparent 64.5%),
+    linear-gradient(26deg, transparent 0 72%, color-mix(in srgb, var(--accent-2), transparent 92%) 72.1% 72.45%, transparent 72.55%);
+}
+
+:root[data-theme="neon"] .menu-screen::after,
+:root[data-theme="neon"] body::after {
+  background:
+    radial-gradient(circle at 44% 10%, color-mix(in srgb, var(--accent), transparent 88%) 0 8rem, transparent 8.15rem),
+    radial-gradient(circle at 61% 12%, color-mix(in srgb, var(--accent-2), transparent 89%) 0 7rem, transparent 7.15rem),
+    repeating-linear-gradient(0deg, transparent 0 3.2rem, color-mix(in srgb, var(--accent), transparent 95%) 3.22rem 3.28rem, transparent 3.34rem 6.4rem),
+    repeating-linear-gradient(90deg, transparent 0 4.6rem, color-mix(in srgb, var(--accent-2), transparent 96%) 4.62rem 4.68rem, transparent 4.74rem 9.2rem);
+}
+
+:root[data-theme="ocean"] .menu-screen::after,
+:root[data-theme="ocean"] body::after {
+  background:
+    radial-gradient(ellipse at 50% -8%, color-mix(in srgb, var(--accent), transparent 90%) 0 18rem, transparent 18.2rem),
+    repeating-linear-gradient(2deg, transparent 0 3.7rem, color-mix(in srgb, var(--accent), transparent 91%) 3.78rem, transparent 4.02rem),
+    repeating-linear-gradient(-2deg, transparent 0 5rem, color-mix(in srgb, var(--accent-2), transparent 94%) 5.12rem, transparent 5.34rem),
+    linear-gradient(180deg, transparent 0 42%, color-mix(in srgb, var(--accent), transparent 96%) 42.2% 42.5%, transparent 42.7%);
+}
+
+:root[data-theme="wood"] .menu-screen::after,
+:root[data-theme="wood"] body::after {
+  background:
+    radial-gradient(ellipse at 52% 10%, color-mix(in srgb, var(--accent-2), transparent 90%) 0 12rem, transparent 12.2rem),
+    repeating-linear-gradient(1deg, transparent 0 3.5rem, color-mix(in srgb, var(--accent), transparent 91%) 3.56rem 3.68rem, transparent 3.84rem 7rem),
+    repeating-linear-gradient(-1deg, transparent 0 5.2rem, color-mix(in srgb, var(--accent-2), transparent 94%) 5.28rem 5.38rem, transparent 5.56rem 10.4rem);
+}
+
+:root[data-theme="modern"] .menu-screen::after,
+:root[data-theme="modern"] body::after {
+  background:
+    repeating-linear-gradient(72deg, transparent 0 6.4rem, color-mix(in srgb, var(--accent-2), transparent 95%) 6.45rem 8.8rem, transparent 8.85rem 12.8rem),
+    repeating-linear-gradient(116deg, transparent 0 9.2rem, color-mix(in srgb, var(--accent), transparent 96%) 9.25rem 9.8rem, transparent 9.85rem 18.4rem),
+    radial-gradient(circle at 58% 8%, color-mix(in srgb, var(--accent), transparent 91%) 0 10rem, transparent 10.2rem);
+}
+
+:root[data-theme="frost"] .menu-screen::after,
+:root[data-theme="frost"] body::after {
+  background-image:
+    radial-gradient(ellipse at 50% -12%, color-mix(in srgb, var(--accent), transparent 83%) 0 15rem, transparent 15.3rem),
+    linear-gradient(132deg, transparent 0 34%, color-mix(in srgb, var(--accent), transparent 83%) 34.15% 34.42%, transparent 34.7%),
+    linear-gradient(42deg, transparent 0 59%, color-mix(in srgb, var(--accent-2), transparent 84%) 59.15% 59.42%, transparent 59.7%),
+    linear-gradient(158deg, transparent 0 72%, color-mix(in srgb, var(--text), transparent 88%) 72.1% 72.25%, transparent 72.5%),
+    repeating-linear-gradient(7deg, transparent 0 5.7rem, color-mix(in srgb, var(--accent), transparent 92%) 5.76rem 5.83rem, transparent 5.9rem 11.4rem),
+    repeating-linear-gradient(-9deg, transparent 0 7.4rem, color-mix(in srgb, var(--accent-2), transparent 94%) 7.47rem 7.54rem, transparent 7.62rem 14.8rem),
+    radial-gradient(circle, color-mix(in srgb, var(--accent), transparent 72%) 1px, transparent 1.35px),
+    radial-gradient(circle, color-mix(in srgb, var(--text), transparent 76%) 1px, transparent 1.25px),
+    radial-gradient(circle, color-mix(in srgb, var(--accent-2), transparent 82%) 1px, transparent 1.2px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    7rem 6.5rem,
+    11rem 9rem,
+    15rem 13rem;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    2rem 1.4rem,
+    5rem 4rem,
+    9rem 7rem;
+}
+
+:root[data-theme="galaxy"] .menu-screen::after,
+:root[data-theme="galaxy"] body::after {
+  background-image:
+    radial-gradient(ellipse at 78% 14%, color-mix(in srgb, var(--accent), transparent 82%) 0 11rem, transparent 16rem),
+    radial-gradient(ellipse at 16% 72%, color-mix(in srgb, var(--accent-2), transparent 87%) 0 9rem, transparent 14rem),
+    radial-gradient(ellipse at 55% 40%, color-mix(in srgb, var(--accent), transparent 92%) 0 16rem, transparent 22rem),
+    linear-gradient(118deg, transparent 0 30%, color-mix(in srgb, var(--text), transparent 95%) 42% 52%, transparent 66%),
+    radial-gradient(circle, color-mix(in srgb, var(--text), transparent 40%) 1px, transparent 1.4px),
+    radial-gradient(circle, color-mix(in srgb, var(--text), transparent 62%) 1px, transparent 1.25px),
+    radial-gradient(circle, color-mix(in srgb, var(--accent-2), transparent 55%) 1px, transparent 1.3px),
+    radial-gradient(circle, color-mix(in srgb, var(--accent), transparent 66%) 1px, transparent 1.2px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    13rem 11rem,
+    6.5rem 5.5rem,
+    17rem 14rem,
+    10rem 8.5rem;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    1.7rem 0.9rem,
+    4.2rem 3.1rem,
+    8.6rem 5.4rem,
+    2.9rem 6.8rem;
+}
+
+.menu-screen[hidden] {
+  display: none;
+}
+
+.menu-actions {
+  position: fixed;
+  z-index: 2;
+  top: 52px;
+  right: max(34px, calc((100vw - 1500px) / 2 + 34px));
+  display: flex;
+  gap: 16px;
+}
+
+.ghost-button,
+.menu-tools-grid button {
+  background: rgba(45, 39, 51, 0.62);
+}
+
+.square-button {
+  width: 40px;
+  padding: 0;
+}
+
+.menu-title {
+  position: fixed;
+  z-index: 1;
+  --menu-core-size: clamp(500px, 42vw, 740px);
+  top: 50%;
+  left: clamp(240px, 34vw, 660px);
+  transform: translate(-50%, -50%);
+  width: min(760px, 54vw);
+  height: calc(var(--menu-core-size) + 142px);
+  text-align: center;
+  pointer-events: none;
+}
+
+.menu-core {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: var(--menu-core-size);
+  height: var(--menu-core-size);
+  --core-scale-mid: 1.035;
+  --core-aura-size: calc(var(--menu-core-size) * 0.13);
+  --core-aura-fade: 34%;
+  --core-inner-color: color-mix(in srgb, var(--accent), var(--accent-2) 36%);
+  --core-inner-aura-size: calc(var(--menu-core-size) * 0.13);
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 18%);
+  --core-ring-opacity: 0.92;
+  --core-ring-fade: 22%;
+  opacity: 1;
+  z-index: 0;
+}
+
+.menu-core::before {
+  inset: calc(var(--menu-core-size) * 0.14);
+}
+
+.menu-core::after {
+  inset: calc(var(--menu-core-size) * -0.075);
+  border-width: 2px;
+}
+
+.menu-title h1 {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 58px;
+  margin: 0;
+  font-size: clamp(3.6rem, 5.2vw, 6.1rem);
+  line-height: 0.9;
+  letter-spacing: 0;
+  font-weight: 900;
+  text-shadow:
+    0 2px 0 color-mix(in srgb, var(--bg), transparent 40%),
+    0 0 28px color-mix(in srgb, var(--accent), transparent 62%);
+}
+
+.menu-title p {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(0.98rem, 1.05vw, 1.16rem);
+  font-weight: 700;
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--bg), transparent 20%);
+}
+
+.menu-card {
+  position: fixed;
+  z-index: 1;
+  top: 50%;
+  right: max(46px, calc((100vw - 1500px) / 2 + 46px));
+  transform: translateY(-50%);
+  width: min(540px, calc(100vw - 58vw));
+  min-width: 430px;
+  min-height: 0;
+  padding: 30px 34px 32px;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--accent), transparent 86%) 0 14rem, transparent 14.3rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--accent) 7%), var(--surface)),
+    var(--surface);
+  box-shadow:
+    0 26px 80px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px color-mix(in srgb, var(--text), transparent 94%);
+}
+
+.menu-accent-line {
+  position: absolute;
+  top: -1px;
+  left: 34px;
+  right: 34px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.menu-section-label {
+  margin: 20px 0 9px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.menu-section-label:first-of-type {
+  margin-top: 0;
+}
+
+.selector-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  gap: 10px;
+}
+
+.large-selector {
+  grid-template-columns: 58px 1fr 58px;
+}
+
+.selector-value {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.large-selector .selector-value {
+  min-height: 72px;
+  color: var(--text);
+  border-color: var(--accent);
+  font-size: 1.54rem;
+}
+
+.selector-row:not(.large-selector) button {
+  min-height: 48px;
+}
+
+.menu-play-grid,
+.menu-tools-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+}
+
+.menu-play-grid button {
+  min-height: 52px;
+  font-size: 1.36rem;
+}
+
+.menu-play-grid #watchButton {
+  grid-column: 1 / -1;
+  min-height: 46px;
+}
+
+.menu-tools-grid button {
+  min-height: 40px;
+  font-size: 1.08rem;
+}
+
+.play-white {
+  background: var(--white-eval);
+  color: #17131a;
+}
+
+.play-black {
+  background: var(--black-eval);
+  color: var(--text);
+}
+
+.menu-status {
+  position: absolute;
+  top: auto;
+  bottom: -36px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(600px, calc(100vw - 32px));
+  min-height: 24px;
+  margin-top: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.menu-status[data-state="ready"] {
+  opacity: 0;
+}
+
+.menu-memory {
+  position: absolute;
+  bottom: -62px;
+  left: 50%;
+  width: min(720px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.menu-memory[hidden] {
+  display: none;
+}
+
+@media (max-height: 820px), (max-width: 1320px) {
+  .menu-title {
+    --menu-core-size: clamp(180px, 28vh, 260px);
+    top: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(640px, calc(100vw - 36px));
+    height: calc(var(--menu-core-size) + 98px);
+  }
+
+  .menu-core {
+    width: var(--menu-core-size);
+    height: var(--menu-core-size);
+    --core-aura-size: calc(var(--menu-core-size) * 0.13);
+    --core-inner-aura-size: calc(var(--menu-core-size) * 0.13);
+  }
+
+  .menu-core::before {
+    inset: calc(var(--menu-core-size) * 0.14);
+  }
+
+  .menu-core::after {
+    inset: calc(var(--menu-core-size) * -0.075);
+  }
+
+  .menu-title h1 {
+    bottom: 35px;
+    font-size: clamp(2.4rem, 8vw, 3.6rem);
+  }
+
+  .menu-title p {
+    bottom: 8px;
+    font-size: 0.9rem;
+  }
+
+  .menu-card {
+    top: calc(44px + var(--menu-core-size) + 92px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(520px, calc(100vw - 32px));
+    min-width: 0;
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .menu-section-label {
+    margin: 16px 0 8px;
+    font-size: 0.76rem;
+  }
+
+  .selector-row {
+    grid-template-columns: 44px 1fr 44px;
+    gap: 8px;
+  }
+
+  .large-selector {
+    grid-template-columns: 54px 1fr 54px;
+  }
+
+  .large-selector .selector-value {
+    min-height: 60px;
+    font-size: 1.35rem;
+  }
+
+  .selector-row:not(.large-selector) button {
+    min-height: 40px;
+  }
+
+  .menu-play-grid,
+  .menu-tools-grid {
+    gap: 10px;
+  }
+
+  .menu-play-grid button {
+    min-height: 48px;
+    font-size: 1.12rem;
+  }
+
+  .menu-play-grid #watchButton {
+    min-height: 42px;
+  }
+
+  .menu-tools-grid button {
+    min-height: 38px;
+    font-size: 0.95rem;
+  }
+
+  .menu-status {
+    bottom: -34px;
+    font-size: 0.85rem;
+  }
+
+  .menu-memory {
+    bottom: -57px;
+    font-size: 0.66rem;
+  }
+}
+
+@media (min-width: 1321px) and (max-height: 760px) {
+  .menu-title {
+    --menu-core-size: clamp(360px, 32vw, 500px);
+    left: 30vw;
+  }
+
+  .menu-title h1 {
+    bottom: 48px;
+    font-size: clamp(3rem, 4.3vw, 4.8rem);
+  }
+
+  .menu-card {
+    width: min(500px, calc(100vw - 56vw));
+    padding: 24px 28px 26px;
+  }
+
+  .menu-section-label {
+    margin: 14px 0 7px;
+  }
+
+  .large-selector .selector-value {
+    min-height: 58px;
+    font-size: 1.35rem;
+  }
+
+  .selector-row:not(.large-selector) button {
+    min-height: 40px;
+  }
+
+  .menu-play-grid button {
+    min-height: 46px;
+    font-size: 1.14rem;
+  }
+
+  .menu-play-grid #watchButton {
+    min-height: 42px;
+  }
+
+  .menu-tools-grid button {
+    min-height: 38px;
+  }
+}

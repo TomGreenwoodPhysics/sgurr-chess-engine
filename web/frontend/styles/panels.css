@@ -1,0 +1,468 @@
+.controls-grid {
+  display: none;
+}
+
+.controls-grid label {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+select,
+button {
+  min-height: 38px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+select {
+  padding: 0 10px;
+}
+
+button {
+  padding: 0 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover,
+select:hover {
+  border-color: var(--accent);
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+#newGameButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17131a;
+}
+
+#editorPlayButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17131a;
+}
+
+#editorClearButton {
+  background: rgba(238, 98, 102, 0.16);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+#mainMenuButton {
+  grid-column: auto;
+}
+
+.action-grid {
+  display: none;
+}
+
+.action-grid button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.88rem;
+}
+
+.panel-value,
+.eval-value,
+.material-diff,
+.engine-block p {
+  margin: 0;
+}
+
+.panel-value {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.eval-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 80px;
+  align-items: start;
+}
+
+.eval-value {
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+
+.eval-meta {
+  display: none;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.captured-block {
+  min-height: 72px;
+  display: grid;
+  align-content: center;
+}
+
+.material-block {
+  display: grid;
+  gap: 10px;
+}
+
+.material-diff {
+  margin-top: 2px;
+  color: var(--accent-2);
+  font-weight: 800;
+  text-align: right;
+}
+
+.captured {
+  min-height: 42px;
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.captured-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.captured-label {
+  width: 92px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  text-transform: uppercase;
+}
+
+.captured-pieces {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+}
+
+.captured-piece {
+  width: 21px;
+  height: 21px;
+  font-size: 1.35rem;
+}
+
+.moves-block {
+  min-height: 0;
+  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.moves-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.moves-title span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.moves-scroll {
+  min-height: 0;
+  overflow: auto;
+  max-height: none;
+  padding-right: 2px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+td {
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(102, 86, 109, 0.34);
+}
+
+td:first-child {
+  width: 36px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+tr.latest {
+  color: var(--accent-2);
+}
+
+tr.latest td {
+  background: color-mix(in srgb, var(--accent-2), transparent 88%);
+}
+
+tr.latest td:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+tr.latest td:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+tr.redo-notice td {
+  color: var(--accent-2);
+  font-size: 0.82rem;
+}
+
+.engine-block {
+  display: none;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.status-block {
+  min-height: 100px;
+  color: var(--text);
+  font-size: 0.92rem;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.status-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.status-head .panel-label {
+  margin: 0;
+}
+
+.status-loader {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-loader span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: loader-dot 900ms ease-in-out infinite;
+}
+
+.status-loader span:nth-child(2) {
+  animation-delay: 110ms;
+}
+
+.status-loader span:nth-child(3) {
+  animation-delay: 220ms;
+}
+
+.status-block.thinking .status-loader {
+  display: flex;
+}
+
+@keyframes loader-dot {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.status-turn {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.status-block #statusValue,
+.status-block .status-result,
+.status-block > p:last-child {
+  margin: 0;
+}
+
+.status-block #statusValue {
+  font-weight: 900;
+}
+
+.status-result {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.status-block.error {
+  color: var(--danger);
+}
+
+.status-block.in-check {
+  border-color: color-mix(in srgb, var(--danger), var(--edge) 24%);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--danger), transparent 88%), transparent 38%),
+    var(--surface);
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--danger), var(--text) 8%),
+    inset 0 0 0 1px color-mix(in srgb, var(--danger), transparent 76%);
+  animation: status-check-breathe 2.4s ease-in-out infinite;
+}
+
+.status-block.in-check .status-turn,
+.status-block.in-check #statusValue {
+  color: color-mix(in srgb, var(--danger), var(--text) 18%);
+}
+
+.status-block.in-check.animations-off {
+  animation: none;
+}
+
+@keyframes status-check-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 3px 0 0 color-mix(in srgb, var(--danger), var(--text) 8%),
+      inset 0 0 0 1px color-mix(in srgb, var(--danger), transparent 76%);
+  }
+  50% {
+    box-shadow:
+      inset 5px 0 0 color-mix(in srgb, var(--danger), var(--text) 18%),
+      inset 0 0 20px color-mix(in srgb, var(--danger), transparent 88%),
+      inset 0 0 0 1px color-mix(in srgb, var(--danger), transparent 58%);
+  }
+}
+
+.status-block.checkmate-reveal {
+  border-color: color-mix(in srgb, var(--danger), var(--accent) 34%);
+  background:
+    radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--danger), transparent 72%) 0 3.4rem, transparent 3.6rem),
+    var(--surface);
+}
+
+.side-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.side-actions button {
+  min-height: 52px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.98rem;
+  font-weight: 900;
+}
+
+.trend-block {
+  flex: 0 0 136px;
+  min-height: 136px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 9px;
+  overflow: hidden;
+}
+
+.trend-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trend-title span {
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.trend-line {
+  position: relative;
+  min-height: 92px;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.trend-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.trend-zero {
+  stroke: color-mix(in srgb, var(--muted), transparent 45%);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+#trendPath {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+#trendDot {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2), transparent 76%);
+  transform: translate(-50%, -50%);
+  transition:
+    left 180ms ease,
+    top 180ms ease;
+}
+
+.board.editor-mode .square {
+  cursor: pointer;
+}
+
+.board.editor-mode .square:hover {
+  box-shadow: inset 0 0 0 999px rgba(188, 126, 195, 0.18);
+}
+
+.board.editor-mode .square.held {
+  box-shadow: inset 0 0 0 999px rgba(238, 98, 102, 0.22);
+}

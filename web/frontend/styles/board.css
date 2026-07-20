@@ -1,0 +1,1258 @@
+.app-shell {
+  --board-size: clamp(620px, calc(100vh - 230px), 720px);
+  --player-row: 82px;
+  --eval-rail-width: 72px;
+  --side-width: 390px;
+  --editor-column-width: 306px;
+  --play-height: calc(var(--board-size) + var(--player-row) + var(--player-row));
+  --play-width: calc(var(--eval-rail-width) + var(--board-size));
+  --eval-track-height: min(704px, calc(var(--board-size) - 16px));
+  width: min(calc(var(--play-width) + var(--side-width) + 18px), calc(100vw - 28px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: max(14px, calc((100vh - var(--play-height)) / 2)) 0 18px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--play-width) var(--side-width);
+  gap: 18px;
+  align-items: start;
+  justify-content: center;
+}
+
+.focus-mode-button {
+  position: fixed;
+  z-index: 12;
+  top: 18px;
+  right: 18px;
+  min-width: 76px;
+  min-height: 38px;
+  border-color: color-mix(in srgb, var(--accent), var(--edge) 56%);
+  background: color-mix(in srgb, var(--surface), transparent 8%);
+  color: var(--text);
+  font-size: 0.78rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg), transparent 42%);
+}
+
+.focus-mode-button[hidden] {
+  display: none;
+}
+
+.focus-mode-button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app-shell[data-focus="true"] {
+  width: min(var(--play-width), calc(100vw - 28px));
+  grid-template-columns: var(--play-width);
+}
+
+.app-shell[data-focus="true"] .side-panel {
+  display: none;
+}
+
+@media (min-width: 1241px) {
+  .app-shell[data-focus="true"] {
+    --board-size: clamp(660px, calc(100vh - 190px), 820px);
+    --eval-track-height: min(804px, calc(var(--board-size) - 16px));
+  }
+
+  .side-panel {
+    transform: translateY(-10px);
+  }
+}
+
+.app-shell[data-mode="editor"] {
+  width: min(calc(var(--play-width) + var(--editor-column-width) * 2 + 30px), calc(100vw - 28px));
+  grid-template-columns: var(--play-width) calc(var(--editor-column-width) * 2 + 12px);
+}
+
+.board-area {
+  width: var(--play-width);
+  min-width: 0;
+}
+
+.board-header {
+  display: none;
+}
+
+.eyebrow,
+.panel-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 2.1rem;
+}
+
+h2 {
+  font-size: 1.2rem;
+}
+
+.status-pill {
+  min-width: 150px;
+  max-width: 280px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 12px 26px var(--shadow);
+}
+
+.play-layout {
+  display: grid;
+  grid-template-columns: var(--eval-rail-width) var(--board-size);
+  gap: 0;
+  align-items: start;
+  justify-content: start;
+}
+
+.eval-rail {
+  height: var(--play-height);
+  position: relative;
+}
+
+.eval-chip {
+  position: absolute;
+  top: calc(var(--player-row) + (var(--board-size) - var(--eval-track-height)) / 2 - 42px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 58px;
+  min-height: 34px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.eval-track {
+  position: absolute;
+  top: calc(var(--player-row) + (var(--board-size) - var(--eval-track-height)) / 2);
+  left: 50%;
+  transform: translateX(-50%);
+  overflow: hidden;
+  width: 42px;
+  height: var(--eval-track-height);
+  margin: 0;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--black-eval);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.eval-fill {
+  position: absolute;
+  inset: auto 0 0;
+  height: 50%;
+  background: var(--white-eval);
+  transition: height 180ms ease;
+}
+
+.eval-labels {
+  display: none;
+}
+
+.board-column {
+  width: var(--board-size);
+  display: grid;
+  grid-template-rows: var(--player-row) var(--board-size) var(--player-row);
+  gap: 0;
+}
+
+.player-card {
+  position: relative;
+  z-index: 0;
+  min-height: 74px;
+  height: 74px;
+  margin: 4px 0;
+  padding: 8px 16px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.player-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.player-card.engine-side {
+  border-color: color-mix(in srgb, var(--accent), var(--edge) 38%);
+  background:
+    radial-gradient(circle at 9% 50%, color-mix(in srgb, var(--accent), transparent 74%) 0 6.8rem, transparent 7rem),
+    radial-gradient(circle at 58% 50%, color-mix(in srgb, var(--accent-2), transparent 91%) 0 9rem, transparent 9.2rem),
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-2), var(--accent) 12%), var(--surface));
+}
+
+.player-card.engine-side::after {
+  content: "";
+  position: absolute;
+  inset: -7px -5px;
+  z-index: 0;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 62%);
+  border-radius: 16px;
+  opacity: 0.62;
+  pointer-events: none;
+}
+
+.player-card.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 25%);
+}
+
+.player-card.flagged {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.player-name {
+  min-width: 0;
+  text-overflow: ellipsis;
+  display: grid;
+  gap: 3px;
+  padding-left: 46px;
+  position: relative;
+}
+
+.player-name::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--white-eval);
+  transform: translateY(-50%);
+}
+
+.player-card[data-colour="black"] .player-name::before {
+  background: var(--black-eval);
+}
+
+.player-presence[hidden] {
+  display: none;
+}
+
+.sgurr-core[hidden] {
+  display: none;
+}
+
+.player-presence {
+  width: 58px;
+  height: 58px;
+  margin-left: 1px;
+  margin-right: 4px;
+}
+
+/* In the engine arena the board-side presences adhere to their colours,
+   matching the duel instances in the side panel: White pale and luminous,
+   Black deep and shadowed. */
+body.watch-mode .player-card[data-colour="white"] .player-presence {
+  filter: saturate(0.62) brightness(1.42) contrast(1.02);
+}
+
+body.watch-mode .player-card[data-colour="black"] .player-presence {
+  filter: saturate(1.55) brightness(0.82) contrast(1.55);
+}
+
+.player-card.engine-side .player-name {
+  padding-left: 0;
+}
+
+.player-card.engine-side .player-name::before {
+  display: none;
+}
+
+.player-card.engine-side .player-name strong {
+  font-size: 1.28rem;
+}
+
+.player-card.engine-side .player-name small {
+  color: color-mix(in srgb, var(--accent), var(--muted) 34%);
+}
+
+.player-card.active .player-name::before {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent), transparent 78%);
+}
+
+.player-card.active .player-clock::before {
+  content: "";
+  position: absolute;
+  left: -15px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 80%);
+}
+
+.player-name strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1.14rem;
+  font-weight: 900;
+  line-height: 0.95;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-name small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.player-clock {
+  position: relative;
+  min-width: 102px;
+  min-height: 40px;
+  padding: 7px 14px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.04rem;
+  font-weight: 900;
+}
+
+.board-wrap {
+  position: relative;
+  width: var(--board-size);
+  height: var(--board-size);
+  overflow: hidden;
+}
+
+.board {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  overflow: hidden;
+  border: 4px solid color-mix(in srgb, var(--edge), var(--black-eval) 38%);
+  border-radius: 0;
+  box-shadow: none;
+  touch-action: none;
+}
+
+.square {
+  position: relative;
+  border: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  container-type: inline-size;
+  cursor: default;
+}
+
+.square.light {
+  background: var(--board-light);
+}
+
+.square.dark {
+  background: var(--board-dark);
+}
+
+.square.last {
+  box-shadow: inset 0 0 0 999px var(--last-move);
+}
+
+.square.selected {
+  box-shadow: inset 0 0 0 999px var(--selected);
+}
+
+.square.legal::after {
+  content: "";
+  position: absolute;
+  width: 24%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--legal);
+}
+
+.square.capture::after {
+  width: 74%;
+  border: 4px solid var(--legal);
+  background: transparent;
+}
+
+.board.premove-mode .square.selected {
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent-2), transparent 54%);
+}
+
+.square.premove-legal::after {
+  background: color-mix(in srgb, var(--accent-2), var(--text) 10%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-2), transparent 38%);
+}
+
+.square.premove-legal.capture::after {
+  border-color: color-mix(in srgb, var(--accent-2), var(--text) 10%);
+  background: transparent;
+}
+
+.square.premove-source {
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent-2), transparent 68%);
+}
+
+.square.premove-target {
+  box-shadow:
+    inset 0 0 0 999px color-mix(in srgb, var(--accent-2), transparent 54%),
+    inset 0 0 0 4px color-mix(in srgb, var(--accent-2), var(--text) 12%);
+}
+
+.square.playable {
+  cursor: pointer;
+}
+
+.square.drag-source .piece {
+  opacity: 0;
+}
+
+.square.drag-over {
+  box-shadow: inset 0 0 0 999px rgba(220, 178, 91, 0.26);
+}
+
+.square.king-check::before,
+.square.king-check::after,
+.square.king-mated::before,
+.square.king-mated::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.square.king-check::before {
+  inset: 0;
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 34%, color-mix(in srgb, var(--danger), transparent 72%) 58%, color-mix(in srgb, var(--danger), transparent 44%) 100%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--danger), transparent 26%),
+    inset 0 0 24px color-mix(in srgb, var(--danger), transparent 64%),
+    0 0 22px color-mix(in srgb, var(--danger), transparent 56%);
+  animation: check-warning-breathe 2.4s ease-in-out infinite;
+}
+
+.square.king-check::after {
+  inset: 8%;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--text), var(--text)) left top / 24% 2px no-repeat,
+    linear-gradient(var(--text), var(--text)) left top / 2px 24% no-repeat,
+    linear-gradient(var(--text), var(--text)) right top / 24% 2px no-repeat,
+    linear-gradient(var(--text), var(--text)) right top / 2px 24% no-repeat,
+    linear-gradient(var(--text), var(--text)) left bottom / 24% 2px no-repeat,
+    linear-gradient(var(--text), var(--text)) left bottom / 2px 24% no-repeat,
+    linear-gradient(var(--text), var(--text)) right bottom / 24% 2px no-repeat,
+    linear-gradient(var(--text), var(--text)) right bottom / 2px 24% no-repeat;
+  opacity: 0.72;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--danger), transparent 22%));
+  animation: check-lock-breathe 2.4s ease-in-out infinite;
+}
+
+.square.king-check .piece {
+  z-index: 2;
+  filter:
+    drop-shadow(0 0 7px color-mix(in srgb, var(--danger), transparent 20%))
+    drop-shadow(0 3px 0 rgba(0, 0, 0, 0.34));
+  animation: checked-king-lift 2.4s ease-in-out infinite;
+}
+
+.square.king-mated::before {
+  inset: 0;
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, #000, transparent 16%) 0 24%, color-mix(in srgb, var(--danger), transparent 58%) 25% 58%, transparent 60%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--danger), transparent 18%),
+    0 0 28px color-mix(in srgb, var(--danger), transparent 44%);
+  animation: mate-lock-fade var(--mate-duration, 3000ms) ease-out forwards;
+}
+
+.square.king-mated::after {
+  inset: -18%;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--danger), var(--text) 10%);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--danger), transparent 42%);
+  animation: mate-lock-contract var(--mate-duration, 3000ms) cubic-bezier(0.42, 0, 0.18, 1) forwards;
+}
+
+.board.animations-off .square.king-check::before,
+.board.animations-off .square.king-check::after,
+.board.animations-off .square.king-check .piece {
+  animation: none;
+}
+
+@keyframes check-warning-breathe {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes check-lock-breathe {
+  0%,
+  100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes checked-king-lift {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.018);
+  }
+}
+
+@keyframes mate-lock-fade {
+  0%,
+  36% {
+    opacity: 1;
+  }
+  78%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mate-lock-contract {
+  0% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+  18% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.72;
+    transform: scale(0.66);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+.piece,
+.drag-piece,
+.move-ghost,
+.palette-piece,
+.promo-piece,
+.captured-piece {
+  position: relative;
+  display: grid;
+  place-items: center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.piece {
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 6%;
+}
+
+.piece-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.drag-piece,
+.move-ghost {
+  position: fixed;
+  z-index: 60;
+  width: var(--piece-size, 72px);
+  height: var(--piece-size, 72px);
+  padding: calc(var(--piece-size, 72px) * 0.06);
+}
+
+.drag-piece {
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.38));
+}
+
+.move-ghost {
+  left: 0;
+  top: 0;
+  transition: transform var(--move-duration, 140ms) var(--move-ease, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: transform;
+}
+
+.board-wrap.checkmate-reveal .board {
+  animation: board-mate-dim var(--mate-duration, 3000ms) ease-in forwards;
+}
+
+.mate-devour {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mate-devour[hidden] {
+  display: none;
+}
+
+.mate-devour::before,
+.mate-devour::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mate-devour::before {
+  z-index: 1;
+  background:
+    radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), transparent 0 9%, color-mix(in srgb, var(--danger), transparent 90%) 18%, transparent 34%),
+    radial-gradient(circle at 50% 50%, transparent 0 15%, color-mix(in srgb, var(--bg), transparent 48%) 52%, color-mix(in srgb, #000, transparent 18%) 100%);
+  animation: mate-field-darken var(--mate-duration, 4200ms) ease-in forwards;
+}
+
+.mate-devour::after {
+  z-index: 2;
+  background:
+    /* the mark: a danger ring on the king's square */
+    radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), transparent 0 7%, color-mix(in srgb, var(--danger), transparent 34%) 7.3% 7.9%, transparent 8.3%),
+    /* the summons: a faint accent ring where the eye is about to open */
+    radial-gradient(circle at var(--eye-x, 50%) var(--eye-y, 50%), transparent 0 15%, color-mix(in srgb, var(--accent), transparent 58%) 15.3% 15.8%, transparent 16.2%);
+  animation: mate-signal-converge var(--mate-duration, 4200ms) ease-in-out forwards;
+}
+
+/* Sparks wheeling inward as the eye feeds — loose light dragged into the
+   pupil ahead of the king itself. */
+.mate-sparks {
+  position: absolute;
+  z-index: 3;
+  left: var(--eye-x, 50%);
+  top: var(--eye-y, 50%);
+  width: 44%;
+  height: 44%;
+  pointer-events: none;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g fill='%23ffd98f'><circle cx='50' cy='6' r='1.4' opacity='.9'/><circle cx='83' cy='22' r='1' opacity='.7'/><circle cx='94' cy='54' r='1.3' opacity='.8'/><circle cx='76' cy='84' r='.9' opacity='.65'/><circle cx='44' cy='95' r='1.2' opacity='.8'/><circle cx='14' cy='78' r='1' opacity='.7'/><circle cx='4' cy='44' r='1.3' opacity='.85'/><circle cx='20' cy='14' r='.9' opacity='.65'/><circle cx='64' cy='12' r='.7' opacity='.55'/><circle cx='33' cy='89' r='.7' opacity='.55'/></g></svg>") center / contain no-repeat;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1.9);
+  animation: mate-sparks-spiral var(--mate-duration, 4200ms) cubic-bezier(0.5, 0, 0.7, 0.4) forwards;
+}
+
+/* Shockwaves: reality flinches twice as the king goes down the throat. */
+.mate-shockwave {
+  position: absolute;
+  z-index: 3;
+  left: var(--eye-x, 50%);
+  top: var(--eye-y, 50%);
+  width: 14%;
+  height: 14%;
+  pointer-events: none;
+  border: 2px solid color-mix(in srgb, var(--accent), transparent 26%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--accent), transparent 62%),
+    inset 0 0 12px color-mix(in srgb, var(--accent-2), transparent 70%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
+  animation: mate-shockwave var(--mate-duration, 4200ms) cubic-bezier(0.16, 0.66, 0.28, 1) forwards;
+}
+
+.mate-shockwave.wave-b {
+  border-color: color-mix(in srgb, var(--danger), transparent 40%);
+  animation-delay: calc(var(--mate-duration, 4200ms) * 0.045);
+}
+
+.mate-devour .mate-devour-core {
+  --core-border: color-mix(in srgb, var(--accent), var(--danger) 35%);
+  --core-aura-size: calc(var(--board-size) * 0.11);
+  --core-aura-fade: 18%;
+  --core-inner-color: color-mix(in srgb, var(--accent), var(--danger) 22%);
+  --core-inner-aura-size: calc(var(--board-size) * 0.08);
+  --core-inner-glow: color-mix(in srgb, var(--accent-2), transparent 12%);
+  --core-ring-opacity: 1;
+  --core-ring-fade: 8%;
+  position: absolute;
+  z-index: 4;
+  left: var(--eye-x, 50%);
+  top: var(--eye-y, 50%);
+  width: 32%;
+  height: 32%;
+  border-width: 2px;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.24);
+  animation: mate-core-arrive var(--mate-duration, 4200ms) cubic-bezier(0.42, 0, 0.16, 1) forwards;
+}
+
+.mate-devour .mate-devour-core::after {
+  inset: -18%;
+  border-width: 2px;
+}
+
+/* The pupil fixes on the king, dilates hugely to swallow it, then narrows
+   to a sated slit. Extra specificity so this beats the shared wander rule
+   in core.css, which comes later in the cascade. */
+.mate-devour .mate-devour-core .core-pupil {
+  animation: mate-pupil-feast var(--mate-duration, 4200ms) ease-in-out forwards;
+}
+
+.mate-devour-piece {
+  position: absolute;
+  z-index: 5;
+  left: var(--mate-x, 50%);
+  top: var(--mate-y, 50%);
+  width: 12.5%;
+  height: 12.5%;
+  padding: 0.7%;
+  display: grid;
+  place-items: center;
+  filter:
+    drop-shadow(0 0 10px color-mix(in srgb, var(--danger), transparent 24%))
+    drop-shadow(0 16px 16px rgba(0, 0, 0, 0.42));
+  transform: translate(-50%, -50%);
+  animation: mate-piece-taken var(--mate-duration, 4200ms) cubic-bezier(0.42, 0, 0.12, 1) forwards;
+}
+
+.mate-devour-piece .piece-image {
+  width: 100%;
+  height: 100%;
+  /* the king trembles when it realises, before it is torn loose */
+  animation: mate-piece-tremble var(--mate-duration, 4200ms) ease-in-out forwards;
+}
+
+@keyframes board-mate-dim {
+  0% {
+    filter: saturate(1) brightness(1);
+  }
+  28% {
+    filter: saturate(0.92) brightness(0.9);
+  }
+  100% {
+    filter: saturate(0.58) brightness(0.48);
+  }
+}
+
+@keyframes mate-field-darken {
+  0%,
+  18% {
+    opacity: 0;
+  }
+  54% {
+    opacity: 0.56;
+  }
+  100% {
+    opacity: 0.86;
+  }
+}
+
+@keyframes mate-signal-converge {
+  0%,
+  14% {
+    opacity: 0;
+  }
+  34% {
+    opacity: 0.78;
+  }
+  74% {
+    opacity: 0.5;
+  }
+  92%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The eye does not summon the king to the centre — it comes for him. It
+   materialises directly overhead, regards him for a long beat, feeds, then
+   blinks shut and is gone. */
+@keyframes mate-core-arrive {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(0.12);
+    filter: saturate(1.4) brightness(2.2) blur(6px);
+  }
+  20% {
+    opacity: 0.95;
+    transform: translate(-50%, -53%) scale(0.86);
+    filter: saturate(1.35) brightness(1.15) blur(1px);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: saturate(1.35) brightness(1) blur(0);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.04);
+    filter: saturate(1.5) brightness(1.08);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.14);
+    filter: saturate(1.7) brightness(1.3);
+  }
+  /* the blink: the whole eye snaps shut on the king */
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2, 0.05);
+    filter: saturate(2) brightness(2.6);
+  }
+  88% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.5, 0.4);
+    filter: saturate(2.1) brightness(2.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.03);
+    filter: saturate(2.2) brightness(3);
+  }
+}
+
+/* The king holds his square, trembling — then is torn loose, stretched
+   thin toward the pupil, and goes down spinning. */
+@keyframes mate-piece-taken {
+  0%,
+  30% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  44% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -66%) scale(1.08) rotate(-4deg);
+  }
+  60% {
+    left: var(--eye-x, 50%);
+    top: var(--eye-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.62, 1.34) rotate(14deg);
+    filter:
+      drop-shadow(0 0 12px color-mix(in srgb, var(--text), transparent 18%))
+      drop-shadow(0 0 28px color-mix(in srgb, var(--accent), transparent 22%));
+  }
+  72% {
+    left: var(--eye-x, 50%);
+    top: var(--eye-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.24, 0.52) rotate(150deg);
+    filter: drop-shadow(0 0 30px color-mix(in srgb, var(--accent), transparent 12%));
+  }
+  80% {
+    left: var(--eye-x, 50%);
+    top: var(--eye-y, 50%);
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(0.07) rotate(340deg);
+    filter: drop-shadow(0 0 36px color-mix(in srgb, var(--accent-2), transparent 6%));
+  }
+  86%,
+  100% {
+    left: var(--eye-x, 50%);
+    top: var(--eye-y, 50%);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.02) rotate(420deg);
+  }
+}
+
+@keyframes mate-piece-tremble {
+  0%,
+  16% {
+    transform: none;
+  }
+  20% {
+    transform: translate(-1.6%, 0.9%) rotate(-2deg);
+  }
+  23% {
+    transform: translate(1.7%, -0.7%) rotate(2.4deg);
+  }
+  26% {
+    transform: translate(-1.9%, -0.5%) rotate(-3deg);
+  }
+  29% {
+    transform: translate(1.5%, 1.1%) rotate(2.2deg);
+  }
+  32% {
+    transform: translate(-1.1%, 0.4%) rotate(-1.4deg);
+  }
+  35%,
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes mate-pupil-feast {
+  0%,
+  26% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  66% {
+    transform: scale(1.18);
+    opacity: 0.8;
+  }
+  /* dilates to take the king in whole */
+  76% {
+    transform: scale(1.8);
+    opacity: 0.95;
+  }
+  86%,
+  100% {
+    transform: scale(0.55);
+    opacity: 0.4;
+  }
+}
+
+@keyframes mate-sparks-spiral {
+  0%,
+  34% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg) scale(1.9);
+  }
+  48% {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) rotate(80deg) scale(1.3);
+  }
+  70% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) rotate(240deg) scale(0.4);
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(340deg) scale(0.05);
+  }
+}
+
+@keyframes mate-shockwave {
+  0%,
+  74% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  78% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.4);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Human victory: Sgurr is slain, not fed. The board floods with light   */
+/* instead of draining; the eye arrives already beaten — guttering like  */
+/* a faulty lamp, colour draining, pupil shrunk to a terrified pinprick  */
+/* — convulses, and ruptures in a blast of white. Its king quakes        */
+/* through the death-throes, then topples and dissolves upward into      */
+/* light.                                                                */
+/* ------------------------------------------------------------------ */
+
+.board-wrap.checkmate-reveal.human-victory .board {
+  animation: board-mate-radiance var(--mate-duration, 4200ms) ease-in forwards;
+}
+
+.mate-devour.human-victory::before {
+  background:
+    radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), color-mix(in srgb, var(--white-eval), transparent 70%) 0 10%, transparent 32%),
+    radial-gradient(circle at 50% 50%, transparent 0 20%, color-mix(in srgb, var(--white-eval), transparent 82%) 70%, color-mix(in srgb, var(--text), transparent 72%) 100%);
+  animation: mate-field-radiance var(--mate-duration, 4200ms) ease-in forwards;
+}
+
+.mate-devour.human-victory::after {
+  background:
+    /* the mark: a victory-white ring on Sgurr's king */
+    radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), transparent 0 7%, color-mix(in srgb, var(--white-eval), transparent 26%) 7.3% 7.9%, transparent 8.3%),
+    /* the omen: a danger ring where the dying eye will appear */
+    radial-gradient(circle at var(--eye-x, 50%) var(--eye-y, 50%), transparent 0 15%, color-mix(in srgb, var(--danger), transparent 55%) 15.3% 15.8%, transparent 16.2%);
+}
+
+.mate-devour.human-victory .mate-devour-core {
+  --core-border: color-mix(in srgb, var(--danger), var(--surface-3) 40%);
+  animation: mate-core-slain var(--mate-duration, 4200ms) cubic-bezier(0.3, 0, 0.3, 1) forwards;
+}
+
+.mate-devour.human-victory .mate-devour-core .core-pupil {
+  animation: mate-pupil-terror var(--mate-duration, 4200ms) ease-in-out forwards;
+}
+
+.mate-devour.human-victory .mate-devour-piece {
+  animation: mate-piece-fall var(--mate-duration, 4200ms) cubic-bezier(0.36, 0, 0.3, 1) forwards;
+}
+
+.mate-devour.human-victory .mate-sparks {
+  animation: mate-sparks-burst var(--mate-duration, 4200ms) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.mate-devour.human-victory .mate-shockwave {
+  border-color: color-mix(in srgb, var(--white-eval), transparent 18%);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--white-eval), transparent 48%),
+    inset 0 0 12px color-mix(in srgb, var(--text), transparent 60%);
+  animation: mate-shockwave-burst var(--mate-duration, 4200ms) cubic-bezier(0.16, 0.66, 0.28, 1) forwards;
+}
+
+.mate-devour.human-victory .mate-shockwave.wave-b {
+  border-color: color-mix(in srgb, var(--danger), transparent 30%);
+  animation-delay: calc(var(--mate-duration, 4200ms) * 0.05);
+}
+
+@keyframes board-mate-radiance {
+  0% {
+    filter: saturate(1) brightness(1);
+  }
+  30% {
+    filter: saturate(1.04) brightness(1.06);
+  }
+  100% {
+    filter: saturate(1.16) brightness(1.32) contrast(0.94);
+  }
+}
+
+@keyframes mate-field-radiance {
+  0%,
+  16% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0.78;
+  }
+}
+
+@keyframes mate-core-slain {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(0.14);
+    filter: saturate(0.9) brightness(1.6) blur(5px);
+  }
+  16% {
+    opacity: 0.9;
+    transform: translate(-50%, -52%) scale(0.9);
+    filter: saturate(0.85) brightness(1.05) blur(1px);
+  }
+  /* guttering: the light inside it stutters */
+  20% {
+    opacity: 0.4;
+  }
+  24% {
+    opacity: 0.95;
+  }
+  28% {
+    opacity: 0.55;
+  }
+  32% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: saturate(0.8) brightness(0.95) blur(0);
+  }
+  /* convulsions: colour draining with every spasm */
+  46% {
+    transform: translate(-51.5%, -49%) scale(1.01) rotate(-2deg);
+    filter: saturate(0.66) brightness(0.9);
+  }
+  54% {
+    transform: translate(-48.5%, -51%) scale(0.99) rotate(2deg);
+    filter: saturate(0.6) brightness(1.15);
+  }
+  60% {
+    transform: translate(-51%, -50.5%) scale(1.02) rotate(-3deg);
+    filter: saturate(0.5) brightness(0.85);
+  }
+  66% {
+    transform: translate(-49%, -49.5%) scale(0.97) rotate(3deg);
+    filter: saturate(0.45) brightness(1.3);
+  }
+  /* rupture */
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3);
+    filter: saturate(0.4) brightness(2.6) blur(2px);
+  }
+  80%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.9);
+    filter: saturate(0.3) brightness(3) blur(14px);
+  }
+}
+
+@keyframes mate-pupil-terror {
+  0%,
+  30% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  /* pinprick: fear */
+  40% {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  66% {
+    transform: scale(0.22);
+    opacity: 0.95;
+  }
+  /* blown wide at the moment of death */
+  72% {
+    transform: scale(2.2);
+    opacity: 0.2;
+  }
+  80%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes mate-piece-fall {
+  0%,
+  70% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  /* recoil from the blast */
+  76% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 1;
+    transform: translate(-50%, -54%) rotate(-6deg);
+  }
+  84% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 0.9;
+    transform: translate(-44%, -46%) rotate(58deg);
+  }
+  90% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 0.7;
+    transform: translate(-40%, -44%) rotate(84deg);
+    filter: blur(1px) drop-shadow(0 0 18px color-mix(in srgb, var(--white-eval), transparent 30%));
+  }
+  100% {
+    left: var(--mate-x, 50%);
+    top: var(--mate-y, 50%);
+    opacity: 0;
+    transform: translate(-38%, -62%) rotate(88deg);
+    filter: blur(5px) drop-shadow(0 0 30px color-mix(in srgb, var(--white-eval), transparent 10%));
+  }
+}
+
+@keyframes mate-sparks-burst {
+  0%,
+  68% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.15);
+  }
+  74% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) rotate(60deg) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(140deg) scale(2.6);
+  }
+}
+
+@keyframes mate-shockwave-burst {
+  0%,
+  70% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  74% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.25);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.8);
+  }
+}
+
+.coord {
+  position: absolute;
+  z-index: 2;
+  color: color-mix(in srgb, var(--text), transparent 26%);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.coord.rank {
+  top: 5px;
+  left: 5px;
+}
+
+.coord.file {
+  right: 5px;
+  bottom: 4px;
+}

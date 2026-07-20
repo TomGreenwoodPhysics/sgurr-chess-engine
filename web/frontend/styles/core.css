@@ -1,0 +1,1061 @@
+.sgurr-core {
+  --core-border: color-mix(in srgb, var(--accent), #150b20 56%);
+  --core-aura-size: 24px;
+  --core-aura-fade: 68%;
+  --core-inner-color: var(--danger);
+  --core-inner-aura-size: 20px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 52%);
+  --core-ring-opacity: 0.72;
+  --core-ring-fade: 38%;
+  --core-scale-low: 1;
+  --core-scale-mid: 1.045;
+  --core-sat-low: 1.12;
+  --core-sat-mid: 1.28;
+  --core-sat-late: 1.2;
+  --core-bright-low: 1;
+  --core-bright-mid: 1.06;
+  --core-bright-late: 0.98;
+  --core-size: 46px;
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--core-border);
+  border-radius: 46% 54% 42% 58% / 52% 41% 59% 48%;
+  background:
+    /* warm wisps, dimmer and deeper in the murk */
+    radial-gradient(ellipse at 30% 72%, color-mix(in srgb, var(--accent), transparent 83%) 0 16%, transparent 36%),
+    radial-gradient(ellipse at 72% 30%, color-mix(in srgb, var(--accent-2), transparent 85%) 0 14%, transparent 32%),
+    radial-gradient(28% 10% at 60% 82%, color-mix(in srgb, var(--accent), transparent 88%) 0 55%, transparent 100%),
+    /* dust motes migrating around the band */
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g fill='%23ffdf9e' opacity='.9'><circle cx='8' cy='50' r='.5' opacity='.45'/><circle cx='15' cy='25' r='.4' opacity='.4'/><circle cx='30' cy='8' r='.35' opacity='.35'/><circle cx='70' cy='7' r='.5' opacity='.45'/><circle cx='90' cy='28' r='.4' opacity='.4'/><circle cx='93' cy='60' r='.55' opacity='.5'/><circle cx='80' cy='88' r='.4' opacity='.4'/><circle cx='45' cy='94' r='.35' opacity='.35'/><circle cx='20' cy='80' r='.45' opacity='.4'/></g></svg>"),
+    /* faint warm halo just outside the inner face — soft-edged, so it reads
+       as light bleeding from the eye rather than a drawn ring */
+    radial-gradient(circle at 50% 50%, transparent 0 37%, color-mix(in srgb, var(--accent), transparent 78%) 40% 41%, transparent 45%),
+    /* Fresnel: the silhouette falls away into deep dark glass */
+    radial-gradient(circle at 48% 50%, transparent 0 62%, color-mix(in srgb, var(--black-eval), #000 22%) 83%, #000 100%),
+    conic-gradient(from 28deg, color-mix(in srgb, var(--black-eval), var(--accent) 15%), color-mix(in srgb, var(--black-eval), var(--accent-2) 13%), color-mix(in srgb, var(--black-eval), var(--accent) 8%), color-mix(in srgb, var(--black-eval), #000 22%), color-mix(in srgb, var(--black-eval), var(--accent) 12%), color-mix(in srgb, var(--black-eval), var(--accent) 15%)),
+    color-mix(in srgb, var(--black-eval), #000 42%);
+  background-size:
+    118% 118%, 118% 118%, 122% 122%, 108% 108%,
+    100% 100%, 100% 100%, 124% 124%;
+  background-position:
+    50% 50%, 50% 50%, 50% 50%, 50% 50%,
+    center, center, 50% 50%;
+  background-repeat: no-repeat;
+  display: grid;
+  place-items: center;
+  filter: saturate(1.35) contrast(1.08) brightness(0.96);
+  box-shadow:
+    /* rim hairline */
+    inset 0 0 0 calc(var(--core-size) * 0.004) color-mix(in srgb, var(--text), transparent 62%),
+    /* iris band: one warm glow just inside the rim grading smoothly through
+       shadow to a faint cool inner edge — a continuous iris rather than
+       concentric stripes */
+    inset 0 0 calc(var(--core-size) * 0.035) calc(var(--core-size) * 0.018) color-mix(in srgb, var(--accent), transparent 56%),
+    inset 0 0 calc(var(--core-size) * 0.07) calc(var(--core-size) * 0.05) color-mix(in srgb, #000, transparent 40%),
+    inset 0 0 calc(var(--core-size) * 0.05) calc(var(--core-size) * 0.085) color-mix(in srgb, var(--accent-2), transparent 82%),
+    /* inner darkening for depth */
+    inset 0 calc(var(--core-size) * -0.085) calc(var(--core-size) * 0.14) color-mix(in srgb, #000, transparent 55%),
+    /* outer glow: the state-driven aura keeps mood/status legible on every
+       core, plus a wide fixed two-tone bloom */
+    0 0 var(--core-aura-size) color-mix(in srgb, var(--accent), transparent var(--core-aura-fade)),
+    0 0 calc(var(--core-size) * 0.16) color-mix(in srgb, var(--accent-2), transparent 78%);
+  transition:
+    --core-border 300ms ease,
+    --core-aura-size 300ms ease,
+    --core-aura-fade 300ms ease,
+    --core-inner-color 300ms ease,
+    --core-inner-aura-size 300ms ease,
+    --core-inner-glow 300ms ease,
+    --core-ring-opacity 300ms ease,
+    --core-ring-fade 300ms ease,
+    border-color 520ms ease,
+    box-shadow 640ms ease,
+    filter 640ms ease,
+    opacity 520ms ease;
+  animation:
+    boss-core-pulse 9.5s ease-in-out infinite,
+    boss-core-churn 23s ease-in-out infinite;
+  /* --core-phase (set per core by JS) starts every eye at its own point in
+     the shared cycles, so multiple cores never move in lockstep. */
+  animation-delay: var(--core-phase, 0s);
+}
+
+.sgurr-core::before,
+.sgurr-core::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transition:
+    border-color 520ms ease,
+    box-shadow 640ms ease,
+    background-color 300ms ease,
+    opacity 520ms ease,
+    inset 520ms ease;
+}
+
+/* The face: deep translucent glass. A molten heart wanders with its glow
+   echo, two spark fields drift in parallax, and the pupil's under-shadow
+   passes across between them. The state inner-glow keeps status legible. */
+.sgurr-core::before {
+  inset: 11%;
+  border-radius: 55% 45% 49% 51% / 45% 58% 42% 55%;
+  background-color: color-mix(in srgb, var(--black-eval), #000 40%);
+  background-image:
+    /* broad soft sheen across the upper glass — no hard catchlight, so it
+       never resolves into a glossy eye */
+    radial-gradient(56% 40% at 40% 33%, color-mix(in srgb, var(--accent), transparent 80%) 0 34%, transparent 100%),
+    radial-gradient(16% 7% at 30% 37%, color-mix(in srgb, var(--text), transparent 90%) 0 60%, transparent 100%),
+    /* the pupil's under-shadow: a dark drifting mass beneath the true pupil
+       (the .core-pupil child, painted above the cosmos light); on its own it
+       carries the pupil for reduced-motion users, who get no child layers */
+    radial-gradient(36% 32% at 50% 50%, color-mix(in srgb, #000, transparent 16%) 0 55%, color-mix(in srgb, #000, transparent 44%) 74%, transparent 90%),
+    /* near spark field */
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='b'><feGaussianBlur stdDeviation='0.6'/></filter></defs><g filter='url(%23b)' fill='%23ffd98f'><circle cx='39' cy='57' r='1.5' opacity='.25'/><circle cx='63' cy='41' r='1.2' opacity='.2'/><circle cx='55' cy='71' r='1.1' opacity='.18'/></g><g fill='%23ffe9b8'><circle cx='38' cy='58' r='.85' opacity='.85'/><circle cx='62' cy='40' r='.6' opacity='.7'/><circle cx='55' cy='70' r='.5' opacity='.6'/><circle cx='70' cy='57' r='.75' opacity='.7'/><circle cx='45' cy='38' r='.45' opacity='.55'/><circle cx='30' cy='47' r='.4' opacity='.5'/><circle cx='66' cy='72' r='.35' opacity='.45'/><circle cx='52' cy='51' r='.3' opacity='.4'/><path d='M35.8 58 h4.4 M38 55.8 v4.4' stroke='%23ffe9b8' stroke-width='.22' opacity='.6' fill='none'/><path d='M60.4 40 h3.2 M62 38.4 v3.2' stroke='%23ffe9b8' stroke-width='.18' opacity='.45' fill='none'/></g></svg>"),
+    /* far spark field: smaller, dimmer, drifting the other way */
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='d'><feGaussianBlur stdDeviation='0.5'/></filter></defs><g filter='url(%23d)' fill='%23f0c684'><circle cx='26' cy='60' r='.45' opacity='.4'/><circle cx='47' cy='27' r='.35' opacity='.35'/><circle cx='58' cy='62' r='.4' opacity='.38'/><circle cx='72' cy='36' r='.3' opacity='.3'/><circle cx='36' cy='30' r='.3' opacity='.3'/><circle cx='64' cy='80' r='.35' opacity='.32'/><circle cx='24' cy='42' r='.25' opacity='.28'/><circle cx='78' cy='64' r='.28' opacity='.28'/><circle cx='48' cy='86' r='.3' opacity='.3'/></g></svg>"),
+    /* the heart's glow echo: a faint halo that travels with it */
+    radial-gradient(circle at 56% 60%, transparent 0 22%, color-mix(in srgb, var(--accent), transparent 85%) 26% 28%, transparent 33%),
+    /* the ember heart: a small contained glow sunk deep in dark glass,
+       most of it shadow so the light feels withheld */
+    radial-gradient(circle at 56% 60%, color-mix(in srgb, var(--accent), var(--text) 12%) 0 3%, var(--accent) 9%, color-mix(in srgb, var(--accent), var(--black-eval) 40%) 21%, color-mix(in srgb, var(--black-eval), var(--accent) 26%) 40%, color-mix(in srgb, var(--black-eval), #000 26%) 64%, color-mix(in srgb, #000, var(--black-eval) 35%) 85%, #000 100%);
+  background-size:
+    100% 100%, 100% 100%, 130% 130%, 106% 106%,
+    112% 112%, 112% 112%, 112% 112%;
+  background-position:
+    center, center, 38% 42%, 50% 50%,
+    50% 50%, 50% 50%, 50% 50%;
+  background-repeat: no-repeat;
+  box-shadow:
+    /* accent-tinted hairline, kept dim so the disc edge never reads as a
+       bright white circle */
+    inset 0 0 0 calc(var(--core-size) * 0.005) color-mix(in srgb, var(--accent), color-mix(in srgb, var(--text), transparent 40%) 46%),
+    inset 0 0 calc(var(--core-size) * 0.02) calc(var(--core-size) * 0.012) color-mix(in srgb, #000, transparent 52%),
+    /* a soft luminous inner shell, blurred wide so it grades into the glass
+       instead of striping it */
+    inset 0 0 calc(var(--core-size) * 0.03) calc(var(--core-size) * 0.05) color-mix(in srgb, var(--accent), transparent 84%),
+    inset 0 0 calc(var(--core-size) * 0.06) calc(var(--core-size) * 0.1) color-mix(in srgb, #000, transparent 74%),
+    inset 0 calc(var(--core-size) * -0.05) calc(var(--core-size) * 0.08) rgba(0, 0, 0, 0.44),
+    0 0 var(--core-inner-aura-size) var(--core-inner-glow),
+    0 0 calc(var(--core-size) * 0.12) color-mix(in srgb, var(--accent-2), transparent 80%);
+  opacity: 0.99;
+  animation:
+    boss-pupil-drift 15s ease-in-out infinite,
+    boss-face-churn 29s ease-in-out infinite,
+    boss-face-glimmer 11s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+.sgurr-core::after {
+  inset: -7.5%;
+  border: 1px solid color-mix(in srgb, var(--accent-2), var(--text) var(--core-ring-fade));
+  border-radius: 42% 58% 52% 48% / 58% 43% 57% 42%;
+  opacity: var(--core-ring-opacity);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text), transparent 88%),
+    0 0 0 calc(var(--core-size) * 0.003) color-mix(in srgb, var(--accent-2), transparent 86%),
+    0 0 calc(var(--core-size) * 0.04) color-mix(in srgb, var(--accent), transparent 78%),
+    inset 0 0 calc(var(--core-size) * 0.022) color-mix(in srgb, var(--accent-2), transparent 78%);
+}
+
+.sgurr-core.ready {
+  --core-inner-color: #73c98b;
+  --core-inner-aura-size: 18px;
+  --core-inner-glow: rgba(115, 201, 139, 0.48);
+}
+
+.sgurr-core.cooling {
+  --core-border: color-mix(in srgb, var(--accent), var(--edge) 16%);
+  --core-aura-size: 30px;
+  --core-aura-fade: 54%;
+  --core-inner-color: color-mix(in srgb, var(--accent), #73c98b 44%);
+  --core-inner-aura-size: 20px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 32%);
+  --core-ring-opacity: 0.8;
+  --core-ring-fade: 34%;
+}
+
+.sgurr-core.thinking {
+  --core-border: var(--accent);
+  --core-aura-size: 36px;
+  --core-aura-fade: 34%;
+  --core-inner-color: var(--accent);
+  --core-inner-aura-size: 22px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 18%);
+  --core-ring-opacity: 0.92;
+  --core-ring-fade: 22%;
+}
+
+.sgurr-core.mating {
+  --core-border: color-mix(in srgb, var(--danger), var(--accent) 40%);
+  --core-aura-size: 48px;
+  --core-aura-fade: 16%;
+  --core-inner-color: color-mix(in srgb, var(--danger), var(--accent-2) 18%);
+  --core-inner-aura-size: 34px;
+  --core-inner-glow: color-mix(in srgb, var(--danger), transparent 12%);
+  --core-ring-opacity: 1;
+  --core-ring-fade: 10%;
+  animation:
+    boss-core-pulse 2.2s ease-in-out infinite,
+    boss-core-churn 6.5s ease-in-out infinite,
+    core-mate-flare 900ms ease-in-out infinite;
+}
+
+.sgurr-core.speaking {
+  --core-aura-size: 42px;
+  --core-aura-fade: 30%;
+  filter: saturate(1.35) brightness(1.08);
+}
+
+.sgurr-core.opening-aware:not(.thinking):not(.mating) {
+  --core-border: color-mix(in srgb, var(--accent), #8ee6a5 28%);
+  --core-aura-size: 46px;
+  --core-aura-fade: 24%;
+  --core-inner-color: color-mix(in srgb, var(--accent), #8ee6a5 38%);
+  --core-inner-aura-size: 28px;
+  --core-ring-opacity: 1;
+  filter: saturate(1.4) brightness(1.1);
+}
+
+.sgurr-core.speaking::after {
+  animation: core-speak-ring 2.8s ease-out both;
+}
+
+.sgurr-core:not(.thinking):not(.mating).mood-dominant {
+  --core-aura-size: 32px;
+  --core-aura-fade: 46%;
+  --core-inner-color: color-mix(in srgb, var(--accent), #73c98b 26%);
+  --core-inner-aura-size: 24px;
+  --core-ring-opacity: 0.88;
+  --core-scale-mid: 1.065;
+  --core-sat-mid: 1.38;
+}
+
+.sgurr-core:not(.thinking):not(.mating).mood-predatory {
+  --core-border: color-mix(in srgb, var(--danger), var(--accent) 28%);
+  --core-aura-size: 42px;
+  --core-aura-fade: 25%;
+  --core-inner-color: color-mix(in srgb, var(--danger), var(--accent-2) 22%);
+  --core-inner-aura-size: 30px;
+  --core-inner-glow: color-mix(in srgb, var(--danger), transparent 20%);
+  --core-ring-opacity: 1;
+  --core-ring-fade: 18%;
+  --core-scale-mid: 1.08;
+  --core-sat-mid: 1.48;
+}
+
+.sgurr-core:not(.thinking):not(.mating).mood-strained {
+  --core-aura-size: 18px;
+  --core-aura-fade: 76%;
+  --core-inner-color: color-mix(in srgb, var(--accent-2), var(--surface-3) 46%);
+  --core-inner-aura-size: 12px;
+  --core-inner-glow: color-mix(in srgb, var(--accent-2), transparent 68%);
+  --core-ring-opacity: 0.48;
+  --core-ring-fade: 62%;
+  --core-scale-mid: 1.025;
+  --core-sat-low: 0.88;
+  --core-sat-mid: 1.02;
+  --core-bright-mid: 0.94;
+  opacity: 0.9;
+}
+
+.sgurr-core:not(.thinking):not(.mating).core-checking {
+  --core-border: var(--danger);
+  --core-inner-color: color-mix(in srgb, var(--danger), var(--surface-3) 42%);
+  --core-inner-glow: color-mix(in srgb, var(--danger), transparent 30%);
+  --core-ring-fade: 26%;
+}
+
+.sgurr-core:not(.thinking):not(.mating).core-pressuring {
+  --core-aura-size: 40px;
+  --core-aura-fade: 28%;
+  --core-ring-opacity: 1;
+  --core-scale-mid: 1.075;
+}
+
+.sgurr-core:not(.thinking):not(.mating).core-fed,
+.sgurr-core:not(.thinking):not(.mating).core-surging {
+  --core-inner-color: color-mix(in srgb, var(--accent), #73c98b 38%);
+  --core-inner-aura-size: 28px;
+  --core-inner-glow: color-mix(in srgb, #73c98b, transparent 28%);
+  --core-sat-mid: 1.44;
+}
+
+.sgurr-core:not(.thinking):not(.mating).core-wounded,
+.sgurr-core:not(.thinking):not(.mating).core-staggered {
+  --core-inner-color: color-mix(in srgb, var(--danger), var(--surface-3) 32%);
+  --core-inner-glow: color-mix(in srgb, var(--danger), transparent 42%);
+  --core-ring-opacity: 0.58;
+  --core-scale-mid: 1.025;
+}
+
+.sgurr-core:not(.thinking):not(.mating).core-endgame::after {
+  inset: -11px;
+  border-width: 2px;
+  opacity: max(0.76, var(--core-ring-opacity));
+}
+
+@keyframes core-mate-flare {
+  0%,
+  100% {
+    filter: saturate(1.2) brightness(1.02);
+  }
+  50% {
+    filter: saturate(1.8) brightness(1.28);
+  }
+}
+
+@keyframes core-speak-ring {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.82);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent), transparent 70%);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.22);
+    box-shadow:
+      0 0 18px color-mix(in srgb, var(--accent), transparent 46%),
+      0 0 36px color-mix(in srgb, var(--accent-2), transparent 64%);
+  }
+  100% {
+    opacity: var(--core-ring-opacity);
+    transform: scale(1);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent), transparent 76%);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* The hero cores (intro and main menu) share the base god-eye look;    */
+/* only their scale, heavier border and slightly stronger presence      */
+/* differ. `--core-size` is kept in step with the rendered size of      */
+/* every core by a ResizeObserver in js/menu-core.js.                   */
+/* ------------------------------------------------------------------ */
+.menu-title .menu-core,
+.intro-core {
+  --core-size: var(--menu-core-size);
+  --core-aura-size: calc(var(--core-size) * 0.03);
+  --core-aura-fade: 52%;
+  --core-inner-aura-size: calc(var(--core-size) * 0.05);
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 52%);
+  --core-ring-opacity: 0.58;
+  --core-ring-fade: 34%;
+  width: var(--core-size);
+  height: var(--core-size);
+  border-width: 2px;
+}
+
+/* Not a heartbeat: a slow, deep swell and subside, like something vast
+   drawing breath in the dark and letting it go. */
+@keyframes boss-core-pulse {
+  0%,
+  100% {
+    scale: 1;
+    border-radius: 46% 54% 42% 58% / 52% 41% 59% 48%;
+  }
+  30% {
+    scale: 1.012;
+    border-radius: 52% 48% 47% 53% / 48% 53% 46% 54%;
+  }
+  50% {
+    scale: 1.019;
+    border-radius: 57% 43% 53% 47% / 43% 58% 42% 57%;
+  }
+  74% {
+    scale: 1.006;
+    border-radius: 49% 51% 46% 54% / 52% 45% 58% 42%;
+  }
+}
+
+/* The wisps, dust and murk migrate around the dark setting, each on
+   its own path. */
+@keyframes boss-core-churn {
+  0%,
+  100% {
+    background-position:
+      50% 50%, 50% 50%, 50% 50%, 50% 50%,
+      center, center, 50% 50%;
+  }
+  35% {
+    background-position:
+      62% 38%, 38% 60%, 55% 62%, 43% 45%,
+      center, center, 54% 46%;
+  }
+  70% {
+    background-position:
+      40% 58%, 58% 42%, 44% 40%, 58% 56%,
+      center, center, 46% 55%;
+  }
+}
+
+/* Inside the glass: the heart wanders with its echo, the spark fields
+   drift in parallax, and the dark shape crosses the interior. */
+@keyframes boss-face-churn {
+  0%,
+  100% {
+    background-position:
+      center, center, 38% 42%, 50% 50%,
+      50% 50%, 50% 50%, 50% 50%;
+  }
+  40% {
+    background-position:
+      center, center, 58% 54%, 46% 54%,
+      55% 46%, 57% 44%, 57% 44%;
+  }
+  75% {
+    background-position:
+      center, center, 66% 64%, 55% 47%,
+      44% 55%, 44% 57%, 44% 57%;
+  }
+}
+
+/* Occultation: the face dims well down as the veil crosses, so the heart
+   withdraws into the murk before slowly resurfacing. Out of phase with
+   everything else. */
+@keyframes boss-face-glimmer {
+  0%,
+  100% {
+    opacity: 0.98;
+  }
+  32% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.8;
+  }
+  78% {
+    opacity: 0.9;
+  }
+}
+
+/* The inner mass drifts to face a direction and holds there — a slow,
+   unsettling regard — then rarely and briefly narrows, like a lid passing
+   over something that is watching. */
+@keyframes boss-pupil-drift {
+  0%,
+  22%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  32% {
+    transform: translate(-2%, 1.2%) scale(0.99);
+  }
+  50% {
+    transform: translate(-2%, 1.2%) scale(1);
+  }
+  58% {
+    transform: translate(1.6%, -1.1%) scale(1.008);
+  }
+  76% {
+    transform: translate(1.6%, -1.1%) scale(1);
+  }
+  90% {
+    transform: translate(0, 0) scale(1);
+  }
+  93% {
+    transform: translate(0, 0) scale(1.02, 0.88);
+  }
+  96% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Menu-core additions: interior life and a watchful idle. The child    */
+/* layers are injected by js/menu-core.js and paint above the molten    */
+/* face (::before) and below the outer ring (::after). All menu-only    */
+/* and only present when motion is enabled.                             */
+/* ------------------------------------------------------------------ */
+
+/* The heart leans a touch toward the cursor, with lag — a slow regard.
+   Declared here (after the base .sgurr-core) so this transition wins for
+   the menu core; boss-core-pulse animates `scale`, not `transform`, so
+   the two never fight. */
+.menu-core {
+  transform: translateX(-50%) translate(var(--regard-x, 0px), var(--regard-y, 0px));
+  transition:
+    transform 1200ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    filter 640ms ease;
+}
+
+.sgurr-core .core-embers,
+.sgurr-core .core-form,
+.sgurr-core .core-surge {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+/* Embers: faint motes rising through the glass and winking out. */
+.sgurr-core .core-embers {
+  inset: calc(var(--core-size) * 0.13);
+  overflow: hidden;
+}
+
+.sgurr-core .core-ember {
+  position: absolute;
+  left: var(--ex);
+  bottom: -6%;
+  width: var(--es);
+  height: var(--es);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent), var(--text) 22%) 0 34%, color-mix(in srgb, var(--accent), transparent 34%) 55%, transparent 72%);
+  opacity: 0;
+  animation: core-ember-rise var(--edur, 10s) ease-in-out var(--edelay, 0s) infinite;
+}
+
+@keyframes core-ember-rise {
+  0% {
+    bottom: -6%;
+    opacity: 0;
+    transform: translateX(0) scale(0.7);
+  }
+  12% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateX(var(--esway, 0px)) scale(1);
+  }
+  82% {
+    opacity: 0.38;
+  }
+  100% {
+    bottom: 104%;
+    opacity: 0;
+    transform: translateX(0) scale(0.55);
+  }
+}
+
+/* A form that almost resolves: a soft shape surfacing from the murk and
+   sinking again before it can be read. Never legible. */
+.sgurr-core .core-form {
+  inset: calc(var(--core-size) * 0.2);
+  background:
+    radial-gradient(42% 52% at 42% 44%, color-mix(in srgb, var(--accent), var(--text) 12%) 0 12%, transparent 62%),
+    radial-gradient(38% 30% at 62% 66%, color-mix(in srgb, var(--accent-2), transparent 22%) 0 20%, transparent 70%);
+  border-radius: 52% 48% 55% 45% / 58% 52% 48% 42%;
+  filter: blur(calc(var(--core-size) * 0.018));
+  opacity: 0;
+  mix-blend-mode: screen;
+  animation: core-form-surface 27s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-form-surface {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 6%) scale(0.9) rotate(0deg);
+  }
+  38% {
+    opacity: 0.15;
+    transform: translate(-3%, 0) scale(1.02) rotate(-6deg);
+  }
+  52% {
+    opacity: 0.19;
+    transform: translate(-3%, 0) scale(1.04) rotate(-7deg);
+  }
+  70% {
+    opacity: 0.05;
+    transform: translate(2%, 3%) scale(0.98) rotate(-3deg);
+  }
+}
+
+/* Surfacing: on a rare idle beat the veil parts, the ember flares and
+   something rises to regard you, then subsides (class toggled by JS). */
+.sgurr-core .core-surge {
+  inset: calc(var(--core-size) * 0.06);
+  background: radial-gradient(circle at 56% 60%, color-mix(in srgb, var(--accent), var(--text) 26%) 0 5%, color-mix(in srgb, var(--accent), transparent 32%) 15%, color-mix(in srgb, var(--accent-2), transparent 68%) 30%, transparent 52%);
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+/* A slow swell that eases all the way back to nothing — fill-mode `both`
+   holds the final transparent frame, so it subsides smoothly instead of
+   cutting off when the class is removed. */
+.menu-core.surfacing .core-surge {
+  animation: core-surge-flare 4s cubic-bezier(0.32, 0, 0.3, 1) both;
+}
+
+@keyframes core-surge-flare {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+  56% {
+    opacity: 0.46;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
+/* Volumetric depth: a soft warm sheen from the upper-left and a gathered
+   shadow lower-right make the orb read as a lit sphere rather than flat
+   concentric rings. Static, so it survives reduced-motion. */
+.sgurr-core .core-depth {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.03);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(56% 52% at 33% 26%, color-mix(in srgb, var(--accent), var(--text) 42%) 0, color-mix(in srgb, var(--accent), var(--text) 8%) 7%, color-mix(in srgb, var(--accent), transparent 58%) 20%, transparent 48%),
+    radial-gradient(82% 76% at 77% 83%, color-mix(in srgb, #000, transparent 32%) 0 24%, transparent 62%);
+  opacity: 0.92;
+}
+
+/* A slow cosmos deep in the glass. All three layers are screen-blended, so
+   they add luminous internal structure to the heart rather than occluding
+   it, and each drifts / pulses on its own long period so the interior never
+   settles or repeats. */
+
+/* Nebula: coloured clouds that swirl and pulse in vibrancy. */
+.sgurr-core .core-nebula {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.12);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 34% at 36% 42%, color-mix(in srgb, var(--accent), transparent 50%) 0 24%, transparent 70%),
+    radial-gradient(36% 44% at 64% 60%, color-mix(in srgb, var(--accent-2), transparent 54%) 0 22%, transparent 68%),
+    radial-gradient(30% 26% at 58% 30%, color-mix(in srgb, var(--accent), var(--text) 34%) 0 18%, transparent 60%);
+  -webkit-mask: radial-gradient(circle, #000 0 58%, transparent 84%);
+  mask: radial-gradient(circle, #000 0 58%, transparent 84%);
+  mix-blend-mode: screen;
+  animation:
+    core-nebula-drift 44s linear infinite,
+    core-vibrancy-pulse 13s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+/* Mottle: soft luminous cells (a blurred SVG mask over a vibrant accent
+   wash) drifting through the glass — internal structure with no hard
+   edges, like light moving through something alive. */
+.sgurr-core .core-mottle {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.12);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 44% 42%, color-mix(in srgb, var(--accent), var(--text) 26%) 0%, var(--accent) 40%, color-mix(in srgb, var(--accent-2), var(--accent) 34%) 74%, var(--accent-2) 100%);
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='m' x='-40%25' y='-40%25' width='180%25' height='180%25'><feGaussianBlur stdDeviation='4'/></filter></defs><g fill='%23ffffff' filter='url(%23m)'><circle cx='32' cy='38' r='10' opacity='.5'/><circle cx='58' cy='28' r='7' opacity='.4'/><circle cx='72' cy='52' r='9' opacity='.45'/><circle cx='46' cy='62' r='11' opacity='.5'/><circle cx='28' cy='66' r='6' opacity='.35'/><circle cx='62' cy='74' r='7' opacity='.4'/><circle cx='50' cy='44' r='5' opacity='.3'/><circle cx='80' cy='34' r='5' opacity='.3'/><circle cx='20' cy='50' r='5' opacity='.3'/><circle cx='40' cy='22' r='5' opacity='.32'/><circle cx='66' cy='40' r='4' opacity='.28'/><circle cx='36' cy='78' r='5' opacity='.3'/></g></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='m' x='-40%25' y='-40%25' width='180%25' height='180%25'><feGaussianBlur stdDeviation='4'/></filter></defs><g fill='%23ffffff' filter='url(%23m)'><circle cx='32' cy='38' r='10' opacity='.5'/><circle cx='58' cy='28' r='7' opacity='.4'/><circle cx='72' cy='52' r='9' opacity='.45'/><circle cx='46' cy='62' r='11' opacity='.5'/><circle cx='28' cy='66' r='6' opacity='.35'/><circle cx='62' cy='74' r='7' opacity='.4'/><circle cx='50' cy='44' r='5' opacity='.3'/><circle cx='80' cy='34' r='5' opacity='.3'/><circle cx='20' cy='50' r='5' opacity='.3'/><circle cx='40' cy='22' r='5' opacity='.32'/><circle cx='66' cy='40' r='4' opacity='.28'/><circle cx='36' cy='78' r='5' opacity='.3'/></g></svg>") center / contain no-repeat;
+  mix-blend-mode: screen;
+  animation:
+    core-mottle-turn 67s linear infinite,
+    core-mottle-pulse 8.5s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+/* Starfield: points that twinkle, the whole field wheeling slowly. */
+.sgurr-core .core-stars {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.12);
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  animation: core-stars-turn 150s linear infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+.core-star {
+  position: absolute;
+  left: var(--sx);
+  top: var(--sy);
+  width: var(--ss);
+  height: var(--ss);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--text), var(--accent) 24%) 0 34%, color-mix(in srgb, var(--accent), transparent 42%) 60%, transparent 78%);
+  opacity: 0;
+  animation: core-star-twinkle var(--sdur, 5s) ease-in-out var(--sdelay, 0s) infinite;
+}
+
+@keyframes core-nebula-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes core-vibrancy-pulse {
+  0%,
+  100% {
+    opacity: 0.32;
+    filter: saturate(0.85);
+  }
+  50% {
+    opacity: 0.6;
+    filter: saturate(1.55);
+  }
+}
+
+/* Aurora: broad, dim ribbons of colour that wash through the interior on
+   long periods — barely-there vibrancy that never resolves into a shape. */
+.sgurr-core .core-aurora {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.13);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 34% at 36% 62%, color-mix(in srgb, var(--accent), transparent 52%) 0 20%, transparent 72%),
+    radial-gradient(40% 52% at 66% 38%, color-mix(in srgb, var(--accent-2), transparent 56%) 0 18%, transparent 70%),
+    radial-gradient(30% 24% at 52% 76%, color-mix(in srgb, var(--accent), var(--accent-2) 50%) 0 14%, transparent 62%);
+  -webkit-mask: radial-gradient(circle, #000 0 52%, transparent 80%);
+  mask: radial-gradient(circle, #000 0 52%, transparent 80%);
+  filter: blur(calc(var(--core-size) * 0.012)) saturate(1.5);
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation:
+    core-aurora-drift 53s ease-in-out infinite,
+    core-aurora-pulse 17s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-aurora-drift {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(26deg) scale(1.06);
+  }
+}
+
+@keyframes core-aurora-pulse {
+  0%,
+  100% {
+    opacity: 0.07;
+  }
+  55% {
+    opacity: 0.2;
+  }
+}
+
+/* Finer mottle: a second, smaller field of cells turning the other way —
+   dimmer, cooler and slower, so it reads as depth behind the first. */
+.sgurr-core .core-mottle-fine {
+  position: absolute;
+  inset: calc(var(--core-size) * 0.17);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 56% 58%, color-mix(in srgb, var(--accent-2), var(--text) 20%) 0%, var(--accent-2) 42%, color-mix(in srgb, var(--accent), var(--accent-2) 40%) 100%);
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='n' x='-60%25' y='-60%25' width='220%25' height='220%25'><feGaussianBlur stdDeviation='2.6'/></filter></defs><g fill='%23ffffff' filter='url(%23n)'><circle cx='26' cy='30' r='4' opacity='.4'/><circle cx='48' cy='20' r='3' opacity='.32'/><circle cx='70' cy='30' r='4.5' opacity='.4'/><circle cx='82' cy='50' r='3.5' opacity='.34'/><circle cx='72' cy='68' r='4' opacity='.38'/><circle cx='54' cy='80' r='3.5' opacity='.34'/><circle cx='32' cy='74' r='4.5' opacity='.4'/><circle cx='18' cy='54' r='3.5' opacity='.34'/><circle cx='40' cy='46' r='3' opacity='.3'/><circle cx='60' cy='52' r='3.5' opacity='.32'/><circle cx='52' cy='34' r='2.5' opacity='.28'/><circle cx='36' cy='60' r='2.5' opacity='.28'/><circle cx='64' cy='40' r='2' opacity='.26'/><circle cx='46' cy='68' r='2' opacity='.26'/><circle cx='78' cy='38' r='2' opacity='.24'/><circle cx='24' cy='42' r='2' opacity='.24'/></g></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='n' x='-60%25' y='-60%25' width='220%25' height='220%25'><feGaussianBlur stdDeviation='2.6'/></filter></defs><g fill='%23ffffff' filter='url(%23n)'><circle cx='26' cy='30' r='4' opacity='.4'/><circle cx='48' cy='20' r='3' opacity='.32'/><circle cx='70' cy='30' r='4.5' opacity='.4'/><circle cx='82' cy='50' r='3.5' opacity='.34'/><circle cx='72' cy='68' r='4' opacity='.38'/><circle cx='54' cy='80' r='3.5' opacity='.34'/><circle cx='32' cy='74' r='4.5' opacity='.4'/><circle cx='18' cy='54' r='3.5' opacity='.34'/><circle cx='40' cy='46' r='3' opacity='.3'/><circle cx='60' cy='52' r='3.5' opacity='.32'/><circle cx='52' cy='34' r='2.5' opacity='.28'/><circle cx='36' cy='60' r='2.5' opacity='.28'/><circle cx='64' cy='40' r='2' opacity='.26'/><circle cx='46' cy='68' r='2' opacity='.26'/><circle cx='78' cy='38' r='2' opacity='.24'/><circle cx='24' cy='42' r='2' opacity='.24'/></g></svg>") center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation:
+    core-mottle-fine-turn 89s linear infinite,
+    core-mottle-fine-pulse 12.5s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-mottle-fine-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes core-mottle-fine-pulse {
+  0%,
+  100% {
+    opacity: 0.06;
+    filter: saturate(1.15) brightness(0.85);
+  }
+  50% {
+    opacity: 0.18;
+    filter: saturate(1.6) brightness(1.1);
+  }
+}
+
+@keyframes core-mottle-turn {
+  to {
+    rotate: -360deg;
+  }
+}
+
+@keyframes core-mottle-pulse {
+  0%,
+  100% {
+    opacity: 0.12;
+    filter: saturate(1.1) brightness(0.9);
+  }
+  50% {
+    opacity: 0.3;
+    filter: saturate(1.55) brightness(1.18);
+  }
+}
+
+@keyframes core-stars-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes core-star-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: var(--so, 0.8);
+    transform: scale(1);
+  }
+}
+
+/* The pupil proper: a near-black mass floating ABOVE the interior light,
+   so no layer of the cosmos can wash it out. It wanders the face slowly,
+   holds its regard, and moves again. Present on any core the JS gives an
+   eye to (hero cores and the post-game result cores).
+
+   The regard (JS-driven on gazing cores): pursuit toward what it has
+   noticed and faint proximity dilation ride the `translate`/`scale`
+   properties, which compose beneath the wander keyframes' `transform`,
+   so the idle drift never fights the gaze. */
+.sgurr-core .core-pupil {
+  position: absolute;
+  left: 30%;
+  top: 29%;
+  width: 41%;
+  height: 41%;
+  border-radius: 48% 52% 50% 50% / 52% 48% 52% 48%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, #000 0 52%, color-mix(in srgb, #000, transparent 16%) 72%, transparent 100%);
+  filter: blur(1.5px);
+  opacity: 0.6;
+  translate: var(--gaze-x, 0px) var(--gaze-y, 0px);
+  scale: var(--pupil-scale, 1);
+  transition:
+    translate 860ms cubic-bezier(0.3, 0, 0.2, 1),
+    scale 1300ms cubic-bezier(0.25, 0, 0.25, 1);
+  animation: core-pupil-wander 31s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+.sgurr-core .core-pupil {
+  filter: blur(calc(var(--core-size) * 0.008));
+}
+
+@keyframes core-pupil-wander {
+  0%,
+  18%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  28% {
+    transform: translate(-14%, 9%) scale(0.97);
+  }
+  46% {
+    transform: translate(-14%, 9%) scale(1);
+  }
+  56% {
+    transform: translate(16%, -7%) scale(1.03);
+  }
+  72% {
+    transform: translate(16%, -7%) scale(1);
+  }
+  86% {
+    transform: translate(3%, 12%) scale(0.98);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Divinity: the apparatus of godhead around both hero cores. A vast    */
+/* near-invisible radiance breathing behind everything, soft shafts of  */
+/* light wheeling almost too slowly to see, a brilliant eclipse arc     */
+/* precessing around the rim, and rare halo ripples that bloom outward  */
+/* and dissolve. Everything is dim, slow and behind or at the rim, so   */
+/* the eye itself stays untouched — the god is in the periphery.        */
+/* ------------------------------------------------------------------ */
+
+/* Presence: the room is lit by it. A huge, extremely faint radiance
+   that swells and subsides like something breathing behind reality. */
+.sgurr-core .core-presence {
+  position: absolute;
+  inset: calc(var(--core-size) * -0.6);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent), transparent 72%) 0 16%, color-mix(in srgb, var(--accent-2), transparent 87%) 34%, transparent 60%);
+  opacity: 0;
+  animation: core-presence-breathe 29s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-presence-breathe {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.36;
+    transform: scale(1.06);
+  }
+}
+
+/* Corona: shafts of light radiating from behind the orb — two angular
+   frequencies superimposed so the rays never read as a regular fan —
+   wheeling so slowly the motion is felt rather than seen. */
+.sgurr-core .core-corona {
+  position: absolute;
+  inset: calc(var(--core-size) * -0.42);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0deg 11deg, color-mix(in srgb, var(--accent), transparent 74%) 18deg, transparent 25deg 36deg),
+    repeating-conic-gradient(from 17deg, transparent 0deg 19deg, color-mix(in srgb, var(--accent-2), transparent 80%) 27deg, transparent 35deg 52deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 27%, #000 38% 50%, transparent 72%);
+  mask: radial-gradient(circle, transparent 0 27%, #000 38% 50%, transparent 72%);
+  filter: blur(calc(var(--core-size) * 0.02));
+  opacity: 0;
+  animation:
+    core-corona-turn 240s linear infinite,
+    core-corona-breathe 21s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-corona-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes core-corona-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Eclipse: a thin brilliant arc at the rim, as if an enormous light
+   were hidden directly behind the orb, precessing around it. */
+.sgurr-core .core-eclipse {
+  position: absolute;
+  inset: calc(var(--core-size) * -0.06);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, transparent 0 44.5%, color-mix(in srgb, var(--text), var(--accent) 34%) 46.5% 47.5%, transparent 50%);
+  -webkit-mask: conic-gradient(from -30deg, transparent 0deg, #000 38deg 66deg, transparent 118deg 360deg);
+  mask: conic-gradient(from -30deg, transparent 0deg, #000 38deg 66deg, transparent 118deg 360deg);
+  filter: blur(calc(var(--core-size) * 0.004));
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation:
+    core-eclipse-precess 97s linear infinite,
+    core-eclipse-breathe 23s ease-in-out infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+@keyframes core-eclipse-precess {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes core-eclipse-breathe {
+  0%,
+  100% {
+    opacity: 0.16;
+  }
+  45% {
+    opacity: 0.55;
+  }
+}
+
+/* Aureole: every so often a halo blooms off the orb, expands and
+   dissolves — a ripple through whatever the orb hangs in. Two rings on
+   the same period, half out of phase. */
+.sgurr-core .core-aureole {
+  position: absolute;
+  inset: calc(var(--core-size) * -0.04);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 44%);
+  box-shadow:
+    0 0 calc(var(--core-size) * 0.03) color-mix(in srgb, var(--accent), transparent 64%),
+    inset 0 0 calc(var(--core-size) * 0.03) color-mix(in srgb, var(--accent-2), transparent 76%);
+  opacity: 0;
+  animation: core-aureole-ripple 17s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+  animation-delay: var(--core-phase, 0s);
+}
+
+.sgurr-core .core-aureole.aureole-late {
+  animation-delay: calc(var(--core-phase, 0s) - 8.5s);
+}
+
+@keyframes core-aureole-ripple {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  5% {
+    opacity: 0.42;
+  }
+  34% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sgurr-core .core-ember,
+  .sgurr-core .core-form,
+  .sgurr-core .core-surge,
+  .sgurr-core .core-nebula,
+  .sgurr-core .core-mottle,
+  .sgurr-core .core-mottle-fine,
+  .sgurr-core .core-aurora,
+  .sgurr-core .core-pupil,
+  .sgurr-core .core-presence,
+  .sgurr-core .core-corona,
+  .sgurr-core .core-eclipse,
+  .sgurr-core .core-aureole,
+  .sgurr-core .core-stars,
+  .core-star {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+.header-core {
+  width: 64px;
+  height: 64px;
+}
+
+.header-block h2 {
+  color: var(--text);
+  font-size: 1.42rem;
+  font-weight: 900;
+  line-height: 1.02;
+}
+
+.engine-rating,
+.engine-time {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.engine-rating {
+  color: var(--accent);
+}
+
+.engine-time {
+  color: var(--muted);
+}

@@ -1,0 +1,305 @@
+@media (max-width: 1500px) and (min-width: 1241px) {
+  .app-shell[data-mode="editor"] {
+    --board-size: clamp(560px, calc(100vw - 714px), 720px);
+    --editor-column-width: 286px;
+    --eval-track-height: min(704px, calc(var(--board-size) - 16px));
+  }
+}
+
+@media (max-width: 1240px) {
+  .app-shell {
+    --board-size: min(720px, calc(100vw - 92px));
+    --eval-track-height: min(704px, calc(var(--board-size) - 16px));
+    grid-template-columns: 1fr;
+    justify-items: center;
+    align-items: start;
+  }
+
+  .app-shell[data-mode="editor"] {
+    width: min(792px, calc(100vw - 28px));
+    grid-template-columns: 1fr;
+  }
+
+  .board-area {
+    width: min(var(--play-width), 100%);
+  }
+
+  .play-layout {
+    width: 100%;
+    grid-template-columns: clamp(48px, 9vw, 72px) minmax(0, var(--board-size));
+  }
+
+  .eval-rail {
+    height: var(--play-height);
+    min-height: var(--play-height);
+  }
+
+  .board-column {
+    width: 100%;
+    grid-template-rows: var(--player-row) auto var(--player-row);
+  }
+
+  .board-wrap {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .side-panel {
+    width: min(720px, 100%);
+    height: auto;
+    min-height: 0;
+    margin: 18px auto 0;
+    overflow: visible;
+  }
+
+  .moves-block {
+    flex: 0 0 auto;
+    min-height: 240px;
+  }
+
+  .editor-panel {
+    width: min(720px, 100%);
+    height: auto;
+    min-height: 0;
+    margin: 0 auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    --board-size: calc(100vw - 56px);
+    --player-row: 68px;
+    --eval-track-height: calc(var(--board-size) - 16px);
+    width: min(calc(100vw - 18px), 720px);
+    padding: 12px 0;
+  }
+
+  .focus-mode-button {
+    top: 8px;
+    right: 8px;
+    min-width: 66px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.7rem;
+  }
+
+  .play-layout {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .eval-block {
+    grid-template-columns: 1fr;
+  }
+
+  .eval-rail {
+    padding: 0;
+  }
+
+  .eval-chip {
+    width: 36px;
+    font-size: 0.68rem;
+  }
+
+  .eval-track {
+    width: 28px;
+  }
+
+  .editor-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .player-card {
+    min-height: 62px;
+    height: 62px;
+    padding: 5px 8px;
+  }
+
+  .player-presence {
+    width: 46px;
+    height: 46px;
+    margin-right: 2px;
+  }
+
+  .player-name {
+    padding-left: 32px;
+  }
+
+  .player-name strong {
+    font-size: 0.92rem;
+  }
+
+  .player-card.engine-side .player-name strong {
+    font-size: 0.98rem;
+  }
+
+  .player-clock {
+    min-width: 64px;
+    padding: 4px 6px;
+    font-size: 0.78rem;
+  }
+
+  .eval-meta {
+    text-align: left;
+  }
+
+  .theme-gallery,
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-box {
+    min-height: 390px;
+    margin-top: 12vh;
+    padding: 150px 20px 24px;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-core-scene {
+    top: -205px;
+    width: 100vw;
+    height: 390px;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-core-main {
+    width: 330px;
+    height: 330px;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-orbit-outer {
+    width: 400px;
+    height: 400px;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-orbit-mid {
+    width: 356px;
+    height: 270px;
+  }
+
+  #resultModal[data-outcome="sgurr-win"] .result-orbit-inner {
+    width: 260px;
+    height: 340px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-box {
+    min-height: 390px;
+    margin-top: 12vh;
+    padding: 148px 20px 24px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-core-scene {
+    top: -200px;
+    width: 100vw;
+    height: 390px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-core-main {
+    width: 310px;
+    height: 310px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-orbit-outer {
+    width: 390px;
+    height: 390px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-orbit-mid {
+    width: 340px;
+    height: 260px;
+  }
+
+  #resultModal[data-outcome="human-win"] .result-orbit-inner {
+    width: 250px;
+    height: 330px;
+  }
+
+  #resultModal:is(
+    [data-outcome="human-draw"],
+    [data-outcome="watch-draw"],
+    [data-outcome="watch-white-win"],
+    [data-outcome="watch-black-win"]
+  ) .result-box {
+    min-height: 390px;
+    margin-top: 12vh;
+    padding: 150px 18px 24px;
+  }
+
+  #resultModal:is(
+    [data-outcome="human-draw"],
+    [data-outcome="watch-draw"],
+    [data-outcome="watch-white-win"],
+    [data-outcome="watch-black-win"]
+  ) .result-core-scene {
+    top: -190px;
+    width: 100vw;
+    height: 370px;
+  }
+
+  #resultModal[data-outcome="human-draw"] .result-core-main {
+    width: 290px;
+    height: 290px;
+  }
+
+  #resultModal[data-outcome="human-draw"] .result-orbit-outer {
+    width: 370px;
+    height: 370px;
+  }
+
+  #resultModal[data-outcome="human-draw"] .result-orbit-mid {
+    width: 326px;
+    height: 238px;
+  }
+
+  #resultModal[data-outcome="human-draw"] .result-orbit-inner {
+    width: 226px;
+    height: 306px;
+  }
+
+  #resultModal[data-outcome="watch-draw"] .result-core-main,
+  #resultModal[data-outcome="watch-draw"] .result-core-secondary {
+    width: 190px;
+    height: 190px;
+  }
+
+  #resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-main {
+    width: 252px;
+    height: 252px;
+  }
+
+  #resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-secondary {
+    width: 152px;
+    height: 152px;
+  }
+
+  .result-dual-king {
+    width: 74px;
+    height: 74px;
+  }
+
+  #resultModal:is([data-outcome="human-draw"], [data-outcome="watch-draw"]) .result-dual-kings {
+    top: 58px;
+    gap: 11px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Capture absorb: captured pieces stream into Sgurr's core (the       */
+/* mate-devour motif extended to ordinary captures), or dissolve in    */
+/* place when the human takes one of Sgurr's pieces.                   */
+/* ------------------------------------------------------------------ */
+
+.capture-absorb-piece {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  width: var(--piece-size, 72px);
+  height: var(--piece-size, 72px);
+  padding: calc(var(--piece-size, 72px) * 0.06);
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+}
+
+.core-absorb-flash {
+  animation: core-absorb-flash 0.45s ease-out;
+}

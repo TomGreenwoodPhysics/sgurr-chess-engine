@@ -1,0 +1,557 @@
+11<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Leave empty for same-origin production; set a full URL only for split hosting. -->
+    <meta name="sgurr-api-base" content="">
+    <title>Sgurr Web Demo</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%230c0f15'/><circle cx='32' cy='32' r='22' fill='none' stroke='%2336cae2' stroke-width='3' opacity='0.55'/><circle cx='32' cy='32' r='13' fill='%2336cae2'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="intro-pending">
+    <section class="intro-screen" id="introScreen" aria-labelledby="introTitle">
+      <div class="intro-cave" aria-hidden="true"></div>
+      <div class="intro-fog" aria-hidden="true">
+        <span></span>
+        <span></span>
+      </div>
+      <div class="intro-threshold" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+
+      <div class="intro-sanctum" aria-hidden="true">
+        <div class="intro-seal">
+          <span class="intro-seal-ring ring-one"></span>
+          <span class="intro-seal-ring ring-two"></span>
+          <span class="intro-seal-ring ring-three"></span>
+        </div>
+      </div>
+
+      <button
+        class="intro-core-trigger"
+        id="introCoreTrigger"
+        type="button"
+        data-sound="none"
+        aria-label="Disturb the slumbering core"
+      >
+        <span class="sgurr-core intro-core dormant" id="introCore" aria-hidden="true"></span>
+      </button>
+
+      <div class="intro-letterbox" aria-hidden="true">
+        <span class="letterbox-bar bar-top"></span>
+        <span class="letterbox-bar bar-bottom"></span>
+      </div>
+
+      <div class="intro-bosscard">
+        <h1 id="introTitle">SGURR</h1>
+        <div class="bosscard-rule" aria-hidden="true"></div>
+        <p class="bosscard-epithet">Ancient of the Hollow Mountain</p>
+        <div class="bosscard-healthbar" aria-hidden="true">
+          <span class="bosscard-health-fill"></span>
+        </div>
+      </div>
+
+      <div class="intro-copy">
+        <p class="intro-eyebrow">Beneath the Scottish hills</p>
+        <p class="intro-state" id="introState" aria-live="polite">Something slumbers in the deep</p>
+        <button class="intro-wake-button" id="wakeSgurrButton" type="button" data-sound="none">
+          Disturb it
+        </button>
+      </div>
+      <div class="intro-transition-veil" aria-hidden="true"></div>
+    </section>
+
+    <section class="menu-screen" id="menuScreen" aria-label="Sgurr main menu">
+      <div class="menu-actions">
+        <button class="ghost-button" type="button" id="menuSettingsButton">Settings</button>
+        <button class="ghost-button square-button" type="button" id="menuHelpButton" aria-label="Help and shortcuts">?</button>
+      </div>
+
+      <div class="menu-title">
+        <span class="sgurr-core menu-core" id="menuCore" aria-hidden="true"></span>
+        <h1>SGURR</h1>
+        <p>A home-grown chess engine from the Scottish hills</p>
+      </div>
+
+      <section class="menu-card">
+        <div class="menu-accent-line"></div>
+
+        <p class="menu-section-label">Game mode</p>
+        <div class="selector-row large-selector">
+          <button type="button" id="timeDownButton">&lt;</button>
+          <button type="button" class="selector-value" id="menuTimeButton">Rapid demo</button>
+          <button type="button" id="timeUpButton">&gt;</button>
+        </div>
+
+        <p class="menu-section-label">Opponent</p>
+        <div class="selector-row">
+          <button type="button" id="engineDownButton">&lt;</button>
+          <button type="button" class="selector-value" id="menuEngineButton">Sgurr Engine</button>
+          <button type="button" id="engineUpButton">&gt;</button>
+        </div>
+
+        <p class="menu-section-label">Appearance</p>
+        <div class="selector-row">
+          <button type="button" id="themeDownButton">&lt;</button>
+          <button type="button" class="selector-value" id="menuThemeButton">Highland Heather</button>
+          <button type="button" id="themeUpButton">&gt;</button>
+        </div>
+
+        <p class="menu-section-label">Play</p>
+        <div class="menu-play-grid">
+          <button type="button" class="play-white" id="playWhiteButton">Play as White</button>
+          <button type="button" class="play-black" id="playBlackButton">Play as Black</button>
+          <button type="button" id="watchButton">Watch Sgurr vs itself</button>
+        </div>
+
+        <p class="menu-section-label">Position tools</p>
+        <div class="menu-tools-grid">
+          <button type="button" id="loadFenButton">Load FEN</button>
+          <button type="button" id="boardEditorButton">Board editor</button>
+        </div>
+
+        <div class="menu-status" id="menuStatus">Checking backend</div>
+        <div class="menu-memory" id="menuMemory" hidden></div>
+      </section>
+    </section>
+
+    <main class="app-shell" id="appShell">
+      <button class="focus-mode-button" id="focusModeButton" type="button" aria-pressed="false" title="Focus mode (Z)" hidden>Focus</button>
+      <section class="board-area" aria-label="Sgurr chessboard">
+        <div class="board-header">
+          <div>
+            <p class="eyebrow">Local UCI demo</p>
+            <h1>Sgurr</h1>
+          </div>
+          <div class="status-pill" id="statusPill">Choose a side</div>
+        </div>
+
+        <div class="play-layout">
+          <aside class="eval-rail" aria-label="Evaluation bar">
+            <div class="eval-chip" id="evalChip">0.0</div>
+            <div class="eval-track">
+              <div class="eval-fill" id="evalFill"></div>
+            </div>
+            <div class="eval-labels">
+              <span>Black</span>
+              <span>White</span>
+            </div>
+          </aside>
+
+          <div class="board-column">
+            <div class="player-card" id="topPlayerCard">
+              <span class="player-presence sgurr-core" id="topPlayerPresence" aria-hidden="true" hidden></span>
+              <span class="player-name" id="topPlayerName">Black</span>
+              <span class="player-clock" id="topPlayerClock">00:00</span>
+            </div>
+            <div class="board-wrap">
+              <div class="board" id="board" role="grid" aria-label="Chessboard"></div>
+              <div class="mate-devour" id="mateDevour" hidden aria-hidden="true">
+                <span class="mate-sparks"></span>
+                <span class="mate-shockwave wave-a"></span>
+                <span class="mate-shockwave wave-b"></span>
+                <span class="sgurr-core mate-devour-core"></span>
+                <span class="mate-devour-piece" id="mateDevourPiece"></span>
+              </div>
+            </div>
+            <div class="player-card" id="bottomPlayerCard">
+              <span class="player-presence sgurr-core" id="bottomPlayerPresence" aria-hidden="true" hidden></span>
+              <span class="player-name" id="bottomPlayerName">White</span>
+              <span class="player-clock" id="bottomPlayerClock">00:00</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel" aria-label="Game controls and move list">
+        <section class="panel-block header-block core-header">
+          <div class="normal-core-view">
+            <div class="core-heading">
+              <div>
+                <h2 id="coreEngineName">Sgurr v6.0 "Banachdaich"</h2>
+                <p class="engine-rating" id="coreEngineSubtitle">GEN5 NNUE + REFINED SEARCH &middot; ~2807</p>
+                <p class="engine-time" id="sideTimeControl">BLITZ 3+0</p>
+              </div>
+              <span class="engine-dot sgurr-core header-core" id="engineDot" aria-hidden="true"></span>
+            </div>
+            <p class="core-line" id="coreLine">Opponent core online</p>
+          </div>
+          <div class="watch-core-view" aria-label="Sgurr engine match">
+            <div class="watch-arena-head">
+              <div>
+                <p class="panel-label">Engine arena</p>
+                <h2>MacKenzie Mirror</h2>
+              </div>
+              <p class="engine-time" id="watchTimeControl">BLITZ 3+0</p>
+            </div>
+            <div class="watch-duel">
+              <div class="watch-instance white-instance" id="watchWhiteInstance">
+                <span class="sgurr-core watch-core" id="watchWhiteCore" aria-hidden="true"></span>
+                <span class="watch-instance-copy"><strong>White Core</strong><small>INSTANCE W</small></span>
+                <span class="watch-clock" id="watchWhiteClock">3:00</span>
+              </div>
+              <span class="watch-versus" aria-hidden="true">VS</span>
+              <div class="watch-instance black-instance" id="watchBlackInstance">
+                <span class="sgurr-core watch-core" id="watchBlackCore" aria-hidden="true"></span>
+                <span class="watch-instance-copy"><strong>Black Core</strong><small>INSTANCE B</small></span>
+                <span class="watch-clock" id="watchBlackClock">3:00</span>
+              </div>
+            </div>
+            <p class="watch-match-line" id="watchMatchLine">Two Sgurr cores online</p>
+          </div>
+        </section>
+
+        <section class="panel-block controls-grid">
+          <label>
+            Time control
+            <select id="movetimeSelect">
+              <option value="bullet_1_0">Bullet 1+0</option>
+              <option value="bullet_2_1">Bullet 2+1</option>
+              <option value="blitz_3_0" selected>Blitz 3+0</option>
+              <option value="blitz_3_2">Blitz 3+2</option>
+              <option value="blitz_5_0">Blitz 5+0</option>
+              <option value="rapid_10_0">Rapid 10+0</option>
+              <option value="rapid_15_10">Rapid 15+10</option>
+              <option value="classical_90_30">Classical 90+30</option>
+            </select>
+          </label>
+          <button id="pauseWatchButton" type="button">Pause</button>
+          <button id="newGameButton" type="button">New game</button>
+        </section>
+
+        <section class="panel-block action-grid">
+          <button id="undoMoveButton" type="button">Undo move</button>
+          <button id="redoMoveButton" type="button">Redo</button>
+          <button id="engineNowButton" type="button">Engine move</button>
+          <button id="copyFenButton" type="button">Copy FEN</button>
+          <button id="exportPgnButton" type="button">Export PGN</button>
+        </section>
+
+        <section class="panel-block eval-block">
+          <div>
+            <p class="panel-label">Evaluation</p>
+            <p class="eval-value" id="evalValue">0.0</p>
+          </div>
+          <div>
+            <p class="panel-label">Material</p>
+            <p class="panel-value" id="materialValue">39 : 39</p>
+            <p class="material-diff" id="materialDiff">Level</p>
+          </div>
+          <div class="eval-meta" id="evalMeta">Waiting for Sgurr</div>
+        </section>
+
+        <section class="panel-block captured-block">
+          <div class="captured" id="capturedPieces"></div>
+        </section>
+
+        <section class="panel-block moves-block">
+          <div class="moves-title">
+            <p class="panel-label">Moves</p>
+            <span id="plyCount">0 ply</span>
+          </div>
+          <div class="moves-scroll" id="movesScroll">
+            <table>
+              <tbody id="moveRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-block engine-block">
+          <p class="panel-label">Backend</p>
+          <p id="backendValue">Checking</p>
+        </section>
+
+        <section class="panel-block status-block">
+          <div class="status-head">
+            <div class="status-title">
+              <p class="panel-label" id="statusModeLabel">Status</p>
+              <span class="status-loader" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+            </div>
+            <p class="status-turn" id="turnValue">White to move</p>
+          </div>
+          <p id="statusValue">Choose a side</p>
+          <p class="status-result" id="resultValue">In play</p>
+        </section>
+
+        <section class="side-actions">
+          <button id="mainMenuButton" type="button">Main menu</button>
+          <button id="sideSettingsButton" type="button">Settings</button>
+          <button id="sideHelpButton" type="button">? Shortcuts</button>
+        </section>
+
+        <section class="panel-block trend-block">
+          <div class="trend-title">
+            <p class="panel-label">Eval trend</p>
+            <span id="trendValue">+0.0</span>
+          </div>
+          <div class="trend-line">
+            <svg class="trend-svg" viewBox="0 0 320 96" preserveAspectRatio="none" aria-hidden="true">
+              <line class="trend-zero" x1="10" y1="48" x2="310" y2="48"></line>
+              <polyline id="trendPath" points=""></polyline>
+            </svg>
+            <span id="trendDot"></span>
+          </div>
+        </section>
+      </aside>
+
+      <aside class="editor-panel" id="editorPanel" aria-label="Board editor" hidden>
+        <div class="editor-column">
+          <section class="panel-block header-block editor-header-block">
+            <div>
+              <p class="eyebrow">Position tools</p>
+              <h2>Board editor</h2>
+            </div>
+          </section>
+
+          <section class="panel-block editor-section">
+            <p class="panel-label">Play setup</p>
+            <button id="editorPlayerButton" type="button">You play: White</button>
+            <button id="editorTurnButton" type="button">First move: White</button>
+            <button id="editorPlayButton" type="button">Play from here</button>
+          </section>
+
+          <section class="panel-block editor-section">
+            <p class="panel-label">Position</p>
+            <div class="editor-grid">
+              <button id="editorStartButton" type="button">Start position</button>
+              <button id="editorCopyFenButton" type="button">Copy FEN</button>
+              <button id="editorClearButton" type="button">Clear board</button>
+              <button id="editorCancelButton" type="button">Cancel (Esc)</button>
+            </div>
+          </section>
+
+          <section class="panel-block status-block editor-status-block">
+            <p class="panel-label">Status</p>
+            <p id="editorStatus">Board editor</p>
+          </section>
+
+          <section class="side-actions editor-actions">
+            <button id="editorMainMenuButton" type="button">Main menu</button>
+            <button id="editorSettingsButton" type="button">Settings</button>
+            <button id="editorHelpButton" type="button">? Shortcuts</button>
+          </section>
+        </div>
+
+        <div class="editor-column">
+          <section class="panel-block editor-section editor-pieces-block">
+            <p class="panel-label">Pieces</p>
+            <div class="editor-palette" id="editorPalette"></div>
+            <p class="editor-hint">Palette toggles a brush. Click or drag pieces. Right-click deletes.</p>
+          </section>
+
+          <section class="panel-block editor-section">
+            <p class="panel-label">Practice</p>
+            <div class="editor-grid" id="editorDrills"></div>
+          </section>
+
+          <section class="panel-block editor-section">
+            <p class="panel-label">Odds</p>
+            <button id="editorOddsRecipientButton" type="button">Odds for: You</button>
+            <div class="editor-grid" id="editorOdds"></div>
+          </section>
+        </div>
+      </aside>
+    </main>
+
+    <div class="promotion-backdrop" id="promotionBackdrop" hidden>
+      <div class="promotion-dialog" id="promotionDialog" role="dialog" aria-modal="true" aria-labelledby="promotionTitle">
+        <h2 id="promotionTitle">Promote to: <span>Esc cancels</span></h2>
+        <div class="promotion-choices" id="promotionChoices"></div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="themeModal" hidden>
+      <section class="modal-box wide-modal" role="dialog" aria-modal="true" aria-labelledby="themeModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="themeModalTitle">Choose a theme</h2>
+            <p>Select a complete board and interface palette</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="theme-gallery" id="themeGallery"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="timeModal" hidden>
+      <section class="modal-box" role="dialog" aria-modal="true" aria-labelledby="timeModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="timeModalTitle">Choose game mode</h2>
+            <p>Every mode plays on a real clock — Sgurr manages its own thinking time.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="time-gallery" id="timeGallery"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="settingsModal" hidden>
+      <section class="modal-box" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="settingsModalTitle">Settings</h2>
+            <p>Preferences are saved in this browser.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="settings-list">
+          <label class="toggle-row">
+            <span>
+              <strong>Auto-flip as Black</strong>
+              <small>Match the desktop board orientation behavior.</small>
+            </span>
+            <input type="checkbox" id="autoFlipInput">
+          </label>
+          <label class="toggle-row">
+            <span>
+              <strong>Show engine info</strong>
+              <small>Display backend status and latest search metadata.</small>
+            </span>
+            <input type="checkbox" id="showEngineInfoInput">
+          </label>
+          <label class="settings-field">
+            Animations
+            <select id="animationModeSelect">
+              <option value="On">On</option>
+              <option value="Off">Off</option>
+            </select>
+          </label>
+          <label class="toggle-row">
+            <span>
+              <strong>Move sounds</strong>
+              <small>Use the existing desktop GUI sound effects.</small>
+            </span>
+            <input type="checkbox" id="soundEnabledInput">
+          </label>
+          <label class="settings-field">
+            Sound volume
+            <input type="range" id="soundVolumeInput" min="0" max="1" step="0.05">
+          </label>
+          <label class="toggle-row">
+            <span>
+              <strong>Menu music</strong>
+              <small>Play Sgurr's theme on the main menu only.</small>
+            </span>
+            <input type="checkbox" id="musicEnabledInput">
+          </label>
+          <label class="settings-field">
+            Menu music volume
+            <input type="range" id="musicVolumeInput" min="0" max="1" step="0.05">
+          </label>
+          <label class="toggle-row">
+            <span>
+              <strong>In-game music</strong>
+              <small>Use an adaptive score while playing against Sgurr.</small>
+            </span>
+            <input type="checkbox" id="gameMusicEnabledInput">
+          </label>
+          <label class="settings-field">
+            In-game music volume
+            <input type="range" id="gameMusicVolumeInput" min="0" max="1" step="0.05">
+          </label>
+          <button type="button" id="clearPreferencesButton">Reset web preferences</button>
+          <button type="button" id="clearMemoryButton">Forget recorded encounters</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="helpModal" hidden>
+      <section class="modal-box wide-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="helpModalTitle">Controls</h2>
+            <p>Keyboard and mouse controls ported from the desktop GUI where Stage 1 supports them.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="help-grid">
+          <div><strong>Click / drag</strong><span>Move a piece with highlighted legal squares</span></div>
+          <div><strong>R</strong><span>Restart the current mode</span></div>
+          <div><strong>U</strong><span>Undo a full move pair</span></div>
+          <div><strong>← / →</strong><span>Step backward or forward one ply</span></div>
+          <div><strong>G</strong><span>Ask Sgurr to move now</span></div>
+          <div><strong>C / P</strong><span>Copy FEN or export PGN</span></div>
+          <div><strong>E</strong><span>Open the board editor</span></div>
+          <div><strong>Space</strong><span>Pause or resume watch mode</span></div>
+          <div><strong>T</strong><span>Cycle theme</span></div>
+          <div><strong>F</strong><span>Flip the board manually</span></div>
+          <div><strong>Z</strong><span>Toggle board focus mode</span></div>
+          <div><strong>L</strong><span>Load FEN</span></div>
+          <div><strong>?</strong><span>Show this help</span></div>
+          <div><strong>Esc</strong><span>Close overlays or promotion chooser</span></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="fenModal" hidden>
+      <section class="modal-box" role="dialog" aria-modal="true" aria-labelledby="fenModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="fenModalTitle">Load FEN</h2>
+            <p>Start a playable web game from a legal FEN.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <label class="fen-field">
+          FEN
+          <textarea id="fenInput" rows="4" spellcheck="false"></textarea>
+        </label>
+        <label class="fen-field">
+          Side after load
+          <select id="fenSideSelect">
+            <option value="white">Play as White</option>
+            <option value="black">Play as Black</option>
+            <option value="watch">Watch Sgurr vs itself</option>
+          </select>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="loadFenSubmitButton">Load position</button>
+          <button type="button" data-close-modal>Cancel</button>
+        </div>
+        <p class="modal-error" id="fenError"></p>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="resultModal" hidden>
+      <section class="modal-box result-box" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <div class="result-core-scene" aria-hidden="true">
+          <span class="result-orbit result-orbit-outer"></span>
+          <span class="result-orbit result-orbit-mid"></span>
+          <span class="result-orbit result-orbit-inner"></span>
+          <span class="sgurr-core result-core-main"></span>
+          <span class="sgurr-core result-core-secondary"></span>
+          <span class="result-shard shard-a"></span>
+          <span class="result-shard shard-b"></span>
+          <span class="result-shard shard-c"></span>
+          <span class="result-shard shard-d"></span>
+          <span class="result-shard shard-e"></span>
+          <span class="result-shard shard-f"></span>
+        </div>
+        <div class="result-system-label">SGURR // GAME CONCLUDED</div>
+        <div class="result-king" id="resultKing">♔</div>
+        <div class="result-dual-kings" id="resultDualKings" aria-label="White and Black kings">
+          <span class="result-dual-king white" id="resultWhiteKing"></span>
+          <span class="result-balance-mark" aria-hidden="true">=</span>
+          <span class="result-dual-king black" id="resultBlackKing"></span>
+        </div>
+        <h2 id="resultTitle">Game over</h2>
+        <p id="resultDetail">Result</p>
+        <div class="result-pill" id="resultPill">1/2-1/2</div>
+        <div class="modal-actions">
+          <button type="button" id="rematchButton">Rematch</button>
+          <button type="button" id="resultMenuButton">Main menu</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

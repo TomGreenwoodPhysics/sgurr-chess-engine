@@ -1,0 +1,889 @@
+.intro-screen {
+  --intro-core-size: 224px;
+  --menu-core-size: var(--intro-core-size);
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  isolation: isolate;
+  background-color: #06090c;
+  color: #f3f1e8;
+  transition: background-color 760ms ease;
+}
+
+.intro-screen[hidden] {
+  display: none;
+}
+
+.intro-screen::before,
+.intro-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 900ms ease;
+}
+
+.intro-screen::before {
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 47%, color-mix(in srgb, var(--accent), transparent 90%) 0 8%, transparent 26%),
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accent-2), transparent 96%) 0 18%, transparent 42%);
+  opacity: 0.38;
+}
+
+.intro-screen::after {
+  z-index: 12;
+  background:
+    linear-gradient(180deg, rgba(2, 4, 6, 0.38), transparent 22% 72%, rgba(2, 3, 5, 0.56)),
+    radial-gradient(ellipse at 50% 47%, transparent 0 28%, rgba(1, 3, 5, 0.18) 61%, rgba(1, 2, 4, 0.82) 100%);
+}
+
+.intro-cave {
+  position: absolute;
+  z-index: 0;
+  inset: -3%;
+  background:
+    linear-gradient(color-mix(in srgb, var(--bg), transparent 72%), color-mix(in srgb, var(--bg), transparent 78%)),
+    url("../assets/intro/sgurr-cave-chamber.png") center 49% / cover no-repeat;
+  filter: brightness(0.4) saturate(0.5) contrast(1.2);
+  transform: scale(1.075);
+  transform-origin: center 52%;
+  transition:
+    filter 1450ms cubic-bezier(0.2, 0.75, 0.2, 1),
+    opacity 850ms ease,
+    transform 1800ms cubic-bezier(0.16, 0.78, 0.2, 1);
+  /* Slow dolly-in: emerging from darkness and walking into the chamber.
+     The final keyframe matches the resting transform so dropping the
+     animation on later states never causes a visible jump. */
+  animation: intro-cave-arrive 6400ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.intro-cave::before,
+.intro-cave::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.intro-cave::before {
+  background: color-mix(in srgb, var(--accent), transparent 91%);
+  mix-blend-mode: color;
+  opacity: 0.62;
+  transition: opacity 1200ms ease;
+}
+
+.intro-cave::after {
+  background:
+    linear-gradient(90deg, transparent 0 49.86%, color-mix(in srgb, var(--accent-2), transparent 80%) 49.94% 50.06%, transparent 50.14%),
+    radial-gradient(ellipse at 50% 78%, color-mix(in srgb, var(--accent), transparent 91%) 0 8%, transparent 29%);
+  opacity: 0.24;
+}
+
+.intro-fog {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 900ms ease;
+}
+
+.intro-fog span {
+  position: absolute;
+  left: -18%;
+  width: 136%;
+  height: 58%;
+  background:
+    radial-gradient(ellipse at 28% 62%, rgba(196, 186, 166, 0.11), transparent 58%),
+    radial-gradient(ellipse at 72% 38%, rgba(172, 160, 138, 0.09), transparent 54%);
+  filter: blur(26px);
+  opacity: 0.55;
+}
+
+.intro-fog span:first-child {
+  top: 44%;
+}
+
+.intro-fog span:last-child {
+  top: 12%;
+  height: 48%;
+  opacity: 0.34;
+}
+
+.intro-screen[data-motion="on"] .intro-fog span {
+  animation: intro-fog-drift 26s ease-in-out infinite alternate;
+}
+
+.intro-screen[data-motion="on"] .intro-fog span:last-child {
+  animation-duration: 34s;
+  animation-delay: -13s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes intro-fog-drift {
+  from {
+    transform: translate3d(-3.5%, 0.5%, 0);
+  }
+  to {
+    transform: translate3d(3.5%, -1.5%, 0);
+  }
+}
+
+.intro-threshold {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 5%;
+  width: min(760px, 64vw);
+  height: 30%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0.28;
+  transition: opacity 900ms ease;
+}
+
+.intro-threshold span {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 100%;
+  height: 34%;
+  border-top: 1px solid color-mix(in srgb, var(--accent), transparent 74%);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 -2px 22px color-mix(in srgb, var(--accent), transparent 90%);
+}
+
+.intro-threshold span:nth-child(2) {
+  bottom: 22%;
+  width: 72%;
+}
+
+.intro-threshold span:nth-child(3) {
+  bottom: 43%;
+  width: 45%;
+}
+
+.intro-sanctum {
+  position: absolute;
+  z-index: 4;
+  top: 47%;
+  left: 50%;
+  width: min(540px, 44vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.intro-seal,
+.intro-seal-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.intro-seal {
+  opacity: 0.38;
+  transition:
+    filter 1200ms ease,
+    opacity 1000ms ease,
+    transform 1400ms cubic-bezier(0.16, 0.78, 0.2, 1);
+}
+
+.intro-seal-ring {
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 64%);
+  box-shadow:
+    inset 0 0 36px color-mix(in srgb, var(--accent), transparent 92%),
+    0 0 24px color-mix(in srgb, var(--accent), transparent 92%);
+}
+
+.intro-seal-ring::before,
+.intro-seal-ring::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--accent-2), transparent 42%);
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: color-mix(in srgb, var(--bg), transparent 12%);
+}
+
+.intro-seal-ring::before {
+  top: 0;
+}
+
+.intro-seal-ring::after {
+  top: 100%;
+}
+
+.intro-seal-ring.ring-one {
+  inset: 14%;
+  animation: intro-seal-turn 22s linear infinite;
+}
+
+.intro-seal-ring.ring-two {
+  inset: 27%;
+  border-color: color-mix(in srgb, var(--accent-2), transparent 70%);
+  animation: intro-seal-turn-reverse 16s linear infinite;
+}
+
+.intro-seal-ring.ring-three {
+  inset: 38%;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--text), transparent 82%);
+  animation: intro-seal-breathe 4.8s ease-in-out infinite;
+}
+
+.intro-core-trigger {
+  position: absolute;
+  z-index: 8;
+  top: 47%;
+  left: 50%;
+  width: var(--intro-core-size);
+  height: var(--intro-core-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.intro-core-trigger:hover,
+.intro-core-trigger:active {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.intro-core-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 20px;
+}
+
+.intro-core-trigger:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.intro-core {
+  --menu-core-size: var(--intro-core-size);
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  transition:
+    filter 1100ms cubic-bezier(0.16, 0.78, 0.2, 1),
+    opacity 900ms ease,
+    box-shadow 1100ms ease;
+}
+
+.intro-core.dormant {
+  --core-ring-opacity: 0.2;
+  --core-ring-fade: 76%;
+  /* barely there: a cold, buried ember under the mountain — dark and
+     desaturated, but not fully dead, so something still seems to slumber. */
+  filter: grayscale(0.6) saturate(0.55) brightness(0.34) contrast(1.05);
+  opacity: 0.62;
+}
+
+.intro-copy {
+  position: absolute;
+  z-index: 14;
+  left: 50%;
+  bottom: 4.2%;
+  width: min(600px, calc(100vw - 40px));
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 3px 20px rgba(0, 0, 0, 0.86);
+  transition:
+    opacity 520ms ease,
+    transform 700ms cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+/* The prompt only fades in once the dolly-in has nearly settled, so the
+   first beats belong to the cave alone. fill-mode backwards (not both) so
+   the fill never fights the state-driven opacity rules that follow. */
+.intro-screen[data-motion="on"] .intro-copy {
+  animation: intro-copy-arrive 1700ms ease 2900ms backwards;
+}
+
+@keyframes intro-copy-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.intro-eyebrow,
+.intro-state {
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.intro-eyebrow {
+  color: #aebac0;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.intro-state {
+  min-height: 18px;
+  margin-top: 8px;
+  color: #9ba9af;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.intro-wake-button {
+  min-width: 184px;
+  min-height: 48px;
+  margin-top: 14px;
+  border-color: color-mix(in srgb, var(--accent), #f3f1e8 24%);
+  border-radius: 4px;
+  background: rgba(7, 12, 16, 0.8);
+  color: #f3f1e8;
+  font-weight: 900;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text), transparent 92%),
+    0 12px 36px rgba(0, 0, 0, 0.42),
+    0 0 28px color-mix(in srgb, var(--accent), transparent 82%);
+}
+
+.intro-wake-button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, #0b1115, var(--accent) 14%);
+  transform: translateY(-1px);
+}
+
+.intro-transition-veil {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cinematic letterbox bars that close in when the encounter begins. */
+.intro-letterbox {
+  position: absolute;
+  z-index: 16;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 700ms ease;
+}
+
+.letterbox-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #010203;
+  transition: height 1100ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.letterbox-bar.bar-top {
+  top: 0;
+}
+
+.letterbox-bar.bar-bottom {
+  bottom: 0;
+}
+
+/* Boss name card: serif title, gold hairline, epithet, filling health bar. */
+.intro-bosscard {
+  position: absolute;
+  z-index: 17;
+  left: 50%;
+  bottom: 12%;
+  width: min(760px, calc(100vw - 48px));
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 700ms ease;
+}
+
+.intro-bosscard h1 {
+  margin: 0;
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+  font-size: 4.9rem;
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: #ead9ac;
+  text-shadow:
+    0 0 30px color-mix(in srgb, var(--accent), transparent 55%),
+    0 2px 20px rgba(0, 0, 0, 0.92);
+}
+
+.bosscard-rule {
+  width: min(560px, 84%);
+  height: 1px;
+  margin: 12px auto 9px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent), #fff 12%) 50%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent), transparent 45%);
+  transform: scaleX(0);
+  transition: transform 950ms cubic-bezier(0.22, 0.61, 0.36, 1) 480ms;
+}
+
+.bosscard-epithet {
+  margin: 0;
+  color: #c8b384;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  opacity: 0;
+  transition: opacity 900ms ease 780ms;
+}
+
+.bosscard-healthbar {
+  width: min(620px, 92%);
+  height: 7px;
+  margin: 28px auto 0;
+  padding: 1px;
+  border: 1px solid rgba(122, 100, 58, 0.6);
+  background: rgba(4, 6, 9, 0.78);
+  box-shadow:
+    inset 0 0 8px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(0, 0, 0, 0.65);
+  opacity: 0;
+  transition: opacity 600ms ease 950ms;
+}
+
+.bosscard-health-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #f2c65f, #9d6a20);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent), transparent 35%);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 1550ms cubic-bezier(0.25, 0.1, 0.25, 1) 1150ms;
+}
+
+/* Rock dust shaken loose when the sleeper is disturbed (spawned from JS). */
+.intro-dust {
+  position: absolute;
+  z-index: 7;
+  top: -3%;
+  left: var(--dx);
+  width: var(--dw);
+  height: calc(var(--dw) * 2.4);
+  border-radius: 1px;
+  background: linear-gradient(rgba(212, 194, 158, 0.9), rgba(140, 120, 92, 0.35));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro-screen[data-motion="on"] .intro-dust {
+  animation: intro-dust-fall var(--dd) cubic-bezier(0.5, 0, 0.85, 0.55) var(--ddelay) forwards;
+}
+
+@keyframes intro-dust-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+  }
+  12% {
+    opacity: 0.85;
+  }
+  82% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dsway), 108vh, 0);
+  }
+}
+
+.intro-screen[data-state="waking"]::before,
+.intro-screen[data-state="naming"]::before {
+  opacity: 1;
+}
+
+/* The disturbance: the whole chamber quakes for a beat. The keyframes end
+   on transform: none so the fill leaves no containing block behind for the
+   fixed-position core handoff later. */
+.intro-screen[data-motion="on"][data-state="waking"] {
+  animation: intro-quake 1050ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes intro-quake {
+  10% {
+    transform: translate3d(-7px, 4px, 0);
+  }
+  20% {
+    transform: translate3d(8px, -3px, 0);
+  }
+  32% {
+    transform: translate3d(-6px, -4px, 0);
+  }
+  44% {
+    transform: translate3d(5px, 3px, 0);
+  }
+  58% {
+    transform: translate3d(-4px, 2px, 0);
+  }
+  72% {
+    transform: translate3d(3px, -2px, 0);
+  }
+  86% {
+    transform: translate3d(-1px, 1px, 0);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* Waking drops the arrival animation (its last keyframe matches the resting
+   transform) and lurches the camera towards the thing that just noticed you;
+   naming settles back slowly while the card holds the frame. */
+.intro-screen[data-state="waking"] .intro-cave,
+.intro-screen[data-state="naming"] .intro-cave {
+  animation: none;
+}
+
+.intro-screen[data-state="waking"] .intro-cave {
+  filter: brightness(0.68) saturate(0.82) contrast(1.14);
+  transform: scale(1.13);
+  transition:
+    filter 900ms cubic-bezier(0.2, 0.75, 0.2, 1),
+    opacity 850ms ease,
+    transform 520ms cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+.intro-screen[data-state="naming"] .intro-cave {
+  filter: brightness(0.58) saturate(0.78) contrast(1.16);
+  transform: scale(1.06);
+  transition:
+    filter 2400ms ease,
+    opacity 850ms ease,
+    transform 3400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.intro-screen[data-state="waking"] .intro-cave::before,
+.intro-screen[data-state="naming"] .intro-cave::before {
+  opacity: 0.9;
+}
+
+.intro-screen[data-state="waking"] .intro-threshold,
+.intro-screen[data-state="naming"] .intro-threshold {
+  opacity: 0.78;
+}
+
+.intro-screen[data-state="waking"] .intro-seal,
+.intro-screen[data-state="naming"] .intro-seal {
+  filter: brightness(1.55) saturate(1.4);
+  opacity: 0.9;
+  transform: scale(1.04);
+}
+
+/* Same declaration in both states so the animation carries over without
+   restarting when waking hands off to naming. */
+.intro-screen[data-state="waking"] .intro-core-trigger,
+.intro-screen[data-state="naming"] .intro-core-trigger {
+  animation: intro-core-wake 1400ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
+}
+
+.intro-screen[data-state="waking"] .intro-core,
+.intro-screen[data-state="naming"] .intro-core {
+  filter: saturate(1.3) brightness(1.22);
+  opacity: 1;
+}
+
+.intro-screen[data-state="waking"] .intro-wake-button {
+  border-color: var(--accent);
+  color: var(--accent);
+  pointer-events: none;
+}
+
+/* The name card owns the naming phase: prompt copy departs, bars close in,
+   the title and health bar arrive. */
+.intro-screen[data-state="naming"] .intro-copy {
+  opacity: 0;
+  transform: translateX(-50%) translateY(16px);
+  pointer-events: none;
+}
+
+.intro-screen[data-state="naming"] .letterbox-bar {
+  height: 9vh;
+}
+
+.intro-screen[data-state="naming"] .intro-bosscard {
+  opacity: 1;
+}
+
+.intro-screen[data-state="naming"] .bosscard-rule {
+  transform: scaleX(1);
+}
+
+.intro-screen[data-state="naming"] .bosscard-epithet {
+  opacity: 1;
+}
+
+.intro-screen[data-state="naming"] .bosscard-healthbar {
+  opacity: 1;
+}
+
+.intro-screen[data-state="naming"] .bosscard-health-fill {
+  transform: scaleX(1);
+}
+
+.intro-screen[data-state="blackout"] .intro-transition-veil {
+  opacity: 1;
+}
+
+.intro-screen[data-state="blackout"]::before,
+.intro-screen[data-state="blackout"]::after,
+.intro-screen[data-state="blackout"] .intro-fog,
+.intro-screen[data-state="blackout"] .intro-bosscard,
+.intro-screen[data-state="blackout"] .intro-letterbox,
+.intro-screen[data-state="blackout"] .intro-copy {
+  opacity: 0;
+}
+
+.intro-screen[data-state="blackout"] .intro-copy {
+  transform: translate(-50%, 18px);
+}
+
+.intro-screen[data-state="transferring"] {
+  background-color: #000;
+  pointer-events: none;
+}
+
+.intro-screen[data-state="transferring"] .intro-transition-veil {
+  opacity: 1;
+}
+
+.intro-screen[data-state="transferring"]::before,
+.intro-screen[data-state="transferring"]::after,
+.intro-screen[data-state="transferring"] .intro-cave,
+.intro-screen[data-state="transferring"] .intro-threshold,
+.intro-screen[data-state="transferring"] .intro-sanctum,
+.intro-screen[data-state="transferring"] .intro-fog,
+.intro-screen[data-state="transferring"] .intro-bosscard,
+.intro-screen[data-state="transferring"] .intro-letterbox,
+.intro-screen[data-state="transferring"] .intro-copy {
+  opacity: 0;
+}
+
+.intro-screen[data-state="transferring"] .intro-cave {
+  display: none;
+  animation: none;
+  transition: none;
+}
+
+.intro-screen[data-state="departing"] {
+  background-color: transparent;
+  pointer-events: none;
+  transition-duration: 1500ms;
+}
+
+.intro-screen[data-state="departing"] .intro-transition-veil {
+  opacity: 0;
+  transition-duration: 1500ms;
+}
+
+.intro-screen[data-state="departing"]::before,
+.intro-screen[data-state="departing"]::after,
+.intro-screen[data-state="departing"] .intro-cave,
+.intro-screen[data-state="departing"] .intro-threshold,
+.intro-screen[data-state="departing"] .intro-sanctum,
+.intro-screen[data-state="departing"] .intro-fog,
+.intro-screen[data-state="departing"] .intro-bosscard,
+.intro-screen[data-state="departing"] .intro-letterbox,
+.intro-screen[data-state="departing"] .intro-copy {
+  opacity: 0;
+}
+
+.intro-screen[data-state="departing"] .intro-copy {
+  transform: translate(-50%, 18px);
+}
+
+.intro-screen[data-state="departing"] .intro-cave {
+  display: none;
+  animation: none;
+  transition: none;
+}
+
+body.intro-pending {
+  overflow: hidden;
+}
+
+body.intro-pending .menu-screen {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.intro-revealing .menu-screen {
+  opacity: 1;
+  transition-duration: 1500ms;
+}
+
+body.intro-background-ready .menu-screen {
+  opacity: 1;
+  transition: none;
+}
+
+body.intro-pending .menu-title .menu-core {
+  opacity: 0;
+}
+
+@keyframes intro-cave-arrive {
+  from {
+    opacity: 0;
+    transform: scale(1.005) translateY(1.4%);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.075) translateY(0);
+  }
+}
+
+@keyframes intro-seal-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes intro-seal-turn-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes intro-seal-breathe {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes intro-core-wake {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  28% {
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  62% {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
+.intro-screen[data-motion="off"] *,
+.intro-screen[data-motion="off"] *::before,
+.intro-screen[data-motion="off"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+
+@media (max-width: 720px) {
+  .intro-screen {
+    --intro-core-size: min(48vw, 210px);
+  }
+
+  .intro-cave {
+    inset: -2%;
+    background-position: 50% 48%;
+  }
+
+  .intro-sanctum {
+    top: 45%;
+    width: min(94vw, 460px);
+  }
+
+  .intro-core-trigger {
+    top: 45%;
+  }
+
+  .intro-copy {
+    bottom: 5%;
+  }
+
+  .intro-bosscard {
+    bottom: 14%;
+  }
+
+  .intro-bosscard h1 {
+    font-size: 2.9rem;
+    letter-spacing: 0.22em;
+    text-indent: 0.22em;
+  }
+
+  .bosscard-epithet {
+    font-size: 0.66rem;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+  }
+
+  .intro-eyebrow {
+    font-size: 0.64rem;
+  }
+}
+
+@media (max-height: 680px) {
+  .intro-screen {
+    --intro-core-size: 156px;
+  }
+
+  .intro-sanctum,
+  .intro-core-trigger {
+    top: 43%;
+  }
+
+  .intro-sanctum {
+    width: min(430px, 48vw);
+  }
+
+  .intro-copy {
+    bottom: 3%;
+  }
+
+  .intro-bosscard {
+    bottom: 10%;
+  }
+
+  .intro-bosscard h1 {
+    font-size: 2.7rem;
+  }
+
+  .bosscard-healthbar {
+    margin-top: 16px;
+  }
+
+  .intro-wake-button {
+    min-height: 42px;
+    margin-top: 8px;
+  }
+}

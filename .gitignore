@@ -44,3 +44,6 @@ benchmarks/games/
 *.pgnbenchmarks/config.json
 benchmarks/ratings.csv
 runs/
+
+# local web demo server logs
+web/*.log

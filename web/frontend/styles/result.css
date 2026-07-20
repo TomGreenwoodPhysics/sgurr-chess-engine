@@ -1,0 +1,1607 @@
+.result-box {
+  position: relative;
+  overflow: visible;
+  text-align: center;
+  width: min(540px, 100%);
+  padding: 30px 30px 28px;
+  border-color: color-mix(in srgb, var(--accent), var(--danger) 26%);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 3%, color-mix(in srgb, var(--accent), transparent 68%) 0 7rem, transparent 7.4rem),
+    radial-gradient(circle at 76% 18%, color-mix(in srgb, var(--accent-2), transparent 84%) 0 5.4rem, transparent 5.8rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), var(--accent) 8%), color-mix(in srgb, var(--surface), #000 4%));
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--accent), transparent 76%),
+    0 0 54px color-mix(in srgb, var(--accent), transparent 76%);
+  animation: result-materialise 520ms cubic-bezier(0.18, 0.86, 0.24, 1) both;
+}
+
+.result-box::before,
+.result-box::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.result-box::before {
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, transparent 0 9%, color-mix(in srgb, var(--accent), transparent 62%) 9.3% 9.7%, transparent 10% 90%, color-mix(in srgb, var(--accent-2), transparent 68%) 90.3% 90.7%, transparent 91%),
+    repeating-linear-gradient(0deg, transparent 0 2.9rem, color-mix(in srgb, var(--text), transparent 95%) 2.94rem 2.99rem, transparent 3.05rem 5.8rem);
+  opacity: 0.7;
+}
+
+.result-box::after {
+  z-index: 0;
+  left: 50%;
+  top: 22px;
+  width: 150px;
+  height: 150px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--text) 16%);
+  border-radius: 46% 54% 43% 57% / 57% 42% 58% 43%;
+  background:
+    radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--text), transparent 10%) 0 9%, transparent 10%),
+    radial-gradient(circle at 60% 58%, color-mix(in srgb, var(--accent-2), transparent 20%) 0 25%, transparent 26%),
+    conic-gradient(from 45deg, var(--accent), var(--accent-2), var(--accent), var(--surface-3), var(--accent));
+  opacity: 0.24;
+  transform: translateX(-50%);
+  filter: saturate(1.35);
+  animation: result-core-afterglow 4.8s ease-in-out infinite;
+}
+
+.result-box > * {
+  position: relative;
+  z-index: 1;
+}
+
+.result-system-label {
+  display: none;
+}
+
+.result-orbit {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--text) 12%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.result-core-scene {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 16px;
+  width: 260px;
+  height: 190px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.result-core-main {
+  --core-border: color-mix(in srgb, var(--accent), var(--accent-2) 24%);
+  --core-aura-size: 54px;
+  --core-aura-fade: 22%;
+  --core-inner-color: color-mix(in srgb, var(--accent), var(--accent-2) 28%);
+  --core-inner-aura-size: 44px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 18%);
+  --core-ring-opacity: 0.88;
+  --core-ring-fade: 14%;
+  position: absolute;
+  left: 50%;
+  top: 34px;
+  width: 136px;
+  height: 136px;
+  border-width: 2px;
+  opacity: 0.28;
+  transform: translateX(-50%);
+  animation:
+    result-core-breathe 5.4s ease-in-out infinite,
+    boss-core-churn 23s ease-in-out infinite;
+}
+
+.result-core-main::after {
+  inset: -18px;
+  border-width: 2px;
+}
+
+.result-core-secondary,
+.result-dual-kings {
+  display: none;
+}
+
+.result-dual-king {
+  display: grid;
+  place-items: center;
+}
+
+.result-dual-king .piece-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.result-shard {
+  position: absolute;
+  left: 50%;
+  top: 86px;
+  width: var(--shard-size, 20px);
+  height: var(--shard-size, 20px);
+  border: 1px solid color-mix(in srgb, var(--accent-2), var(--text) 18%);
+  border-radius: 46% 54% 43% 57% / 58% 40% 60% 42%;
+  background:
+    radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--text), transparent 22%) 0 16%, transparent 17%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent), var(--text) 10%), color-mix(in srgb, var(--accent-2), var(--surface) 12%));
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--accent-2), transparent 36%),
+    0 0 30px color-mix(in srgb, var(--accent), transparent 66%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.2);
+}
+
+.shard-a {
+  --tx: -178px;
+  --ty: -86px;
+  --rot: -58deg;
+  --shard-size: 24px;
+}
+
+.shard-b {
+  --tx: -122px;
+  --ty: 58px;
+  --rot: 42deg;
+  --shard-size: 17px;
+}
+
+.shard-c {
+  --tx: -42px;
+  --ty: -122px;
+  --rot: 88deg;
+  --shard-size: 20px;
+}
+
+.shard-d {
+  --tx: 76px;
+  --ty: -106px;
+  --rot: -36deg;
+  --shard-size: 22px;
+}
+
+.shard-e {
+  --tx: 142px;
+  --ty: 34px;
+  --rot: 62deg;
+  --shard-size: 18px;
+}
+
+.shard-f {
+  --tx: 190px;
+  --ty: -58px;
+  --rot: 124deg;
+  --shard-size: 26px;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) {
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--white-eval), transparent 94%), transparent 42% 58%, color-mix(in srgb, var(--black-eval), transparent 88%)),
+    radial-gradient(ellipse at 50% 10%, color-mix(in srgb, var(--accent), transparent 74%) 0 12rem, transparent 36rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3), #000 18%), color-mix(in srgb, var(--bg), #000 32%));
+  backdrop-filter: blur(2px) brightness(0.62) saturate(0.86);
+  animation: arena-result-backdrop 1100ms ease-out both;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+)::before,
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+)::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+)::before {
+  inset: -36vmax;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg 13deg,
+    color-mix(in srgb, var(--accent), transparent 95%) 13.4deg 14deg,
+    transparent 14.4deg 29deg,
+    color-mix(in srgb, var(--accent-2), transparent 96%) 29.4deg 30deg
+  );
+  opacity: 0.68;
+  animation: arena-result-field 60s linear infinite;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+)::after {
+  left: -18%;
+  right: -18%;
+  bottom: -40%;
+  height: 72%;
+  border-top: 1px solid color-mix(in srgb, var(--accent), transparent 70%);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5.6rem, color-mix(in srgb, var(--accent), transparent 90%) 5.64rem 5.7rem),
+    repeating-linear-gradient(0deg, transparent 0 3.7rem, color-mix(in srgb, var(--accent-2), transparent 92%) 3.74rem 3.8rem);
+  opacity: 0.46;
+  transform: perspective(540px) rotateX(64deg) scale(1.3);
+  transform-origin: 50% 0;
+  animation: arena-result-grid 20s linear infinite;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-box {
+  z-index: 1;
+  width: min(640px, calc(100vw - 32px));
+  min-height: 430px;
+  margin-top: 14vh;
+  padding: 178px 42px 30px;
+  overflow: visible;
+  border-color: color-mix(in srgb, var(--accent), var(--accent-2) 42%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), transparent 27%), color-mix(in srgb, var(--surface), #000 8%) 46%),
+    repeating-linear-gradient(90deg, transparent 0 3rem, color-mix(in srgb, var(--accent), transparent 96%) 3.04rem 3.09rem, transparent 3.14rem 6rem);
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.54),
+    0 0 0 1px color-mix(in srgb, var(--accent), transparent 68%),
+    0 -28px 100px color-mix(in srgb, var(--accent), transparent 74%);
+  animation: arena-result-rise 900ms cubic-bezier(0.16, 0.86, 0.22, 1) both;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-box::before {
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--white-eval), transparent 50%), transparent 34% 66%, color-mix(in srgb, var(--black-eval), transparent 48%)) top / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0 62%, color-mix(in srgb, var(--accent), transparent 95%) 62.2% 62.6%, transparent 62.8%);
+  opacity: 0.86;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-box::after,
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-shard {
+  display: none;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-system-label {
+  display: block;
+  margin: 0 auto 12px;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 34%);
+  font-size: 0.72rem;
+  font-weight: 900;
+  animation: arena-label-arrive 800ms steps(6, end) 700ms both;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-box h2 {
+  margin-top: 0;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 34%);
+  font-size: clamp(2.35rem, 5.6vw, 3.8rem);
+  text-transform: uppercase;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-box p {
+  margin: 12px 0 18px;
+}
+
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+) .result-pill {
+  border-radius: 5px;
+}
+
+#resultModal:is([data-outcome="human-draw"], [data-outcome="watch-draw"]) .result-king {
+  display: none;
+}
+
+#resultModal:is([data-outcome="human-draw"], [data-outcome="watch-draw"]) .result-dual-kings {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  transform: translateX(-50%);
+  animation: balance-kings-arrive 1100ms cubic-bezier(0.16, 0.9, 0.2, 1) 650ms both;
+}
+
+.result-dual-king {
+  width: 88px;
+  height: 88px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--text) 20%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-2), transparent 10%);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--accent), transparent 62%);
+}
+
+.result-balance-mark {
+  color: var(--accent-2);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+#resultModal[data-outcome="human-draw"] .result-core-scene {
+  top: -235px;
+  width: min(720px, 96vw);
+  height: 440px;
+  overflow: visible;
+}
+
+#resultModal[data-outcome="human-draw"] .result-core-main {
+  --core-aura-size: 92px;
+  --core-aura-fade: 24%;
+  --core-inner-aura-size: 72px;
+  left: 50%;
+  top: 42px;
+  width: 340px;
+  height: 340px;
+  opacity: 0.82;
+  animation: equilibrium-core 8s ease-in-out infinite;
+}
+
+#resultModal[data-outcome="human-draw"] .result-core-main::after {
+  inset: -36px;
+}
+
+#resultModal[data-outcome="human-draw"] .result-orbit {
+  display: block;
+  opacity: 0.48;
+  animation: equilibrium-orbit 22s linear infinite;
+}
+
+#resultModal[data-outcome="human-draw"] .result-orbit-outer {
+  width: 460px;
+  height: 460px;
+}
+
+#resultModal[data-outcome="human-draw"] .result-orbit-mid {
+  width: 410px;
+  height: 300px;
+  animation-direction: reverse;
+  animation-duration: 17s;
+}
+
+#resultModal[data-outcome="human-draw"] .result-orbit-inner {
+  width: 292px;
+  height: 390px;
+  animation-duration: 13s;
+}
+
+#resultModal:is([data-outcome="watch-draw"], [data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-scene {
+  top: -210px;
+  width: min(760px, 98vw);
+  height: 430px;
+  overflow: visible;
+}
+
+#resultModal:is([data-outcome="watch-draw"], [data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-main,
+#resultModal:is([data-outcome="watch-draw"], [data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-secondary {
+  position: absolute;
+  display: block;
+  top: 70px;
+  border-width: 2px;
+}
+
+#resultModal[data-outcome="watch-draw"] .result-core-main,
+#resultModal[data-outcome="watch-draw"] .result-core-secondary {
+  --core-aura-size: 68px;
+  --core-aura-fade: 28%;
+  width: 248px;
+  height: 248px;
+  opacity: 0.86;
+  animation: arena-core-balance 7.2s ease-in-out infinite;
+}
+
+#resultModal[data-outcome="watch-draw"] .result-core-main {
+  --core-inner-color: color-mix(in srgb, var(--white-eval), var(--accent) 34%);
+  left: 32%;
+}
+
+#resultModal[data-outcome="watch-draw"] .result-core-secondary {
+  --core-inner-color: color-mix(in srgb, var(--black-eval), var(--accent) 18%);
+  left: 68%;
+  transform: translateX(-50%);
+  animation-delay: -3.6s;
+}
+
+#resultModal[data-outcome="watch-draw"] .result-core-main::before,
+#resultModal[data-outcome="watch-draw"] .result-core-secondary::before {
+  inset: 46px;
+}
+
+#resultModal[data-outcome="watch-draw"] .result-core-main::after,
+#resultModal[data-outcome="watch-draw"] .result-core-secondary::after {
+  inset: -28px;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-box {
+  padding-top: 184px;
+}
+
+#resultModal[data-outcome="watch-white-win"] {
+  background:
+    radial-gradient(ellipse at 35% 10%, color-mix(in srgb, var(--white-eval), transparent 72%) 0 14rem, transparent 38rem),
+    linear-gradient(110deg, color-mix(in srgb, var(--white-eval), transparent 91%), transparent 52%, color-mix(in srgb, var(--black-eval), transparent 78%)),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3), #000 18%), color-mix(in srgb, var(--bg), #000 34%));
+}
+
+#resultModal[data-outcome="watch-black-win"] {
+  background:
+    radial-gradient(ellipse at 65% 10%, color-mix(in srgb, var(--accent), transparent 68%) 0 14rem, transparent 38rem),
+    linear-gradient(70deg, color-mix(in srgb, var(--white-eval), transparent 78%), transparent 48%, color-mix(in srgb, var(--black-eval), transparent 88%)),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3), #000 18%), color-mix(in srgb, var(--bg), #000 34%));
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-main {
+  --core-aura-size: 92px;
+  --core-aura-fade: 18%;
+  width: 316px;
+  height: 316px;
+  opacity: 1;
+  animation: arena-winner-arrive 1200ms cubic-bezier(0.16, 0.86, 0.22, 1) both, arena-winner-core 7.6s ease-in-out 1200ms infinite;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-secondary {
+  --core-aura-size: 36px;
+  width: 204px;
+  height: 204px;
+  opacity: 0.34;
+  filter: grayscale(0.52) brightness(0.66);
+  animation: arena-loser-core 1600ms ease-out both;
+}
+
+#resultModal[data-outcome="watch-white-win"] .result-core-main {
+  --core-inner-color: color-mix(in srgb, var(--white-eval), var(--accent) 32%);
+  left: 34%;
+}
+
+#resultModal[data-outcome="watch-white-win"] .result-core-secondary {
+  --core-inner-color: color-mix(in srgb, var(--black-eval), var(--accent) 18%);
+  left: 70%;
+}
+
+#resultModal[data-outcome="watch-black-win"] .result-core-main {
+  --core-inner-color: color-mix(in srgb, var(--black-eval), var(--accent) 18%);
+  left: 66%;
+}
+
+#resultModal[data-outcome="watch-black-win"] .result-core-secondary {
+  --core-inner-color: color-mix(in srgb, var(--white-eval), var(--accent) 32%);
+  left: 30%;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-main::before {
+  inset: 58px;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-main::after {
+  inset: -34px;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-secondary::before {
+  inset: 38px;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-core-secondary::after {
+  inset: -22px;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-king {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 62px;
+  display: grid;
+  place-items: center;
+  width: 100px;
+  height: 100px;
+  margin-left: -50px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent-2), var(--text) 22%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-2), transparent 8%);
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--accent), transparent 88%),
+    0 0 38px color-mix(in srgb, var(--accent), transparent 48%);
+  animation: arena-king-crowned 1100ms cubic-bezier(0.16, 0.9, 0.2, 1) 900ms both;
+}
+
+#resultModal:is([data-outcome="watch-white-win"], [data-outcome="watch-black-win"]) .result-king .piece-image {
+  width: 86px;
+  height: 86px;
+  margin: auto;
+}
+
+#resultModal[data-outcome="human-win"] .result-box {
+  z-index: 1;
+  width: min(620px, calc(100vw - 32px));
+  min-height: 430px;
+  margin-top: 15vh;
+  padding: 174px 42px 30px;
+  overflow: visible;
+  border-color: color-mix(in srgb, var(--accent-2), var(--text) 16%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), transparent 26%), color-mix(in srgb, var(--surface), #000 7%) 46%),
+    repeating-linear-gradient(90deg, transparent 0 3rem, color-mix(in srgb, var(--accent-2), transparent 95%) 3.04rem 3.09rem, transparent 3.14rem 6rem);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.48),
+    0 0 0 1px color-mix(in srgb, var(--accent-2), transparent 62%),
+    0 -24px 110px color-mix(in srgb, var(--accent-2), transparent 68%);
+  animation: human-verdict-rise 950ms cubic-bezier(0.16, 0.86, 0.22, 1) both;
+}
+
+#resultModal[data-outcome="human-win"] .result-box::before {
+  background:
+    linear-gradient(90deg, transparent 0 9%, color-mix(in srgb, var(--accent-2), transparent 72%) 9.3% 9.6%, transparent 10% 90%, color-mix(in srgb, var(--accent), transparent 78%) 90.3% 90.6%, transparent 91%),
+    repeating-linear-gradient(0deg, transparent 0 3.2rem, color-mix(in srgb, var(--text), transparent 96%) 3.24rem 3.29rem, transparent 3.35rem 6.4rem);
+  opacity: 0.5;
+  animation: none;
+}
+
+#resultModal[data-outcome="human-win"] .result-box::after {
+  display: none;
+}
+
+#resultModal[data-outcome="human-win"] .result-core-scene {
+  top: -250px;
+  width: min(760px, 96vw);
+  height: 470px;
+  overflow: visible;
+}
+
+#resultModal[data-outcome="human-win"] .result-core-main {
+  --core-border: color-mix(in srgb, var(--accent), var(--edge) 34%);
+  --core-aura-size: 82px;
+  --core-aura-fade: 34%;
+  --core-inner-color: color-mix(in srgb, var(--accent), var(--accent-2) 36%);
+  --core-inner-aura-size: 70px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 18%);
+  --core-ring-opacity: 0.92;
+  --core-ring-fade: 22%;
+  --core-scale-low: 1;
+  --core-scale-mid: 1.035;
+  --core-sat-low: 1.12;
+  --core-sat-mid: 1.28;
+  --core-sat-late: 1.2;
+  --core-bright-low: 1;
+  --core-bright-mid: 1.06;
+  --core-bright-late: 0.98;
+  /* The aftermath: the rupture already happened on the board. What hangs
+     here is the husk — dark, drained of colour, listing slightly, its
+     interior a ghost of what it was, a last ember guttering inside. */
+  opacity: 0.9;
+  width: 360px;
+  height: 360px;
+  top: 36px;
+  filter: grayscale(0.66) saturate(0.5) brightness(0.46) contrast(1.08);
+  animation: result-husk-drift 14s ease-in-out infinite;
+}
+
+#resultModal[data-outcome="human-win"] .result-core-main::before {
+  inset: 66px;
+  animation: result-husk-flicker 9s linear infinite;
+}
+
+#resultModal[data-outcome="human-win"] .result-core-main::after {
+  inset: -38px;
+  border-width: 3px;
+  opacity: 0.2;
+  animation: none;
+}
+
+/* Ash sifting down off the husk, over and over, never settling. */
+#resultModal[data-outcome="human-win"] .result-shard {
+  animation: result-ash-drift var(--ash-dur, 7s) linear var(--ash-delay, 0s) infinite;
+}
+
+#resultModal[data-outcome="human-win"] .shard-a {
+  --ax: -132px;
+  --tx: -26px;
+  --ty: 250px;
+  --rot: -70deg;
+  --shard-size: 13px;
+  --ash-delay: -1.2s;
+}
+
+#resultModal[data-outcome="human-win"] .shard-b {
+  --ax: -78px;
+  --tx: 18px;
+  --ty: 290px;
+  --rot: 54deg;
+  --shard-size: 9px;
+  --ash-dur: 8.5s;
+  --ash-delay: -5.4s;
+}
+
+#resultModal[data-outcome="human-win"] .shard-c {
+  --ax: -18px;
+  --tx: -14px;
+  --ty: 265px;
+  --rot: 96deg;
+  --shard-size: 11px;
+  --ash-delay: -3.1s;
+}
+
+#resultModal[data-outcome="human-win"] .shard-d {
+  --ax: 44px;
+  --tx: 24px;
+  --ty: 300px;
+  --rot: -48deg;
+  --shard-size: 12px;
+  --ash-dur: 9.5s;
+  --ash-delay: -7.8s;
+}
+
+#resultModal[data-outcome="human-win"] .shard-e {
+  --ax: 104px;
+  --tx: -20px;
+  --ty: 255px;
+  --rot: 62deg;
+  --shard-size: 9px;
+  --ash-dur: 8s;
+  --ash-delay: -2.2s;
+}
+
+#resultModal[data-outcome="human-win"] .shard-f {
+  --ax: 152px;
+  --tx: 14px;
+  --ty: 280px;
+  --rot: 118deg;
+  --shard-size: 12px;
+  --ash-delay: -6.1s;
+}
+
+/* Dead halos: the god's machinery hangs tilted and still, barely lit. */
+#resultModal[data-outcome="human-win"] .result-orbit {
+  display: block;
+  opacity: 0;
+}
+
+#resultModal[data-outcome="human-win"] .result-orbit-outer {
+  --dead-tilt: 9deg;
+  width: 490px;
+  height: 490px;
+  border-color: color-mix(in srgb, var(--accent-2), transparent 36%);
+  animation: human-orbit-dead 1600ms ease-out 400ms both;
+}
+
+#resultModal[data-outcome="human-win"] .result-orbit-mid {
+  --dead-tilt: -14deg;
+  width: 430px;
+  height: 330px;
+  border-color: color-mix(in srgb, var(--accent), transparent 42%);
+  animation: human-orbit-dead 1600ms ease-out 560ms both;
+}
+
+#resultModal[data-outcome="human-win"] .result-orbit-inner {
+  --dead-tilt: 21deg;
+  width: 320px;
+  height: 420px;
+  border-color: color-mix(in srgb, var(--text), transparent 62%);
+  animation: human-orbit-dead 1600ms ease-out 720ms both;
+}
+
+#resultModal[data-outcome="human-win"] .result-system-label {
+  display: block;
+  margin: 0 auto 12px;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 38%);
+  font-size: 0.72rem;
+  font-weight: 900;
+  animation: human-label-confirm 700ms steps(5, end) 2800ms both;
+}
+
+#resultModal[data-outcome="human-win"] .result-king {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 48px;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin-left: -52px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent-2), var(--text) 22%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-2), transparent 12%);
+  color: color-mix(in srgb, var(--text), var(--accent-2) 18%);
+  font-size: 3.8rem;
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--accent-2), transparent 88%),
+    0 0 34px color-mix(in srgb, var(--accent-2), transparent 48%);
+  animation: human-king-rise 1100ms cubic-bezier(0.16, 0.9, 0.2, 1) 2650ms both;
+}
+
+#resultModal[data-outcome="human-win"] .result-king .piece-image {
+  width: 90px;
+  height: 90px;
+  margin: auto;
+}
+
+#resultModal[data-outcome="human-win"] .result-box h2 {
+  margin-top: 0;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 36%);
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  text-transform: uppercase;
+}
+
+#resultModal[data-outcome="human-win"] .result-box p {
+  margin: 12px 0 18px;
+}
+
+#resultModal[data-outcome="human-win"] .result-pill {
+  border-radius: 5px;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box {
+  width: min(620px, calc(100vw - 32px));
+  min-height: 430px;
+  margin-top: 15vh;
+  padding: 178px 42px 30px;
+  overflow: visible;
+  transform-origin: 50% 0;
+  border-color: color-mix(in srgb, var(--accent), var(--danger) 34%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface), transparent 28%), color-mix(in srgb, var(--surface), #000 9%) 44%),
+    repeating-linear-gradient(90deg, transparent 0 3rem, color-mix(in srgb, var(--accent), transparent 95%) 3.04rem 3.09rem, transparent 3.14rem 6rem);
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.56),
+    0 0 0 1px color-mix(in srgb, var(--accent), transparent 56%),
+    0 -28px 110px color-mix(in srgb, var(--accent), transparent 70%);
+  animation: sgurr-verdict-rise 900ms cubic-bezier(0.16, 0.86, 0.22, 1) both;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box::before {
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent), transparent 55%), transparent 22% 78%, color-mix(in srgb, var(--accent-2), transparent 62%)) top / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0 61%, color-mix(in srgb, var(--accent), transparent 94%) 61.2% 61.6%, transparent 61.8%);
+  opacity: 0.9;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-core-scene {
+  top: -270px;
+  width: min(760px, 96vw);
+  height: 480px;
+  overflow: visible;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-core-main {
+  --core-aura-size: 116px;
+  --core-aura-fade: 15%;
+  --core-inner-aura-size: 88px;
+  --core-inner-glow: color-mix(in srgb, var(--accent), transparent 14%);
+  --core-ring-opacity: 0.96;
+  --core-ring-fade: 12%;
+  left: 50%;
+  top: 30px;
+  width: 410px;
+  height: 410px;
+  opacity: 1;
+  filter: saturate(1.16) brightness(1.02);
+  animation:
+    sgurr-core-descend 1500ms cubic-bezier(0.14, 0.82, 0.2, 1) both,
+    sgurr-core-dominance 7.5s ease-in-out 1500ms infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-core-main::before {
+  inset: 74px;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-core-main::after {
+  inset: -42px;
+  border-width: 3px;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-shard {
+  display: none;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box::after {
+  display: none;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-orbit {
+  display: block;
+  opacity: 0;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-orbit-outer {
+  width: 510px;
+  height: 510px;
+  border-color: color-mix(in srgb, var(--accent), transparent 44%);
+  box-shadow: 0 0 42px color-mix(in srgb, var(--accent), transparent 76%);
+  animation: sgurr-orbit-arrive 1200ms ease-out 420ms both, sgurr-orbit-turn 18s linear 1620ms infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-orbit-mid {
+  width: 454px;
+  height: 340px;
+  border-color: color-mix(in srgb, var(--accent-2), transparent 48%);
+  animation: sgurr-orbit-arrive 1200ms ease-out 560ms both, sgurr-orbit-counterturn 14s linear 1760ms infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-orbit-inner {
+  width: 330px;
+  height: 438px;
+  border-color: color-mix(in srgb, var(--text), transparent 70%);
+  animation: sgurr-orbit-arrive 1200ms ease-out 700ms both, sgurr-orbit-turn 11s linear 1900ms infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-system-label {
+  display: block;
+  margin: 0 auto 12px;
+  color: color-mix(in srgb, var(--accent), var(--text) 30%);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  animation: sgurr-label-resolve 1000ms steps(6, end) 650ms both;
+}
+
+/* The taken king is not destroyed — he is kept. When the screen opens he
+   is already deep in the eye, dim and blurred with depth, tumbling slowly
+   in the currents: no arrival, no re-entry — he has been in there since
+   the devour. Negative delays start both motions mid-cycle. */
+#resultModal[data-outcome="sgurr-win"] .result-king {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  /* the core scene sits at -270px; this puts the king at the orb's heart */
+  top: -74px;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  padding: 3px;
+  color: var(--text);
+  opacity: 0.46;
+  filter: grayscale(0.68) brightness(0.82) blur(1.6px);
+  text-shadow:
+    0 0 14px color-mix(in srgb, var(--accent), transparent 40%),
+    0 0 34px color-mix(in srgb, var(--accent-2), transparent 64%);
+  /* the tumble animates the `rotate` property, which composes beneath the
+     drift's `transform`, so the two motions never fight */
+  animation:
+    sgurr-king-adrift 16s ease-in-out -6.5s infinite,
+    sgurr-king-tumble 47s linear -12s infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-king .piece-image {
+  width: 66px;
+  height: 66px;
+  margin: auto;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box h2 {
+  margin-top: 0;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 28%);
+  text-shadow:
+    0 0 24px color-mix(in srgb, var(--accent), transparent 48%),
+    0 3px 0 color-mix(in srgb, var(--bg), transparent 30%);
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box p {
+  margin: 12px 0 18px;
+  letter-spacing: 0;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-pill {
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-2), transparent 12%);
+}
+
+#resultModal[data-outcome="sgurr-win"] .modal-actions {
+  margin-top: 6px;
+}
+
+.result-king {
+  height: 88px;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols", serif;
+  font-size: 5.1rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--accent-2), var(--text) 20%);
+  text-shadow:
+    0 0 24px color-mix(in srgb, var(--accent), transparent 48%),
+    0 0 48px color-mix(in srgb, var(--accent-2), transparent 74%),
+    0 6px 0 color-mix(in srgb, var(--bg), transparent 36%);
+  animation: result-king-settle 760ms cubic-bezier(0.2, 0.9, 0.2, 1.08) both;
+}
+
+.result-king .piece-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.result-box h2 {
+  margin: 8px 0 0;
+  color: var(--accent-2);
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 0.95;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--accent), transparent 68%);
+}
+
+.result-box p {
+  margin: 12px 0 16px;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.result-pill {
+  width: fit-content;
+  min-width: 132px;
+  margin: 0 auto 20px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2), var(--accent) 10%);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 40%);
+  font-size: 1.1rem;
+  font-weight: 900;
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--accent), transparent 84%);
+}
+
+.result-box .modal-actions button:first-child {
+  background: color-mix(in srgb, var(--accent), var(--text) 10%);
+  border-color: var(--accent);
+  color: color-mix(in srgb, var(--bg), #000 18%);
+}
+
+.result-box .modal-actions button:last-child {
+  background: color-mix(in srgb, var(--surface-2), var(--accent-2) 8%);
+  border-color: color-mix(in srgb, var(--accent-2), var(--edge) 42%);
+}
+
+@keyframes result-materialise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes result-core-afterglow {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(0.96) rotate(0deg);
+    opacity: 0.18;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.08) rotate(8deg);
+    opacity: 0.32;
+  }
+}
+
+@keyframes result-core-breathe {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(0.96) rotate(0deg);
+    opacity: 0.24;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.06) rotate(5deg);
+    opacity: 0.36;
+  }
+}
+
+@keyframes result-husk-drift {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: -7deg;
+  }
+  50% {
+    translate: 0 12px;
+    rotate: -4.5deg;
+  }
+}
+
+/* Mostly dark; every so often the last ember inside catches, twice, and
+   fails again. */
+@keyframes result-husk-flicker {
+  0%,
+  60%,
+  100% {
+    opacity: 0.85;
+    filter: brightness(0.9);
+  }
+  63% {
+    opacity: 0.95;
+    filter: brightness(1.35);
+  }
+  66% {
+    opacity: 0.8;
+    filter: brightness(0.85);
+  }
+  70% {
+    opacity: 0.92;
+    filter: brightness(1.2);
+  }
+  73%,
+  88% {
+    opacity: 0.82;
+    filter: brightness(0.88);
+  }
+  91% {
+    opacity: 0.9;
+    filter: brightness(1.12);
+  }
+  94% {
+    opacity: 0.82;
+    filter: brightness(0.88);
+  }
+}
+
+@keyframes result-ash-drift {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--ax, 0px)), -50%) scale(0.55) rotate(0deg);
+  }
+  12% {
+    opacity: 0.5;
+  }
+  72% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--ax, 0px) + var(--tx, 0px)), calc(-50% + var(--ty, 250px))) scale(0.38) rotate(var(--rot, 60deg));
+  }
+}
+
+@keyframes human-orbit-dead {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--dead-tilt, 10deg) * 0.4)) scale(0.95);
+  }
+  to {
+    opacity: 0.15;
+    transform: translate(-50%, -50%) rotate(var(--dead-tilt, 10deg)) scale(1);
+  }
+}
+
+@keyframes result-blob-loom {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(0.98) rotate(-1deg);
+    filter: saturate(1.05) brightness(0.9);
+  }
+  45% {
+    transform: translateX(-50%) scale(1.035) rotate(2deg);
+    filter: saturate(1.22) brightness(1.02);
+  }
+  70% {
+    transform: translateX(-50%) scale(1.01) rotate(0.4deg);
+    filter: saturate(1.14) brightness(0.96);
+  }
+}
+
+@keyframes result-core-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.28) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.74;
+    transform: scale(1.55) rotate(18deg);
+  }
+}
+
+@keyframes result-core-shatter {
+  0% {
+    opacity: 0.42;
+    transform: translateX(-50%) scale(1) rotate(0deg);
+    filter: saturate(1.4) brightness(1.1);
+  }
+  58% {
+    opacity: 0.28;
+    transform: translateX(-50%) scale(1.55) rotate(-12deg);
+    filter: saturate(1.8) brightness(1.28);
+  }
+  100% {
+    opacity: 0.08;
+    transform: translateX(-50%) scale(2.2) rotate(-24deg);
+    filter: saturate(0.9) brightness(0.9);
+  }
+}
+
+@keyframes result-loom {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.018);
+  }
+}
+
+@keyframes result-core-loom {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(0.92) rotate(0deg);
+    opacity: 0.24;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.16) rotate(7deg);
+    opacity: 0.42;
+  }
+}
+
+@keyframes result-king-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.72) rotate(-4deg);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(1px) scale(1.08) rotate(1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes sgurr-takeover-backdrop {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0) brightness(1) saturate(1);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(3px) brightness(0.52) saturate(0.82);
+  }
+}
+
+@keyframes sgurr-verdict-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.975);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sgurr-core-descend {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-110px) scale(0.58);
+    filter: saturate(0.7) brightness(0.7);
+  }
+  68% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(8px) scale(1.035);
+    filter: saturate(1.22) brightness(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+    filter: saturate(1.16) brightness(1.02);
+  }
+}
+
+@keyframes sgurr-core-dominance {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    filter: saturate(1.16) brightness(1.02);
+  }
+  5% {
+    transform: translateX(-50%) translateY(0) scale(1.055);
+    filter: saturate(1.42) brightness(1.32);
+  }
+  12% {
+    transform: translateX(-50%) translateY(1px) scale(1.012);
+    filter: saturate(1.2) brightness(1.05);
+  }
+  50% {
+    transform: translateX(-50%) translateY(5px) scale(1.025);
+    filter: saturate(1.24) brightness(1.08);
+  }
+}
+
+@keyframes sgurr-orbit-arrive {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.62) rotate(-18deg);
+  }
+  to {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes sgurr-orbit-turn {
+  from {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes sgurr-orbit-counterturn {
+  from {
+    opacity: 0.58;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    opacity: 0.58;
+    transform: translate(-50%, -50%) rotate(-360deg);
+  }
+}
+
+/* Weightless: the king tumbles end over end, far too slowly to watch. */
+@keyframes sgurr-king-tumble {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* Suspended: a slow, weightless drift, never settling. */
+@keyframes sgurr-king-adrift {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.62) rotate(4deg);
+  }
+  26% {
+    transform: translate(-10px, 8px) scale(0.59) rotate(-3deg);
+  }
+  52% {
+    transform: translate(5px, 15px) scale(0.57) rotate(1deg);
+  }
+  76% {
+    transform: translate(10px, 5px) scale(0.63) rotate(7deg);
+  }
+}
+
+@keyframes sgurr-signal-field {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes sgurr-grid-drift {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 5.9rem 0, 0 3.9rem;
+  }
+}
+
+@keyframes sgurr-label-resolve {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+#resultModal[data-outcome="human-win"][data-animation="off"] *,
+#resultModal[data-outcome="sgurr-win"][data-animation="off"] *,
+#resultModal:is(
+  [data-outcome="human-draw"],
+  [data-outcome="watch-draw"],
+  [data-outcome="watch-white-win"],
+  [data-outcome="watch-black-win"]
+)[data-animation="off"] * {
+  animation-duration: 1ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+#resultModal[data-animation="off"],
+#resultModal[data-animation="off"]::before,
+#resultModal[data-animation="off"]::after,
+#resultModal[data-animation="off"] *::before,
+#resultModal[data-animation="off"] *::after {
+  animation: none !important;
+}
+
+@keyframes arena-result-backdrop {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0) brightness(1) saturate(1);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(2px) brightness(0.62) saturate(0.86);
+  }
+}
+
+@keyframes arena-result-field {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes arena-result-grid {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 5.7rem 0, 0 3.8rem;
+  }
+}
+
+@keyframes arena-result-rise {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arena-label-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes balance-kings-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(34px) scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes equilibrium-core {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) scale(0.99);
+    filter: saturate(1.02) brightness(0.94);
+  }
+  50% {
+    transform: translateX(-50%) translateY(3px) scale(1.025);
+    filter: saturate(1.14) brightness(1.04);
+  }
+}
+
+@keyframes equilibrium-orbit {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes arena-core-balance {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) scale(0.985);
+    filter: saturate(1.04) brightness(0.94);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-2px) scale(1.025);
+    filter: saturate(1.16) brightness(1.04);
+  }
+}
+
+@keyframes arena-winner-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-50px) scale(0.62);
+    filter: saturate(0.7) brightness(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+    filter: saturate(1.2) brightness(1.06);
+  }
+}
+
+@keyframes arena-winner-core {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    filter: saturate(1.2) brightness(1.06);
+  }
+  50% {
+    transform: translateX(-50%) translateY(3px) scale(1.035);
+    filter: saturate(1.3) brightness(1.12);
+  }
+}
+
+@keyframes arena-loser-core {
+  from {
+    opacity: 0.82;
+    transform: translateX(-50%) scale(1);
+    filter: grayscale(0) brightness(1);
+  }
+  to {
+    opacity: 0.3;
+    transform: translateX(-50%) translateY(22px) scale(0.76);
+    filter: grayscale(0.64) brightness(0.58);
+  }
+}
+
+@keyframes arena-king-crowned {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.56);
+    filter: brightness(2);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.06);
+    filter: brightness(1.2);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes human-victory-backdrop {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0) brightness(1) saturate(1);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(2px) brightness(0.68) saturate(0.88);
+  }
+}
+
+@keyframes human-verdict-rise {
+  from {
+    opacity: 0;
+    transform: translateY(34px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes human-fracture-field {
+  from {
+    transform: rotate(0deg) scale(0.98);
+  }
+  to {
+    transform: rotate(-360deg) scale(1.08);
+  }
+}
+
+@keyframes human-grid-release {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: -5.5rem 0, 0 -3.7rem;
+  }
+}
+
+@keyframes human-king-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(72px) scale(0.48);
+    filter: brightness(2.2);
+  }
+  64% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.08);
+    filter: brightness(1.25);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes human-label-confirm {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

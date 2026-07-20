@@ -1,0 +1,55 @@
+:root {
+  --bg: #251a16;
+  --surface: #33241d;
+  --surface-2: #432f25;
+  --surface-3: #5a3d2d;
+  --edge: #76523d;
+  --text: #fcf2e0;
+  --muted: #d3bb9d;
+  --accent: #e2b147;
+  --accent-2: #c96f3a;
+  --danger: #ee6266;
+  --board-light: #f5d8aa;
+  --board-dark: #975e39;
+  --last-move: rgba(220, 178, 91, 0.58);
+  --selected: rgba(188, 126, 195, 0.52);
+  --legal: rgba(23, 25, 29, 0.38);
+  --white-eval: #fcf4e5;
+  --black-eval: #33241d;
+  --piece-white: #fff8e9;
+  --piece-black: #261914;
+  --piece-white-edge: #482d1d;
+  --piece-black-edge: #ebcfa8;
+  --shadow: rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
+  font-family: Bahnschrift, "Segoe UI", Arial, sans-serif;
+}
+
+:root[data-theme="frost"] {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+button,
+select {
+  font: inherit;
+}

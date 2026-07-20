@@ -1,0 +1,401 @@
+.promotion-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(4, 7, 11, 0.56);
+  display: block;
+  padding: 0;
+}
+
+.promotion-backdrop[hidden] {
+  display: none;
+}
+
+.promotion-dialog {
+  position: fixed;
+  left: var(--promotion-left, 50%);
+  top: var(--promotion-top, 50%);
+  width: min(var(--promotion-width, 352px), calc(100vw - 28px));
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface), #000 7%);
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.48);
+  padding: 14px 18px 16px;
+}
+
+.promotion-dialog h2 {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-transform: none;
+}
+
+.promotion-dialog h2 span {
+  color: color-mix(in srgb, var(--muted), transparent 16%);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.promotion-choices {
+  display: grid;
+  grid-template-columns: repeat(4, 70px);
+  justify-content: center;
+  gap: 8px;
+}
+
+.promotion-choices button {
+  position: relative;
+  width: 70px;
+  height: 74px;
+  padding: 0;
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+}
+
+.promotion-choices button:hover,
+.promotion-choices button:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface-3);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.promo-piece {
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  font-size: 0;
+}
+
+.promo-piece .piece-image {
+  object-position: center;
+}
+
+.promo-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 7, 11, 0.74);
+}
+
+#resultModal {
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent), transparent 86%) 0 13rem, transparent 13.4rem),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent-2), transparent 92%) 0 24rem, transparent 24.4rem),
+    color-mix(in srgb, var(--bg), transparent 22%);
+  backdrop-filter: blur(2px) brightness(0.74);
+}
+
+#resultModal[data-reason="checkmate"] {
+  background:
+    radial-gradient(circle at 50% 37%, color-mix(in srgb, var(--danger), transparent 86%) 0 9rem, transparent 9.4rem),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent), transparent 82%) 0 16rem, transparent 16.5rem),
+    radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--accent-2), transparent 92%) 0 28rem, transparent 28.6rem),
+    color-mix(in srgb, var(--bg), transparent 18%);
+}
+
+#resultModal[data-outcome="human-win"] {
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 12%, color-mix(in srgb, var(--accent-2), transparent 74%) 0 11rem, transparent 34rem),
+    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--accent), transparent 88%) 0 23rem, transparent 44rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3), #000 16%), color-mix(in srgb, var(--bg), #000 28%));
+  backdrop-filter: blur(2px) brightness(0.68) saturate(0.88);
+  animation: human-victory-backdrop 1200ms ease-out both;
+}
+
+#resultModal[data-outcome="human-win"]::before,
+#resultModal[data-outcome="human-win"]::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+#resultModal[data-outcome="human-win"]::before {
+  inset: -38vmax;
+  background: repeating-conic-gradient(
+    from -8deg at 50% 50%,
+    transparent 0deg 8deg,
+    color-mix(in srgb, var(--accent-2), transparent 91%) 8.3deg 9deg,
+    transparent 9.4deg 19deg,
+    color-mix(in srgb, var(--accent), transparent 95%) 19.3deg 20deg
+  );
+  opacity: 0.78;
+  animation: human-fracture-field 34s linear infinite;
+}
+
+#resultModal[data-outcome="human-win"]::after {
+  left: -20%;
+  right: -20%;
+  bottom: -40%;
+  height: 74%;
+  border-top: 1px solid color-mix(in srgb, var(--accent-2), transparent 54%);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5.4rem, color-mix(in srgb, var(--accent-2), transparent 86%) 5.44rem 5.5rem),
+    repeating-linear-gradient(0deg, transparent 0 3.6rem, color-mix(in srgb, var(--accent), transparent 90%) 3.64rem 3.7rem);
+  opacity: 0.5;
+  transform: perspective(520px) rotateX(64deg) scale(1.3);
+  transform-origin: 50% 0;
+  animation: human-grid-release 18s linear infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] {
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 4%, color-mix(in srgb, var(--accent), transparent 62%) 0 9rem, transparent 34rem),
+    radial-gradient(ellipse at 50% 38%, color-mix(in srgb, var(--danger), transparent 88%) 0 22rem, transparent 44rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-3), #000 18%), color-mix(in srgb, var(--bg), #000 34%)),
+    color-mix(in srgb, var(--bg), #000 20%);
+  backdrop-filter: blur(3px) brightness(0.52) saturate(0.82);
+  animation: sgurr-takeover-backdrop 1100ms ease-out both;
+}
+
+#resultModal[data-outcome="sgurr-win"]::before,
+#resultModal[data-outcome="sgurr-win"]::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+#resultModal[data-outcome="sgurr-win"]::before {
+  z-index: 0;
+  inset: -46vmax;
+  background: repeating-conic-gradient(
+    from 4deg at 50% 50%,
+    transparent 0deg 10deg,
+    color-mix(in srgb, var(--accent), transparent 94%) 10.4deg 11deg,
+    transparent 11.4deg 23deg,
+    color-mix(in srgb, var(--accent-2), transparent 96%) 23.4deg 24deg
+  );
+  opacity: 0.82;
+  animation: sgurr-signal-field 52s linear infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"]::after {
+  z-index: 0;
+  left: -18%;
+  right: -18%;
+  bottom: -38%;
+  height: 72%;
+  border-top: 1px solid color-mix(in srgb, var(--accent), transparent 66%);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5.8rem, color-mix(in srgb, var(--accent), transparent 88%) 5.84rem 5.9rem),
+    repeating-linear-gradient(0deg, transparent 0 3.8rem, color-mix(in srgb, var(--accent-2), transparent 91%) 3.84rem 3.9rem);
+  opacity: 0.58;
+  transform: perspective(540px) rotateX(64deg) scale(1.3);
+  transform-origin: 50% 0;
+  animation: sgurr-grid-drift 16s linear infinite;
+}
+
+#resultModal[data-outcome="sgurr-win"] .result-box {
+  z-index: 1;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-box {
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.44);
+  padding: 22px;
+}
+
+.wide-modal {
+  width: min(900px, 100%);
+}
+
+.modal-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.theme-card,
+.time-card {
+  min-height: 126px;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+}
+
+.theme-card.active,
+.time-card.active {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgba(220, 178, 91, 0.2);
+}
+
+.theme-preview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.theme-preview span:nth-child(odd) {
+  background: var(--preview-light);
+}
+
+.theme-preview span:nth-child(even) {
+  background: var(--preview-dark);
+}
+
+.time-gallery {
+  display: grid;
+  gap: 10px;
+}
+
+.time-card {
+  min-height: 72px;
+}
+
+.settings-list {
+  display: grid;
+  gap: 12px;
+}
+
+.toggle-row {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-transform: none;
+}
+
+.toggle-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.toggle-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
+
+.settings-field {
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.settings-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.help-grid div {
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.help-grid strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--accent-2);
+}
+
+.help-grid span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.fen-field {
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 94px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 12px;
+  font: 0.95rem Consolas, "Cascadia Mono", monospace;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.modal-actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17131a;
+}
+
+.modal-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}

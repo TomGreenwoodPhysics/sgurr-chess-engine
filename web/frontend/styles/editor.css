@@ -1,0 +1,51 @@
+.editor-section {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-header-block {
+  min-height: 92px;
+}
+
+.editor-status-block {
+  min-height: 98px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.editor-palette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.palette-button {
+  aspect-ratio: 1;
+  min-height: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.palette-button.active {
+  border-color: var(--accent-2);
+  background: var(--accent);
+  color: #17131a;
+}
+
+.palette-piece {
+  width: 100%;
+  height: 100%;
+  font-size: 1.7rem;
+}
+
+.editor-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}

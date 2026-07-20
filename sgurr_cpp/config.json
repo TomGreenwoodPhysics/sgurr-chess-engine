@@ -1,0 +1,239 @@
+{
+    "resign": {
+        "move_count": 1,
+        "score": 0,
+        "twosided": false,
+        "enabled": false
+    },
+    "draw": {
+        "move_number": 0,
+        "move_count": 1,
+        "score": 0,
+        "enabled": false
+    },
+    "maxmoves": {
+        "move_count": 1,
+        "enabled": false
+    },
+    "tb_adjudication": {
+        "syzygy_dirs": "",
+        "max_pieces": 0,
+        "ignore_50_move_rule": false,
+        "enabled": false
+    },
+    "opening": {
+        "file": "C:\\Coding\\Sgurr\\testing\\book.epd",
+        "format": 0,
+        "order": 0,
+        "plies": -1,
+        "start": 1
+    },
+    "pgn": {
+        "additional_lines_rgx": [],
+        "event_name": "Fastchess Tournament",
+        "site": "?",
+        "file": "C:\\Coding\\Sgurr\\benchmarks\\games\\pool-prune-2026-07-11.pgn",
+        "notation": 0,
+        "append_file": true,
+        "track_nodes": false,
+        "track_seldepth": false,
+        "track_nps": false,
+        "track_hashfull": false,
+        "track_tbhits": false,
+        "track_timeleft": false,
+        "track_latency": false,
+        "track_pv": false,
+        "min": false,
+        "crc": false
+    },
+    "epd": {
+        "file": "",
+        "append_file": true
+    },
+    "sprt": {
+        "alpha": 0.0,
+        "beta": 0.0,
+        "elo0": 0.0,
+        "elo1": 0.0,
+        "model": "normalized",
+        "enabled": false
+    },
+    "config_name": "config.json",
+    "output": 0,
+    "seed": 102280573180930873,
+    "variant": 0,
+    "type": 0,
+    "gauntlet_seeds": 1,
+    "ratinginterval": 60,
+    "scoreinterval": 1,
+    "wait": 0,
+    "autosaveinterval": 20,
+    "games": 2,
+    "rounds": 300,
+    "concurrency": 7,
+    "force_concurrency": false,
+    "recover": false,
+    "noswap": false,
+    "reverse": false,
+    "report_penta": true,
+    "affinity": false,
+    "show_latency": false,
+    "log": {
+        "file": "",
+        "level": 2,
+        "append_file": true,
+        "compress": false,
+        "realtime": true,
+        "engine_coms": false
+    },
+    "engines": [
+        {
+            "name": "v40-base",
+            "dir": "",
+            "cmd": "C:\\Coding\\Sgurr\\sgurr_cpp\\sgr_r_base.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "v40-lmp",
+            "dir": "",
+            "cmd": "C:\\Coding\\Sgurr\\sgurr_cpp\\sgr_r_lmp.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "v40-rfp",
+            "dir": "",
+            "cmd": "C:\\Coding\\Sgurr\\sgurr_cpp\\sgr_r_rfp.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "v40-both",
+            "dir": "",
+            "cmd": "C:\\Coding\\Sgurr\\sgurr_cpp\\sgr_r_both.exe",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 80,
+                    "fixed_time": 0,
+                    "time": 8000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        }
+    ],
+    "stats": {
+        "v40-rfp vs v40-both": {
+            "wins": 221,
+            "losses": 214,
+            "draws": 165,
+            "penta_WW": 38,
+            "penta_WD": 63,
+            "penta_WL": 82,
+            "penta_DD": 22,
+            "penta_LD": 58,
+            "penta_LL": 37
+        },
+        "v40-lmp vs v40-rfp": {
+            "wins": 138,
+            "losses": 351,
+            "draws": 111,
+            "penta_WW": 12,
+            "penta_WD": 22,
+            "penta_WL": 92,
+            "penta_DD": 9,
+            "penta_LD": 71,
+            "penta_LL": 94
+        },
+        "v40-lmp vs v40-both": {
+            "wins": 124,
+            "losses": 367,
+            "draws": 109,
+            "penta_WW": 10,
+            "penta_WD": 25,
+            "penta_WL": 79,
+            "penta_DD": 10,
+            "penta_LD": 64,
+            "penta_LL": 112
+        },
+        "v40-base vs v40-both": {
+            "wins": 120,
+            "losses": 369,
+            "draws": 111,
+            "penta_WW": 11,
+            "penta_WD": 19,
+            "penta_WL": 79,
+            "penta_DD": 14,
+            "penta_LD": 64,
+            "penta_LL": 113
+        },
+        "v40-base vs v40-rfp": {
+            "wins": 147,
+            "losses": 330,
+            "draws": 123,
+            "penta_WW": 17,
+            "penta_WD": 37,
+            "penta_WL": 76,
+            "penta_DD": 12,
+            "penta_LD": 62,
+            "penta_LL": 96
+        },
+        "v40-base vs v40-lmp": {
+            "wins": 243,
+            "losses": 220,
+            "draws": 137,
+            "penta_WW": 46,
+            "penta_WD": 62,
+            "penta_WL": 89,
+            "penta_DD": 11,
+            "penta_LD": 53,
+            "penta_LL": 39
+        }
+    }
+}

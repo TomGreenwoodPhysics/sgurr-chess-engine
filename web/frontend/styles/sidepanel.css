@@ -1,0 +1,369 @@
+.side-panel {
+  width: var(--side-width);
+  height: var(--play-height);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px 0 0;
+}
+
+.side-panel[hidden],
+.editor-panel[hidden] {
+  display: none;
+}
+
+.editor-panel {
+  width: calc(var(--editor-column-width) * 2 + 12px);
+  height: var(--play-height);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px 0 0;
+}
+
+.editor-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-block {
+  flex: 0 0 auto;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+  padding: 14px 16px;
+}
+
+.header-block {
+  position: relative;
+  height: 112px;
+  min-height: 112px;
+  display: block;
+}
+
+.core-header {
+  height: 164px;
+  min-height: 164px;
+  padding: 17px 18px;
+  overflow: hidden;
+}
+
+.core-header .normal-core-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.watch-core-view {
+  display: none;
+}
+
+.core-header.watch-mode {
+  height: auto;
+  min-height: 184px;
+  padding: 14px 14px 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--white-eval), transparent 94%), transparent 38% 62%, color-mix(in srgb, var(--black-eval), transparent 86%)),
+    var(--surface);
+}
+
+.core-header.watch-mode .normal-core-view {
+  display: none;
+}
+
+.core-header.watch-mode .watch-core-view {
+  display: block;
+}
+
+.watch-arena-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.watch-arena-head .panel-label {
+  margin: 0 0 3px;
+}
+
+.watch-arena-head h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.watch-arena-head .engine-time {
+  margin: 2px 0 0;
+  color: var(--accent-2);
+  font-size: 0.74rem;
+}
+
+.watch-duel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Each instance is a colour-tinted card: White's half pale and luminous,
+   Black's half deep ink — the duel reads as two territories. */
+.watch-instance {
+  position: relative;
+  min-width: 0;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  padding: 8px 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--edge), transparent 30%);
+  border-radius: 12px;
+  transition:
+    border-color 360ms ease,
+    box-shadow 360ms ease,
+    background-color 360ms ease,
+    opacity 360ms ease;
+}
+
+.white-instance {
+  border-color: color-mix(in srgb, var(--white-eval), var(--edge) 58%);
+  background: linear-gradient(205deg, color-mix(in srgb, var(--white-eval), transparent 88%), transparent 60%);
+}
+
+.black-instance {
+  border-color: color-mix(in srgb, var(--black-eval), var(--accent) 26%);
+  background: linear-gradient(155deg, transparent 40%, color-mix(in srgb, var(--black-eval), #000 30%));
+}
+
+.watch-instance::after {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+  transform: scaleX(0.35);
+  transition: opacity 360ms ease, transform 360ms ease;
+}
+
+/* The thinking side's territory wakes: accent ring, soft outer glow, and
+   the underline sweeping in. */
+.watch-instance.active {
+  border-color: color-mix(in srgb, var(--accent), transparent 26%);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--accent), transparent 82%),
+    inset 0 0 14px color-mix(in srgb, var(--accent), transparent 90%);
+}
+
+.watch-instance.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.watch-instance.flagged {
+  opacity: 0.48;
+  border-color: var(--danger);
+}
+
+.watch-core {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 48px;
+  height: 48px;
+}
+
+.black-instance {
+  grid-template-columns: minmax(0, 1fr) 56px;
+}
+
+.black-instance .watch-core {
+  grid-column: 2;
+  justify-self: end;
+}
+
+/* The two arena instances adhere to their colours: the White core pale and
+   luminous, the Black core deep and shadowed. Extra specificity so the tint
+   survives the shared state rules in core.css (which come later in the
+   cascade), and the filter carries the whole subtree — face, cosmos, halo. */
+.watch-duel .white-instance .watch-core {
+  --core-border: color-mix(in srgb, var(--white-eval), var(--accent) 34%);
+  --core-inner-glow: color-mix(in srgb, var(--white-eval), transparent 30%);
+  filter: saturate(0.62) brightness(1.42) contrast(1.02);
+}
+
+.watch-duel .black-instance .watch-core {
+  --core-border: color-mix(in srgb, var(--black-eval), var(--accent) 40%);
+  --core-inner-glow: color-mix(in srgb, var(--accent-2), transparent 26%);
+  /* vibrantly black: contrast crushes the glass to obsidian while the
+     ember, sparks and glow stay saturated and bright — rich, not dim */
+  filter: saturate(1.55) brightness(0.82) contrast(1.55);
+}
+
+.watch-instance-copy {
+  min-width: 0;
+  align-self: end;
+  line-height: 1.05;
+}
+
+.watch-instance-copy strong,
+.watch-instance-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-instance-copy strong {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.watch-instance-copy small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 900;
+}
+
+.black-instance .watch-instance-copy,
+.black-instance .watch-clock {
+  grid-column: 1;
+  text-align: right;
+}
+
+.watch-clock {
+  align-self: start;
+  color: var(--accent-2);
+  font-size: 0.78rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.watch-instance.active .watch-clock {
+  color: var(--accent);
+}
+
+.watch-versus {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 38%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-2), transparent 24%);
+  color: var(--accent);
+  font-size: 0.62rem;
+  font-weight: 900;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--accent), transparent 80%),
+    inset 0 0 6px color-mix(in srgb, var(--accent), transparent 86%);
+}
+
+.watch-match-line {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.core-header.speaking {
+  border-color: color-mix(in srgb, var(--accent), var(--accent-2) 28%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 72%),
+    0 0 28px color-mix(in srgb, var(--accent), transparent 82%);
+}
+
+.core-header.opening-aware {
+  border-color: color-mix(in srgb, var(--accent), #78d89a 34%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 64%),
+    0 0 34px color-mix(in srgb, var(--accent), transparent 76%);
+}
+
+.core-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.core-line {
+  margin: auto 0 0;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+  transition:
+    color 420ms ease,
+    opacity 420ms ease,
+    text-shadow 420ms ease,
+    transform 420ms ease;
+}
+
+.core-line.thinking {
+  color: color-mix(in srgb, var(--accent), var(--muted) 30%);
+  opacity: 1;
+  animation: core-line-thinking 3.6s ease-in-out infinite;
+}
+
+.core-line.fading {
+  opacity: 0;
+  transform: translateY(5px);
+  animation: none;
+}
+
+.core-line.speaking {
+  color: color-mix(in srgb, var(--text), var(--accent-2) 18%);
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--accent), transparent 54%),
+    0 0 26px color-mix(in srgb, var(--accent-2), transparent 72%);
+  animation: core-line-speak 2.8s ease-out both;
+}
+
+@keyframes core-line-thinking {
+  0%,
+  100% {
+    text-shadow: none;
+  }
+  46% {
+    text-shadow: 0 0 16px color-mix(in srgb, var(--accent), transparent 58%);
+  }
+}
+
+@keyframes core-line-speak {
+  0% {
+    opacity: 0;
+    transform: translateY(7px);
+    letter-spacing: 0.04em;
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  44% {
+    letter-spacing: 0.08em;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: 0.04em;
+  }
+}
