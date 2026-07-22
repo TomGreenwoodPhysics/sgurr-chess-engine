@@ -14,13 +14,13 @@ $dg = Get-Process datagen -ErrorAction SilentlyContinue
 Write-Host ("  datagen workers : {0}" -f $(if ($dg) { "$($dg.Count) running" } else { "none running" }))
 
 # --- position count vs target ---
-$raw = Join-Path $root 'data\gen7_raw'
+$raw = Join-Path $root 'data\gen8_raw'
 if (Test-Path $raw) {
     $bytes = (Get-ChildItem "$raw\data_*.bin" | Measure-Object Length -Sum).Sum
     $pos = [long]($bytes / 32)
-    $target = 12000000
+    $target = 60000000
     $pct = [math]::Round(100.0 * $pos / $target, 1)
-    Write-Host ("  gen7 positions  : {0:N0} / {1:N0}  ({2}%)" -f $pos, $target, $pct)
+    Write-Host ("  gen8 positions  : {0:N0} / {1:N0}  ({2}%)" -f $pos, $target, $pct)
 }
 
 # --- pipeline driver (only if a pipeline run is active) ---
@@ -53,7 +53,7 @@ Write-Host ("  disk free (C:)  : {0} GB" -f $diskFreeGB)
 Write-Host ("  ram free        : {0} GB" -f $freeGB)
 
 # --- newest worker log line ---
-$wlog = Join-Path $root 'runs\gen7_datagen\worker_1.log'
+$wlog = Join-Path $root 'runs\gen8_datagen\worker_1.log'
 if (Test-Path $wlog) {
     $last = (Get-Content $wlog -Tail 1)
     Write-Host ""

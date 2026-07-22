@@ -1,0 +1,55 @@
+{
+  "generation": 7,
+  "version": "v7.0",
+  "codename": "TBD",
+  "raw_dir": "data/gen7_raw",
+  "target_positions": 11000000,
+  "hardware": "Ryzen 7 7800X3D, 7 threads",
+
+  "_release_exe_note": "intentionally unset: calibrate then measures this generation's own engine (sgr_gen7.exe). Only set release_exe (to e.g. the previous version) if the SPRT shows gen7 is a wash and you decide to ship the prior net, as gen6 did.",
+
+  "datagen": {
+    "nodes": 150000,
+    "book": "testing/book.epd",
+    "labeller": "nets/gen5.nnue",
+    "processes": null
+  },
+
+  "probe": {
+    "enabled": true,
+    "steps": 1900,
+    "threshold_pct": 0.75,
+    "extend_factor": 1.5,
+    "max_extensions": 0
+  },
+
+  "train": {
+    "epochs": 8,
+    "schedule": "cosine",
+    "lr_min": 1e-5,
+    "val_frac": 0,
+    "lambda": [0.9, 1.0]
+  },
+
+  "select": {
+    "tc": "8+0.08",
+    "rounds": 30,
+    "concurrency": 7
+  },
+
+  "sprt": {
+    "tc": "8+0.08",
+    "elo0": 0,
+    "elo1": 5,
+    "max_rounds": 500,
+    "concurrency": 7,
+    "baseline_exe": "sgurr_cpp/sgr_v6_0_zen4.exe",
+    "baseline_name": "Sgurr-v6.0"
+  },
+
+  "calibrate": {
+    "tc": "10+0.1",
+    "rounds": 15,
+    "concurrency": 7
+  }
+}

@@ -653,7 +653,7 @@ class Pipeline:
                f"+{cal['wdl'][0]} ={cal['wdl'][1]} -{cal['wdl'][2]} | "
                f"{self.cfg.get('calibrate', {}).get('tc', '10+0.1')} | "
                f"{json.loads((ROOT / 'benchmarks' / 'pool.json').read_text())['pool_id']} | "
-               f"i5-9400F, 5 threads | Pipeline run; SPRT vs "
+               f"{self.cfg.get('hardware', 'UNSET-hardware')} | Pipeline run; SPRT vs "
                f"{self.sprt_baseline_label()}: "
                f"{sprt['elo']:+.1f} +/-{sprt['pm']:.1f} ({sprt['verdict']})"
                + (f"; lambda sweep winner {sel.get('winner')}"
