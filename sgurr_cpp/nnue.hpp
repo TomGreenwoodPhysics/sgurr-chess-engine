@@ -48,12 +48,27 @@ constexpr int QA    = 255;
 constexpr int QB    = 64;
 constexpr int SCALE = 400;
 
+// AVX2 int16 inference. Default on (like the search toggles); build with
+// -DSGR_SIMD=0 to fall back to the scalar int32 path. The two produce
+// bit-identical evals -- SIMD is purely faster (~+21% NPS) -- so this is a
+// speed switch with no effect on move choice. Requires AVX2 (any -march=native
+// build on modern x86). See nnue.cpp for the safety proof and guards.
+#ifndef SGR_SIMD
+#define SGR_SIMD 1
+#endif
+
 // Load a network file. Returns false on failure, in which case the engine
 // keeps using the hand-crafted evaluation.
 bool load(const std::string& path);
 
 // Whether a network is loaded and NNUE evaluation should be used.
 bool active();
+
+// Which inference path this binary was compiled with: "avx512", "avx2", or
+// "scalar". Printed at startup/selfcheck so the active path is observable
+// rather than assumed (this project has been bitten by silent build-config
+// differences before).
+const char* simd_kind();
 
 // Side-relative evaluation in centipawns (positive = good for side to move).
 int evaluate(const Board& board);

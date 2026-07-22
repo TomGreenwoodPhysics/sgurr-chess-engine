@@ -8,6 +8,25 @@
 #include <iostream>
 #include <vector>
 
+// -DSGR_SIMD switches the accumulator to int16 and the output layer to an
+// AVX2 clamp+madd. The result is bit-identical to the scalar int32 path (all
+// integer arithmetic, no reordering that changes the total), so it carries no
+// Elo risk of its own -- only speed. The int16 accumulator is provably safe:
+// train.py clips feature weights to +/-127, so the worst-case raw accumulator
+// (bias + 32 pieces) stays inside +/-~4100, an 8x+ margin under int16. See the
+// range check in the roadmap notes.
+#if SGR_SIMD
+#if !defined(__AVX2__)
+#error "SGR_SIMD needs AVX2 (build with -march=native on any modern x86, or set -DSGR_SIMD=0 for the scalar path)"
+#endif
+#include <immintrin.h>
+static_assert(nnue::HL % 16 == 0, "SGR_SIMD requires HL to be a multiple of 16");
+// The output int32 lane sums stay exact (== the scalar int64 total) only while
+// HL <= 512: per lane <= (HL/8) * 2*255*32767 must fit int32. HL=1024 would
+// need periodic widening to int64 -- guard it rather than fail silently.
+static_assert(nnue::HL <= 512, "SGR_SIMD output sum needs int64 widening for HL>512");
+#endif
+
 namespace nnue {
 
 namespace {
@@ -25,7 +44,12 @@ bool g_active = false;
 // Accumulators: [0] = white perspective, [1] = black. g_acc_hash is the
 // Zobrist key of the position they currently represent; evaluate() rebuilds
 // them whenever it doesn't match the board.
-std::int32_t g_acc[2][HL];
+#if SGR_SIMD
+using AccT = std::int16_t;
+#else
+using AccT = std::int32_t;
+#endif
+alignas(64) AccT g_acc[2][HL];
 bool g_acc_valid = false;
 U64 g_acc_hash = 0;
 
@@ -38,11 +62,109 @@ inline int feature_index(int persp, int colour, int ptype, int sq) {
     return rel_colour * 384 + ptype * 64 + rel_sq;
 }
 
+#if SGR_SIMD
+#if defined(__AVX512BW__)
+// AVX-512 path: 32 int16 lanes per instruction. On Zen 4 these are
+// double-pumped through 256-bit units, so the win over AVX2 is halved
+// instruction count (front-end pressure), not raw ALU width — measured, not
+// assumed. Arithmetic is exact at any width, so output stays bit-identical.
+static_assert(nnue::HL % 32 == 0, "AVX-512 path requires HL % 32 == 0");
+
+inline void vec_add(AccT* acc, const std::int16_t* w) {
+    for (int k = 0; k < HL; k += 32) {
+        __m512i a  = _mm512_loadu_si512(acc + k);
+        __m512i wv = _mm512_loadu_si512(w + k);
+        _mm512_storeu_si512(acc + k, _mm512_add_epi16(a, wv));
+    }
+}
+
+inline void vec_sub(AccT* acc, const std::int16_t* w) {
+    for (int k = 0; k < HL; k += 32) {
+        __m512i a  = _mm512_loadu_si512(acc + k);
+        __m512i wv = _mm512_loadu_si512(w + k);
+        _mm512_storeu_si512(acc + k, _mm512_sub_epi16(a, wv));
+    }
+}
+
+// Both perspectives' clamp+madd, reduced to one int32. Per-lane bound: each
+// madd result is <= 2*255*32767 ~ 16.7M and both sides give at most
+// 2*(HL/32) <= 32 accumulations per lane, so lane sums stay far inside int32
+// (the HL <= 512 static_assert above is the formal guard).
+inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
+    const __m512i zero = _mm512_setzero_si512();
+    const __m512i vqa  = _mm512_set1_epi16(static_cast<short>(QA));
+    const std::int16_t* w = g_net.out_weight.data();
+    __m512i sum = _mm512_setzero_si512();
+    for (int k = 0; k < HL; k += 32) {
+        __m512i a = _mm512_loadu_si512(us + k);
+        a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);   // crelu
+        sum = _mm512_add_epi32(sum, _mm512_madd_epi16(a, _mm512_loadu_si512(w + k)));
+    }
+    for (int k = 0; k < HL; k += 32) {
+        __m512i a = _mm512_loadu_si512(them + k);
+        a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);
+        sum = _mm512_add_epi32(sum, _mm512_madd_epi16(a, _mm512_loadu_si512(w + HL + k)));
+    }
+    return _mm512_reduce_add_epi32(sum);
+}
+const char* const kSimdKind = "avx512";
+
+#else
+// AVX2 path: 16 int16 lanes per instruction.
+inline void vec_add(AccT* acc, const std::int16_t* w) {
+    for (int k = 0; k < HL; k += 16) {
+        __m256i a  = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(acc + k));
+        __m256i wv = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + k));
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(acc + k), _mm256_add_epi16(a, wv));
+    }
+}
+
+inline void vec_sub(AccT* acc, const std::int16_t* w) {
+    for (int k = 0; k < HL; k += 16) {
+        __m256i a  = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(acc + k));
+        __m256i wv = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + k));
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(acc + k), _mm256_sub_epi16(a, wv));
+    }
+}
+
+inline std::int32_t hsum_epi32(__m256i v) {
+    __m128i s = _mm_add_epi32(_mm256_castsi256_si128(v),
+                              _mm256_extracti128_si256(v, 1));
+    s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(1, 0, 3, 2)));
+    s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2, 3, 0, 1)));
+    return _mm_cvtsi128_si32(s);
+}
+
+inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
+    const __m256i zero = _mm256_setzero_si256();
+    const __m256i vqa  = _mm256_set1_epi16(static_cast<short>(QA));
+    const std::int16_t* w = g_net.out_weight.data();
+    __m256i sum = _mm256_setzero_si256();
+    for (int k = 0; k < HL; k += 16) {
+        __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(us + k));
+        a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);   // crelu
+        sum = _mm256_add_epi32(sum, _mm256_madd_epi16(
+                  a, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + k))));
+    }
+    for (int k = 0; k < HL; k += 16) {
+        __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(them + k));
+        a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);
+        sum = _mm256_add_epi32(sum, _mm256_madd_epi16(
+                  a, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + HL + k))));
+    }
+    return hsum_epi32(sum);
+}
+const char* const kSimdKind = "avx2";
+#endif
+
+#else
 inline std::int32_t crelu(std::int32_t x) {
     if (x < 0) return 0;
     if (x > QA) return QA;
     return x;
 }
+const char* const kSimdKind = "scalar";
+#endif
 
 // Add (sign = +1) or remove (sign = -1) one piece's contribution to both
 // accumulators.
@@ -53,11 +175,16 @@ inline void edit_feature(int piece, int sq, int sign) {
     int ib = feature_index(BLACK, colour, ptype, sq);
     const std::int16_t* ww = &g_net.ft_weight[static_cast<std::size_t>(iw) * HL];
     const std::int16_t* wb = &g_net.ft_weight[static_cast<std::size_t>(ib) * HL];
+#if SGR_SIMD
+    if (sign > 0) { vec_add(g_acc[0], ww); vec_add(g_acc[1], wb); }
+    else          { vec_sub(g_acc[0], ww); vec_sub(g_acc[1], wb); }
+#else
     if (sign > 0) {
         for (int k = 0; k < HL; ++k) { g_acc[0][k] += ww[k]; g_acc[1][k] += wb[k]; }
     } else {
         for (int k = 0; k < HL; ++k) { g_acc[0][k] -= ww[k]; g_acc[1][k] -= wb[k]; }
     }
+#endif
 }
 
 // Apply a move's feature changes to the accumulators: s = +1 for make,
@@ -83,24 +210,40 @@ void apply_move(const UndoInfo& undo, int s) {
     }
 }
 
+// Clamp each accumulator lane to [0, QA], multiply by the int16 output
+// weights, and total. The vector paths compute every intermediate exactly as
+// the scalar path does (integer ops, no overflow within the guarded bounds),
+// so the int64 total is identical across scalar/AVX2/AVX-512 -- a speed
+// change, never a numeric one.
 std::int64_t output_from_acc(int side_to_move) {
-    const std::int32_t* us   = g_acc[side_to_move == WHITE ? 0 : 1];
-    const std::int32_t* them = g_acc[side_to_move == WHITE ? 1 : 0];
+    const AccT* us   = g_acc[side_to_move == WHITE ? 0 : 1];
+    const AccT* them = g_acc[side_to_move == WHITE ? 1 : 0];
+#if SGR_SIMD
+    return static_cast<std::int64_t>(forward_sum(us, them)) + g_net.out_bias;
+#else
     std::int64_t sum = 0;
     for (int k = 0; k < HL; ++k)
         sum += static_cast<std::int64_t>(crelu(us[k])) * g_net.out_weight[k];
     for (int k = 0; k < HL; ++k)
         sum += static_cast<std::int64_t>(crelu(them[k])) * g_net.out_weight[HL + k];
     return sum + g_net.out_bias;
+#endif
 }
 
 }  // namespace
 
 void refresh(const Board& board) {
+#if SGR_SIMD
+    // AccT == int16_t == the stored bias type, so the init is two straight
+    // copies rather than a widening loop.
+    std::memcpy(g_acc[0], g_net.ft_bias.data(), HL * sizeof(AccT));
+    std::memcpy(g_acc[1], g_net.ft_bias.data(), HL * sizeof(AccT));
+#else
     for (int k = 0; k < HL; ++k) {
         g_acc[0][k] = g_net.ft_bias[k];
         g_acc[1][k] = g_net.ft_bias[k];
     }
+#endif
     for (int piece = 0; piece < 12; ++piece) {
         std::uint64_t bb = board.bitboards[piece];
         while (bb) {
@@ -195,6 +338,10 @@ bool load(const std::string& path) {
 
 bool active() {
     return g_active;
+}
+
+const char* simd_kind() {
+    return kSimdKind;
 }
 
 }  // namespace nnue

@@ -703,3 +703,77 @@ gen6 8M is exhausted (probe "saturated", gen6-net A/B +6 ±20, HL=512 flat
 shipping first is a bonus for it: the labeller becomes the new engine minus
 RFP, and improving/histLMR/singular all return *searched* scores, so unlike
 RFP they are labeller-safe and their depth gain lands in the labels for free.
+
+## 2026-07-22 — NNUE inference was scalar the whole time: AVX2 int16 is +21% NPS, free
+
+The evaluation had never been vectorised. `nnue.cpp` was plain scalar loops
+with an **int32 accumulator**, leaning entirely on compiler auto-vectorisation
+— which does not handle the output layer's horizontal reduction. On a Zen 4
+box with AVX2 (and AVX-512) sitting idle, that is pure NPS left on the floor.
+
+**Change (`-DSGR_SIMD`, default on).** Accumulator narrowed to **int16**; the
+output layer hand-written as AVX2 clamp (`min/max_epi16`) + `vpmaddwd` +
+horizontal sum. The int16 accumulator is provably overflow-safe *for every
+legal position*, not just sampled ones: `train.py` clips feature weights to
+±127, so the worst case (bias + 32 pieces) is bounded at ±~4100 — an 8–12.6×
+margin under int16 across all deploy nets (gen1 8.0×, gen3 12.6×, gen5 11.7×,
+gen6 10.8×, gen7-512 8.9×).
+
+**Bit-identical, so no Elo risk of its own.** All integer arithmetic with no
+reordering that changes the total, so the SIMD output *equals* the scalar
+output exactly — verified two ways: (1) a cross-build eval checksum over
+150k+ positions (selfcheck `evalsum`) matches to the integer between the
+scalar and SIMD builds on gen5 and gen6; (2) full games are **node-identical
+at fixed depth** — same search, same moves, just faster. The rebuilt v6.0
+baseline is node-identical to the shipped `sgr_v6_0.exe`, so it is still v6.0.
+
+**Measured NPS (gen5 net, depth-fixed, quiet 7800X3D):** startpos +20.0%,
+midgame +18.2%, endgame +26.5% — **~+21% average**. At ~70 Elo/doubling that
+is **≈ +13–19 Elo**, banked with a mechanical guarantee rather than an SPRT.
+
+**Now default-on**, matching the search-toggle convention (`#ifndef SGR_SIMD
+/ #define SGR_SIMD 1`); `-DSGR_SIMD=0` reverts to scalar. Compile-time guards:
+`#error` without AVX2, `static_assert` on HL%16 and HL≤512 (the int32 lane
+sums stay exact to the scalar int64 total only through 512; HL=1024 for the
+width retest will need int64 widening — guarded, not silent).
+
+**Consequences.** (a) The gen7 pipeline builds SIMD by default; its SPRT
+baseline was rebuilt SIMD too, so the net stays the only variable. (b) Free
+on both sides of the flywheel — a SIMD datagen build labels ~21% faster with
+bit-identical labels, so rebuild `datagen.exe` with it before gen8. (c) More
+is available later (AVX-512 width, vectorising the accumulator update loops,
+int8 activations) but this clean, verified cut is banked first.
+
+## 2026-07-22 — AVX-512 + vectorised update loops: +3% more, and the honest ceiling
+
+Second SIMD pass, same evening. The inference now width-dispatches on the
+compiler's target: **AVX-512** (32 int16 lanes) when `__AVX512BW__` is
+defined, AVX2 otherwise, scalar with `-DSGR_SIMD=0`. The accumulator
+**update loops** (`edit_feature`) are hand-vectorised at both widths, the
+refresh bias-init became two `memcpy`s (AccT == the stored bias type), and
+`g_acc` is 64-byte aligned.
+
+**Result: +3.2% over the AVX2 forward-pass build** (start +4.1%, mid +3.8%,
+end +1.7%; node counts identical throughout), total **~+22% vs scalar**.
+Modest, and the reasons were predictable: Zen 4 double-pumps 512-bit ops
+through 256-bit units, so AVX-512 buys instruction count, not width; and
+clang's auto-vectoriser was already handling the simple int16 `+=` update
+loops well — the hand-written forward pass (horizontal reduction, which
+auto-vectorisation does not do) was always the real win. Banked because it
+is free and verified, logged at its measured size: **≈ +2–3 Elo on top of
+v1's +13–19.** The remaining SIMD headroom on this architecture is small;
+int8 activations would be the next step-change and that is a
+quantisation-scheme project, not an intrinsics evening.
+
+**Verification, same bar as v1:** three-way eval checksum (avx512 / avx2 /
+scalar selfcheck builds) identical to the integer on gen5 and gen6
+(`evalsum=-230828` / `-334461`, 4,468 checks each, all PASS); engine
+node-identical to the shipped `sgr_v6_0.exe` at fixed depth on
+opening/middlegame/endgame. The SPRT baseline `sgr_v6_0_zen4.exe` was
+rebuilt from the final source so tonight's gen7 candidate and its baseline
+share identical inference speed.
+
+**Observability:** every binary now self-reports its path — the startup line
+reads `nnue: loaded <net> (avx512|avx2|scalar)` and selfcheck prints
+`simd=<kind>` — so a build silently falling back to a slower path is visible
+in any log, in keeping with the no-silent-config lesson from the migration.

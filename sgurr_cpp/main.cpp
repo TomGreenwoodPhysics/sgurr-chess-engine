@@ -165,7 +165,7 @@ void uci_loop() {
 
     while (std::getline(std::cin, command)) {
         if (command == "uci") {
-            std::cout << "id name Sgurr 6.0\n";
+            std::cout << "id name Sgurr 7.0\n";   // bump per release
             std::cout << "id author Tom\n";
             std::cout << "uciok\n";
         } else if (command == "isready") {
@@ -355,7 +355,8 @@ int main(int argc, char* argv[]) {
         const char* env = std::getenv("SGR_EVALFILE");
         std::string net_path = env ? env : SGR_DEFAULT_NET;
         if (!net_path.empty() && nnue::load(net_path)) {
-            std::cerr << "info string nnue: loaded " << net_path << "\n";
+            std::cerr << "info string nnue: loaded " << net_path
+                      << " (" << nnue::simd_kind() << ")\n";
         } else {
             std::cerr << "info string nnue: no network, using hand-crafted eval\n";
         }

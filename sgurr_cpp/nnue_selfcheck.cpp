@@ -17,6 +17,10 @@
 #include <vector>
 
 static long long g_checks = 0, g_fails = 0;
+// Sum of every ground-truth (refresh-based) eval seen. Deterministic across
+// builds, so scalar and SGR_SIMD builds must print an identical checksum --
+// that is the cross-build bit-equivalence test for the SIMD output layer.
+static long long g_evalsum = 0;
 
 // Check every legal move in the position: make it, compare the maintained
 // output to a fresh refresh, then unmake and compare again.
@@ -30,6 +34,7 @@ static void check_all_moves(const std::string& fen) {
         long long inc = nnue::evaluate_raw(board);  // incremental
         nnue::refresh(board);
         long long ref = nnue::evaluate_raw(board);  // scratch
+        g_evalsum += ref;
         ++g_checks;
         if (inc != ref) { ++g_fails; if (g_fails <= 10)
             printf("  MAKE mismatch fen=[%s] move=%d inc=%lld ref=%lld\n",
@@ -74,7 +79,8 @@ static void check_chain(std::mt19937& rng, int max_ply) {
 int main(int argc, char** argv) {
     const char* net = argc > 1 ? argv[1] : "../nets/gen1.nnue";
     if (!nnue::load(net)) { printf("failed to load net %s\n", net); return 1; }
-    printf("loaded %s active=%d\n", net, (int)nnue::active());
+    printf("loaded %s active=%d simd=%s\n", net, (int)nnue::active(),
+           nnue::simd_kind());
 
     // Positions chosen to exercise every special move type.
     const std::vector<std::string> fens = {
@@ -93,7 +99,7 @@ int main(int argc, char** argv) {
     std::mt19937 rng(0xC0FFEE);
     for (int g = 0; g < 2000; ++g) check_chain(rng, 40 + (int)(rng() % 60));
 
-    printf("checks=%lld fails=%lld -> %s\n", g_checks, g_fails,
-           g_fails == 0 ? "PASS" : "FAIL");
+    printf("checks=%lld fails=%lld evalsum=%lld -> %s\n", g_checks, g_fails,
+           g_evalsum, g_fails == 0 ? "PASS" : "FAIL");
     return g_fails == 0 ? 0 : 1;
 }

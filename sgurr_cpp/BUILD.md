@@ -27,6 +27,14 @@ no net is loaded.
 `-static` makes the binary standalone (no clang64 DLLs needed on PATH), which
 is convenient for the SPRT harness.
 
+`-march=native` also enables the vectorised NNUE path (`SGR_SIMD`, default
+on): AVX-512 when the target has it (Zen 4+, prints `(avx512)` at startup),
+AVX2 otherwise (`(avx2)`). It is ~22% faster than and bit-identical to the
+scalar eval. Add `-DSGR_SIMD=0` only to build the scalar fallback for an A/B
+(prints `(scalar)`). A build for a pre-AVX2 CPU must pass `-DSGR_SIMD=0`
+(the SIMD path `#error`s without AVX2). The startup line always names the
+active path — check it when a build seems slow.
+
 Run as HCE (no net) vs NNUE (net) with the same binary:
 
     ./sgr.exe uci                                  # HCE (no SGR_EVALFILE, no sgurr.nnue)
