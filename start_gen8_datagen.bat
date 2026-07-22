@@ -16,7 +16,7 @@ set "LOGDIR=%ROOT%\runs\gen8_datagen"
 rem TARGET is a high cap, not a goal: gen8 feeds king buckets, which want volume.
 rem At ~7M positions/day (12 SIMD workers) this will not be reached inside a
 rem 6-day window, so datagen runs the whole time instead of stopping early.
-set "TARGET=60000000"
+set "TARGET=150000000"
 set "LIMIT=nodes:150000"
 rem 12 workers on a 16-thread 7800X3D: datagen is NODE-limited (nodes:150000),
 rem so oversubscribing cores changes throughput but not the data. Leaves some

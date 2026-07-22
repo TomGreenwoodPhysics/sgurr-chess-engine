@@ -18,7 +18,7 @@ $raw = Join-Path $root 'data\gen8_raw'
 if (Test-Path $raw) {
     $bytes = (Get-ChildItem "$raw\data_*.bin" | Measure-Object Length -Sum).Sum
     $pos = [long]($bytes / 32)
-    $target = 60000000
+    $target = 150000000
     $pct = [math]::Round(100.0 * $pos / $target, 1)
     Write-Host ("  gen8 positions  : {0:N0} / {1:N0}  ({2}%)" -f $pos, $target, $pct)
 }

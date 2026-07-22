@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Force -Path $out, $logd | Out-Null
 
 for ($i = 1; $i -le 12; $i++) {
     Start-Process -FilePath $eng `
-        -ArgumentList "`"$out`"", "60000000", "nodes:150000", "`"$book`"", "`"$net`"" `
+        -ArgumentList "`"$out`"", "150000000", "nodes:150000", "`"$book`"", "`"$net`"" `
         -WorkingDirectory $root -WindowStyle Hidden `
         -RedirectStandardOutput "$logd\worker_$i.log" `
         -RedirectStandardError  "$logd\worker_$i.err.log"
