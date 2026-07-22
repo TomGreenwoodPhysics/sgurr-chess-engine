@@ -1,11 +1,37 @@
-11<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Leave empty for same-origin production; set a full URL only for split hosting. -->
     <meta name="sgurr-api-base" content="">
-    <title>Sgurr Web Demo</title>
+
+    <title>Sgurr — a home-grown chess engine from the Scottish hills</title>
+    <meta name="description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0c0f15">
+
+    <!-- Social cards. og:image paths are relative, which the major scrapers
+         resolve against the page URL; if Sgurr ever gets a fixed public
+         domain, make these absolute — that is what the spec asks for and
+         what the stricter scrapers require. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Sgurr">
+    <meta property="og:title" content="Sgurr — a home-grown chess engine from the Scottish hills">
+    <meta property="og:description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <meta property="og:image" content="assets/intro/sgurr-social-card.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A vaulted stone chamber deep under the hills, a carved ring portal standing above a circular dais.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sgurr — a home-grown chess engine from the Scottish hills">
+    <meta name="twitter:description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <meta name="twitter:image" content="assets/intro/sgurr-social-card.jpg">
+
+    <!-- The chamber backdrop is the first thing anyone sees, but it is reached
+         from CSS, so without this hint the browser cannot start fetching it
+         until styles.css and its @imports have parsed. -->
+    <link rel="preload" as="image" href="assets/intro/sgurr-cave-chamber.webp" type="image/webp" fetchpriority="high">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%230c0f15'/><circle cx='32' cy='32' r='22' fill='none' stroke='%2336cae2' stroke-width='3' opacity='0.55'/><circle cx='32' cy='32' r='13' fill='%2336cae2'/></svg>">
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -79,41 +105,48 @@
       <section class="menu-card">
         <div class="menu-accent-line"></div>
 
-        <p class="menu-section-label">Game mode</p>
-        <div class="selector-row large-selector">
-          <button type="button" id="timeDownButton">&lt;</button>
-          <button type="button" class="selector-value" id="menuTimeButton">Rapid demo</button>
-          <button type="button" id="timeUpButton">&gt;</button>
+        <!-- Only the controls scroll. The accent line and the memory strip stay
+             direct children of the card because both are positioned outside its
+             padding box, and a scroll container would clip them. -->
+        <div class="menu-card-scroll">
+          <p class="menu-section-label">Game mode</p>
+          <div class="selector-row large-selector">
+            <button type="button" id="timeDownButton">&lt;</button>
+            <button type="button" class="selector-value" id="menuTimeButton">Rapid demo</button>
+            <button type="button" id="timeUpButton">&gt;</button>
+          </div>
+
+          <p class="menu-section-label">Opponent</p>
+          <div class="selector-row">
+            <button type="button" id="engineDownButton">&lt;</button>
+            <button type="button" class="selector-value" id="menuEngineButton">Sgurr Engine</button>
+            <button type="button" id="engineUpButton">&gt;</button>
+          </div>
+          <p class="selector-caption" id="menuEngineCaption"></p>
+
+          <p class="menu-section-label">Appearance</p>
+          <div class="selector-row">
+            <button type="button" id="themeDownButton">&lt;</button>
+            <button type="button" class="selector-value" id="menuThemeButton">Highland Heather</button>
+            <button type="button" id="themeUpButton">&gt;</button>
+          </div>
+
+          <p class="menu-section-label">Play</p>
+          <div class="menu-play-grid">
+            <button type="button" class="play-white" id="playWhiteButton">Play as White</button>
+            <button type="button" class="play-black" id="playBlackButton">Play as Black</button>
+            <button type="button" id="watchButton">Watch Sgurr vs itself</button>
+          </div>
+
+          <p class="menu-section-label">Position tools</p>
+          <div class="menu-tools-grid">
+            <button type="button" id="loadFenButton">Load FEN</button>
+            <button type="button" id="boardEditorButton">Board editor</button>
+          </div>
+
+          <div class="menu-status" id="menuStatus">Checking backend</div>
         </div>
 
-        <p class="menu-section-label">Opponent</p>
-        <div class="selector-row">
-          <button type="button" id="engineDownButton">&lt;</button>
-          <button type="button" class="selector-value" id="menuEngineButton">Sgurr Engine</button>
-          <button type="button" id="engineUpButton">&gt;</button>
-        </div>
-
-        <p class="menu-section-label">Appearance</p>
-        <div class="selector-row">
-          <button type="button" id="themeDownButton">&lt;</button>
-          <button type="button" class="selector-value" id="menuThemeButton">Highland Heather</button>
-          <button type="button" id="themeUpButton">&gt;</button>
-        </div>
-
-        <p class="menu-section-label">Play</p>
-        <div class="menu-play-grid">
-          <button type="button" class="play-white" id="playWhiteButton">Play as White</button>
-          <button type="button" class="play-black" id="playBlackButton">Play as Black</button>
-          <button type="button" id="watchButton">Watch Sgurr vs itself</button>
-        </div>
-
-        <p class="menu-section-label">Position tools</p>
-        <div class="menu-tools-grid">
-          <button type="button" id="loadFenButton">Load FEN</button>
-          <button type="button" id="boardEditorButton">Board editor</button>
-        </div>
-
-        <div class="menu-status" id="menuStatus">Checking backend</div>
         <div class="menu-memory" id="menuMemory" hidden></div>
       </section>
     </section>
@@ -183,7 +216,7 @@
             <div class="watch-arena-head">
               <div>
                 <p class="panel-label">Engine arena</p>
-                <h2>MacKenzie Mirror</h2>
+                <h2 id="watchArenaTitle">Sgurr Mirror</h2>
               </div>
               <p class="engine-time" id="watchTimeControl">BLITZ 3+0</p>
             </div>
@@ -286,14 +319,46 @@
           <button id="sideHelpButton" type="button">? Shortcuts</button>
         </section>
 
+        <section class="panel-block review-block" id="reviewBlock" hidden>
+          <div class="review-head">
+            <p class="panel-label">Review</p>
+            <button type="button" class="review-exit" id="reviewExitButton">Done</button>
+          </div>
+
+          <p class="review-move" id="reviewMove">Start position</p>
+          <p class="review-eval" id="reviewEval">&mdash;</p>
+
+          <input
+            class="review-scrub"
+            id="reviewScrub"
+            type="range"
+            min="0"
+            max="0"
+            value="0"
+            step="1"
+            aria-label="Scrub through the game"
+          >
+
+          <div class="review-nav">
+            <button type="button" id="reviewStartButton" aria-label="First position">&#124;&lt;</button>
+            <button type="button" id="reviewPrevButton" aria-label="Previous position">&lt;</button>
+            <span class="review-counter" id="reviewCounter">0 / 0</span>
+            <button type="button" id="reviewNextButton" aria-label="Next position">&gt;</button>
+            <button type="button" id="reviewEndButton" aria-label="Final position">&gt;&#124;</button>
+          </div>
+
+          <button type="button" class="review-swing" id="reviewSwingButton" hidden></button>
+        </section>
+
         <section class="panel-block trend-block">
           <div class="trend-title">
-            <p class="panel-label">Eval trend</p>
+            <p class="panel-label" id="trendLabel">Eval trend</p>
             <span id="trendValue">+0.0</span>
           </div>
           <div class="trend-line">
             <svg class="trend-svg" viewBox="0 0 320 96" preserveAspectRatio="none" aria-hidden="true">
               <line class="trend-zero" x1="10" y1="48" x2="310" y2="48"></line>
+              <line class="trend-swing-mark" id="trendSwingMark" x1="0" y1="4" x2="0" y2="92" hidden></line>
               <polyline id="trendPath" points=""></polyline>
             </svg>
             <span id="trendDot"></span>
@@ -377,6 +442,19 @@
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>
         <div class="theme-gallery" id="themeGallery"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="engineModal" hidden>
+      <section class="modal-box wide-modal" role="dialog" aria-modal="true" aria-labelledby="engineModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="engineModalTitle">Choose an opponent</h2>
+            <p>Every released Sgurr, strongest first. Ratings are CCRL-Blitz-anchored estimates from one internal pool, not official ratings.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+        <div class="engine-gallery" id="engineGallery"></div>
       </section>
     </div>
 
@@ -546,6 +624,7 @@
         <p id="resultDetail">Result</p>
         <div class="result-pill" id="resultPill">1/2-1/2</div>
         <div class="modal-actions">
+          <button type="button" id="reviewGameButton">Review game</button>
           <button type="button" id="rematchButton">Rematch</button>
           <button type="button" id="resultMenuButton">Main menu</button>
         </div>

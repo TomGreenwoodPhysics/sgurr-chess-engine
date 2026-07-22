@@ -3,13 +3,14 @@ import { cancelDrag, cancelPromotion, handleBoardPointerMove, handleBoardPointer
 import { currentTimeControl, syncClock } from "./clocks.js";
 import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
 import { clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, loadEditorStartPosition } from "./editor.js";
-import { cycleEngine, fetchEngines, refreshHealth } from "./engine.js";
+import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
 import { cancelPremoves, copyFen, exportPgn, loadFenFromModal, openFenModal, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
 import { initIntro, wakeSgurr } from "./intro.js";
 import { initMenuCore } from "./menu-core.js";
 import { defaultBlobMemory } from "./memory.js";
+import { enterReview, exitReview, reviewEntries, reviewGoto, reviewIndexForPly, reviewStep, reviewSwing } from "./review.js";
 import { app, refs } from "./state.js";
-import { applyTheme, closeAllModals, cycleTheme, cycleTime, openModal, renderSettings, saveSettings } from "./themes.js";
+import { applyAnimationMode, applyTheme, closeAllModals, cycleTheme, cycleTime, openModal, renderSettings, saveSettings } from "./themes.js";
 import { render, renderClockUi } from "./ui.js";
 
 refs.introCoreTrigger.addEventListener("click", wakeSgurr);
@@ -25,7 +26,10 @@ refs.themeUpButton.addEventListener("click", () => cycleTheme(1));
 refs.menuThemeButton.addEventListener("click", () => openModal(refs.themeModal));
 refs.engineDownButton.addEventListener("click", () => cycleEngine(-1));
 refs.engineUpButton.addEventListener("click", () => cycleEngine(1));
-refs.menuEngineButton.addEventListener("click", () => cycleEngine(1));
+refs.menuEngineButton.addEventListener("click", () => {
+  renderEngineGallery();
+  openModal(refs.engineModal);
+});
 refs.menuSettingsButton.addEventListener("click", () => openModal(refs.settingsModal));
 refs.menuHelpButton.addEventListener("click", () => openModal(refs.helpModal));
 refs.loadFenButton.addEventListener("click", openFenModal);
@@ -199,12 +203,59 @@ document.addEventListener("click", (event) => {
   playSound("button", { volume: 1.1 });
 });
 
+// --- Post-game review -------------------------------------------------
+function openReview() {
+  if (enterReview()) {
+    closeAllModals();
+  }
+  render();
+}
+
+function leaveReview() {
+  exitReview();
+  render();
+}
+
+function stepReview(direction) {
+  reviewStep(direction);
+  render();
+}
+
+refs.reviewGameButton.addEventListener("click", openReview);
+refs.reviewExitButton.addEventListener("click", leaveReview);
+refs.reviewPrevButton.addEventListener("click", () => stepReview(-1));
+refs.reviewNextButton.addEventListener("click", () => stepReview(1));
+refs.reviewStartButton.addEventListener("click", () => {
+  reviewGoto(0);
+  render();
+});
+refs.reviewEndButton.addEventListener("click", () => {
+  reviewGoto(reviewEntries().length - 1);
+  render();
+});
+refs.reviewScrub.addEventListener("input", () => {
+  reviewGoto(Number(refs.reviewScrub.value));
+  render();
+});
+refs.reviewSwingButton.addEventListener("click", () => {
+  const swing = reviewSwing();
+  if (swing) {
+    reviewGoto(reviewIndexForPly(swing.ply));
+    render();
+  }
+});
+
 function overlayIsOpen() {
   return (
     !refs.promotionBackdrop.hidden ||
-    [refs.themeModal, refs.timeModal, refs.settingsModal, refs.helpModal, refs.fenModal].some(
-      (modal) => !modal.hidden,
-    )
+    [
+      refs.themeModal,
+      refs.timeModal,
+      refs.engineModal,
+      refs.settingsModal,
+      refs.helpModal,
+      refs.fenModal,
+    ].some((modal) => !modal.hidden)
   );
 }
 
@@ -226,7 +277,9 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (event.key === "Escape") {
-    if (app.mode === "game" && hasPremoves() && !overlayIsOpen()) {
+    if (app.review.active && !overlayIsOpen()) {
+      leaveReview();
+    } else if (app.mode === "game" && hasPremoves() && !overlayIsOpen()) {
       cancelPremoves();
     } else if (app.mode === "game" && app.focusMode && !overlayIsOpen()) {
       toggleFocusMode(false);
@@ -247,9 +300,25 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "u" && app.mode === "game") {
     undoMove();
   } else if (event.key === "ArrowLeft" && app.mode === "game") {
-    undoPly();
+    // While reviewing, the arrows walk the record instead of taking back
+    // plies — the game is over, there is nothing to take back.
+    if (app.review.active) {
+      stepReview(-1);
+    } else {
+      undoPly();
+    }
   } else if (event.key === "ArrowRight" && app.mode === "game") {
-    redoPly();
+    if (app.review.active) {
+      stepReview(1);
+    } else {
+      redoPly();
+    }
+  } else if (event.key === "Home" && app.review.active) {
+    reviewGoto(0);
+    render();
+  } else if (event.key === "End" && app.review.active) {
+    reviewGoto(reviewEntries().length - 1);
+    render();
   } else if (event.key.toLowerCase() === "g" && app.mode === "game") {
     triggerEngineMove();
   } else if (event.key.toLowerCase() === "c" && app.mode === "game") {
@@ -278,6 +347,7 @@ window.addEventListener("keydown", (event) => {
 
 initAudio();
 applyTheme();
+applyAnimationMode();
 initIntro();
 initMenuCore();
 refs.movetimeSelect.value = currentTimeControl().key;

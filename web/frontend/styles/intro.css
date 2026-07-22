@@ -45,7 +45,7 @@
   inset: -3%;
   background:
     linear-gradient(color-mix(in srgb, var(--bg), transparent 72%), color-mix(in srgb, var(--bg), transparent 78%)),
-    url("../assets/intro/sgurr-cave-chamber.png") center 49% / cover no-repeat;
+    url("../assets/intro/sgurr-cave-chamber.webp") center 49% / cover no-repeat;
   filter: brightness(0.4) saturate(0.5) contrast(1.2);
   transform: scale(1.075);
   transform-origin: center 52%;

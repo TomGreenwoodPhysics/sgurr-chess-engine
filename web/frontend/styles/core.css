@@ -331,6 +331,13 @@
 /* only their scale, heavier border and slightly stronger presence      */
 /* differ. `--core-size` is kept in step with the rendered size of      */
 /* every core by a ResizeObserver in js/menu-core.js.                   */
+/*                                                                      */
+/* Size these from --menu-core-size, NOT from --core-size. The observer */
+/* writes --core-size back as an inline style, so sizing off it would   */
+/* close a loop: inline --core-size pins the width, the width then      */
+/* stops responding to breakpoint changes in --menu-core-size, the      */
+/* observer never fires again, and the core stays frozen at whatever it */
+/* first measured. --core-size is an output here, never an input.       */
 /* ------------------------------------------------------------------ */
 .menu-title .menu-core,
 .intro-core {
@@ -341,8 +348,8 @@
   --core-inner-glow: color-mix(in srgb, var(--accent), transparent 52%);
   --core-ring-opacity: 0.58;
   --core-ring-fade: 34%;
-  width: var(--core-size);
-  height: var(--core-size);
+  width: var(--menu-core-size);
+  height: var(--menu-core-size);
   border-width: 2px;
 }
 
@@ -1013,24 +1020,24 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sgurr-core .core-ember,
-  .sgurr-core .core-form,
-  .sgurr-core .core-surge,
-  .sgurr-core .core-nebula,
-  .sgurr-core .core-mottle,
-  .sgurr-core .core-mottle-fine,
-  .sgurr-core .core-aurora,
-  .sgurr-core .core-pupil,
-  .sgurr-core .core-presence,
-  .sgurr-core .core-corona,
-  .sgurr-core .core-eclipse,
-  .sgurr-core .core-aureole,
-  .sgurr-core .core-stars,
-  .core-star {
-    animation: none;
-    opacity: 0;
-  }
+/* Driven by the in-app Animations setting rather than the OS reduced-motion
+   hint, matching motionOn() in menu-core.js. */
+body.animations-off .sgurr-core .core-ember,
+body.animations-off .sgurr-core .core-form,
+body.animations-off .sgurr-core .core-surge,
+body.animations-off .sgurr-core .core-nebula,
+body.animations-off .sgurr-core .core-mottle,
+body.animations-off .sgurr-core .core-mottle-fine,
+body.animations-off .sgurr-core .core-aurora,
+body.animations-off .sgurr-core .core-pupil,
+body.animations-off .sgurr-core .core-presence,
+body.animations-off .sgurr-core .core-corona,
+body.animations-off .sgurr-core .core-eclipse,
+body.animations-off .sgurr-core .core-aureole,
+body.animations-off .sgurr-core .core-stars,
+body.animations-off .core-star {
+  animation: none;
+  opacity: 0;
 }
 
 .header-core {

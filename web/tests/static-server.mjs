@@ -14,6 +14,8 @@ const MIME_TYPES = new Map([
   [".json", "application/json; charset=utf-8"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
+  [".webp", "image/webp"],
+  [".jpg", "image/jpeg"],
 ]);
 
 function resolveRequestPath(requestUrl) {

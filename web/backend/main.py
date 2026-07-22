@@ -51,55 +51,66 @@ NETS_DIR = REPO_ROOT / "nets"
 # ledger row appear here; experimental builds deliberately do not.
 # Note v3.1 rates BELOW v3.0: it was a search-only release whose flat soft
 # time limit lost at the pool TC. That is real, measured, and left visible.
+# `rating` is the structured form of the number the subtitle carries; the
+# subtitle itself is derived from `tech` + `rating` below so the figure lives
+# in exactly one place. The frontend uses `rating` to sort and display the
+# ladder, so a version added here shows up in the opponent picker for free.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
         "id": "v6.0",
         "exe": CPP_DIR / "sgr_v6_0.exe",
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v6.0 "Banachdaich"',
-        "subtitle": "GEN5 NNUE + REFINED SEARCH · ~2807",
+        "tech": "GEN5 NNUE + REFINED SEARCH",
+        "rating": 2807,
     },
     {
         "id": "v5.0",
         "exe": CPP_DIR / "sgr_v5_0.exe",
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v5.0 "Gillean"',
-        "subtitle": "GEN5 NNUE + RFP SEARCH · ~2724",
+        "tech": "GEN5 NNUE + RFP SEARCH",
+        "rating": 2724,
     },
     {
         "id": "v4.0",
         "exe": CPP_DIR / "sgr_v4_0.exe",
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v4.0 "MacKenzie"',
-        "subtitle": "GEN5 NNUE · ~2604",
+        "tech": "GEN5 NNUE",
+        "rating": 2604,
     },
     {
         "id": "v3.1",
         "exe": CPP_DIR / "sgr_v3_1.exe",
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.1 "Blackpeak"',
-        "subtitle": "GEN3 NNUE + SOFT TIME · ~2540",
+        "tech": "GEN3 NNUE + SOFT TIME",
+        "rating": 2540,
     },
     {
         "id": "v3.0",
         "exe": CPP_DIR / "sgr_gen3.exe",
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.0 "Blackpeak"',
-        "subtitle": "GEN3 NNUE · ~2589",
+        "tech": "GEN3 NNUE",
+        "rating": 2589,
     },
     {
         "id": "v2.0",
         "exe": CPP_DIR / "sgr_gen2.exe",
         "net": NETS_DIR / "gen2.nnue",
         "label": 'Sgurr v2.0 "Notches"',
-        "subtitle": "GEN2 NNUE · ~2468",
+        "tech": "GEN2 NNUE",
+        "rating": 2468,
     },
     {
         "id": "v1.0",
         "exe": CPP_DIR / "sgr_gen1.exe",
         "net": NETS_DIR / "gen1.nnue",
         "label": 'Sgurr v1.0 "Fox"',
-        "subtitle": "GEN1 NNUE · ~2385",
+        "tech": "GEN1 NNUE",
+        "rating": 2385,
     },
     {
         # No net by design: this IS the hand-crafted eval.
@@ -107,7 +118,8 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "exe": CPP_DIR / "Ruk_hce.exe",
         "net": None,
         "label": "Sgurr classical",
-        "subtitle": "HAND-CRAFTED EVAL · ~2376",
+        "tech": "HAND-CRAFTED EVAL",
+        "rating": 2376,
     },
 ]
 _engine_override = os.environ.get("SGURR_ENGINE_EXE") or os.environ.get("SGR_ENGINE_EXE")
@@ -120,6 +132,9 @@ for _spec in ENGINE_SPECS:
     _spec["exe"] = Path(_spec["exe"]).resolve()
     if _spec.get("net") is not None:
         _spec["net"] = Path(_spec["net"]).resolve()
+    # Single source of truth for the rating: the displayed subtitle is built
+    # from it rather than repeating the number as free text.
+    _spec["subtitle"] = f"{_spec['tech']} · ~{_spec['rating']}"
 
 DEFAULT_ENGINE_ID = str(ENGINE_SPECS[0]["id"])
 # Back-compat aliases: /health and the engine-path exposure describe the default.
@@ -275,6 +290,8 @@ ENGINES: dict[str, dict[str, object]] = {
         "exe": spec["exe"],
         "label": spec["label"],
         "subtitle": spec["subtitle"],
+        "tech": spec["tech"],
+        "rating": spec["rating"],
     }
     for spec in ENGINE_SPECS
 }
@@ -663,6 +680,8 @@ def list_engines() -> dict[str, object]:
                 "id": engine_id,
                 "label": entry["label"],
                 "subtitle": entry["subtitle"],
+                "tech": entry["tech"],
+                "rating": entry["rating"],
                 "available": Path(entry["exe"]).exists(),
             }
             for engine_id, entry in ENGINES.items()

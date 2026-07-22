@@ -2,6 +2,7 @@ import { playCheckmateRevealSound, playSound } from "./audio.js";
 import { FILES, PROMOTIONS } from "./config.js";
 import { handleEditorDelete } from "./editor.js";
 import { cancelPremoves, handleSquare, makePlayerMove, queuePremove, tryMove } from "./game.js";
+import { reviewCurrent } from "./review.js";
 import { app, refs } from "./state.js";
 import { render } from "./ui.js";
 import { clampNumber, clonePieces, decoratePieceNode, parseFenPieces, pieceColor, pieceForColour, pieceLabel } from "./utils.js";
@@ -153,6 +154,10 @@ function canQueuePremove() {
 }
 
 function boardInteractionAvailable() {
+  // Review is a read-only view of a finished game; the board is scenery.
+  if (app.review.active) {
+    return false;
+  }
   return humanCanMove() || canQueuePremove();
 }
 
@@ -177,10 +182,13 @@ function legalTargets(square) {
 }
 
 function lastMoveSquares() {
-  if (!app.lastMove || app.lastMove.length < 4) {
+  // In review the highlight tracks the move that produced the position on
+  // screen, not the last move of the finished game.
+  const uci = app.review.active ? reviewCurrent()?.uci : app.lastMove;
+  if (!uci || uci.length < 4) {
     return new Set();
   }
-  return new Set([app.lastMove.slice(0, 2), app.lastMove.slice(2, 4)]);
+  return new Set([uci.slice(0, 2), uci.slice(2, 4)]);
 }
 
 function kingSquare(pieces, colour) {
@@ -438,9 +446,6 @@ function capturedPieceForMove(uci, previousPieces) {
 // The in-place dissolve remains as a fallback when no target is laid out.
 function triggerCaptureAbsorb(lastMove, previousPieces, { byHuman = false } = {}) {
   if (app.animationMode === "Off" || !lastMove?.uci) {
-    return;
-  }
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return;
   }
   const captured = capturedPieceForMove(lastMove.uci, previousPieces);
@@ -814,7 +819,13 @@ function appendBoardCoords(cell, square) {
 
 function renderBoard() {
   const editing = app.mode === "editor";
-  const pieces = editing ? app.editor.pieces : projectPremovePieces(parseFenPieces(app.fen));
+  const reviewing = app.review.active;
+  const reviewFen = reviewing ? reviewCurrent()?.fen : null;
+  const pieces = editing
+    ? app.editor.pieces
+    : reviewFen
+      ? parseFenPieces(reviewFen)
+      : projectPremovePieces(parseFenPieces(app.fen));
   const gameDragFrom =
     !editing && app.drag.active && app.drag.mode === "game" ? app.drag.from : null;
   const editorDragFrom =
@@ -823,8 +834,12 @@ function renderBoard() {
   const targets = !editing && hintFrom ? legalTargets(hintFrom) : new Set();
   const premoving = !editing && canQueuePremove();
   const last = editing ? new Set() : lastMoveSquares();
-  const checkedKing = !editing && app.inCheck ? kingSquare(pieces, app.turn) : null;
-  const matedKing = checkmateRevealPending() ? kingSquare(pieces, app.turn) : null;
+  // app.inCheck and the mate reveal describe the final position, so they must
+  // not be painted onto an earlier one while reviewing.
+  const checkedKing =
+    !editing && !reviewing && app.inCheck ? kingSquare(pieces, app.turn) : null;
+  const matedKing =
+    !reviewing && checkmateRevealPending() ? kingSquare(pieces, app.turn) : null;
 
   refs.board.innerHTML = "";
   refs.board.classList.toggle("editor-mode", editing);

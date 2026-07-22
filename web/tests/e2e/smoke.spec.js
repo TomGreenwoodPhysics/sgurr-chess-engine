@@ -88,6 +88,51 @@ const AFTER_E4_E5_STATE = gameState({
     perspective: "white",
   },
 });
+// A game that turns: White stands slightly better after 1.e4 e5, then throws
+// it away over 2.Nf3 Nc6. Two scored positions either side of a human move is
+// the minimum a turning point needs, and the drop is signed white-relative
+// exactly as the backend sends it.
+const AFTER_NF3_FEN = "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
+const AFTER_NC6_FEN = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3";
+
+const AFTER_NF3_STATE = gameState({
+  fen: AFTER_NF3_FEN,
+  turn: "black",
+  legalMoves: ["b8c6", "b8a6", "g8f6", "d7d6", "d7d5", "f8e7"],
+  premoveMoves: ["f1c4", "f1b5", "b1c3", "d2d4"],
+  moves: ["e2e4", "e7e5", "g1f3"],
+  moveRows: [
+    { number: 1, white: "e4", black: "e5" },
+    { number: 2, white: "Nf3", black: "" },
+  ],
+  lastMove: { uci: "g1f3", san: "Nf3", by: "player" },
+});
+
+const COLLAPSE_STATE = gameState({
+  fen: AFTER_NC6_FEN,
+  legalMoves: [],
+  premoveMoves: [],
+  moves: ["e2e4", "e7e5", "g1f3", "b8c6"],
+  moveRows: [
+    { number: 1, white: "e4", black: "e5" },
+    { number: 2, white: "Nf3", black: "Nc6" },
+  ],
+  lastMove: { uci: "b8c6", san: "Nc6", by: "engine" },
+  latestEval: {
+    kind: "cp",
+    value: -350,
+    display: "-3.5",
+    depth: 9,
+    nodes: 4200,
+    time_ms: 30,
+    pv: ["f1c4"],
+    perspective: "white",
+  },
+  gameOver: true,
+  result: "1/2-1/2",
+  reason: "threefold_repetition",
+});
+
 const WATCH_DRAW_STATE = gameState({
   fen: AFTER_E4_FEN,
   turn: "black",
@@ -140,6 +185,10 @@ async function installMockBackend(page, { finishWatch = false, engineExists = tr
       await json(route, { ...AFTER_E4_STATE, last_move: { ...AFTER_E4_STATE.last_move, by: "player" } });
       return;
     }
+    if (path === "/api/player-move" && body?.move === "g1f3") {
+      await json(route, AFTER_NF3_STATE);
+      return;
+    }
     if (path === "/api/engine-move") {
       if (finishWatch) {
         await json(route, WATCH_DRAW_STATE);
@@ -147,6 +196,8 @@ async function installMockBackend(page, { finishWatch = false, engineExists = tr
         await json(route, AFTER_E4_STATE);
       } else if (body?.fen === AFTER_E4_FEN) {
         await json(route, AFTER_E4_E5_STATE);
+      } else if (body?.fen === AFTER_NF3_FEN) {
+        await json(route, COLLAPSE_STATE);
       } else {
         await json(route, { detail: `Unexpected engine FEN: ${body?.fen}` }, 400);
       }
@@ -273,4 +324,48 @@ test("keeps game-start controls disabled when the engine is missing", async ({ p
   await expect(page.locator("#playWhiteButton")).toBeDisabled();
   await expect(page.locator("#playBlackButton")).toBeDisabled();
   await expect(page.locator("#watchButton")).toBeDisabled();
+});
+
+test("reviews a finished game and names the move it turned on", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+
+  // 1.e4 e5, then 2.Nf3 Nc6 which ends the game with the eval collapsed.
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  await page.locator('[data-square="g1"]').click();
+  await page.locator('[data-square="f3"]').click();
+
+  await expect(page.locator("#resultModal")).toBeVisible();
+  await page.locator("#reviewGameButton").click();
+
+  // Review takes over from the result modal and opens on the turning point.
+  await expect(page.locator("#resultModal")).toBeHidden();
+  await expect(page.locator("#reviewBlock")).toBeVisible();
+  await expect(page.locator("#board .square")).toHaveCount(64);
+
+  // +0.2 -> -3.5 white-relative, spanning White's own 2.Nf3.
+  const swing = page.locator("#reviewSwingButton");
+  await expect(swing).toBeVisible();
+  await expect(swing).toContainText("2. Nf3");
+  await expect(swing).toContainText("+0.2");
+  await expect(swing).toContainText("-3.5");
+  await expect(swing).toContainText("3.7 pawns");
+  await expect(page.locator("#reviewMove")).toHaveText("2. Nf3");
+
+  // Stepping back reaches the start position, and the controls bound there.
+  await page.locator("#reviewStartButton").click();
+  await expect(page.locator("#reviewMove")).toHaveText("Start position");
+  await expect(page.locator("#reviewPrevButton")).toBeDisabled();
+  await expect(page.locator("#reviewStartButton")).toBeDisabled();
+
+  await page.locator("#reviewNextButton").click();
+  await expect(page.locator("#reviewMove")).toHaveText("1. e4");
+
+  // Ending review hands the result modal back.
+  await page.locator("#reviewExitButton").click();
+  await expect(page.locator("#reviewBlock")).toBeHidden();
+  await expect(page.locator("#resultModal")).toBeVisible();
 });

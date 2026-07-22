@@ -431,6 +431,118 @@ tr.redo-notice td {
   vector-effect: non-scaling-stroke;
 }
 
+/* Marks the ply the game turned on, in the full-game trend shown in review. */
+.trend-swing-mark {
+  stroke: color-mix(in srgb, var(--danger), transparent 30%);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-swing-mark[hidden] {
+  display: none;
+}
+
+/* ---- Post-game review ------------------------------------------------ */
+.review-block {
+  display: grid;
+  gap: 10px;
+}
+
+.review-block[hidden] {
+  display: none;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-exit {
+  padding: 3px 12px;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.review-move {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-eval {
+  margin: -4px 0 0;
+  color: var(--accent-2);
+  font-size: 0.86rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Not every ply carries an eval — the engine only scores on its own turn. */
+.review-eval.is-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.review-scrub {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.review-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-nav button {
+  flex: 1;
+  min-height: 30px;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.review-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.review-counter {
+  flex: 0 0 auto;
+  min-width: 4.6em;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The headline finding: click to jump straight to the moment it turned. */
+.review-swing {
+  width: 100%;
+  padding: 9px 11px;
+  border-color: color-mix(in srgb, var(--danger), var(--edge) 55%);
+  background: color-mix(in srgb, var(--danger), transparent 88%);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+
+.review-swing[hidden] {
+  display: none;
+}
+
 #trendPath {
   fill: none;
   stroke: var(--accent);

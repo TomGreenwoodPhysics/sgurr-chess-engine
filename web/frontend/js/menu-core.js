@@ -4,15 +4,12 @@ import { app, refs } from "./state.js";
 // Aesthetic life for every Sgurr core: the god-eye layer stack (depth,
 // cosmos, divinity, interior) injected into all of them, cursor attention
 // for the menu and post-game cores, and a rare "surfacing" idle beat on the
-// menu. Everything here is decorative and only runs while motion is enabled
-// — so reduced-motion users and the headless smoke tests (animations off)
-// get static, undisturbed cores.
+// menu. Everything here is decorative and only runs while the in-app
+// Animations setting is on — so users who turn it off, and the headless
+// smoke tests (animations off), get static, undisturbed cores.
 
 function motionOn() {
-  return (
-    app.animationMode !== "Off"
-    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return app.animationMode !== "Off";
 }
 
 // Structural depth: a static volumetric light/shadow layer that makes the

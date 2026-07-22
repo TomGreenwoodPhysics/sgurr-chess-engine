@@ -12,6 +12,13 @@ function applyTheme() {
   localStorage.setItem("sgurrTheme", app.themeKey);
 }
 
+// Mirrors app.animationMode onto the body so CSS can suppress decorative
+// layers. Must run before initIntro() so the intro's first frame is already
+// correct for users who have animations off.
+function applyAnimationMode() {
+  document.body.classList.toggle("animations-off", app.animationMode === "Off");
+}
+
 function cycleTheme(direction) {
   const index = THEME_ORDER.indexOf(app.themeKey);
   app.themeKey = THEME_ORDER[(index + direction + THEME_ORDER.length) % THEME_ORDER.length];
@@ -26,22 +33,124 @@ function cycleTime(direction) {
   render();
 }
 
-function openModal(modal) {
-  closeAllModals();
-  modal.hidden = false;
-}
-
-function closeAllModals() {
-  for (const modal of [
+// ---------------------------------------------------------------------
+// The modal layer, and its focus handling.
+//
+// The dialogs are siblings of #menuScreen and #appShell, so marking those
+// two inert lifts the whole background out of the tab order in one move —
+// the same primitive the intro uses while it holds the screen. Inert is
+// what actually stops focus escaping; the Tab wrap below is polish, so the
+// last control cycles back to the first instead of out to browser chrome.
+//
+// #resultModal is deliberately not in this set. It is render-driven — ui.js
+// shows it from game state rather than from a user action — so there is no
+// trigger element to hand focus back to when it closes.
+// ---------------------------------------------------------------------
+function userModals() {
+  return [
     refs.themeModal,
     refs.timeModal,
+    refs.engineModal,
     refs.settingsModal,
     refs.helpModal,
     refs.fenModal,
-  ]) {
+  ];
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+let modalReturnFocus = null;
+
+function openModalElement() {
+  return userModals().find((modal) => modal && !modal.hidden) || null;
+}
+
+function focusablesWithin(root) {
+  return [...root.querySelectorAll(FOCUSABLE_SELECTOR)].filter(
+    (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement,
+  );
+}
+
+function setBackgroundInert(inert) {
+  // While the intro still holds the screen it owns these two flags. Closing a
+  // modal must never hand the menu back early.
+  if (!inert && !app.intro.complete) {
+    return;
+  }
+  refs.menuScreen.inert = inert;
+  refs.appShell.inert = inert;
+}
+
+function onModalKeydown(event) {
+  if (event.key !== "Tab") {
+    return;
+  }
+  const modal = openModalElement();
+  if (!modal) {
+    return;
+  }
+  const focusables = focusablesWithin(modal);
+  if (!focusables.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+document.addEventListener("keydown", onModalKeydown);
+
+function openModal(modal) {
+  const trigger = document.activeElement;
+  closeAllModals({ restoreFocus: false });
+  modal.hidden = false;
+  setBackgroundInert(true);
+  modalReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+
+  // Focus the dialog box itself rather than its first control, so assistive
+  // technology reads the title before the buttons. It is not natively
+  // focusable, hence the programmatic tabindex. Callers that want a specific
+  // control focused (openFenModal, say) simply focus it after this returns.
+  const box = modal.querySelector('[role="dialog"]');
+  if (box) {
+    box.tabIndex = -1;
+    box.focus();
+  } else {
+    focusablesWithin(modal)[0]?.focus();
+  }
+}
+
+// Bound directly as a click listener on [data-close-modal], so this is also
+// called with a MouseEvent. Read the flag defensively rather than
+// destructuring, so only a genuine { restoreFocus: false } suppresses the
+// hand-back — anything else, event object included, restores focus.
+function closeAllModals(options) {
+  const restoreFocus = options?.restoreFocus !== false;
+  for (const modal of userModals()) {
     modal.hidden = true;
   }
   refs.fenError.textContent = "";
+  setBackgroundInert(false);
+  if (restoreFocus) {
+    if (modalReturnFocus?.isConnected) {
+      modalReturnFocus.focus();
+    }
+    modalReturnFocus = null;
+  }
 }
 
 function setTheme(themeKey) {
@@ -112,6 +221,7 @@ function renderTimeGallery() {
 }
 
 function renderSettings() {
+  applyAnimationMode();
   refs.autoFlipInput.checked = app.autoFlipAsBlack;
   refs.showEngineInfoInput.checked = app.showEngineInfo;
   refs.animationModeSelect.value = app.animationMode;
@@ -124,6 +234,7 @@ function renderSettings() {
 }
 
 export {
+  applyAnimationMode,
   applyTheme,
   cycleTheme,
   cycleTime,

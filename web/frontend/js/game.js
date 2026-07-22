@@ -7,6 +7,7 @@ import { apiPost, applyServerState, selectedEngineId, setBusy, setError } from "
 import { applySnapshot, recordSnapshot } from "./history.js";
 import { blobMemoryGreeting } from "./memory.js";
 import { coreMoveLine, setThinkingState } from "./personality.js";
+import { resetReview } from "./review.js";
 import { app, refs } from "./state.js";
 import { closeAllModals, openModal } from "./themes.js";
 import { render, setStatus } from "./ui.js";
@@ -76,6 +77,7 @@ function resetLocalGame(side) {
   app.openingAnnouncedKey = "";
   app.openingAnnouncedDepth = 0;
   app.memoryRecorded = false;
+  resetReview();
   app.focusMode = false;
   app.humanSide = side;
   app.pendingAnimation = null;

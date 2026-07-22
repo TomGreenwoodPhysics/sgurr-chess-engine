@@ -2,11 +2,11 @@ import { playSound, syncMenuMusic, unlockAudio } from "./audio.js";
 import { INTRO_BLACKOUT_DURATION_MS, INTRO_HANDOFF_DURATION_MS, INTRO_NAME_DURATION_MS, INTRO_REVEAL_DURATION_MS, INTRO_WAKE_DURATION_MS } from "./config.js";
 import { app, refs } from "./state.js";
 
+// Deliberately keyed on the in-app Animations setting alone, not the OS
+// prefers-reduced-motion hint: the intro is the site's signature and plays by
+// default. Setting Animations to Off is the escape hatch.
 function introMotionEnabled() {
-  return (
-    app.animationMode !== "Off"
-    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return app.animationMode !== "Off";
 }
 
 function initIntro() {

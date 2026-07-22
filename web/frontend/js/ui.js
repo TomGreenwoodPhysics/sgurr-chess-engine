@@ -5,6 +5,7 @@ import { CAPTURED_PIECE_CODES, CHECKMATE_DRILLS, EDIT_PALETTE, ODDS_PRESETS, PIE
 import { editorOddsLabel, editorReturnLabel, loadCheckmateDrill, loadOddsPreset, toggleEditorBrush } from "./editor.js";
 import { favoriteMemoryOpening } from "./memory.js";
 import { applyCoreMood, coreLineText } from "./personality.js";
+import { plyMoveText, reviewCurrent, reviewEntries, reviewEvalAt, reviewEvalSeries, reviewSwing } from "./review.js";
 import { app, refs } from "./state.js";
 import { renderSettings, renderThemeGallery, renderTimeGallery } from "./themes.js";
 import { decoratePieceNode, formatClock, pieceColor, pieceLabel, title } from "./utils.js";
@@ -304,34 +305,123 @@ function addEvalHistoryPoint(evalInfo, ply) {
 }
 
 function renderEvalTrend(display) {
-  const points = app.evalHistory.length
-    ? app.evalHistory
-    : [{ ply: app.moves.length, cp: 0, display }];
+  const reviewing = app.review.active;
+  // Live: the capped rolling window, spaced evenly. Review: the whole game,
+  // spaced by ply so the graph reads as elapsed game time and the swing mark
+  // lands where the move actually was.
+  const reviewSeries = reviewing ? reviewEvalSeries() : [];
+  const points = reviewing
+    ? (reviewSeries.length ? reviewSeries : [{ ply: 0, cp: 0, display }])
+    : app.evalHistory.length
+      ? app.evalHistory
+      : [{ ply: app.moves.length, cp: 0, display }];
   const width = 320;
   const height = 96;
   const plotPad = 10;
   const maxCp = 800;
   const lastIndex = Math.max(1, points.length - 1);
+  const maxPly = Math.max(1, points[points.length - 1]?.ply || 1);
+  const xForPly = (ply) => plotPad + (ply / maxPly) * (width - plotPad * 2);
   const svgPoints = points.map((point, index) => {
-    const x = points.length === 1 ? plotPad : plotPad + (index / lastIndex) * (width - plotPad * 2);
+    const x = reviewing
+      ? xForPly(point.ply)
+      : points.length === 1
+        ? plotPad
+        : plotPad + (index / lastIndex) * (width - plotPad * 2);
     const clamped = Math.max(-maxCp, Math.min(maxCp, point.cp));
     const y = height / 2 - (clamped / maxCp) * (height / 2 - plotPad);
     return { x, y };
   });
   const path = svgPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const last = svgPoints[svgPoints.length - 1] || { x: 0, y: height / 2 };
-  const dotX = Math.max(plotPad, Math.min(width - plotPad, last.x));
-  const dotY = Math.max(plotPad, Math.min(height - plotPad, last.y));
+
+  // Live the dot marks the latest eval; in review it marks where you are.
+  let marker = svgPoints[svgPoints.length - 1] || { x: 0, y: height / 2 };
+  if (reviewing) {
+    const currentPly = reviewCurrent()?.ply ?? 0;
+    let nearest = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      if (Math.abs(points[i].ply - currentPly) < Math.abs(points[nearest].ply - currentPly)) {
+        nearest = i;
+      }
+    }
+    marker = svgPoints[nearest] || marker;
+  }
+  const dotX = Math.max(plotPad, Math.min(width - plotPad, marker.x));
+  const dotY = Math.max(plotPad, Math.min(height - plotPad, marker.y));
 
   refs.trendPath.setAttribute("points", path);
   refs.trendDot.style.left = `${(dotX / width) * 100}%`;
   refs.trendDot.style.top = `${(dotY / height) * 100}%`;
+
+  if (refs.trendSwingMark) {
+    const swing = reviewing ? reviewSwing() : null;
+    if (swing) {
+      const x = xForPly(swing.toPly).toFixed(1);
+      refs.trendSwingMark.setAttribute("x1", x);
+      refs.trendSwingMark.setAttribute("x2", x);
+      refs.trendSwingMark.hidden = false;
+    } else {
+      refs.trendSwingMark.hidden = true;
+    }
+  }
+}
+
+// The review panel: where you are in the game, and the moment it turned.
+function renderReviewPanel() {
+  if (!refs.reviewBlock) {
+    return;
+  }
+  const reviewing = app.review.active && app.mode === "game";
+  refs.reviewBlock.hidden = !reviewing;
+  if (refs.trendLabel) {
+    refs.trendLabel.textContent = reviewing ? "Eval trend (full game)" : "Eval trend";
+  }
+  if (!reviewing) {
+    return;
+  }
+
+  const entries = reviewEntries();
+  const current = reviewCurrent();
+  const lastIndex = Math.max(0, entries.length - 1);
+
+  refs.reviewMove.textContent = plyMoveText(current);
+
+  // The engine only searches on its own turn, so many plies carry no score.
+  // Rather than a bare "no eval", fall back to the last real one and say so —
+  // that is also what the eval column beside the board is showing.
+  const carried = reviewEvalAt(app.review.index);
+  const ownEval = current?.display || null;
+  refs.reviewEval.textContent = ownEval
+    || (carried ? `${carried.display} at the last scored position` : "not yet scored");
+  refs.reviewEval.classList.toggle("is-empty", !ownEval);
+
+  refs.reviewScrub.max = String(lastIndex);
+  refs.reviewScrub.value = String(app.review.index);
+  refs.reviewCounter.textContent = `${app.review.index} / ${lastIndex}`;
+
+  refs.reviewStartButton.disabled = app.review.index <= 0;
+  refs.reviewPrevButton.disabled = app.review.index <= 0;
+  refs.reviewNextButton.disabled = app.review.index >= lastIndex;
+  refs.reviewEndButton.disabled = app.review.index >= lastIndex;
+
+  const swing = reviewSwing();
+  if (swing) {
+    refs.reviewSwingButton.hidden = false;
+    refs.reviewSwingButton.textContent =
+      `Turning point: ${swing.moveText} — ${swing.fromDisplay} to ${swing.toDisplay}`
+      + ` (${swing.pawns.toFixed(1)} pawns)`;
+  } else {
+    refs.reviewSwingButton.hidden = true;
+  }
 }
 
 function renderEval() {
   const editorMaterial = app.mode === "editor" ? materialFromPieces(app.editor.pieces) : null;
+  const reviewEval = app.review.active ? reviewEvalAt(app.review.index) : null;
   const evalInfo =
-    app.mode === "editor"
+    app.review.active
+      ? reviewEval
+      : app.mode === "editor"
       ? {
           kind: "cp",
           value: editorMaterial.diff * 100,
@@ -593,7 +683,10 @@ function resultPresentation(outcome, message) {
 }
 
 function renderResultModal() {
-  refs.resultModal.hidden = !(app.mode === "game" && app.gameOver) || checkmateRevealPending();
+  // Reviewing keeps the game-over state, so the modal has to stand aside
+  // while it runs — and reappears when review is dismissed.
+  refs.resultModal.hidden =
+    !(app.mode === "game" && app.gameOver) || checkmateRevealPending() || app.review.active;
   if (refs.resultModal.hidden) {
     return;
   }
@@ -702,16 +795,38 @@ function renderBlobMemory() {
   refs.menuMemory.hidden = false;
 }
 
+// Self-play is a mirror match, so the arena is named for the build fighting
+// itself: the quoted codename where a release has one ('Sgurr v6.0
+// "Banachdaich"' -> Banachdaich), otherwise whatever follows "Sgurr"
+// ('Sgurr classical' -> Classical). This used to be hardcoded as "MacKenzie
+// Mirror" and froze there when v4.0 stopped being the current release.
+function engineCodename(label) {
+  const quoted = label.match(/"([^"]+)"/)?.[1];
+  if (quoted) {
+    return quoted;
+  }
+  const trailing = label.replace(/^Sgurr\s*/i, "").trim();
+  return trailing ? title(trailing) : "Sgurr";
+}
+
 function renderMenu() {
   refs.menuScreen.hidden = app.mode !== "menu";
   refs.menuTimeButton.textContent = currentTimeControl().label;
   refs.menuThemeButton.textContent = THEMES[app.themeKey]?.label || THEMES.wood.label;
-  refs.menuEngineButton.textContent = app.engineLabel || 'Sgurr v6.0 "Banachdaich"';
+  const engineLabel = app.engineLabel || 'Sgurr v6.0 "Banachdaich"';
+  const engineSubtitle = app.engineSubtitle || "GEN5 NNUE + REFINED SEARCH · ~2807";
+  refs.menuEngineButton.textContent = engineLabel;
+  if (refs.menuEngineCaption) {
+    refs.menuEngineCaption.textContent = engineSubtitle;
+  }
   if (refs.coreEngineName) {
-    refs.coreEngineName.textContent = app.engineLabel || 'Sgurr v6.0 "Banachdaich"';
+    refs.coreEngineName.textContent = engineLabel;
   }
   if (refs.coreEngineSubtitle) {
-    refs.coreEngineSubtitle.textContent = app.engineSubtitle || "GEN5 NNUE + REFINED SEARCH · ~2807";
+    refs.coreEngineSubtitle.textContent = engineSubtitle;
+  }
+  if (refs.watchArenaTitle) {
+    refs.watchArenaTitle.textContent = `${engineCodename(engineLabel)} Mirror`;
   }
   renderThemeGallery();
   renderTimeGallery();
@@ -752,6 +867,7 @@ function render() {
   renderMoves();
   renderBackend();
   renderEditor();
+  renderReviewPanel();
   renderResultModal();
   syncMenuMusic();
   syncGameMusic();
