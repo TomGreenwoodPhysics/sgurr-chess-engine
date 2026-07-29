@@ -22,6 +22,8 @@ the canonical identifiers; peak names are codenames only.
 | v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT); plus history malus and best-move-stability time management; 2627 ±27 CCRL-Blitz-anchored |
 | v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) + LMP; 2724 ±36 on the re-anchored pool-2026-07-B, +119 vs v4.0 same-solve (gen6 net measured flat and was not shipped — see CHANGELOG) |
 | v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package on the gen5 net: improving flag + history-adjusted LMR + singular extensions, +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); **2807 ±36**, +83 vs v5.0 same-solve — first version above the old pool's ceiling |
+| v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 (SPRT, both AVX-512 int16 builds), vs gen6's +6 wash — the labels really were the bottleneck; 2903 ±6 (8,522-game solve). Also the AVX-512/int16 NNUE inference landed here (~+22% NPS, bit-identical) |
+| v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0** (SPRT), the largest single-cycle gain; **3005.5 ±11** (3,329-game solve), essentially at the 3000 mark. King buckets were tested on this data and measured flat (−10.7 ±16 despite lower loss) — net capacity is label-limited, so the shipped net is the classic 768→384 |
 
 See `CHANGELOG.md` for details and measured results with error bars,
 `benchmarks/ledger.md` for the append-only record of measured ratings, and
@@ -38,12 +40,17 @@ published CCRL Blitz ratings (Blunder, Zahak, Weiss, Igel — four families,
 CCRL Blitz scale, not official CCRL ratings. Anchors were re-sourced from the
 live CCRL Blitz list on 2026-07-15 (pool-2026-07-B); earlier published rows
 sat ~22 higher on pool-A's inflated anchors, so all versions below are from
-one consistent solve. Full method and append-only history:
-`benchmarks/ledger.md`.
+one consistent solve. v7.0 and v8.0 were measured on the current Ryzen 7
+7800X3D; v6.0 and earlier on an i5-9400F — one Ordo solve places them on a
+single scale, but cross-hardware *absolute* gaps carry that caveat (the
+version-to-version SPRTs, run on one machine, do not). Full method and
+append-only history: `benchmarks/ledger.md`.
 
 | engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v6.0 "Banachdaich" | **2807 ±36** |
+| Sgurr v8.0 "Thearlaich" | **3006 ±11** |
+| Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
+| Sgurr v6.0 "Banachdaich" | 2807 ±36 |
 | Sgurr v5.0 "Gillean" | 2724 ±36 |
 | Sgurr v4.0 "MacKenzie" | 2604 ±27 |
 | Sgurr v3.0 "Blackpeak" | 2590 ±39 |
