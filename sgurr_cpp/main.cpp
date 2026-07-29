@@ -356,7 +356,9 @@ int main(int argc, char* argv[]) {
         std::string net_path = env ? env : SGR_DEFAULT_NET;
         if (!net_path.empty() && nnue::load(net_path)) {
             std::cerr << "info string nnue: loaded " << net_path
-                      << " (" << nnue::simd_kind() << ")\n";
+                      << " (" << nnue::simd_kind();
+            if (nnue::buckets() > 1) std::cerr << ", k=" << nnue::buckets();
+            std::cerr << ")\n";
         } else {
             std::cerr << "info string nnue: no network, using hand-crafted eval\n";
         }

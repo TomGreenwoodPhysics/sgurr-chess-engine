@@ -47,13 +47,21 @@ _W_BASE = (_colour * 384 + _ptype * 64).astype(np.int64)          # white persp
 _B_BASE = ((1 - _colour) * 384 + _ptype * 64).astype(np.int64)    # black persp
 
 
-def _decode_chunk(arr):
+def _decode_chunk(arr, bmap=None, pad=PAD):
     """arr: (m, 32) uint8 contiguous -> (wf, bf, stm, score, result) for the
     chunk, wf/bf shape (m, MAXP). Operates on the flat list of occupied cells
-    (~24 per record) so no (m, 64) int64 grid is ever materialised."""
+    (~24 per record) so no (m, 64) int64 grid is ever materialised.
+
+    bmap (64-entry king-bucket map) shifts each perspective's features into
+    the bucket of that perspective's OWN king: index += map[rel_king]*768.
+
+    Features are returned as int16: the largest index is buckets*768 (the pad
+    row), far under 32767, and at gen8 scale (56M positions) int64 feature
+    arrays alone would be ~29 GB -- more than the machine's RAM. int16 keeps
+    the dataset ~7 GB; batches are widened to int64 on the GPU."""
     m = arr.shape[0]
 
-    stm = arr[:, 24].astype(np.int64)
+    stm = arr[:, 24].astype(np.int8)
     score = arr[:, 25:27].copy().view(np.int16).reshape(m).astype(np.float32)
     result = (arr[:, 27].astype(np.float32)) / 2.0
 
@@ -78,28 +86,46 @@ def _decode_chunk(arr):
     wf_flat = _W_BASE[code_flat] + cols
     bf_flat = _B_BASE[code_flat] + (cols ^ np.int64(56))
 
-    wf = np.full((m, MAXP), PAD, np.int64)
-    bf = np.full((m, MAXP), PAD, np.int64)
+    if bmap is not None:
+        # exactly one king of each colour per record (freeze validates this;
+        # the assert catches a corrupt input loudly instead of mistraining)
+        m5, m11 = code_flat == 5, code_flat == 11        # WK, BK codes
+        assert int(m5.sum()) == m and int(m11.sum()) == m, \
+            "record without exactly one king per side"
+        bmap64 = np.asarray(bmap, np.int64)
+        wk = np.zeros(m, np.int64); bk = np.zeros(m, np.int64)
+        wk[rows[m5]] = cols[m5]
+        bk[rows[m11]] = cols[m11]
+        woff = bmap64[wk] * 768                # white persp: own king, no mirror
+        boff = bmap64[bk ^ np.int64(56)] * 768 # black persp: own king, mirrored
+        wf_flat = wf_flat + woff[rows]
+        bf_flat = bf_flat + boff[rows]
+
+    wf = np.full((m, MAXP), pad, np.int16)
+    bf = np.full((m, MAXP), pad, np.int16)
     wf[rows, slot] = wf_flat
     bf[rows, slot] = bf_flat
     return wf, bf, stm, score, result
 
 
-def load_dataset(path, chunk=1_000_000):
-    """Chunked vectorised loader -> (wf, bf, stm, score, result, n)."""
+def load_dataset(path, chunk=1_000_000, buckets=1):
+    """Chunked vectorised loader -> (wf, bf, stm, score, result, n).
+    buckets>1 applies the shared king-bucket map (nt.KING_BUCKET_MAP)."""
+    bmap = nt.KING_BUCKET_MAP if buckets > 1 else None
+    pad = INPUT * buckets
     raw = np.fromfile(path, dtype=np.uint8)
     n = raw.size // 32
     arr = raw[: n * 32].reshape(n, 32)
 
-    wf = np.empty((n, MAXP), np.int64)
-    bf = np.empty((n, MAXP), np.int64)
-    stm = np.empty(n, np.int64)
+    wf = np.empty((n, MAXP), np.int16)
+    bf = np.empty((n, MAXP), np.int16)
+    stm = np.empty(n, np.int8)
     score = np.empty(n, np.float32)
     result = np.empty(n, np.float32)
 
     for lo in range(0, n, chunk):
         hi = min(lo + chunk, n)
-        w, b, s, sc, r = _decode_chunk(np.ascontiguousarray(arr[lo:hi]))
+        w, b, s, sc, r = _decode_chunk(np.ascontiguousarray(arr[lo:hi]), bmap, pad)
         wf[lo:hi] = w; bf[lo:hi] = b
         stm[lo:hi] = s; score[lo:hi] = sc; result[lo:hi] = r
     return wf, bf, stm, score, result, n
@@ -139,15 +165,16 @@ def make_split(n, val_frac, seed, block=65536):
 
 
 class NNUE(nn.Module):
-    def __init__(self):
+    def __init__(self, n_features=INPUT):
         super().__init__()
-        # +1 row for padding (forced to zero, contributes nothing to the sum)
-        self.ft = nn.Embedding(INPUT + 1, HL, padding_idx=PAD)
+        # +1 row for padding (forced to zero, contributes nothing to the sum).
+        # n_features = INPUT * buckets for king-bucketed nets.
+        self.ft = nn.Embedding(n_features + 1, HL, padding_idx=n_features)
         self.ftb = nn.Parameter(torch.zeros(HL))
         self.out = nn.Linear(2 * HL, 1)
         nn.init.normal_(self.ft.weight, 0, 0.05)
         with torch.no_grad():
-            self.ft.weight[PAD].zero_()
+            self.ft.weight[n_features].zero_()
         nn.init.normal_(self.out.weight, 0, 0.05)
 
     def forward(self, wf, bf, stm):
@@ -161,9 +188,11 @@ class NNUE(nn.Module):
 
 
 def batch_loss(model, WF, BF, STM, SC, RES, sel, dev, lambda_):
-    """Forward + MSE-in-sigmoid-space loss for one batch of indices `sel`."""
-    wfb = WF[sel].to(dev, non_blocking=True)
-    bfb = BF[sel].to(dev, non_blocking=True)
+    """Forward + MSE-in-sigmoid-space loss for one batch of indices `sel`.
+    Features are stored int16 (RAM) and widened to int64 here, after the
+    device copy, so the PCIe transfer stays half-width too."""
+    wfb = WF[sel].to(dev, non_blocking=True).long()
+    bfb = BF[sel].to(dev, non_blocking=True).long()
     stmb = STM[sel].to(dev, non_blocking=True)
     scb = SC[sel].to(dev, non_blocking=True)
     resb = RES[sel].to(dev, non_blocking=True)
@@ -206,6 +235,11 @@ def main():
                     help="target = lambda*eval_winprob + (1-lambda)*game_result")
     ap.add_argument("--wclip", type=float, default=127.0 / nt.QA,
                     help="clamp |ft weights| so the int16 accumulator can't overflow")
+    ap.add_argument("--buckets", type=int, default=1, choices=[1, nt.BUCKETS],
+                    help=f"king-bucketed inputs: 1 = classic 768 net (v1 file), "
+                         f"{nt.BUCKETS} = nt.KING_BUCKET_MAP (v2 file with the "
+                         f"map embedded). Other counts need a new map in "
+                         f"nnue_tools first.")
     ap.add_argument("--val_frac", type=float, default=0.05,
                     help="held-out validation fraction (0 = train on everything)")
     ap.add_argument("--seed", type=int, default=0,
@@ -220,10 +254,13 @@ def main():
     nt.HL = args.hl
     print(f"HL = {HL}")
 
+    n_features = INPUT * args.buckets
+    print(f"king buckets = {args.buckets}  (features = {n_features})")
+
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print("device:", dev)
     t0 = time.time()
-    wf, bf, stm, score, result, n = load_dataset(args.data)
+    wf, bf, stm, score, result, n = load_dataset(args.data, buckets=args.buckets)
     print(f"loaded {n} positions  ({time.time()-t0:.1f}s)")
 
     # The dataset stays in CPU memory and each batch is copied to the device
@@ -242,7 +279,7 @@ def main():
     print(f"split: {n_train} train, {int(val_idx.numel())} val "
           f"(val_frac={args.val_frac}, seed={args.seed})")
 
-    model = NNUE().to(dev)
+    model = NNUE(n_features).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = None
     if args.schedule == "cosine":
@@ -262,7 +299,7 @@ def main():
             if sched is not None:
                 sched.step()
             with torch.no_grad():
-                model.ft.weight[:INPUT].clamp_(-args.wclip, args.wclip)
+                model.ft.weight[:n_features].clamp_(-args.wclip, args.wclip)
             total += loss.item() * sel.numel()
         train_loss = total / n_train
 
@@ -274,11 +311,12 @@ def main():
             print(f"epoch {epoch+1:3d}/{args.epochs}  loss {train_loss:.5f}  "
                   f"({time.time()-t0:.1f}s)")
 
-    ftw = model.ft.weight[:INPUT].detach().cpu().numpy()        # (INPUT, HL)
+    ftw = model.ft.weight[:n_features].detach().cpu().numpy()   # (n_features, HL)
     ftb = model.ftb.detach().cpu().numpy()                      # (HL,)
     ow = model.out.weight.detach().cpu().numpy().reshape(-1)    # (2*HL,)
     ob = float(model.out.bias.detach().cpu().numpy()[0])
-    nt.export(args.out, ftw, ftb, ow, ob)
+    nt.export(args.out, ftw, ftb, ow, ob,
+              bucket_map=(nt.KING_BUCKET_MAP if args.buckets > 1 else None))
     print("wrote", args.out)
 
 

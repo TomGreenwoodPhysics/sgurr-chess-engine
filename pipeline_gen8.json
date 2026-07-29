@@ -1,0 +1,60 @@
+{
+  "generation": 8,
+  "version": "v8.0",
+  "codename": "TBD",
+  "raw_dir": "data/gen8_raw",
+  "target_positions": 55900000,
+  "hardware": "Ryzen 7 7800X3D, 7 threads",
+
+  "_notes": [
+    "target_positions is set BELOW the ~55.93M already on disk so the datagen stage marks itself complete instead of spawning workers -- the gen8 data was generated standalone over the away-week (gen7 labeller, -DSGR_RFP=0, nodes:150000).",
+    "train.extra_args turns on 8 king buckets (nnue_tools.KING_BUCKET_MAP, embedded in the v2 net file).",
+    "Run the manual A/B first (bucketed vs unbucketed control on the same data) before this pipeline: the pipeline measures the RELEASE candidate; the A/B isolates what buckets themselves bought."
+  ],
+
+  "datagen": {
+    "nodes": 150000,
+    "book": "testing/book.epd",
+    "labeller": "nets/gen7.nnue",
+    "processes": null
+  },
+
+  "probe": {
+    "enabled": true,
+    "steps": 1900,
+    "threshold_pct": 0.75,
+    "extend_factor": 1.5,
+    "max_extensions": 0
+  },
+
+  "train": {
+    "epochs": 8,
+    "schedule": "cosine",
+    "lr_min": 1e-5,
+    "val_frac": 0,
+    "lambda": [0.9, 1.0],
+    "extra_args": ["--buckets", "8"]
+  },
+
+  "select": {
+    "tc": "8+0.08",
+    "rounds": 30,
+    "concurrency": 7
+  },
+
+  "sprt": {
+    "tc": "8+0.08",
+    "elo0": 0,
+    "elo1": 5,
+    "max_rounds": 500,
+    "concurrency": 7,
+    "baseline_exe": "sgurr_cpp/sgr_gen7.exe",
+    "baseline_name": "Sgurr-v7.0"
+  },
+
+  "calibrate": {
+    "tc": "10+0.1",
+    "rounds": 15,
+    "concurrency": 7
+  }
+}

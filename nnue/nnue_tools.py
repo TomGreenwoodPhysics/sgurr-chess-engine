@@ -7,28 +7,75 @@ import numpy as np
 INPUT, HL, QA, QB, SCALE = 768, 384, 255, 64, 400   # HL=384 since v4.0 (gen5)
 MAGIC = b"RUKN"
 
-def gen_random(path, seed=20260621):
+# --- king buckets (version-2 nets) -----------------------------------------
+# Each perspective indexes its features by its OWN king's bucket, so the net
+# learns king-placement-specific weights. The map is over the perspective's
+# RELATIVE king square (own back rank = rank 1; black mirrors via sq^56).
+# Fine resolution on the back rank, where kings sit for most of the game,
+# coarse above it. The 64-byte map is embedded verbatim in every v2 .nnue and
+# the engine reads it back from the file, so trainer and engine cannot
+# silently disagree on bucket assignment (single source of truth: this table).
+def _build_king_bucket_map():
+    m = np.zeros(64, np.uint8)
+    for sq in range(64):
+        r, f = sq // 8, sq % 8
+        if r == 0:
+            m[sq] = f // 2        # a1b1=0  c1d1=1  e1f1=2  g1h1=3
+        elif r == 1:
+            m[sq] = 4             # rank 2
+        elif r <= 3:
+            m[sq] = 5             # ranks 3-4
+        elif r <= 5:
+            m[sq] = 6             # ranks 5-6
+        else:
+            m[sq] = 7             # ranks 7-8
+    return m
+
+KING_BUCKET_MAP = _build_king_bucket_map()
+BUCKETS = int(KING_BUCKET_MAP.max()) + 1          # 8
+
+def gen_random(path, seed=20260621, buckets=1):
+    """Random net for engine verification. buckets>1 writes a version-2 file
+    with KING_BUCKET_MAP, exercising the engine's bucketed load/index path."""
     rng = np.random.default_rng(seed)
-    ftw = rng.integers(-64, 65, size=INPUT * HL, dtype=np.int16)
+    n_features = INPUT * buckets
+    ftw = rng.integers(-64, 65, size=n_features * HL, dtype=np.int16)
     ftb = rng.integers(-64, 65, size=HL, dtype=np.int16)
     ow  = rng.integers(-64, 65, size=2 * HL, dtype=np.int16)
     ob  = int(rng.integers(-4096, 4097))
     with open(path, "wb") as f:
         f.write(MAGIC)
-        f.write(struct.pack("<6I", 1, INPUT, HL, QA, QB, SCALE))
+        if buckets == 1:
+            f.write(struct.pack("<6I", 1, INPUT, HL, QA, QB, SCALE))
+        else:
+            assert buckets == BUCKETS, "random v2 nets use KING_BUCKET_MAP"
+            f.write(struct.pack("<6I", 2, n_features, HL, QA, QB, SCALE))
+            f.write(KING_BUCKET_MAP.tobytes())
         f.write(ftw.tobytes()); f.write(ftb.tobytes())
         f.write(ow.tobytes());  f.write(struct.pack("<i", ob))
 
 def load(path):
+    """-> (ftw, ftb, ow, ob, buckets, bucket_map). v1 files load as buckets=1
+    with an all-zero map, so callers can treat every net uniformly."""
     with open(path, "rb") as f:
         assert f.read(4) == MAGIC
         ver, inp, hl, qa, qb, sc = struct.unpack("<6I", f.read(24))
-        assert (inp, hl, qa, qb, sc) == (INPUT, HL, QA, QB, SCALE)
-        ftw = np.frombuffer(f.read(INPUT*HL*2), dtype=np.int16).astype(np.int64).reshape(INPUT, HL)
+        assert (hl, qa, qb, sc) == (HL, QA, QB, SCALE)
+        if ver == 1:
+            assert inp == INPUT
+            buckets, bmap = 1, np.zeros(64, np.uint8)
+        elif ver == 2:
+            assert inp % INPUT == 0, f"v2 input {inp} not a multiple of {INPUT}"
+            buckets = inp // INPUT
+            bmap = np.frombuffer(f.read(64), dtype=np.uint8).copy()
+            assert int(bmap.max()) < buckets, "bucket map entry out of range"
+        else:
+            raise AssertionError(f"unknown net version {ver}")
+        ftw = np.frombuffer(f.read(inp*HL*2), dtype=np.int16).astype(np.int64).reshape(inp, HL)
         ftb = np.frombuffer(f.read(HL*2), dtype=np.int16).astype(np.int64)
         ow  = np.frombuffer(f.read(2*HL*2), dtype=np.int16).astype(np.int64)
         ob  = struct.unpack("<i", f.read(4))[0]
-    return ftw, ftb, ow, ob
+    return ftw, ftb, ow, ob, buckets, bmap
 
 def pieces_from_fen(fen):
     """yield (colour, ptype, sq) for each piece. a1=0, sq=rank*8+file."""
@@ -59,12 +106,18 @@ def trunc_div(num, den):
     return -q if (num < 0) != (den < 0) else q
 
 def forward(net, fen):
-    ftw, ftb, ow, ob = net
+    ftw, ftb, ow, ob, buckets, bmap = net
     plist, stm = pieces_from_fen(fen)
+    # bucket offset per perspective, from that perspective's OWN king
+    off = [0, 0]
+    if buckets > 1:
+        kings = {c: sq for (c, pt, sq) in plist if pt == 5}
+        off[0] = int(bmap[kings[0]]) * INPUT
+        off[1] = int(bmap[kings[1] ^ 56]) * INPUT
     acc = [ftb.copy(), ftb.copy()]          # [white_pov, black_pov], int64
     for colour, ptype, sq in plist:
         for persp in (0, 1):
-            acc[persp] += ftw[feat(persp, colour, ptype, sq)]
+            acc[persp] += ftw[off[persp] + feat(persp, colour, ptype, sq)]
     us, them = acc[stm], acc[1-stm]
     cu = np.clip(us, 0, QA)
     ct = np.clip(them, 0, QA)
@@ -75,9 +128,10 @@ def forward(net, fen):
     return output, cp
 
 if __name__ == "__main__":
-    if sys.argv[1] == "gen":
-        gen_random(sys.argv[2])
-        print("wrote random net", sys.argv[2])
+    if sys.argv[1] == "gen":            # gen <path> [buckets]
+        k = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+        gen_random(sys.argv[2], buckets=k)
+        print(f"wrote random net {sys.argv[2]} (buckets={k})")
     elif sys.argv[1] == "fwd":     # fwd <net> <fen...>
         net = load(sys.argv[2])
         fen = " ".join(sys.argv[3:])
@@ -86,16 +140,29 @@ if __name__ == "__main__":
 
 
 # --- quantise + export: the trainer calls this to write a .nnue the engine loads ---
-def export(path, ftw, ftb, ow, ob):
-    """ftw: (INPUT,HL) float; ftb: (HL,) float; ow: (2*HL,) float; ob: float scalar.
-    Quantises with the engine's QA/QB scales and writes the RUKN format."""
-    ftw_q = np.clip(np.round(np.asarray(ftw) * QA), -32768, 32767).astype(np.int16).reshape(INPUT, HL)
+def export(path, ftw, ftb, ow, ob, bucket_map=None):
+    """ftw: (n_features,HL) float; ftb: (HL,) float; ow: (2*HL,) float; ob: scalar.
+    Quantises with the engine's QA/QB scales and writes the RUKN format.
+    bucket_map None -> version-1 (n_features must be INPUT); otherwise a
+    64-entry uint8 map -> version-2 with the map embedded after the header."""
+    ftw = np.asarray(ftw)
+    n_features = ftw.shape[0] if ftw.ndim == 2 else ftw.size // HL
+    ftw_q = np.clip(np.round(ftw * QA), -32768, 32767).astype(np.int16).reshape(n_features, HL)
     ftb_q = np.clip(np.round(np.asarray(ftb) * QA), -32768, 32767).astype(np.int16)
     ow_q  = np.clip(np.round(np.asarray(ow)  * QB), -32768, 32767).astype(np.int16)
     ob_q  = int(round(float(ob) * QA * QB))
     with open(path, "wb") as f:
         f.write(MAGIC)
-        f.write(struct.pack("<6I", 1, INPUT, HL, QA, QB, SCALE))
+        if bucket_map is None:
+            assert n_features == INPUT, f"v1 export needs {INPUT} features, got {n_features}"
+            f.write(struct.pack("<6I", 1, INPUT, HL, QA, QB, SCALE))
+        else:
+            bmap = np.asarray(bucket_map, np.uint8)
+            assert bmap.size == 64
+            assert n_features == (int(bmap.max()) + 1) * INPUT, \
+                f"features {n_features} disagree with map buckets {int(bmap.max())+1}"
+            f.write(struct.pack("<6I", 2, n_features, HL, QA, QB, SCALE))
+            f.write(bmap.tobytes())
         f.write(ftw_q.tobytes()); f.write(ftb_q.tobytes())
         f.write(ow_q.tobytes());  f.write(struct.pack("<i", ob_q))
 

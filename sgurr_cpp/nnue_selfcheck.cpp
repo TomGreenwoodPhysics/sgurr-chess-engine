@@ -79,10 +79,24 @@ static void check_chain(std::mt19937& rng, int max_ply) {
 int main(int argc, char** argv) {
     const char* net = argc > 1 ? argv[1] : "../nets/gen1.nnue";
     if (!nnue::load(net)) { printf("failed to load net %s\n", net); return 1; }
-    printf("loaded %s active=%d simd=%s\n", net, (int)nnue::active(),
-           nnue::simd_kind());
+    printf("loaded %s active=%d simd=%s buckets=%d\n", net, (int)nnue::active(),
+           nnue::simd_kind(), nnue::buckets());
 
-    // Positions chosen to exercise every special move type.
+    // fwd mode: print evaluate_raw for one FEN. Golden cross-check against the
+    // Python integer reference (nnue_tools.py fwd) -- the two must agree to
+    // the integer, which catches feature-indexing/bucket bugs neither side's
+    // internal consistency checks can see.
+    if (argc > 3 && std::string(argv[2]) == "fwd") {
+        Board board(argv[3]);
+        nnue::refresh(board);
+        printf("%lld\n", nnue::evaluate_raw(board));
+        return 0;
+    }
+
+    // Positions chosen to exercise every special move type, plus king
+    // placements on and around bucket boundaries (v2 nets: d1/e1 crosses
+    // back-rank buckets, rank 2/3 and 4/5 cross the band buckets; king moves
+    // from these squares exercise the stale->refresh crossing path).
     const std::vector<std::string> fens = {
         START_FEN,
         "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1",        // castling both sides
@@ -93,6 +107,10 @@ int main(int argc, char** argv) {
         "8/P6k/8/8/8/8/6Kp/8 b - - 0 1",                            // black promotion
         "r1bqkbnr/pPpp1ppp/2n5/8/8/8/P1PPpPPP/RNBQKBNR w KQkq - 0 1", // promotion with capture
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // kiwipete
+        "4k3/8/8/8/8/8/8/3K4 w - - 0 1",     // kings at d1/e8: back-rank boundary
+        "4k3/8/8/8/8/8/4K3/8 w - - 0 1",     // white king rank 2: rank-band edge
+        "8/8/8/4k3/4K3/8/8/8 w - - 0 1",     // both kings mid-board, band 5/6 edge
+        "8/8/2k5/8/8/5K2/8/8 b - - 0 1",     // asymmetric bands, black to move
     };
     for (const auto& f : fens) check_all_moves(f);
 

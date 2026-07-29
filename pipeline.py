@@ -413,7 +413,9 @@ class Pipeline:
                  "--out", net, "--epochs", str(tr["epochs"]),
                  "--schedule", tr.get("schedule", "cosine"),
                  "--lr_min", str(tr.get("lr_min", 1e-5)),
-                 "--lambda_", str(lam), "--val_frac", str(tr.get("val_frac", 0))],
+                 "--lambda_", str(lam), "--val_frac", str(tr.get("val_frac", 0)),
+                 # arch/extra flags (e.g. ["--buckets", "8"]) pass straight through
+                 *[str(a) for a in tr.get("extra_args", [])]],
                 log_path=self.run_dir / f"train_{self.lam_tag(lam)}.log",
                 cwd=ROOT / "nnue", env={"KMP_DUPLICATE_LIB_OK": "TRUE"})
             curve = [float(m.group(1)) for m in

@@ -32,14 +32,29 @@ namespace nnue {
 namespace {
 
 struct Network {
-    std::vector<std::int16_t> ft_weight;   // INPUT * HL, feature-major
+    std::vector<std::int16_t> ft_weight;   // buckets * INPUT * HL, feature-major
     std::array<std::int16_t, HL> ft_bias{};
     std::array<std::int16_t, 2 * HL> out_weight{};
     std::int32_t out_bias = 0;
+    // King buckets (version-2 nets). bucket_map maps the perspective's OWN
+    // king square (relative frame; black mirrors via sq^56) to a bucket, and
+    // that perspective's features shift by bucket*INPUT. The map is READ FROM
+    // THE NET FILE -- the trainer embeds it -- so engine and trainer can never
+    // disagree on bucket assignment. v1 nets load as buckets=1, zero map.
+    int buckets = 1;
+    std::array<std::uint8_t, 64> bucket_map{};
 };
 
 Network g_net;
 bool g_active = false;
+
+// Per-perspective feature offset (bucket * INPUT) for the accumulators'
+// current position; recomputed by refresh(). A king move that changes its own
+// side's bucket invalidates that perspective wholesale -- on_make/on_unmake
+// detect this and mark the accumulator stale instead of editing it, and
+// evaluate() falls back to a full refresh, the same safety net every other
+// mismatch already uses.
+int g_bucket_off[2] = {0, 0};
 
 // Accumulators: [0] = white perspective, [1] = black. g_acc_hash is the
 // Zobrist key of the position they currently represent; evaluate() rebuilds
@@ -173,8 +188,10 @@ inline void edit_feature(int piece, int sq, int sign) {
     int ptype = piece % 6;
     int iw = feature_index(WHITE, colour, ptype, sq);
     int ib = feature_index(BLACK, colour, ptype, sq);
-    const std::int16_t* ww = &g_net.ft_weight[static_cast<std::size_t>(iw) * HL];
-    const std::int16_t* wb = &g_net.ft_weight[static_cast<std::size_t>(ib) * HL];
+    const std::int16_t* ww =
+        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[0] + iw) * HL];
+    const std::int16_t* wb =
+        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[1] + ib) * HL];
 #if SGR_SIMD
     if (sign > 0) { vec_add(g_acc[0], ww); vec_add(g_acc[1], wb); }
     else          { vec_sub(g_acc[0], ww); vec_sub(g_acc[1], wb); }
@@ -210,6 +227,21 @@ void apply_move(const UndoInfo& undo, int s) {
     }
 }
 
+// Does this move change the mover's own king bucket? Only that side's
+// perspective re-indexes (the opponent sees the king as an ordinary piece and
+// updates incrementally), but the single g_acc_valid flag covers both, so a
+// crossing costs one full refresh -- rare enough (bucket-crossing king moves
+// plus castling) that the simplicity wins.
+inline bool crosses_bucket(const UndoInfo& undo) {
+    if (g_net.buckets <= 1) return false;
+    const Move& m = undo.move;
+    if (undo.moved_piece == WK)
+        return g_net.bucket_map[m.from()] != g_net.bucket_map[m.to()];
+    if (undo.moved_piece == BK)
+        return g_net.bucket_map[m.from() ^ 56] != g_net.bucket_map[m.to() ^ 56];
+    return false;
+}
+
 // Clamp each accumulator lane to [0, QA], multiply by the int16 output
 // weights, and total. The vector paths compute every intermediate exactly as
 // the scalar path does (integer ops, no overflow within the guarded bounds),
@@ -233,6 +265,16 @@ std::int64_t output_from_acc(int side_to_move) {
 }  // namespace
 
 void refresh(const Board& board) {
+    // Bucket offsets from each side's own king, BEFORE any features are
+    // added: every edit_feature call below indexes through these.
+    if (g_net.buckets > 1) {
+        int wk = __builtin_ctzll(board.bitboards[WK]);
+        int bk = __builtin_ctzll(board.bitboards[BK]);
+        g_bucket_off[0] = g_net.bucket_map[wk] * INPUT;
+        g_bucket_off[1] = g_net.bucket_map[bk ^ 56] * INPUT;
+    } else {
+        g_bucket_off[0] = g_bucket_off[1] = 0;
+    }
 #if SGR_SIMD
     // AccT == int16_t == the stored bias type, so the init is two straight
     // copies rather than a widening loop.
@@ -258,14 +300,18 @@ void refresh(const Board& board) {
 
 void on_make(const UndoInfo& undo, std::uint64_t new_hash) {
     // Only update if the accumulator matches the pre-move position; otherwise
-    // mark it stale and let the next evaluate() rebuild it.
+    // mark it stale and let the next evaluate() rebuild it. A king move that
+    // changes its own bucket re-indexes that whole perspective, so it also
+    // goes the stale->refresh route rather than an incremental edit.
     if (!g_acc_valid || g_acc_hash != undo.old_hash_key) { g_acc_valid = false; return; }
+    if (crosses_bucket(undo)) { g_acc_valid = false; return; }
     apply_move(undo, +1);
     g_acc_hash = new_hash;
 }
 
 void on_unmake(const UndoInfo& undo, std::uint64_t post_hash) {
     if (!g_acc_valid || g_acc_hash != post_hash) { g_acc_valid = false; return; }
+    if (crosses_bucket(undo)) { g_acc_valid = false; return; }
     apply_move(undo, -1);
     g_acc_hash = undo.old_hash_key;
 }
@@ -308,7 +354,7 @@ bool load(const std::string& path) {
 
     std::uint32_t header[6];   // version, input, hl, qa, qb, scale
     in.read(reinterpret_cast<char*>(header), sizeof(header));
-    if (header[1] != INPUT || header[2] != HL || header[3] != QA
+    if (header[2] != HL || header[3] != QA
         || header[4] != QB || header[5] != SCALE) {
         std::cerr << "nnue: architecture mismatch in " << path
                   << " (input=" << header[1] << " hl=" << header[2]
@@ -317,7 +363,36 @@ bool load(const std::string& path) {
         return false;
     }
 
-    g_net.ft_weight.resize(static_cast<std::size_t>(INPUT) * HL);
+    // v1: classic 768-input net. v2: king-bucketed, input = buckets*768 with
+    // the 64-byte bucket map stored right after the header.
+    if (header[0] == 1) {
+        if (header[1] != INPUT) {
+            std::cerr << "nnue: v1 input " << header[1] << " != " << INPUT << "\n";
+            return false;
+        }
+        g_net.buckets = 1;
+        g_net.bucket_map.fill(0);
+    } else if (header[0] == 2) {
+        if (header[1] % INPUT != 0 || header[1] == 0) {
+            std::cerr << "nnue: v2 input " << header[1]
+                      << " is not a multiple of " << INPUT << "\n";
+            return false;
+        }
+        g_net.buckets = static_cast<int>(header[1] / INPUT);
+        in.read(reinterpret_cast<char*>(g_net.bucket_map.data()), 64);
+        for (int sq = 0; sq < 64; ++sq) {
+            if (g_net.bucket_map[sq] >= g_net.buckets) {
+                std::cerr << "nnue: bucket map entry " << int(g_net.bucket_map[sq])
+                          << " out of range for " << g_net.buckets << " buckets\n";
+                return false;
+            }
+        }
+    } else {
+        std::cerr << "nnue: unknown net version " << header[0] << "\n";
+        return false;
+    }
+
+    g_net.ft_weight.resize(static_cast<std::size_t>(header[1]) * HL);
     in.read(reinterpret_cast<char*>(g_net.ft_weight.data()),
             g_net.ft_weight.size() * sizeof(std::int16_t));
     in.read(reinterpret_cast<char*>(g_net.ft_bias.data()),
@@ -342,6 +417,10 @@ bool active() {
 
 const char* simd_kind() {
     return kSimdKind;
+}
+
+int buckets() {
+    return g_net.buckets;
 }
 
 }  // namespace nnue

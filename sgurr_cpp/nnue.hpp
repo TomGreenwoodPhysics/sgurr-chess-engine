@@ -21,14 +21,22 @@ class Board;
 //
 // Network file format (little-endian):
 //   char   magic[4] = "RUKN"
-//   uint32 version  = 1
-//   uint32 input    = 768
+//   uint32 version  = 1 (classic) or 2 (king-bucketed)
+//   uint32 input    = 768 (v1) or buckets*768 (v2)
 //   uint32 hl       = HL
 //   uint32 qa, qb, scale
+//   uint8  bucket_map[64]          (v2 ONLY: relative own-king sq -> bucket;
+//                                   single source of truth, written by the
+//                                   trainer and read back here)
 //   int16  ft_weight[input * hl]   (feature-major: ft_weight[feature*hl + k])
 //   int16  ft_bias[hl]
 //   int16  out_weight[2 * hl]      ([0..hl) = stm side, [hl..2hl) = other side)
 //   int32  out_bias
+//
+// v2 king buckets: each perspective's features shift by
+// bucket_map[rel_own_king]*768, so the net learns king-placement-specific
+// weights. A king move across a bucket boundary invalidates that side's
+// accumulator; the engine handles it with the existing stale->refresh path.
 
 struct UndoInfo;   // defined in board.hpp
 
@@ -69,6 +77,11 @@ bool active();
 // rather than assumed (this project has been bitten by silent build-config
 // differences before).
 const char* simd_kind();
+
+// King-bucket count of the LOADED net: 1 for classic v1 nets, >1 for v2
+// bucketed nets (the map itself is read from the net file). Also printed at
+// startup for the same observability reason.
+int buckets();
 
 // Side-relative evaluation in centipawns (positive = good for side to move).
 int evaluate(const Board& board);
