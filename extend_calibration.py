@@ -33,9 +33,11 @@ def main() -> int:
                     help="7 physical cores; leaves headroom on the 8-core CCD")
     ap.add_argument("--dry-run", action="store_true",
                     help="resolve paths and print the command without playing")
+    ap.add_argument("--config", default="pipeline_gen8.json",
+                    help="pipeline config naming the generation/version to extend")
     args = ap.parse_args()
 
-    cfg = json.loads((ROOT / "pipeline_gen7.json").read_text(encoding="utf-8"))
+    cfg = json.loads((ROOT / args.config).read_text(encoding="utf-8"))
     version = cfg["version"]
     pool = json.loads((BM / "pool.json").read_text(encoding="utf-8"))
     fc = BM / "tools" / "fastchess.exe"

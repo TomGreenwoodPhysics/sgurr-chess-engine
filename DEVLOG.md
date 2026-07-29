@@ -777,3 +777,46 @@ share identical inference speed.
 reads `nnue: loaded <net> (avx512|avx2|scalar)` and selfcheck prints
 `simd=<kind>` — so a build silently falling back to a slower path is visible
 in any log, in keeping with the no-silent-config lesson from the migration.
+
+## 2026-07-29 — gen8 A/B: king buckets flat on clean data; the flywheel turn is +105
+
+The away-week harvest closed at **55,931,801 clean positions** (gen7-net
+labeller, `-DSGR_RFP=0`, nodes:150000, ~7.9M/day over 7.06 days, zero torn
+tails across ~5 auto-resume cycles). Two nets trained on it, identical
+settings (λ=1.0, 8 epochs cosine): a 768×384 control and an 8-king-bucket
+variant (v2 net format; map = back rank in file-pairs, then rank bands,
+embedded in the file and read back by the engine — see commit c3c0e68).
+Two 1,200-game net-isolated A/Bs at 8+0.08, search held constant.
+
+**King buckets: −10.7 ±16.3 vs the control.** Flat, trending negative; the
+CI excludes the whole +25–50 prior. This despite **12% lower training loss**
+(0.00493 vs 0.00558) — the third loss≠Elo instance (gen6 net A/B, HL=512,
+now k8) and the first on CLEAN labels, so the poisoned-label explanation is
+unavailable. Reading: at 150k-node label depth, a 768×384 net already
+absorbs essentially everything the labels contain; added capacity fits label
+noise (lower loss) without adding chess (no Elo). Candidate co-factors, in
+falling order of belief: label-information ceiling; 56M still thin for 8
+buckets (~7M/bucket, skewed toward castled kings); untuned map. The v2
+format, engine support, and selfcheck coverage are merged and verified, so
+the retest is cheap when either labels deepen or data grows. Nets kept:
+`nets/gen8-k8.nnue`, `nets/gen8-ctrl768.nnue`.
+
+**The flywheel turn: +105.3 ±16.2** — gen8-ctrl beats the gen7 net directly,
+the largest single-cycle net gain in the project's history (previous best:
+gen5's +55.5). Honest decomposition note: this is NOT data volume alone —
+it bundles 5× positions AND two generations of labeller upgrade (gen7's data
+was labelled by the gen5 net; gen8's by the gen7 net). A volume-isolated
+number would need a 768 net on an 11M subset of gen8; not run — the release
+does not depend on it. The student beating its teacher by +105 is the
+flywheel working as designed: search-amplified labels (150k nodes) carry far
+more knowledge than the labeller's raw eval.
+
+**Consequence for the roadmap: the binding constraint is now label quality,
+not net capacity.** Both archs saturate the current labels; width retests
+and bucket retests gate on better labels (deeper labelling search, or the
+next flywheel turn), not on more of the same data.
+
+**Release: v8.0 candidate = unbucketed 768×384 on the gen8 56M.**
+`pipeline_gen8.json` flipped accordingly. At the historical ~2/3 pool
+compression for large gains, +105 self-play projects ~+70–90 pooled from
+v7.0's 2903 ±6 — the 3000 target is plausibly inside this cycle.

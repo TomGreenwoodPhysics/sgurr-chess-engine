@@ -591,6 +591,10 @@ class Pipeline:
         cmd += ["-each", f"tc={cal.get('tc', '10+0.1')}",
                 "-rounds", str(cal.get("rounds", 15)), "-repeat",
                 "-concurrency", str(cal.get("concurrency", 5)),
+                # one engine failing to spawn (Defender re-scan etc.) must not
+                # kill a multi-hour unattended gauntlet -- 2026-07-29 lost a
+                # calibrate run to a transient igel block 32s in
+                "-recover",
                 "-openings", f"file={ROOT / 'testing' / 'book.epd'}",
                 "format=epd", "order=random",
                 "-pgnout", f"file={pgn}", "-ratinginterval", "60"]

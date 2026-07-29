@@ -8,8 +8,8 @@
 
   "_notes": [
     "target_positions is set BELOW the ~55.93M already on disk so the datagen stage marks itself complete instead of spawning workers -- the gen8 data was generated standalone over the away-week (gen7 labeller, -DSGR_RFP=0, nodes:150000).",
-    "train.extra_args turns on 8 king buckets (nnue_tools.KING_BUCKET_MAP, embedded in the v2 net file).",
-    "Run the manual A/B first (bucketed vs unbucketed control on the same data) before this pipeline: the pipeline measures the RELEASE candidate; the A/B isolates what buckets themselves bought."
+    "UNBUCKETED release: the 2026-07-29 A/B measured 8 king buckets at -10.7 +/-16.3 vs the 768 control on this same data (despite 12% lower loss), while the control beat the gen7 net +105.3 +/-16.2. The release arch is therefore the classic 768x384; king-bucket support stays in the codebase for retest when labels/data change. See DEVLOG 2026-07-29.",
+    "The pipeline's lambda-sweep nets retrain the same arch/data as the A/B control (its lambda=1.0 variant should reproduce nets/gen8-ctrl768.nnue up to GPU nondeterminism)."
   ],
 
   "datagen": {
@@ -32,8 +32,7 @@
     "schedule": "cosine",
     "lr_min": 1e-5,
     "val_frac": 0,
-    "lambda": [0.9, 1.0],
-    "extra_args": ["--buckets", "8"]
+    "lambda": [0.9, 1.0]
   },
 
   "select": {
