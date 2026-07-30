@@ -164,6 +164,49 @@ def make_split(n, val_frac, seed, block=65536):
     return train_idx, val_idx
 
 
+class FactorizedNNUE(nn.Module):
+    """King-bucketed feature transformer as a SHARED base plus a small
+    per-bucket DELTA: contribution(feature f in bucket b) = shared[f] +
+    delta[b*768+f].
+
+    This is the standard fix for bucket data starvation (cf. Stockfish's
+    "factorizer"): the naive per-bucket net (-10.7 +/-16 on gen8) gives every
+    bucket its own weights but only ~1/K of the data each; here the shared
+    table trains on ALL positions and each delta only learns its bucket's
+    correction. Deltas start at ZERO, so training begins from exactly the
+    unbucketed model and diverges only where the data supports it.
+
+    Exported COALESCED (final[b][f] = shared[f] + delta[b][f]) into the same
+    v2 net file, so engine inference is completely unchanged."""
+    def __init__(self, buckets):
+        super().__init__()
+        n_delta = INPUT * buckets
+        self.pad = n_delta                    # loader's PAD index
+        self.ft_shared = nn.Embedding(INPUT + 1, HL, padding_idx=INPUT)
+        self.ft_delta = nn.Embedding(n_delta + 1, HL, padding_idx=n_delta)
+        self.ftb = nn.Parameter(torch.zeros(HL))
+        self.out = nn.Linear(2 * HL, 1)
+        nn.init.normal_(self.ft_shared.weight, 0, 0.05)
+        nn.init.zeros_(self.ft_delta.weight)
+        with torch.no_grad():
+            self.ft_shared.weight[INPUT].zero_()
+        nn.init.normal_(self.out.weight, 0, 0.05)
+
+    def _acc(self, f):
+        # base feature index for the shared table; PAD maps to the shared pad row
+        base = torch.where(f == self.pad, torch.full_like(f, INPUT), f % INPUT)
+        return (self.ft_shared(base) + self.ft_delta(f)).sum(dim=1) + self.ftb
+
+    def forward(self, wf, bf, stm):
+        accw = self._acc(wf)
+        accb = self._acc(bf)
+        m = (stm == 0).unsqueeze(1)
+        us = torch.where(m, accw, accb)
+        them = torch.where(m, accb, accw)
+        x = torch.cat([torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)], dim=1)
+        return self.out(x).squeeze(1)
+
+
 class NNUE(nn.Module):
     def __init__(self, n_features=INPUT):
         super().__init__()
@@ -240,6 +283,11 @@ def main():
                          f"{nt.BUCKETS} = nt.KING_BUCKET_MAP (v2 file with the "
                          f"map embedded). Other counts need a new map in "
                          f"nnue_tools first.")
+    ap.add_argument("--factorize", action="store_true",
+                    help="train buckets as shared base + per-bucket delta "
+                         "(fixes bucket data starvation); export is coalesced "
+                         "so the engine sees an ordinary v2 net. Requires "
+                         "--buckets > 1.")
     ap.add_argument("--val_frac", type=float, default=0.05,
                     help="held-out validation fraction (0 = train on everything)")
     ap.add_argument("--seed", type=int, default=0,
@@ -255,7 +303,10 @@ def main():
     print(f"HL = {HL}")
 
     n_features = INPUT * args.buckets
-    print(f"king buckets = {args.buckets}  (features = {n_features})")
+    if args.factorize and args.buckets <= 1:
+        ap.error("--factorize requires --buckets > 1")
+    print(f"king buckets = {args.buckets}  (features = {n_features})"
+          + ("  [factorized: shared + delta]" if args.factorize else ""))
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print("device:", dev)
@@ -279,7 +330,8 @@ def main():
     print(f"split: {n_train} train, {int(val_idx.numel())} val "
           f"(val_frac={args.val_frac}, seed={args.seed})")
 
-    model = NNUE(n_features).to(dev)
+    model = (FactorizedNNUE(args.buckets) if args.factorize
+             else NNUE(n_features)).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = None
     if args.schedule == "cosine":
@@ -299,7 +351,14 @@ def main():
             if sched is not None:
                 sched.step()
             with torch.no_grad():
-                model.ft.weight[:n_features].clamp_(-args.wclip, args.wclip)
+                if args.factorize:
+                    # coalesced weight = shared + delta must obey wclip (int16
+                    # accumulator safety). Split the budget so their sum stays
+                    # in range: shared carries the bulk, delta a small correction.
+                    model.ft_shared.weight[:INPUT].clamp_(-args.wclip * 0.75, args.wclip * 0.75)
+                    model.ft_delta.weight[:n_features].clamp_(-args.wclip * 0.25, args.wclip * 0.25)
+                else:
+                    model.ft.weight[:n_features].clamp_(-args.wclip, args.wclip)
             total += loss.item() * sel.numel()
         train_loss = total / n_train
 
@@ -311,7 +370,17 @@ def main():
             print(f"epoch {epoch+1:3d}/{args.epochs}  loss {train_loss:.5f}  "
                   f"({time.time()-t0:.1f}s)")
 
-    ftw = model.ft.weight[:n_features].detach().cpu().numpy()   # (n_features, HL)
+    if args.factorize:
+        # COALESCE: final per-bucket weight[b][f] = shared[f] + delta[b*768+f].
+        # Result is an ordinary v2 per-bucket table -- the engine never knows a
+        # factorizer was used. Re-clip the sum to wclip to guarantee int16 safety.
+        import numpy as _np
+        shared = model.ft_shared.weight[:INPUT].detach().cpu().numpy()          # (768, HL)
+        delta = model.ft_delta.weight[:n_features].detach().cpu().numpy()       # (768*K, HL)
+        ftw = delta + _np.tile(shared, (args.buckets, 1))                        # broadcast per bucket
+        ftw = _np.clip(ftw, -args.wclip, args.wclip)
+    else:
+        ftw = model.ft.weight[:n_features].detach().cpu().numpy()   # (n_features, HL)
     ftb = model.ftb.detach().cpu().numpy()                      # (HL,)
     ow = model.out.weight.detach().cpu().numpy().reshape(-1)    # (2*HL,)
     ob = float(model.out.bias.detach().cpu().numpy()[0])
