@@ -57,6 +57,22 @@ NETS_DIR = REPO_ROOT / "nets"
 # ladder, so a version added here shows up in the opponent picker for free.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
+        "id": "v8.0",
+        "exe": CPP_DIR / "sgr_gen8.exe",
+        "net": NETS_DIR / "gen8.nnue",
+        "label": 'Sgurr v8.0 "Thearlaich"',
+        "tech": "GEN8 NNUE",
+        "rating": 3006,
+    },
+    {
+        "id": "v7.0",
+        "exe": CPP_DIR / "sgr_gen7.exe",
+        "net": NETS_DIR / "gen7.nnue",
+        "label": 'Sgurr v7.0 "Ghreadaidh"',
+        "tech": "GEN7 NNUE (CLEAN REGEN)",
+        "rating": 2903,
+    },
+    {
         "id": "v6.0",
         "exe": CPP_DIR / "sgr_v6_0.exe",
         "net": NETS_DIR / "gen5.nnue",
