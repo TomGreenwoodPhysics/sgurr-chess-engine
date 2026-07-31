@@ -820,3 +820,52 @@ next flywheel turn), not on more of the same data.
 `pipeline_gen8.json` flipped accordingly. At the historical ~2/3 pool
 compression for large gains, +105 self-play projects ~+70–90 pooled from
 v7.0's 2903 ±6 — the 3000 target is plausibly inside this cycle.
+
+## 2026-07-30 — mining the gen8 56M: λ is already optimal, width pays +9, buckets pay nothing even done properly
+
+Four experiments on the **fixed** gen8 dataset, all net-isolated A/Bs at
+8+0.08 with search held constant. The point was to exhaust what a week of
+datagen can give before spending another week on gen9.
+
+**λ sweep — 0.9 is the peak; no free gain.** vs the shipped λ=0.9 net:
+λ=0.85 **−4.4 ±7.1**, λ=0.7 **−12.6 ±7.0**, λ=0.6 **−51.9 ±11.9** (l060
+stopped at 3,030 games, direction unambiguous); gen8's own selection round
+already had λ=1.0 losing to 0.9. The curve brackets a maximum at 0.9 from
+both sides. Keep λ=0.9; stop tuning it.
+
+**Width — HL 384→512 is +9.0 ±10.3** (3,000 games, one-sided ≈96% a real
+gain, and this is NET of the ~20% NPS tax since the match is at fixed TC).
+Notably HL=512 measured *flat* on gen6's RFP-poisoned data and pays here:
+cleaner labels do support somewhat more capacity. Carry HL=512 into gen9.
+
+**King buckets, take two: the factorizer.** The naive per-bucket net's
+−10.7 was diagnosed as data starvation (8 buckets, each weight seeing ~⅛ of
+the positions). Implemented the standard fix in `train.py`: a **shared base
+table trained on ALL positions plus a small per-bucket delta**, deltas
+zero-initialised so training starts from exactly the unbucketed model and
+diverges only where a bucket's data supports it. Export **coalesces**
+(`final[b][f] = shared[f] + delta[b][f]`) into the same v2 file, so engine
+inference is untouched — verified by selfcheck PASS and a
+Python-vs-engine golden match on the coalesced net.
+
+**It worked as engineering and bought nothing as chess: +2.0 ±10.0.** The
+factorizer moved buckets ~+13 Elo (−10.7 → +2.0), i.e. it removed the
+starvation penalty exactly as intended — and the gain never materialised.
+Two independent implementations now say **these labels carry no
+king-zone-specific information beyond what shared weights already
+capture**. Buckets are dropped for gen9; the code stays (verified, dormant,
+zero cost) for retest when labels change.
+
+**Sharpest loss≠Elo evidence yet — the ranking is inverted.** On identical
+data: factorized-k8 **best loss 0.00471 → +2 Elo**; naive-k8 0.00493 →
+**−10.7**; ctrl768 0.00558 → baseline; HL512 **worst loss 0.00661 → +9
+Elo**. Training loss is not merely uninformative here, it is
+*anti-correlated* with strength. Fourth instance in this log (gen6 net A/B,
+HL=512-on-gen6, naive buckets, now this) — the rule is settled: **never
+select an architecture on loss; only games decide.**
+
+**Consequence.** The 56M is mined out: one +9 (width), one 0 (buckets), one
+confirmed-optimal knob (λ). Capacity is not the constraint — **label
+information is**, and the only lever that has ever moved this project by
++100 is a flywheel turn (a stronger labeller). gen9 = gen8 net as labeller,
+HL=512, λ=0.9, buckets off.
