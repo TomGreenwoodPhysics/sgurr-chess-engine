@@ -30,6 +30,13 @@ See `CHANGELOG.md` for details and measured results with error bars,
 `DEVLOG.md` for the dated engineering log — findings, bugs, and the
 methodology decisions behind them.
 
+**`METHODOLOGY.md`** is the synthesis: how strength is measured here, what the
+measurement floor actually is (two identical-recipe trainings differ by
+**+13.7 ±10.3** Elo, which invalidated several earlier conclusions), why
+training loss is *anti-correlated* with strength across architectures, and the
+finding that data volume outweighs network width by roughly 4×. Most of it is
+negative results. **`ROADMAP.md`** is the forward plan.
+
 ---
 
 ## Strength
