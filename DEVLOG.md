@@ -869,3 +869,86 @@ confirmed-optimal knob (λ). Capacity is not the constraint — **label
 information is**, and the only lever that has ever moved this project by
 +100 is a flywheel turn (a stronger labeller). gen9 = gen8 net as labeller,
 HL=512, λ=0.9, buckets off.
+
+> **Superseded 2026-08-01.** The "mined out / label-limited" reading above was
+> wrong, and the +9 width result it rests on is inside a noise floor that had
+> never been measured. See the next entry.
+
+## 2026-08-01 — the noise floor: training is not reproducible, and half of last week's conclusions were never real
+
+**Measured what had always been assumed.** Two nets, identical data (the gen8
+56M), identical recipe (HL384, λ=0.9, 8 epochs cosine, val_frac 0), differing
+**only in random seed**. Result: **+13.7 ±10.3** over 3,000 games — a 95% CI
+of [+3.4, +24.0] that **excludes zero**. Two runs of the same recipe produce
+measurably different engines.
+
+**Consequences, applied honestly.** Every net A/B in this project quietly
+assumed this number was ~0. Anything under roughly ±25 was never established:
+
+| result | status |
+|---|---|
+| gen8 vs gen7 **+126** | survives |
+| 14M vs 56M **−65** | survives |
+| λ=0.6 **−52** | survives |
+| gen7 vs gen6 **+44** | survives |
+| **HL512 width +9.0** | **inside noise — withdrawn** |
+| naive buckets −10.7 | inside noise |
+| factorizer +2.0 | inside noise (conclusion unchanged; it was ~0) |
+| λ=0.85 −4.4, λ=0.7 −12.6 | inside noise (curve *shape* survives on λ=0.6) |
+
+The structural findings all stand. The architecture micro-results do not, and
+the gen9 recommendation of "HL=512" is retracted — it was seed luck as much
+as signal.
+
+**More games cannot fix this.** The variance lives in the *training*, not the
+measurement: 10,000 games shrinks the match error and leaves the seed error
+untouched. Resolving sub-20 Elo effects requires training N seeds per
+configuration and averaging — multiplying the cost of every architecture
+experiment by 3–5×. This retroactively explains the "magnitude predicts
+survival" rule from 07-16: small deltas evaporate partly because they were
+never distinguishable from noise to begin with.
+
+## 2026-08-01 — architecture × data: data volume dominates, and 56M is NOT saturated
+
+Five points, 15,000 games, 12.5 h, all vs `nets/gen8.nnue` (HL384 @ 56M).
+
+| | 14M | 28M | 56M |
+|---|---|---|---|
+| **HL256** | −75.8 ±10.5 | — | −6.9 ±10.0 |
+| **HL384** | −65 (32ep) / −119.1 ±10.7 (8ep) | −48.5 ±10.4 | 0 (ref) |
+| **HL512** | — | — | +9.0 ±10.3 |
+
+**1. Data volume beats architecture by ~4×.** Across a 2× width range
+(256→512) the whole spread is ~16 Elo, every point inside the ±14 noise
+floor. Across a 4× data range it is **65 Elo**, far outside it. Width is a
+rounding error; positions are the product.
+
+**2. A smaller net is NOT more data-efficient** — the question this run was
+built to answer. Each architecture's shortfall at 14M, measured against *its
+own* 56M ceiling: HL384 65 Elo short, HL256 69 Elo short. Identical. The
+hypothesis that a skinnier net could buy 2-day generations (trading ~15 Elo
+for 3.5× more flywheel turns) is dead: at 14M you lose ~65–70 Elo whatever
+the width, and that net is also the next generation's labeller, so the
+deficit compounds instead of washing out.
+
+**3. Returns are ACCELERATING, not diminishing.** 14M → 28M buys +17;
+28M → 56M buys +48. The curve is convex over the measured range, so **56M is
+not near the ceiling** and gen9 should collect *more*, not less. This is the
+exact opposite of the plan that motivated the run.
+
+**4. The probe stage's saturation verdict is worthless.** It called gen6,
+gen7 *and* gen8 "saturated" (0.44%, 0.32%, 0.21% half→full val-loss gain).
+Yet 14M→56M is worth 65 Elo. It is a loss-based signal in a project where
+loss has now been wrong five times running; it should not be used as a
+stopping rule, and the datagen target should not be cut on its say-so.
+
+**5. The recipe confound, resolved.** 14M @ 8 epochs measured **−119.1**
+against 14M @ 32 epochs' −65 — so the deficit was never an overfitting
+artefact of step-matching; the step-matched net was the *better* arm and
+still lost by 65. With less data you need more passes, and even then you
+cannot recover. Undertraining hurts more than overfitting at this scale.
+
+**gen9, revised:** gen8 net as labeller, λ=0.9, buckets off, width whatever
+is convenient (it does not matter), and **as many positions as the calendar
+allows — more than 56M.** Datagen time is the product; everything else is
+noise around it.
