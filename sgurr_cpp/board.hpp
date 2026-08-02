@@ -15,14 +15,18 @@ constexpr U64 FULL = 0xFFFFFFFFFFFFFFFFULL;
 constexpr const char* START_FEN =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+// Everything needed to undo one move. Built on every make_move, so absent
+// values are -1 rather than std::optional: same convention as `mailbox`, which
+// has always used -1 for an empty square. captured_piece and captured_square
+// are set and cleared together -- either both hold a capture or both are -1.
 struct UndoInfo {
     Move move;
     int moved_piece = -1;
     int placed_piece = -1;
-    std::optional<int> captured_piece = std::nullopt;
-    std::optional<int> captured_square = std::nullopt;
+    int captured_piece = -1;
+    int captured_square = -1;
     std::uint8_t old_castling = 0;
-    std::optional<int> old_en_passant = std::nullopt;
+    int old_en_passant = -1;
     int old_halfmove_clock = 0;
     int old_fullmove_number = 1;
     U64 old_hash_key = 0;
@@ -30,7 +34,7 @@ struct UndoInfo {
 
 struct NullMoveUndo {
     int old_side_to_move = WHITE;
-    std::optional<int> old_en_passant = std::nullopt;
+    int old_en_passant = -1;
     int old_halfmove_clock = 0;
     int old_fullmove_number = 1;
     U64 old_hash_key = 0;
@@ -59,7 +63,7 @@ public:
     std::array<int, 64> mailbox{};
     int side_to_move = WHITE;
     std::uint8_t castling_rights = 0;   // bits: 1=WK 2=WQ 4=BK 8=BQ
-    std::optional<int> en_passant = std::nullopt;
+    int en_passant = -1;                // -1 = no en-passant square
     int halfmove_clock = 0;
     int fullmove_number = 1;
     U64 hash_key = 0;
@@ -136,11 +140,7 @@ private:
     void add_king_moves(MoveList& moves, int piece, U64 own);
     void add_castling_moves(MoveList& moves);
 
-    void update_castling_rights(
-        int piece,
-        const Move& move,
-        std::optional<int> captured
-    );
+    void update_castling_rights(int piece, const Move& move, int captured);
 };
 
 long long perft(Board& board, int depth);

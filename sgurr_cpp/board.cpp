@@ -523,7 +523,7 @@ void Board::set_fen(const std::string& fen) {
 
     side_to_move = side == "w" ? WHITE : BLACK;
     castling_rights = castling_part == "-" ? 0 : parse_castling_field(castling_part);
-    en_passant = ep == "-" ? std::nullopt : std::optional<int>(square_index(ep));
+    en_passant = ep == "-" ? -1 : square_index(ep);
 
     if (!(stream >> halfmove_clock)) {
         halfmove_clock = 0;
@@ -555,8 +555,8 @@ U64 Board::compute_hash() const {
 
     key ^= ZOBRIST_CASTLING[castling_rights];
 
-    if (en_passant.has_value()) {
-        key ^= ZOBRIST_EN_PASSANT_FILE[file_of(*en_passant)];
+    if (en_passant >= 0) {
+        key ^= ZOBRIST_EN_PASSANT_FILE[file_of(en_passant)];
     }
 
     return key;
@@ -1178,7 +1178,7 @@ MoveList Board::generate_pseudo_legal_moves() {
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, WHITE);
-                } else if (en_passant.has_value() && *en_passant == to_sq) {
+                } else if (en_passant == to_sq) {
                     moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
             }
@@ -1212,7 +1212,7 @@ MoveList Board::generate_pseudo_legal_moves() {
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, BLACK);
-                } else if (en_passant.has_value() && *en_passant == to_sq) {
+                } else if (en_passant == to_sq) {
                     moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
             }
@@ -1251,17 +1251,14 @@ MoveList Board::generate_legal_moves() {
 }
 
 UndoInfo Board::make_move(const Move& move) {
-    std::optional<int> piece_opt = piece_at(move.from());
+    int piece = mailbox[move.from()];
 
-    if (!piece_opt.has_value()) {
+    if (piece < 0) {
         throw std::runtime_error("no piece on source square");
     }
 
-    int piece = *piece_opt;
-    std::optional<int> captured = piece_at(move.to());
-    std::optional<int> captured_square = captured.has_value()
-        ? std::optional<int>(move.to())
-        : std::nullopt;
+    int captured = mailbox[move.to()];                       // -1 = no capture
+    int captured_square = captured < 0 ? -1 : move.to();
 
     UndoInfo undo;
     undo.move = move;
@@ -1280,8 +1277,8 @@ UndoInfo Board::make_move(const Move& move) {
     bitboards[piece] &= ~from_mask & FULL;
     mailbox[move.from()] = -1;
 
-    if (captured.has_value()) {
-        bitboards[*captured] &= ~to_mask & FULL;
+    if (captured >= 0) {
+        bitboards[captured] &= ~to_mask & FULL;
     }
 
     if (move.is_en_passant()) {
@@ -1329,13 +1326,13 @@ UndoInfo Board::make_move(const Move& move) {
 
     update_castling_rights(piece, move, captured);
 
-    en_passant = std::nullopt;
+    en_passant = -1;
 
     if ((piece == WP || piece == BP) && std::abs(move.to() - move.from()) == 16) {
         en_passant = (move.to() + move.from()) / 2;
     }
 
-    if (piece == WP || piece == BP || captured.has_value() || move.is_en_passant()) {
+    if (piece == WP || piece == BP || captured >= 0 || move.is_en_passant()) {
         halfmove_clock = 0;
     } else {
         halfmove_clock += 1;
@@ -1355,8 +1352,10 @@ UndoInfo Board::make_move(const Move& move) {
     h ^= ZOBRIST_PIECES[piece][move.from()];
     h ^= ZOBRIST_PIECES[placed_piece][move.to()];
 
-    if (captured.has_value() && captured_square.has_value()) {
-        h ^= ZOBRIST_PIECES[*captured][*captured_square];
+    // captured and captured_square are always set together, so one test covers
+    // both: -1/-1 for a quiet move, the victim and its square otherwise.
+    if (captured >= 0) {
+        h ^= ZOBRIST_PIECES[captured][captured_square];
     }
 
     if (move.is_castling()) {
@@ -1374,12 +1373,12 @@ UndoInfo Board::make_move(const Move& move) {
     h ^= ZOBRIST_CASTLING[undo.old_castling];
     h ^= ZOBRIST_CASTLING[castling_rights];
 
-    if (undo.old_en_passant.has_value()) {
-        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(*undo.old_en_passant)];
+    if (undo.old_en_passant >= 0) {
+        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(undo.old_en_passant)];
     }
 
-    if (en_passant.has_value()) {
-        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(*en_passant)];
+    if (en_passant >= 0) {
+        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(en_passant)];
     }
 
     h ^= ZOBRIST_SIDE;
@@ -1407,9 +1406,9 @@ void Board::unmake_move(const UndoInfo& undo) {
     bitboards[undo.moved_piece] |= bit(move.from());
     mailbox[move.from()] = undo.moved_piece;
 
-    if (undo.captured_piece.has_value() && undo.captured_square.has_value()) {
-        bitboards[*undo.captured_piece] |= bit(*undo.captured_square);
-        mailbox[*undo.captured_square] = *undo.captured_piece;
+    if (undo.captured_piece >= 0) {
+        bitboards[undo.captured_piece] |= bit(undo.captured_square);
+        mailbox[undo.captured_square] = undo.captured_piece;
     }
 
     if (move.is_castling()) {
@@ -1451,7 +1450,7 @@ NullMoveUndo Board::make_null_move() {
     undo.old_fullmove_number = fullmove_number;
     undo.old_hash_key = hash_key;
 
-    en_passant = std::nullopt;
+    en_passant = -1;
     halfmove_clock += 1;
 
     if (side_to_move == BLACK) {
@@ -1465,8 +1464,8 @@ NullMoveUndo Board::make_null_move() {
     // Incremental Zobrist update: only en passant and side change.
     U64 h = undo.old_hash_key;
 
-    if (undo.old_en_passant.has_value()) {
-        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(*undo.old_en_passant)];
+    if (undo.old_en_passant >= 0) {
+        h ^= ZOBRIST_EN_PASSANT_FILE[file_of(undo.old_en_passant)];
     }
 
     h ^= ZOBRIST_SIDE;
@@ -1497,11 +1496,7 @@ bool Board::has_non_pawn_material(int colour) const {
     return (bitboards[BN] | bitboards[BB] | bitboards[BR] | bitboards[BQ]) != 0;
 }
 
-void Board::update_castling_rights(
-    int piece,
-    const Move& move,
-    std::optional<int> captured
-) {
+void Board::update_castling_rights(int piece, const Move& move, int captured) {
     if (piece == WK) {
         castling_rights &= ~(CR_WK | CR_WQ);
     } else if (piece == BK) {
@@ -1520,13 +1515,13 @@ void Board::update_castling_rights(
         }
     }
 
-    if (captured.has_value() && *captured == WR) {
+    if (captured == WR) {
         if (move.to() == 0) {
             castling_rights &= ~CR_WQ;
         } else if (move.to() == 7) {
             castling_rights &= ~CR_WK;
         }
-    } else if (captured.has_value() && *captured == BR) {
+    } else if (captured == BR) {
         if (move.to() == 56) {
             castling_rights &= ~CR_BQ;
         } else if (move.to() == 63) {

@@ -212,8 +212,8 @@ void apply_move(const UndoInfo& undo, int s) {
     const Move& m = undo.move;
     edit_feature(undo.moved_piece, m.from(), -s);
     edit_feature(undo.placed_piece, m.to(), +s);
-    if (undo.captured_piece.has_value() && undo.captured_square.has_value())
-        edit_feature(*undo.captured_piece, *undo.captured_square, -s);
+    if (undo.captured_piece >= 0)
+        edit_feature(undo.captured_piece, undo.captured_square, -s);
     if (m.is_castling()) {
         int rook = -1, rf = 0, rt = 0;
         switch (m.to()) {

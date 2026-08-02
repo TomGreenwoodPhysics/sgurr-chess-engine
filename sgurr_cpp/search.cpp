@@ -153,11 +153,11 @@ std::optional<Move> Engine::valid_tt_move_key(
         return std::nullopt;
     }
 
-    if (!slot.best_move.has_value()) {
+    if (slot.best_move == NO_MOVE) {
         return std::nullopt;
     }
 
-    const Move& key = *slot.best_move;
+    const Move key = slot.best_move;
 
     for (const Move& move : moves) {
         if (move == key) {
@@ -725,7 +725,7 @@ int Engine::negamax(
                 depth,
                 score_to_tt(beta, ply),
                 TT_LOWER,
-                std::nullopt
+                NO_MOVE
             );
 
             return beta;
@@ -778,7 +778,7 @@ int Engine::negamax(
 #endif
 
     int best_score = -INF;
-    std::optional<Move> best_move_key = std::nullopt;
+    Move best_move_key = NO_MOVE;
     bool legal_found = false;
     int legal_moves_searched = 0;
 
@@ -1302,7 +1302,7 @@ void Engine::store_tt(
     int depth,
     int score,
     int flag,
-    std::optional<Move> best_move_key
+    Move best_move_key
 ) {
     TTEntry& slot = transposition_table[board_hash & TT_MASK];
 
@@ -1313,11 +1313,11 @@ void Engine::store_tt(
     }
 }
 
-std::optional<Move> Engine::get_tt_move(U64 board_hash) const {
+Move Engine::get_tt_move(U64 board_hash) const {
     const TTEntry& slot = transposition_table[board_hash & TT_MASK];
 
     if (slot.key != board_hash) {
-        return std::nullopt;
+        return NO_MOVE;
     }
 
     return slot.best_move;

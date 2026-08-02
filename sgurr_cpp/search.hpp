@@ -156,7 +156,7 @@ struct TTEntry {
     int depth = -1;
     int score = 0;
     int flag = TT_EXACT;
-    std::optional<Move> best_move = std::nullopt;
+    Move best_move = NO_MOVE;    // NO_MOVE = entry carries no move
 };
 
 class Engine {
@@ -289,8 +289,8 @@ private:
         int depth,
         int score,
         int flag,
-        std::optional<Move> best_move_key
+        Move best_move_key
     );
 
-    std::optional<Move> get_tt_move(U64 board_hash) const;
+    Move get_tt_move(U64 board_hash) const;
 };
