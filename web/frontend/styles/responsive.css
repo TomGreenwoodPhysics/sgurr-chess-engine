@@ -149,6 +149,17 @@
     grid-template-columns: 1fr;
   }
 
+  /* Three side-by-side actions would wrap 2 + 1 here; stack them instead. */
+  .result-box .modal-actions {
+    flex-direction: column;
+    width: min(260px, 100%);
+    margin-inline: auto;
+  }
+
+  .result-box .modal-actions button {
+    max-width: none;
+  }
+
   #resultModal[data-outcome="sgurr-win"] .result-box {
     min-height: 390px;
     margin-top: 12vh;
