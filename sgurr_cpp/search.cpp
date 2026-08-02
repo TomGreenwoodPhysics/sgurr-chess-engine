@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <new>
 #include <string>
 
 namespace {
@@ -28,9 +29,43 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
 } // namespace
 
 Engine::Engine() {
-    transposition_table.assign(TT_SIZE, TTEntry{});
+    resize_hash(DEFAULT_HASH_MB);
     reset_killers();
     reset_history();
+}
+
+void Engine::resize_hash(int mb) {
+    mb = std::clamp(mb, MIN_HASH_MB, MAX_HASH_MB);
+
+    std::size_t entries = (static_cast<std::size_t>(mb) * 1024 * 1024) / sizeof(TTEntry);
+
+    // Round DOWN to a power of two. The probe indexes with `hash & tt_mask`,
+    // which is one AND on the hottest path in the engine; a non-power-of-two
+    // size would force a modulo there. Rounding down rather than up also keeps
+    // the table inside the megabytes the user actually asked for.
+    std::size_t pow2 = 1;
+    while (pow2 * 2 <= entries) {
+        pow2 *= 2;
+    }
+
+    // Allocation can fail outright at the top of the range -- 4096 MB is a
+    // 3.2 GB request once rounded. Falling back to the default is strictly
+    // better than letting bad_alloc escape and kill the engine mid-game, and
+    // the fallback is announced rather than silent.
+    try {
+        std::vector<TTEntry> fresh(pow2, TTEntry{});
+        transposition_table.swap(fresh);
+        tt_size = pow2;
+        tt_mask = pow2 - 1;
+    } catch (const std::bad_alloc&) {
+        std::cerr << "info string Hash: could not allocate " << mb
+                  << " MB, keeping " << (tt_size / 1024) << "k entries\n";
+        if (tt_size == 0) {                     // nothing usable yet: must not
+            tt_size = 1 << 16;                  // leave the table empty, since
+            tt_mask = tt_size - 1;              // every probe indexes into it
+            transposition_table.assign(tt_size, TTEntry{});
+        }
+    }
 }
 
 void Engine::reset_killers() {
@@ -103,7 +138,10 @@ std::string uci_score(int score) {
     }
 
     if (score < -MATE_THRESHOLD && score >= -MATE) {
-        return "mate -" + std::to_string((MATE + score + 1) / 2);
+        // A root that is ALREADY mate is zero moves away, and "-0" is not a
+        // number any GUI should be handed. Zero is unsigned.
+        int moves = (MATE + score + 1) / 2;
+        return moves == 0 ? "mate 0" : "mate -" + std::to_string(moves);
     }
 
     return "cp " + std::to_string(score);
@@ -112,7 +150,7 @@ std::string uci_score(int score) {
 } // namespace
 
 void Engine::clear_transposition_table() {
-    transposition_table.assign(TT_SIZE, TTEntry{});
+    transposition_table.assign(tt_size, TTEntry{});
 }
 
 void Engine::clear_search_heuristics() {
@@ -147,7 +185,7 @@ std::optional<Move> Engine::valid_tt_move_key(
     U64 board_hash,
     const MoveList& moves
 ) const {
-    const TTEntry& slot = transposition_table[board_hash & TT_MASK];
+    const TTEntry& slot = transposition_table[board_hash & tt_mask];
 
     if (slot.key != board_hash) {
         return std::nullopt;
@@ -277,6 +315,13 @@ SearchResult Engine::search_best_move(
             best_move = move;
             best_score = score;
             completed_depth = depth;
+        } else if (completed_depth == 0) {
+            // Terminal root: checkmate or stalemate, so there is no move to
+            // report, but negamax_root's score (-MATE or 0) IS meaningful.
+            // Without this, best_score keeps its -INF initialiser and the info
+            // line reports `score cp -10000000` -- a ~100,000-pawn evaluation
+            // where a mate or a draw belongs.
+            best_score = score;
         }
 
         long long ms = static_cast<long long>(elapsed_seconds(start_time) * 1000);
@@ -400,7 +445,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         // now so the line is on its way while make_move's remaining work and
         // the call setup happen. A hint only: it cannot fault and cannot
         // change what is searched.
-        __builtin_prefetch(&transposition_table[board.hash_key & TT_MASK]);
+        __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
 
 #if SGR_CONTHIST
         ss_piece[0] = undo.placed_piece;
@@ -598,7 +643,7 @@ int Engine::negamax(
     U64 board_hash = board.hash_key;
     int original_alpha = alpha;
 
-    const TTEntry& tt_slot = transposition_table[board_hash & TT_MASK];
+    const TTEntry& tt_slot = transposition_table[board_hash & tt_mask];
 
     // With a move excluded the stored entry describes a different search, so
     // no TT cutoff (and no store below); the entry is still read for the
@@ -864,7 +909,7 @@ int Engine::negamax(
         // See negamax_root: prefetch the slot the child will probe. The gap
         // here is larger -- the extension logic and the LMR arithmetic both
         // run before the recursive call reaches the TT.
-        __builtin_prefetch(&transposition_table[board.hash_key & TT_MASK]);
+        __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
 
 #if SGR_CONTHIST
         ss_piece[ply] = undo.placed_piece;
@@ -1314,7 +1359,7 @@ void Engine::store_tt(
     int flag,
     Move best_move_key
 ) {
-    TTEntry& slot = transposition_table[board_hash & TT_MASK];
+    TTEntry& slot = transposition_table[board_hash & tt_mask];
 
     // Replace if the slot holds a different position, or ours is searched at
     // least as deep. The table never wipes; old entries age out per slot.
@@ -1324,7 +1369,7 @@ void Engine::store_tt(
 }
 
 Move Engine::get_tt_move(U64 board_hash) const {
-    const TTEntry& slot = transposition_table[board_hash & TT_MASK];
+    const TTEntry& slot = transposition_table[board_hash & tt_mask];
 
     if (slot.key != board_hash) {
         return NO_MOVE;

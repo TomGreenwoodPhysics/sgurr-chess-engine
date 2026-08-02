@@ -22,9 +22,17 @@ constexpr int TT_EXACT = 0;
 constexpr int TT_LOWER = 1;
 constexpr int TT_UPPER = 2;
 
-constexpr int TT_SIZE_BITS = 21;
-constexpr std::size_t TT_SIZE = std::size_t(1) << TT_SIZE_BITS;   // ~2M entries
-constexpr U64 TT_MASK = TT_SIZE - 1;
+// Transposition table sizing. `Hash` is a UCI option, so the entry count is a
+// runtime value on the Engine rather than a compile-time constant. The count is
+// always rounded DOWN to a power of two, which keeps the probe a single AND
+// against a mask instead of a modulo on the hottest path in the engine.
+//
+// The default reproduces the historical table exactly: sizeof(TTEntry) is 24,
+// so 48 MB is 2^21 entries, which is what TT_SIZE_BITS = 21 used to give.
+constexpr int DEFAULT_HASH_MB = 48;
+constexpr int MIN_HASH_MB = 1;
+constexpr int MAX_HASH_MB = 4096;
+
 constexpr int TIME_CHECK_INTERVAL = 512;
 constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
 
@@ -164,9 +172,16 @@ public:
     long long nodes = 0;
     long long tt_hits = 0;
 
-    std::vector<TTEntry> transposition_table;   // fixed size TT_SIZE, indexed by hash & TT_MASK
+    std::vector<TTEntry> transposition_table;   // tt_size entries, indexed by hash & tt_mask
+    std::size_t tt_size = 0;
+    U64 tt_mask = 0;
 
     Engine();
+
+    // Resize the transposition table to (about) `mb` megabytes, rounded down
+    // to a power-of-two entry count. Discards the current contents, so it is a
+    // between-games operation, never a mid-search one.
+    void resize_hash(int mb);
 
     SearchResult search_best_move(
         Board& board,

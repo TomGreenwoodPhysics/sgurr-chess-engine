@@ -28,6 +28,84 @@
 constexpr const char* ENGINE_NAME = "Sgurr";
 constexpr const char* ENGINE_AUTHOR = "Tom";
 
+// Runtime UCI options.
+//
+// Until now the engine advertised NONE, which is a standards gap (a GUI cannot
+// even set Hash) and the reason no search parameter in this project has ever
+// been tuned -- every margin and threshold is a compile-time constant. These
+// are the standard housekeeping options; the tunable search parameters follow
+// in a later change.
+//
+// `Threads` is declared with min == max == 1 rather than omitted. The engine is
+// single-threaded by design (the rating scale here is single-core, so parallel
+// search would measure exactly zero), and declaring it honestly tells a GUI
+// that the option exists and is pinned, rather than leaving it to guess.
+int g_move_overhead_ms = static_cast<int>(MOVE_OVERHEAD_MS);
+
+std::vector<std::string> split(const std::string& text);   // defined below
+
+void print_uci_options(const Engine& engine) {
+    std::cout << "option name Hash type spin default " << DEFAULT_HASH_MB
+              << " min " << MIN_HASH_MB << " max " << MAX_HASH_MB << "\n";
+    std::cout << "option name Clear Hash type button\n";
+    std::cout << "option name Move Overhead type spin default "
+              << MOVE_OVERHEAD_MS << " min 0 max 5000\n";
+    std::cout << "option name Threads type spin default 1 min 1 max 1\n";
+    (void)engine;
+}
+
+// Parse `setoption name <words...> value <words...>`. The name may contain
+// spaces ("Clear Hash"), so it is everything between `name` and `value`.
+void handle_setoption(const std::string& command, Engine& engine) {
+    std::vector<std::string> parts = split(command);
+
+    std::string name;
+    std::string value;
+    int section = 0;   // 0 = before name, 1 = in name, 2 = in value
+
+    for (std::size_t i = 1; i < parts.size(); ++i) {
+        if (parts[i] == "name" && section == 0) {
+            section = 1;
+        } else if (parts[i] == "value" && section == 1) {
+            section = 2;
+        } else if (section == 1) {
+            name += (name.empty() ? "" : " ") + parts[i];
+        } else if (section == 2) {
+            value += (value.empty() ? "" : " ") + parts[i];
+        }
+    }
+
+    auto as_int = [&](int fallback) {
+        try {
+            return std::stoi(value);
+        } catch (...) {
+            return fallback;
+        }
+    };
+
+    if (name == "Hash") {
+        int asked = as_int(DEFAULT_HASH_MB);
+        engine.resize_hash(asked);
+        // Report what was ACTUALLY allocated, not what was asked for. The entry
+        // count is rounded down to a power of two so the probe can index with a
+        // mask, which can cost up to a third of the request (256 MB -> 192 MB).
+        // Silently honouring a different size than the user set is exactly the
+        // kind of thing that later gets mistaken for a measurement.
+        double actual_mb = double(engine.tt_size * sizeof(TTEntry)) / (1024.0 * 1024.0);
+        std::cerr << "info string Hash " << asked << " MB requested -> "
+                  << std::fixed << std::setprecision(2) << actual_mb
+                  << " MB (" << engine.tt_size << " entries)\n";
+    } else if (name == "Clear Hash") {
+        engine.clear_for_new_game();
+    } else if (name == "Move Overhead") {
+        g_move_overhead_ms = std::max(0, as_int(g_move_overhead_ms));
+    } else if (name == "Threads") {
+        // Accepted and pinned at 1; see the note above.
+    } else if (!name.empty()) {
+        std::cerr << "info string unknown option '" << name << "' ignored\n";
+    }
+}
+
 std::vector<std::string> split(const std::string& text) {
     std::vector<std::string> parts;
     std::istringstream stream(text);
@@ -163,7 +241,7 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
     // Hold back a margin for GUI/network latency so the move is transmitted
     // before the flag falls, then budget one slice of the remaining time plus
     // half the increment, never more than half the clock, with a safety floor.
-    long long usable = std::max(1LL, *time_left - MOVE_OVERHEAD_MS);
+    long long usable = std::max(1LL, *time_left - g_move_overhead_ms);
     long long hard = usable / mtg + inc / 2;
     hard = std::min(hard, usable / 2);
     hard = std::max(hard, 10LL);
@@ -190,7 +268,10 @@ void uci_loop() {
         if (command == "uci") {
             std::cout << "id name " << ENGINE_NAME << " " << SGR_VERSION << "\n";
             std::cout << "id author " << ENGINE_AUTHOR << "\n";
+            print_uci_options(engine);
             std::cout << "uciok\n";
+        } else if (command.rfind("setoption", 0) == 0) {
+            handle_setoption(command, engine);
         } else if (command == "isready") {
             std::cout << "readyok\n";
         } else if (command == "ucinewgame") {
