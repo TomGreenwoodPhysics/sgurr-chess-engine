@@ -56,6 +56,20 @@ struct LegalityInfo {
 constexpr int POSITION_HISTORY_CAP = 1024;
 constexpr int POSITION_HISTORY_MASK = POSITION_HISTORY_CAP - 1;
 
+// Per-node data for answering "does this move give check?" without making the
+// move. Computed once before a node's move loop; gives_check() then answers
+// each move against it, replacing a full attack scan per move made.
+//
+// Relies on the enemy king NOT already being in check, which holds at every
+// node the search reaches: the move that arrived here was legality-filtered.
+struct CheckInfo {
+    int ksq = -1;               // enemy king square
+    U64 check_squares[6]{};     // by piece type (P,N,B,R,Q,K): squares from
+                                // which that type of ours checks the enemy king
+    U64 discovery = 0;          // our pieces that alone block one of our own
+                                // sliders' rays to the enemy king
+};
+
 int rank_of(int sq);
 int file_of(int sq);
 U64 bit(int sq);
@@ -134,6 +148,9 @@ public:
 
     LegalityInfo legality_info() const;
     bool is_legal(const Move& move, const LegalityInfo& li) const;
+
+    CheckInfo check_info() const;
+    bool gives_check(const Move& move, const CheckInfo& ci) const;
 
     U64 attackers_to(int sq, U64 occ) const;
     int see(const Move& move) const;

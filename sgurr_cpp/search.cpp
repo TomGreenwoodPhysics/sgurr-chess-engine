@@ -737,6 +737,12 @@ int Engine::negamax(
     moves = order_moves(board, moves, tt_move_key, ply);
     LegalityInfo li = board.legality_info();
 
+    // Check geometry for this node, computed once. The move loop below tests
+    // each move against it instead of making the move and scanning the board.
+    // Valid for the whole loop: make/unmake is balanced, so the position is
+    // unchanged between iterations (and across the singular search below).
+    CheckInfo ci = board.check_info();
+
 #if SGR_SINGULAR
     // Singular extension test: the TT move carries a lower-bound score from a
     // search nearly as deep as this node. Search the OTHER moves, reduced,
@@ -847,11 +853,17 @@ int Engine::negamax(
         legal_found = true;
         legal_moves_searched += 1;
 
+        // Answered from the node's check geometry before the move is made.
+        // This used to be in_check() on the position AFTER make_move, which
+        // is a full attack scan -- knights, pawns, king, then both slider
+        // sets -- run for every move searched at every interior node.
+        bool gives_check = board.gives_check(move, ci);
+
         UndoInfo undo = board.make_move(move);
 
         // See negamax_root: prefetch the slot the child will probe. The gap
-        // here is larger -- the check test, the extension logic and the LMR
-        // arithmetic all run before the recursive call reaches the TT.
+        // here is larger -- the extension logic and the LMR arithmetic both
+        // run before the recursive call reaches the TT.
         __builtin_prefetch(&transposition_table[board.hash_key & TT_MASK]);
 
 #if SGR_CONTHIST
@@ -859,7 +871,6 @@ int Engine::negamax(
         ss_to[ply] = move.to();
 #endif
 
-        bool gives_check = board.in_check(board.side_to_move);
         int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
 #if SGR_SINGULAR
         if (

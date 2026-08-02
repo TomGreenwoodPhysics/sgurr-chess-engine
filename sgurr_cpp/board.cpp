@@ -837,6 +837,160 @@ bool Board::is_legal(const Move& move, const LegalityInfo& li) const {
     return true;
 }
 
+CheckInfo Board::check_info() const {
+    CheckInfo ci;
+
+    int us = side_to_move;
+    int them = us ^ 1;
+    int ksq = king_square(them);
+    ci.ksq = ksq;
+
+    if (ksq < 0) {
+        return ci;
+    }
+
+    U64 occ = occ_all;
+
+    // Squares from which each of our piece types would attack the enemy king.
+    // Pawns are colour-flipped in the same way as is_square_attacked: our pawn
+    // attacks ksq exactly when it stands on the enemy pawn-attack pattern of
+    // ksq. Kings cannot deliver check.
+    ci.check_squares[0] = PAWN_ATTACKS_TBL[them][ksq];
+    ci.check_squares[1] = KNIGHT_ATTACKS_TBL[ksq];
+    ci.check_squares[2] = bishop_attacks(ksq, occ);
+    ci.check_squares[3] = rook_attacks(ksq, occ);
+    ci.check_squares[4] = ci.check_squares[2] | ci.check_squares[3];
+    ci.check_squares[5] = 0;
+
+    // Discovered-check candidates: the mirror of legality_info's pin scan, run
+    // against the ENEMY king with OUR sliders. A piece that is the only thing
+    // on the ray between one of our sliders and their king discovers check by
+    // stepping off that ray. Only our own pieces qualify -- a lone enemy
+    // blocker is pinned to its own king, and moving it is not our move.
+    U64 our_bq = bitboards[us == WHITE ? WB : BB] | bitboards[us == WHITE ? WQ : BQ];
+    U64 our_rq = bitboards[us == WHITE ? WR : BR] | bitboards[us == WHITE ? WQ : BQ];
+    U64 snipers = (bishop_attacks(ksq, 0) & our_bq) | (rook_attacks(ksq, 0) & our_rq);
+    U64 own = us == WHITE ? occ_white : occ_black;
+
+    while (snipers) {
+        auto [s, rest] = pop_lsb(snipers);
+        snipers = rest;
+
+        U64 blockers = BETWEEN[ksq][s] & occ;
+
+        if (blockers && (blockers & (blockers - 1)) == 0 && (blockers & own)) {
+            ci.discovery |= blockers;
+        }
+    }
+
+    return ci;
+}
+
+bool Board::gives_check(const Move& move, const CheckInfo& ci) const {
+    int ksq = ci.ksq;
+
+    if (ksq < 0) {
+        return false;
+    }
+
+    int from = move.from();
+    int to = move.to();
+    int us = side_to_move;
+
+    U64 our_bq = bitboards[us == WHITE ? WB : BB] | bitboards[us == WHITE ? WQ : BQ];
+    U64 our_rq = bitboards[us == WHITE ? WR : BR] | bitboards[us == WHITE ? WQ : BQ];
+
+    // Promotion, en passant and castling all change occupancy in ways the
+    // precomputed check_squares cannot describe (the arriving piece is not the
+    // one that left, or two squares empty at once, or two pieces move). Each
+    // is rare, so each is answered from the exact post-move occupancy.
+    switch (move.kind()) {
+        case MT_PROMO: {
+            // The pawn vacates `from`, which may itself be on the line the
+            // promoted piece now checks along -- e.g. a pawn on e7 promoting
+            // to a queen on e8 against a king on e1.
+            U64 occ_after = (occ_all ^ bit(from)) | bit(to);
+            int ptype = move.promo_piece(us) % 6;
+
+            if (ptype == 1 && (KNIGHT_ATTACKS_TBL[ksq] & bit(to))) {
+                return true;
+            }
+
+            if ((ptype == 2 || ptype == 4)
+                    && (bishop_attacks(ksq, occ_after) & bit(to))) {
+                return true;
+            }
+
+            if ((ptype == 3 || ptype == 4)
+                    && (rook_attacks(ksq, occ_after) & bit(to))) {
+                return true;
+            }
+
+            return (ci.discovery & bit(from)) && !(LINE[ksq][from] & bit(to));
+        }
+
+        case MT_EP: {
+            // Two squares empty at once: the pawn's origin and the victim's
+            // square, which are on different files. Either can uncover a
+            // slider, so recompute both ray sets outright.
+            int cap = us == WHITE ? to - 8 : to + 8;
+            U64 occ_after = (occ_all ^ bit(from) ^ bit(cap)) | bit(to);
+
+            if (ci.check_squares[0] & bit(to)) {
+                return true;
+            }
+
+            return (bishop_attacks(ksq, occ_after) & our_bq)
+                || (rook_attacks(ksq, occ_after) & our_rq);
+        }
+
+        case MT_CASTLE: {
+            // The king cannot give check, but the rook lands on a new square,
+            // and the king vacating its own can uncover one of our sliders.
+            int rook_from;
+            int rook_to;
+
+            switch (to) {
+                case 6:  rook_from = 7;  rook_to = 5;  break;
+                case 2:  rook_from = 0;  rook_to = 3;  break;
+                case 62: rook_from = 63; rook_to = 61; break;
+                default: rook_from = 56; rook_to = 59; break;   // to == 58
+            }
+
+            U64 occ_after =
+                (occ_all ^ bit(from) ^ bit(rook_from)) | bit(to) | bit(rook_to);
+            U64 rq_after = (our_rq ^ bit(rook_from)) | bit(rook_to);
+
+            return (bishop_attacks(ksq, occ_after) & our_bq)
+                || (rook_attacks(ksq, occ_after) & rq_after);
+        }
+
+        default:
+            break;
+    }
+
+    // Ordinary move or capture.
+    //
+    // The direct test uses check_squares, which was built against the
+    // PRE-move occupancy. That is exact here. The only square whose emptiness
+    // could extend a ray to `to` is `from`, and for `from` to sit between the
+    // enemy king and `to` all three must be collinear -- which for a slider
+    // means it was already attacking the king along that ray before moving,
+    // i.e. the enemy king was already in check. It never is. Knights cannot
+    // produce three collinear squares at all, and the pawn, knight and king
+    // tables do not depend on occupancy.
+    int ptype = mailbox[from] % 6;
+
+    if (ci.check_squares[ptype] & bit(to)) {
+        return true;
+    }
+
+    // Discovered check: the mover was the sole blocker on one of our sliders'
+    // rays to the enemy king, and it has stepped off that line. Staying on the
+    // line -- moving further out along it, for instance -- still blocks.
+    return (ci.discovery & bit(from)) && !(LINE[ksq][from] & bit(to));
+}
+
 int Board::see(const Move& move) const {
     // Static exchange evaluation of a capture: net material won on move.to()
     // if both sides keep recapturing with their least valuable attacker while
