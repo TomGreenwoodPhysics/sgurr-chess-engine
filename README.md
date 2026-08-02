@@ -214,7 +214,42 @@ For example:
 bestmove g1f3
 ```
 
-### Test modes
+### `bench` — the search fingerprint
+
+```bash
+./sgr.exe bench        # fixed set of 19 positions at depth 11
+./sgr.exe bench 13     # or any depth
+```
+
+`bench` searches a fixed position list to a fixed depth. The search is
+deterministic — no clock, no randomness, and every heuristic is cleared
+between positions — so the per-position node counts and their total are a
+**fingerprint of the engine's search behaviour**.
+
+That makes it the cheapest verification tool in the project. Any change that
+is supposed to be *speed-only* — build flags, data layout, SIMD, a refactor —
+must leave the fingerprint byte-identical. If it moves, the change altered
+*what* is searched rather than only how fast, and the speedup is not free.
+
+The fingerprint goes to **stdout**; wall time, NPS and the loaded net go to
+**stderr**. So a comparison between two builds is exactly:
+
+```bash
+diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+```
+
+Worked example — the AVX-512 NNUE path versus the scalar fallback, which are
+bit-identical by construction:
+
+```text
+fingerprint  identical (3,601,424 nodes)   ->  same search
+scalar       2,340,308 nps
+avx512       2,865,439 nps                 ->  +22.4% speed, mechanically free
+```
+
+`bench` is also available inside a UCI session (`bench`, `bench 13`).
+
+### Other test modes
 
 Run the built-in general test mode:
 
@@ -292,6 +327,9 @@ at any point; datasets, weights, and ledger rows are append-only artefacts.
 ## Testing and validation
 
 * Move generation is checked using `perft`.
+* Search behaviour is fingerprinted with `bench` — a deterministic fixed-depth
+  node count that must stay byte-identical across any change intended to be
+  speed-only, so that class of work is verifiable without playing games.
 * Make/unmake logic is tested by verifying that board state and hash keys are
   restored correctly.
 * Incremental Zobrist hashing is checked against recomputed hashes.

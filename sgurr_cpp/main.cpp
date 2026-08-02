@@ -3,6 +3,8 @@
 #include "search.hpp"
 #include "nnue.hpp"
 
+#include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <cstdlib>
 #include <optional>
@@ -157,6 +159,11 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
     return TimeBudget{ hard / 1000.0, soft / 1000.0 };
 }
 
+// Defined below, next to the position list it walks. Declared here so `bench`
+// also works as a command inside a live UCI session, not just as an argv mode.
+constexpr int BENCH_DEPTH = 11;
+int run_bench(int depth);
+
 void uci_loop() {
     Board board;
     Engine engine;
@@ -205,6 +212,21 @@ void uci_loop() {
             } else {
                 std::cout << "bestmove 0000\n";
             }
+        } else if (command == "bench" || command.rfind("bench ", 0) == 0) {
+            // Optional depth: "bench 13". Anything unparseable falls back to
+            // the default rather than aborting a live session.
+            int depth = BENCH_DEPTH;
+            std::vector<std::string> parts = split(command);
+
+            if (parts.size() > 1) {
+                try {
+                    depth = std::stoi(parts[1]);
+                } catch (...) {
+                    depth = BENCH_DEPTH;
+                }
+            }
+
+            run_bench(depth);
         } else if (command == "quit") {
             break;
         }
@@ -342,6 +364,120 @@ int run_see_tests() {
     return passed == static_cast<int>(cases.size()) ? 0 : 1;
 }
 
+// ---------------------------------------------------------------------------
+// bench: a fixed-depth search over a fixed set of positions.
+//
+// The search is fully deterministic -- no randomness, no clock (a fixed-depth
+// search passes no time limit, so time_is_up() never fires), and every
+// heuristic is cleared before each position. So the per-position node counts
+// and their total are a FINGERPRINT of the engine's search behaviour.
+//
+// That is what makes this the project's cheapest verification tool. A change
+// meant to be speed-only -- build flags, data layout, SIMD, a refactor --
+// must leave the fingerprint byte-identical. If it moves, the change altered
+// WHAT is searched rather than only how fast, and the speedup is not free.
+// METHODOLOGY.md 7 already requires node-identical A/B binaries before they
+// are trusted; this makes that check one command instead of a procedure.
+//
+// The fingerprint goes to stdout and everything non-deterministic (wall time,
+// NPS, net path, SIMD path) goes to stderr, so
+//
+//     diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+//
+// compares exactly the deterministic part and nothing else.
+//
+// Heuristics are cleared before EVERY position rather than once at the start,
+// so each entry is independent: reordering or adding positions cannot shift
+// another position's count, and a divergence names the position that caused
+// it instead of every position after it.
+//
+// The node counts also depend on the loaded network -- a different net is a
+// different evaluation and therefore a different tree. That is a feature: it
+// means an accidental net mismatch shows up as a fingerprint difference
+// rather than passing silently, which is the failure that cost this project
+// ~430 Elo once already.
+//
+// BENCH_DEPTH is declared above uci_loop, where the `bench` command needs it.
+
+const char* const BENCH_FENS[] = {
+    // openings
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+    "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R w KQkq - 0 6",
+    "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6",
+
+    // middlegames
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+    "4rrk1/pp1n3p/3q2pQ/2p1pb2/2PP4/2P3N1/P2B2PP/4RRK1 b - - 7 19",
+    "2rq1rk1/pb1nbppp/1p2pn2/8/2BP4/2N1PN2/PPQ2PPP/R1B2RK1 w - - 0 12",
+    "r2q1rk1/1b1nbppp/p3pn2/1p6/3P4/1BN1PN2/PP2QPPP/R1BR2K1 w - - 0 12",
+    "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+
+    // capture-rich, to exercise quiescence and SEE
+    "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+    "3r1rk1/p3qppp/2bb4/2p5/3p4/1P2P3/PBQN1PPP/2R2RK1 w - - 0 1",
+
+    // endgames
+    "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+    "8/8/1P6/5pr1/8/4R3/7k/2K5 w - - 0 1",
+    "6k1/6p1/6Pp/ppp5/3pn2P/1P3K2/1PP2P2/3N4 b - - 0 1",
+    "R7/P4k2/8/8/8/8/r7/6K1 w - - 0 1",
+    "8/p3k3/1p6/2p5/2P5/1P4P1/P3K3/8 w - - 0 1",
+    "8/8/4k3/8/1p2P3/1P6/4K3/8 w - - 0 1",
+    "8/5k2/8/8/8/3K4/4P3/8 w - - 0 1",
+};
+
+int run_bench(int depth) {
+    const int count = static_cast<int>(sizeof(BENCH_FENS) / sizeof(BENCH_FENS[0]));
+
+    Engine engine;
+
+    std::cout << "bench depth " << depth
+              << " eval " << (nnue::active() ? "nnue" : "hce")
+              << " positions " << count << "\n";
+
+    long long total_nodes = 0;
+    double search_seconds = 0.0;   // search time only, excluding the TT clears
+
+    for (int i = 0; i < count; ++i) {
+        Board board(BENCH_FENS[i]);
+
+        // Independence: no TT entry, killer, history or continuation-history
+        // score may carry over from the previous position.
+        engine.clear_for_new_game();
+
+        // The search writes UCI "info" lines to stdout; keep them out of the
+        // fingerprint.
+        std::cout.setstate(std::ios::failbit);
+        SearchResult result = engine.search_best_move(board, depth);
+        std::cout.clear();
+
+        total_nodes += result.nodes;
+        search_seconds += result.time_taken;
+
+        std::cout << "pos " << std::setw(2) << (i + 1)
+                  << "  nodes " << std::setw(10) << result.nodes
+                  << "  bm " << std::setw(5)
+                  << (result.best_move.has_value()
+                          ? move_to_string(*result.best_move)
+                          : std::string("none"))
+                  << "  score " << result.score
+                  << "\n";
+    }
+
+    std::cout << "nodes " << total_nodes << "\n";
+
+    std::cerr << "time " << std::fixed << std::setprecision(3) << search_seconds
+              << " s   nps "
+              << (search_seconds > 0.0
+                      ? static_cast<long long>(total_nodes / search_seconds)
+                      : 0LL)
+              << "\n";
+
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Load an NNUE network if one is available; otherwise use the hand-crafted
     // evaluation.
@@ -373,6 +509,15 @@ int main(int argc, char* argv[]) {
         test_mode();
     } else if (argc > 1 && std::string(argv[1]) == "seetest") {
         return run_see_tests();
+    } else if (argc > 1 && std::string(argv[1]) == "bench") {
+        int depth = argc > 2 ? std::atoi(argv[2]) : BENCH_DEPTH;
+
+        if (depth < 1) {
+            std::cerr << "bench: depth must be >= 1\n";
+            return 1;
+        }
+
+        return run_bench(depth);
     } else if (argc > 2 && std::string(argv[1]) == "fen") {
         std::string fen;
 
