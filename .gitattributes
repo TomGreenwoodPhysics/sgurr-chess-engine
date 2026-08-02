@@ -1,0 +1,33 @@
+# Line endings.
+#
+# Without this, the working tree's line endings depend on each contributor's
+# core.autocrlf setting, so a checkout on a different OS can show every line of
+# a file as changed. Normalising here makes the stored form canonical (LF) and
+# the checked-out form correct for the platform, whatever the local git config.
+
+# Default: let git detect text vs binary, store text as LF, check out native.
+* text=auto
+
+# Windows shells are the exception: these must keep CRLF in the working tree.
+# .bat in particular can misparse a script saved with bare LF endings.
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# POSIX shell scripts must keep LF whatever the platform.
+*.sh   text eol=lf
+
+# Binary assets: never inspect, never translate, never diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.ico  binary
+*.mp3  binary
+*.ogg  binary
+*.wav  binary
+*.exe  binary
+*.nnue binary
+*.bin  binary
+*.zip  binary
