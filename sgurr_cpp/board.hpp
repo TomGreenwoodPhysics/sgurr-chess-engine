@@ -157,6 +157,7 @@ public:
     bool see_ge(const Move& move, int threshold) const;
 
     MoveList generate_pseudo_legal_moves();
+    MoveList generate_noisy_moves();
     MoveList generate_legal_moves();
 
     UndoInfo make_move(const Move& move);

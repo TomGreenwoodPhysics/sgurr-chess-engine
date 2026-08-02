@@ -1247,15 +1247,16 @@ void Board::add_king_moves(MoveList& moves, int piece, U64 own) {
 
 namespace {
 
-// Emit every move for one slider bitboard. Templated on the attack generator
-// so each call site below compiles down to its own magic lookup with no
-// dispatch: the piece type is a property of the call, not of the data.
+// Emit moves for one piece bitboard. Templated on the attack generator, so
+// each call site compiles down to its own lookup with no dispatch: the piece
+// type is a property of the call, not of the data.
 //
-// `targets` is the already-masked destination set (everything except our own
-// pieces and the enemy king). It does not vary between sliders, so it is
-// computed once by the caller instead of per piece.
+// `targets` is the already-masked destination set -- everything except our own
+// pieces and the enemy king for full generation, or just the enemy pieces when
+// generating captures only. It does not vary between piece types, so the
+// caller computes it once rather than per piece.
 template <typename AttackFn>
-void add_slider_moves(MoveList& moves, U64 bb, U64 targets, U64 occ, AttackFn attacks_of) {
+void add_moves_from_attacks(MoveList& moves, U64 bb, U64 targets, U64 occ, AttackFn attacks_of) {
     while (bb) {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
@@ -1393,16 +1394,124 @@ MoveList Board::generate_pseudo_legal_moves() {
 
     U64 targets = ~own & ~enemy_king;
 
-    add_slider_moves(moves, bitboards[us == WHITE ? WB : BB], targets, occ,
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WB : BB], targets, occ,
                      [](int sq, U64 o) { return bishop_attacks(sq, o); });
-    add_slider_moves(moves, bitboards[us == WHITE ? WR : BR], targets, occ,
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WR : BR], targets, occ,
                      [](int sq, U64 o) { return rook_attacks(sq, o); });
-    add_slider_moves(moves, bitboards[us == WHITE ? WQ : BQ], targets, occ,
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WQ : BQ], targets, occ,
                      [](int sq, U64 o) { return bishop_attacks(sq, o) | rook_attacks(sq, o); });
 
     add_king_moves(moves, us == WHITE ? WK : BK, own);
 
     add_castling_moves(moves);
+
+    return moves;
+}
+
+// Captures, en passant and promotions only -- the moves quiescence searches.
+//
+// Quiescence used to generate every pseudo-legal move and then discard the
+// quiet ones, which is most of them. This emits only the moves it keeps.
+//
+// The emission ORDER must match what that filter produced, move for move.
+// order_moves() sorts with std::sort, which is not stable, so two moves with
+// equal scores can come out in either order depending on how they arrived --
+// and equal scores are common among captures. A different order here would be
+// a different search, not a faster one. So this mirrors the structure of
+// generate_pseudo_legal_moves exactly: same piece order, same per-pawn order
+// of push-promotion before captures, same left-then-right capture direction,
+// and the same ascending square walks.
+MoveList Board::generate_noisy_moves() {
+    MoveList moves;
+
+    int us = side_to_move;
+    int them = us ^ 1;
+
+    U64 own = occupancy(us);
+    U64 enemy = occupancy(them);
+    U64 enemy_king = bitboards[them == WHITE ? WK : BK];
+
+    enemy &= ~enemy_king;
+
+    U64 occ = own | enemy | enemy_king;
+
+    // For every non-pawn, the full generator masks with ~own & ~enemy_king, so
+    // the moves it emits that land on an occupied square are exactly those
+    // landing on `enemy`. That single mask replaces the is_noisy_move test.
+    if (us == WHITE) {
+        U64 pawns = bitboards[WP];
+
+        while (pawns) {
+            auto [sq, next] = pop_lsb(pawns);
+            pawns = next;
+
+            // A push is noisy only when it promotes. A non-promoting push and
+            // the double push both land on an empty square, so neither can be.
+            int one = sq + 8;
+
+            if (on_board(one) && !(occ & bit(one)) && rank_of(one) == 7) {
+                add_pawn_move(moves, sq, one, WHITE);
+            }
+
+            for (int to_sq : {sq + 7, sq + 9}) {
+                if (!on_board(to_sq)) {
+                    continue;
+                }
+
+                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
+                    continue;
+                }
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, WHITE);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
+                }
+            }
+        }
+    } else {
+        U64 pawns = bitboards[BP];
+
+        while (pawns) {
+            auto [sq, next] = pop_lsb(pawns);
+            pawns = next;
+
+            int one = sq - 8;
+
+            if (on_board(one) && !(occ & bit(one)) && rank_of(one) == 0) {
+                add_pawn_move(moves, sq, one, BLACK);
+            }
+
+            for (int to_sq : {sq - 7, sq - 9}) {
+                if (!on_board(to_sq)) {
+                    continue;
+                }
+
+                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
+                    continue;
+                }
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, BLACK);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
+                }
+            }
+        }
+    }
+
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WN : BN], enemy, occ,
+                     [](int sq, U64) { return KNIGHT_ATTACKS_TBL[sq]; });
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WB : BB], enemy, occ,
+                     [](int sq, U64 o) { return bishop_attacks(sq, o); });
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WR : BR], enemy, occ,
+                     [](int sq, U64 o) { return rook_attacks(sq, o); });
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WQ : BQ], enemy, occ,
+                     [](int sq, U64 o) { return bishop_attacks(sq, o) | rook_attacks(sq, o); });
+    add_moves_from_attacks(moves, bitboards[us == WHITE ? WK : BK], enemy, occ,
+                     [](int sq, U64) { return KING_ATTACKS_TBL[sq]; });
+
+    // Castling is never noisy: the king's destination is required to be empty.
 
     return moves;
 }

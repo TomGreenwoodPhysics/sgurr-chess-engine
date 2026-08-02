@@ -1081,13 +1081,12 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     alpha = std::max(alpha, stand_pat);
 
-    MoveList noisy_moves;
-
-    for (const Move& move : generate_moves(board)) {
-        if (is_noisy_move(board, move)) {
-            noisy_moves.add(move);
-        }
-    }
+    // Generated directly rather than by generating everything and discarding
+    // the quiets. Emission order matches the old filter exactly, which matters:
+    // order_moves sorts with std::sort, which is not stable, so a reordering
+    // among equal-scored captures would change the search rather than speed it
+    // up.
+    MoveList noisy_moves = board.generate_noisy_moves();
 
     noisy_moves = order_moves(board, noisy_moves, std::nullopt, ply, false);
     LegalityInfo li = board.legality_info();
