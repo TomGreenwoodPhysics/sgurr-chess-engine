@@ -12,6 +12,22 @@
 #include <string>
 #include <vector>
 
+// Advertised engine identity, in ONE place.
+//
+// The UCI `id name` line is the only channel by which a GUI, a tournament
+// runner, or a PGN header learns which engine it is talking to, so a stale
+// value here silently mislabels every game record it touches. It has been
+// stale before: the string read "Sgurr 7.0" for the whole of v8.0's life,
+// including the 3,329-game calibration that produced the 3006 rating.
+//
+// Overridable at build time (-DSGR_VERSION=\"8.1\") like the other build
+// switches, so a release build can stamp itself without a source edit.
+#ifndef SGR_VERSION
+#define SGR_VERSION "8.0"
+#endif
+constexpr const char* ENGINE_NAME = "Sgurr";
+constexpr const char* ENGINE_AUTHOR = "Tom";
+
 std::vector<std::string> split(const std::string& text) {
     std::vector<std::string> parts;
     std::istringstream stream(text);
@@ -172,8 +188,8 @@ void uci_loop() {
 
     while (std::getline(std::cin, command)) {
         if (command == "uci") {
-            std::cout << "id name Sgurr 7.0\n";   // bump per release
-            std::cout << "id author Tom\n";
+            std::cout << "id name " << ENGINE_NAME << " " << SGR_VERSION << "\n";
+            std::cout << "id author " << ENGINE_AUTHOR << "\n";
             std::cout << "uciok\n";
         } else if (command == "isready") {
             std::cout << "readyok\n";

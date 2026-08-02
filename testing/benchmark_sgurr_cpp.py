@@ -109,8 +109,16 @@ def choose_sgurr_cpp_move(
     nodes = int(info.get("nodes", 0))
     depth = int(info.get("depth", 0))
 
-    # python-chess uses tbhits for tablebases, not our transposition table.
-    # keep this column for compatibility, but expect it to be zero for now.
+    # Always 0 now, and correctly so. The engine used to report its
+    # transposition-table hit count in the UCI `tbhits` field, which actually
+    # means ENDGAME TABLEBASE hits -- so this column was reading a mislabelled
+    # number. The engine no longer emits `tbhits` at all; TT health is now
+    # reported in `hashfull` (occupancy in permille).
+    #
+    # This script is legacy and not wired into pipeline.py; `sgr.exe bench`
+    # plus testing/sprt.py have superseded it. The column is left in place
+    # rather than renamed across its eight call sites here, since that refactor
+    # is not part of a UCI conformance fix.
     tt_hits = int(info.get("tbhits", 0))
 
     score_obj = info.get("score")

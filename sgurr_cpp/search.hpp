@@ -185,6 +185,9 @@ public:
     int evaluate_quiet_position(const Board& board) const;
     MoveList generate_moves(Board& board) const;
 
+    // Transposition-table occupancy in permille, for the UCI `hashfull` field.
+    int hashfull() const;
+
 private:
     std::chrono::steady_clock::time_point start_time;
     std::optional<double> time_limit = std::nullopt;         // hard deadline: abort mid-search

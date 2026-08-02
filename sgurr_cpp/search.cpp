@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -79,6 +80,33 @@ int score_from_tt(int score, int ply) {
     }
 
     return score;
+}
+
+// The UCI `score` field.
+//
+// A forced mate must be reported as `score mate <moves>` -- positive when this
+// side is delivering it, negative when receiving it. Reporting it as a
+// centipawn value instead makes a GUI display a mate as a ~10,000-pawn
+// advantage, which is how this engine behaved until now.
+//
+// Internally a mate is encoded root-relative as MATE - plies (negamax returns
+// -MATE + ply at a checkmated node), so plies-to-mate is MATE - |score|, and
+// UCI wants MOVES, hence the round-up by (plies + 1) / 2.
+//
+// The |score| <= MATE guards keep the +/-INF sentinel -- used as the initial
+// best_score when a search is started on a position with no legal moves --
+// out of the mate band, so it falls through to a centipawn score rather than
+// being reported as a nonsensical mate distance.
+std::string uci_score(int score) {
+    if (score > MATE_THRESHOLD && score <= MATE) {
+        return "mate " + std::to_string((MATE - score + 1) / 2);
+    }
+
+    if (score < -MATE_THRESHOLD && score >= -MATE) {
+        return "mate -" + std::to_string((MATE + score + 1) / 2);
+    }
+
+    return "cp " + std::to_string(score);
 }
 
 } // namespace
@@ -251,14 +279,33 @@ SearchResult Engine::search_best_move(
             completed_depth = depth;
         }
 
+        long long ms = static_cast<long long>(elapsed_seconds(start_time) * 1000);
+
+        // `tbhits` used to carry the transposition-table hit count here. That
+        // field means ENDGAME TABLEBASE hits in UCI, and this engine has no
+        // tablebases, so any GUI or PGN tracker reading it recorded nonsense
+        // (fastchess has a track_tbhits switch that would have done exactly
+        // that). TT health belongs in `hashfull`, which is what it now
+        // reports; tt_hits is still counted and still returned in
+        // SearchResult, it is simply no longer mislabelled on the wire.
         std::cout
             << "info depth " << depth
-            << " score cp " << best_score
+            << " score " << uci_score(best_score)
             << " nodes " << nodes
-            << " tbhits " << tt_hits
-            << " time " << static_cast<int>(elapsed_seconds(start_time) * 1000)
-            << " pv " << (best_move.has_value() ? move_to_string(*best_move) : "none")
-            << "\n";
+            // Divide by at least 1ms: an iteration that completes inside the
+            // clock's resolution would otherwise report the raw node count as
+            // a rate, which reads as an absurdly SLOW engine at shallow depth.
+            << " nps " << (nodes * 1000 / std::max(ms, 1LL))
+            << " hashfull " << hashfull()
+            << " time " << ms;
+
+        // Omit `pv` entirely rather than emitting the non-move token "none":
+        // a GUI parsing the pv field is entitled to expect moves in it.
+        if (best_move.has_value()) {
+            std::cout << " pv " << move_to_string(*best_move);
+        }
+
+        std::cout << "\n";
     }
 
     return SearchResult{
@@ -269,6 +316,24 @@ SearchResult Engine::search_best_move(
         tt_hits,
         elapsed_seconds(start_time)
     };
+}
+
+int Engine::hashfull() const {
+    // UCI `hashfull` is transposition-table occupancy in permille. Sampled
+    // over the first 1000 slots rather than scanned in full: entries are
+    // indexed by hash & TT_MASK and so are spread uniformly, and walking all
+    // TT_SIZE entries once per iteration would cost more than the number is
+    // worth. This is also the telemetry that was missing when the 2026-07-15
+    // "TT size buys nothing" result proved hard to interpret.
+    int used = 0;
+
+    for (int i = 0; i < 1000; ++i) {
+        if (transposition_table[i].key != 0) {
+            used += 1;
+        }
+    }
+
+    return used;
 }
 
 bool Engine::time_is_up() const {
