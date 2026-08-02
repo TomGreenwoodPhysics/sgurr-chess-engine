@@ -395,6 +395,13 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 
         legal_found = true;
         UndoInfo undo = board.make_move(move);
+
+        // The child node's first act is to probe this slot. Start the fetch
+        // now so the line is on its way while make_move's remaining work and
+        // the call setup happen. A hint only: it cannot fault and cannot
+        // change what is searched.
+        __builtin_prefetch(&transposition_table[board.hash_key & TT_MASK]);
+
 #if SGR_CONTHIST
         ss_piece[0] = undo.placed_piece;
         ss_to[0] = move.to();
@@ -841,6 +848,12 @@ int Engine::negamax(
         legal_moves_searched += 1;
 
         UndoInfo undo = board.make_move(move);
+
+        // See negamax_root: prefetch the slot the child will probe. The gap
+        // here is larger -- the check test, the extension logic and the LMR
+        // arithmetic all run before the recursive call reaches the TT.
+        __builtin_prefetch(&transposition_table[board.hash_key & TT_MASK]);
+
 #if SGR_CONTHIST
         ss_piece[ply] = undo.placed_piece;
         ss_to[ply] = move.to();
