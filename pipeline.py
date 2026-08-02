@@ -55,6 +55,9 @@ CLANG = r"C:\msys64\clang64\bin\clang++.exe"
 ENGINE_SRC = ["main.cpp", "board.cpp", "evaluation.cpp", "search.cpp", "nnue.cpp"]
 RECORD = 32  # bytes per datagen record
 
+sys.path.insert(0, str(ROOT / "testing"))
+from engine_check import verify_all, EngineUnusable   # noqa: E402
+
 
 # --------------------------------------------------------------------------
 # small utilities
@@ -157,6 +160,24 @@ class Pipeline:
                 f"{stage}: {n} datagen.exe process(es) running -- game results "
                 f"under CPU load are invalid. Stop them (taskkill /IM "
                 f"datagen.exe /F) and re-run.")
+
+    def assert_engines_runnable(self, stage, paths):
+        """Every binary in the match must actually start, not merely exist.
+
+        Path.exists() is not enough. Smart App Control is enforced on this
+        machine and intermittently blocks freshly linked unsigned binaries, and
+        Defender re-scans have done the same (2026-07-29 lost a calibration
+        gauntlet to a transient block 32s in). fastchess runs the calibrate
+        stage with -recover, which keeps a pool engine's failure from killing
+        an unattended run -- but that same flag will happily let a permanently
+        unspawnable engine forfeit every game and still produce a full,
+        plausible PGN. Verify up front so that becomes an abort, not a rating.
+        """
+        try:
+            for path, name in verify_all(paths).items():
+                log(f"{stage}: engine ok  {Path(path).name}  ->  {name}")
+        except EngineUnusable as exc:
+            raise RuntimeError(f"{stage}: {exc}") from None
 
     def done(self, stage):
         return stage in self.state
@@ -538,6 +559,7 @@ class Pipeline:
                 f"engine's -- set sprt.baseline_name in the config.")
         if not base_exe.exists():
             raise RuntimeError(f"sprt: baseline engine not found: {base_exe}")
+        self.assert_engines_runnable("sprt", [self.final_exe(), base_exe])
         log(f"sprt: Sgurr-{self.version} vs {base_name} ({base_exe.name})")
         out = run(
             [fc,
@@ -584,6 +606,15 @@ class Pipeline:
         rel_exe = self.release_exe()
         if not rel_exe.exists():
             raise RuntimeError(f"calibrate: release engine not found: {rel_exe}")
+
+        # Verify the whole field, not just ours: a pool engine that cannot
+        # spawn forfeits every game it plays, which inflates Sgurr's score
+        # against it and drags the Ordo solve off the CCRL anchors. Checking
+        # them together also means one pass names every broken binary rather
+        # than one rebuild-and-retry cycle per engine.
+        self.assert_engines_runnable(
+            "calibrate", [rel_exe] + [bm / e["cmd"] for e in pool["engines"]])
+
         cmd = [fc, "-tournament", "gauntlet", "-seeds", "1",
                "-engine", f"cmd={rel_exe}", f"name=Sgurr-{self.version}"]
         for e in pool["engines"]:

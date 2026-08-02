@@ -12,6 +12,34 @@ Use **clang** from the MSYS2 `clang64` environment:
 > datagen output file (`datagen.cpp`). clang (libc++) is unaffected. Add
 > `/c/msys64/clang64/bin` to `PATH`, or invoke it by full path as below.
 
+## Use `build.sh`
+
+    ./build.sh                    # dev build      -> sgr.exe
+    ./build.sh -r                 # release build  -> sgr.exe   (PGO + ThinLTO)
+    ./build.sh -d                 # datagen build  -> datagen.exe (RFP disabled)
+    ./build.sh -r -o sgr_v8_1.exe # choose the output name
+
+It runs the recipes documented below **and then proves the binary starts**,
+relinking automatically if it does not. That second part is not optional here:
+
+> **Smart App Control is enforced on this machine** and intermittently refuses
+> to start freshly linked unsigned binaries — roughly 2 builds in 6 during one
+> session. The block lands on the *file*, not the code: two byte-identical
+> binaries under different names, one blocked and one not. It has **no
+> exclusion mechanism**, and turning it off is a **one-way switch** (Windows
+> cannot re-enable it without an OS reset). A fresh link is normally allowed
+> through, and once a binary has started it keeps starting — so relink-and-recheck
+> is both the cheap fix and the complete one.
+
+Skipping the check is expensive. A non-spawning engine does not crash a match:
+it forfeits every game and still produces a complete, plausible result. DEVLOG
+2026-07-29 lost a calibration gauntlet to a transient block 32 seconds in.
+`testing/sprt.py` and `pipeline.py` now verify every binary before playing, but
+catching it at build time is cheaper still.
+
+The sections below document what the script does, and remain the reference for
+building by hand.
+
 ## Engine
 
 There is a single engine binary. It uses the hand-crafted evaluation (HCE)

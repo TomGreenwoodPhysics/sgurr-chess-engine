@@ -14,6 +14,17 @@ Example:
 
 import argparse, math, os, queue, subprocess, sys, threading, time
 import chesslite as cl
+from engine_check import verify_engine, verify_all, EngineUnusable
+
+
+class EngineDied(RuntimeError):
+    """The engine stopped talking mid-match.
+
+    Raised instead of returning a sentinel, because the old behaviour was to
+    return None and let the game loop score it as an illegal move -- i.e. a
+    dead engine lost every game and the SPRT still printed a verdict. See
+    testing/engine_check.py for the full story.
+    """
 
 
 # ----------------------------- SPRT statistics -----------------------------
@@ -61,10 +72,32 @@ class Engine:
         self._send("isready"); self._wait("readyok")
 
     def _send(self, c):
-        self.p.stdin.write(c + "\n"); self.p.stdin.flush()
+        try:
+            self.p.stdin.write(c + "\n"); self.p.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise EngineDied(
+                f"{self.path}: died before it could be sent '{c}' ({exc}). "
+                f"Exit code {self.p.poll()}.") from None
+
+    def _readline(self):
+        """One line, or EngineDied at EOF.
+
+        `for line in self.p.stdout` ends silently when the pipe closes, so a
+        dead engine used to look like an engine that simply had nothing more to
+        say. Reading explicitly makes death distinguishable from silence.
+        """
+        line = self.p.stdout.readline()
+        if line == "":
+            raise EngineDied(
+                f"{self.path}: closed its output mid-match (exit code "
+                f"{self.p.poll()}). The process is gone, so every remaining "
+                f"game would be scored as a loss against it -- aborting "
+                f"instead of reporting a result built on a dead engine.")
+        return line
 
     def _wait(self, tok):
-        for line in self.p.stdout:
+        while True:
+            line = self._readline()
             if line.strip() == tok or line.startswith(tok):
                 return
 
@@ -82,7 +115,8 @@ class Engine:
         self._send(f"go wtime {int(wt)} btime {int(bt)} winc {int(wi)} binc {int(bi)}")
         t0 = time.perf_counter()
         mv = None
-        for line in self.p.stdout:
+        while True:
+            line = self._readline()      # raises EngineDied at EOF
             if line.startswith("bestmove"):
                 toks = line.split()
                 mv = toks[1] if len(toks) > 1 else "0000"
@@ -193,6 +227,14 @@ class Tally:
         self.upper = math.log((1 - args.beta) / args.alpha)
         self.lower = math.log(args.beta / (1 - args.alpha))
         self.decided = None
+        self.aborted = None   # set if any worker's engine died mid-match
+
+    def abort(self, reason):
+        with self.lock:
+            if self.aborted is None:
+                self.aborted = reason
+            # Unblock the other workers: `decided` is what their loops poll.
+            self.decided = self.decided or "ABORTED"
 
     def record_pair(self, r1, r2):
         # r1,r2 are NEW's score in the two colour-swapped games
@@ -234,6 +276,11 @@ def worker(tally, jobs, args):
             new_r2 = 1.0 - r2   # convert white-perspective to NEW-perspective
             if tally.record_pair(r1, new_r2):
                 break
+    except EngineDied as exc:
+        # Never let a dead engine become a scoreline. Flag the whole run as
+        # invalid so main() reports an abort instead of a verdict computed
+        # partly from games one side could not physically play.
+        tally.abort(str(exc))
     finally:
         new_eng.quit(); base_eng.quit()
 
@@ -273,6 +320,18 @@ def main():
                 break
             jobs.put(e); n_pairs += 1
 
+    # Pre-flight. Both binaries must actually start and complete a UCI
+    # handshake before a single game is played -- an engine that cannot spawn
+    # would otherwise lose every game and the SPRT would still print a verdict.
+    # Also prints each engine's self-reported id, which catches the other half
+    # of the problem: running a stale or mislabelled binary by mistake.
+    try:
+        for path, name in verify_all([args.new, args.base]).items():
+            print(f"engine ok  {path}  ->  {name}")
+    except EngineUnusable as exc:
+        print(f"\nABORTING BEFORE ANY GAMES\n\n{exc}\n", file=sys.stderr)
+        return 2
+
     print(f"SPRT  new={args.new}  base={args.base}")
     print(f"TC={args.tc[0]/1000:g}+{args.tc[1]/1000:g}s  book={args.book} "
           f"({len(book)} lines)  concurrency={args.concurrency}")
@@ -287,6 +346,13 @@ def main():
     for t in threads: t.join()
 
     print()
+    if tally.aborted:
+        print(f">>> ABORTED -- NO VERDICT\n\n{tally.aborted}\n", file=sys.stderr)
+        print(f"    {tally.w+tally.d+tally.l} games had been played; they are "
+              f"discarded rather than reported, because a result that includes "
+              f"games a dead engine 'lost' is not a measurement.", file=sys.stderr)
+        return 2
+
     if tally.decided:
         print(">>> " + tally.decided)
     else:
@@ -297,4 +363,4 @@ def main():
           f"({time.time()-t0:.0f}s)")
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
