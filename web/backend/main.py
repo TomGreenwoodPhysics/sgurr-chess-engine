@@ -57,6 +57,27 @@ NETS_DIR = REPO_ROOT / "nets"
 # ladder, so a version added here shows up in the opponent picker for free.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
+        # v8.1 is v8.0's search, compiled better: PGO + ThinLTO and nine
+        # node-identical data-layout changes, together worth ~20% NPS. It is
+        # bench-fingerprint-identical to sgr_gen8.exe (13,614,729 nodes at
+        # depth 13) and move-identical at fixed depth, so it cannot play
+        # differently -- it only gets deeper in the same clock.
+        #
+        # RATING IS PROVISIONAL. 3006 is v8.0's measured value carried over as
+        # a FLOOR, not an estimate: identical search plus more speed cannot be
+        # weaker. The real figure is being measured (predicted +18, see
+        # benchmarks/v81_speed_prediction.md); update this and add a ledger row
+        # once that lands. It is deliberately not pre-set to the prediction --
+        # putting an unmeasured number on a public page is exactly what this
+        # project's methodology exists to prevent.
+        "id": "v8.1",
+        "exe": CPP_DIR / "sgr_v8_1.exe",
+        "net": NETS_DIR / "gen8.nnue",
+        "label": 'Sgurr v8.1 "Thearlaich"',
+        "tech": "GEN8 NNUE + PGO SPEED",
+        "rating": 3006,
+    },
+    {
         "id": "v8.0",
         "exe": CPP_DIR / "sgr_gen8.exe",
         "net": NETS_DIR / "gen8.nnue",
