@@ -41,9 +41,14 @@ benchmarks/tools/
 benchmarks/games/
 *.jsonl
 *.csv
-*.pgnbenchmarks/config.json
+*.pgn
+benchmarks/config.json
 benchmarks/ratings.csv
 runs/
+
+# fastchess run state: rewritten in place with live match stats on every run,
+# so it is scratch output rather than source.
+sgurr_cpp/config.json
 
 # local web demo server logs
 web/*.log
