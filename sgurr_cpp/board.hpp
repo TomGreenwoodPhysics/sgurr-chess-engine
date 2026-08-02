@@ -50,6 +50,12 @@ struct LegalityInfo {
     U64 check_mask = 0;  // when nchk == 1: squares that resolve the check
 };
 
+// Capacity of Board::position_history, the repetition-detection ring. A power
+// of two so the wrap is a mask. See the field declaration for why a ring, and
+// why this size cannot be too small.
+constexpr int POSITION_HISTORY_CAP = 1024;
+constexpr int POSITION_HISTORY_MASK = POSITION_HISTORY_CAP - 1;
+
 int rank_of(int sq);
 int file_of(int sq);
 U64 bit(int sq);
@@ -67,7 +73,20 @@ public:
     int halfmove_clock = 0;
     int fullmove_number = 1;
     U64 hash_key = 0;
-    std::vector<U64> position_history;
+    // Zobrist keys of the positions already visited, for repetition detection.
+    // A fixed ring rather than a std::vector: make_move and unmake_move push
+    // and pop this on every node in the tree, and a heap container there costs
+    // a pointer chase, a capacity test and an occasional reallocation.
+    //
+    // The ring does not have to hold a whole game. is_repetition() never looks
+    // back further than halfmove_clock entries, and halfmove_clock resets on
+    // every pawn move and capture -- the search already scores a draw at 100,
+    // and the 75-move rule ends a real game at 150. 1024 slots is several
+    // times more history than can ever be read back, so a game long enough to
+    // wrap loses only entries that no longer affect the answer, instead of
+    // running off the end of a plain array.
+    std::array<U64, POSITION_HISTORY_CAP> position_history{};
+    int position_history_count = 0;
 
     Board();
     explicit Board(const std::string& fen);

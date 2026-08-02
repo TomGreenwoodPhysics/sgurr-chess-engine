@@ -501,7 +501,7 @@ void Board::set_fen(const std::string& fen) {
 
     bitboards.fill(0);
     mailbox.fill(-1);
-    position_history.clear();
+    position_history_count = 0;
 
     int rank = 7;
     int file = 0;
@@ -1004,13 +1004,14 @@ bool Board::see_ge(const Move& move, int threshold) const {
 }
 
 bool Board::is_repetition() const {
-    int n = static_cast<int>(position_history.size());
+    int n = position_history_count;
     int limit = std::min(n, halfmove_clock);
 
     // Same side to move recurs every 2 plies; positions older than the last
-    // irreversible move (pawn move / capture) can never repeat.
+    // irreversible move (pawn move / capture) can never repeat. `limit` is
+    // bounded by halfmove_clock, so this window is always far inside the ring.
     for (int i = n - 2; i >= n - limit; i -= 2) {
-        if (position_history[i] == hash_key) {
+        if (position_history[i & POSITION_HISTORY_MASK] == hash_key) {
             return true;
         }
     }
@@ -1344,7 +1345,9 @@ UndoInfo Board::make_move(const Move& move) {
 
     side_to_move ^= 1;
 
-    position_history.push_back(undo.old_hash_key);
+    position_history[position_history_count & POSITION_HISTORY_MASK] =
+        undo.old_hash_key;
+    position_history_count += 1;
 
     // Incremental Zobrist update.
     U64 h = undo.old_hash_key;
@@ -1398,7 +1401,7 @@ void Board::unmake_move(const UndoInfo& undo) {
     if (nnue::active()) nnue::on_unmake(undo, hash_key);
 
     side_to_move ^= 1;
-    position_history.pop_back();
+    position_history_count -= 1;
 
     bitboards[undo.placed_piece] &= ~bit(move.to()) & FULL;
     mailbox[move.to()] = -1;
@@ -1459,7 +1462,9 @@ NullMoveUndo Board::make_null_move() {
 
     side_to_move ^= 1;
 
-    position_history.push_back(undo.old_hash_key);
+    position_history[position_history_count & POSITION_HISTORY_MASK] =
+        undo.old_hash_key;
+    position_history_count += 1;
 
     // Incremental Zobrist update: only en passant and side change.
     U64 h = undo.old_hash_key;
@@ -1478,7 +1483,7 @@ NullMoveUndo Board::make_null_move() {
 }
 
 void Board::unmake_null_move(const NullMoveUndo& undo) {
-    position_history.pop_back();
+    position_history_count -= 1;
     side_to_move = undo.old_side_to_move;
     en_passant = undo.old_en_passant;
     halfmove_clock = undo.old_halfmove_clock;
