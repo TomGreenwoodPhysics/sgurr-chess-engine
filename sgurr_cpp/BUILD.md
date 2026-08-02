@@ -20,6 +20,8 @@ when no network loads, and the NNUE when a network is provided via
 always be linked, since the evaluation references `nnue::` symbols even when
 no net is loaded.
 
+### Development build (fast to compile)
+
     /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
         -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
         -o sgr.exe
@@ -35,10 +37,60 @@ scalar eval. Add `-DSGR_SIMD=0` only to build the scalar fallback for an A/B
 (the SIMD path `#error`s without AVX2). The startup line always names the
 active path — check it when a build seems slow.
 
-Run as HCE (no net) vs NNUE (net) with the same binary:
+### Release build: PGO + ThinLTO (**+11.3% NPS**, measured)
 
-    ./sgr.exe uci                                  # HCE (no SGR_EVALFILE, no sgurr.nnue)
-    SGR_EVALFILE=../nets/gen1.nnue ./sgr.exe uci   # NNUE
+Anything released, calibrated, or used as an SPRT baseline should be built
+this way. It changes no source and no search behaviour — it is purely faster.
+
+**ThinLTO** lets the optimiser see across `.cpp` boundaries at link time,
+which plain per-file compilation cannot. **PGO** replaces the compiler's
+guesses about which branches are hot with a recording of which branches this
+engine actually takes, so the common paths get laid out for the instruction
+cache. Search is extremely branch-heavy, so PGO carries most of the win.
+
+    C=/c/msys64/clang64/bin/clang++
+    F="-std=c++20 -O3 -march=native -DNDEBUG -static -Wall -Wextra"
+    S="main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
+
+    # 1. instrumented build
+    $C $F -fprofile-generate=./pgo $S -o sgr_prof.exe
+
+    # 2. run a representative workload (bench is exactly that)
+    SGR_EVALFILE=../nets/gen8.nnue ./sgr_prof.exe bench 13
+
+    # 3. merge the raw profile
+    /c/msys64/clang64/bin/llvm-profdata merge -output=pgo/sgurr.profdata pgo/*.profraw
+
+    # 4. final build
+    $C $F -flto=thin -fuse-ld=lld -fprofile-use=./pgo/sgurr.profdata $S -o sgr.exe
+
+Notes:
+
+* **Regenerate the profile after significant search changes.** clang will warn
+  `function control flow change detected (hash mismatch)` and silently drop the
+  profile for any function whose shape moved, so a stale profile quietly
+  degrades to a plain build for exactly the code you just edited.
+* `pgo/` is gitignored. The profile is a build artefact, not source.
+* Full LTO (`-flto=full`) and a broader profile (bench at several depths) were
+  both measured and neither beat this recipe — all three sat inside the
+  measurement noise. ThinLTO is chosen for the faster incremental link.
+
+**Measured on a 7800X3D against the plain `-O3 -march=native` build**, 12
+interleaved runs each of `bench 13`, gen8 net:
+
+| build | median NPS |
+|---|---|
+| `-O3 -march=native` | 2,736,898 |
+| **+ PGO + ThinLTO** | **3,045,808** |
+
+**+11.3%**, and the separation is clean — the *slowest* PGO run (2,990,742)
+beat the *fastest* baseline run (2,775,630), so the two distributions do not
+overlap across 24 runs. At the project's ~70 Elo per doubling that is
+**≈ +10.8 Elo, inferred** (an inference from NPS, like the SIMD result — not
+a number measured in games).
+
+The `bench` fingerprint is byte-identical between the two builds, which is
+what makes the speedup free rather than a behaviour change (see below).
 
 ## Datagen
 
@@ -47,3 +99,29 @@ Run as HCE (no net) vs NNUE (net) with the same binary:
         -o datagen.exe
 
 See the header of `datagen.cpp` for arguments (fixed depth vs `nodes:N`).
+
+> **Labeller builds must pass `-DSGR_RFP=0`.** Reverse futility pruning returns
+> a raw static eval where a searched score is expected; under a fixed node
+> budget that poisons the labels. It cost gen6 an entire cycle.
+
+PGO applies here too, and matters more than it does for the engine — datagen
+is a multi-day CPU-bound job. Generate a *datagen* profile rather than reusing
+the engine's: the engine profile has no entry for `datagen.cpp`'s `main`, so
+clang warns and discards it for that function (the shared search/board/nnue
+code still benefits).
+
+## Verifying a build
+
+    ./sgr.exe bench
+
+`bench` searches a fixed position set to a fixed depth. The search is
+deterministic, so its node counts are a fingerprint of search behaviour. Any
+change meant to be **speed-only** — the flags above, SIMD, a refactor — must
+leave the fingerprint byte-identical:
+
+    diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+
+The fingerprint is on stdout; wall time, NPS and the loaded net go to stderr,
+so the diff compares only the deterministic part. If the fingerprint moves,
+the change altered *what* is searched rather than only how fast, and the
+speedup is not free.
