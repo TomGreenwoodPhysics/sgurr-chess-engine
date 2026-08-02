@@ -67,6 +67,20 @@ class Board {
 public:
     std::array<U64, 12> bitboards{};
     std::array<int, 64> mailbox{};
+
+    // Occupancy, maintained incrementally rather than recomputed. occupancy()
+    // used to OR together six or twelve bitboards on every call, and it is
+    // called from is_square_attacked, legality_info, both move generators, and
+    // twice inside the SEE exchange loop -- so the same twelve ORs were being
+    // redone several times per node.
+    //
+    // These are derived state: they must always equal the union of the piece
+    // bitboards. Only set_fen, make_move and unmake_move ever write a piece
+    // bitboard, so those are the only three places that maintain them, and a
+    // debug build re-derives and checks them after every make and unmake.
+    U64 occ_white = 0;
+    U64 occ_black = 0;
+    U64 occ_all = 0;
     int side_to_move = WHITE;
     std::uint8_t castling_rights = 0;   // bits: 1=WK 2=WQ 4=BK 8=BQ
     int en_passant = -1;                // -1 = no en-passant square
@@ -93,6 +107,14 @@ public:
 
     void set_fen(const std::string& fen);
     U64 compute_hash() const;
+
+    // Rebuild occ_* from the piece bitboards. Only needed when the position is
+    // set wholesale; make/unmake keep them in sync incrementally.
+    void refresh_occupancy();
+
+    // Re-derives occupancy and asserts it matches the cache. Compiled to
+    // nothing when NDEBUG is set, so release builds pay nothing for it.
+    void assert_occupancy_sync() const;
 
     U64 occupancy(std::optional<int> colour = std::nullopt) const;
     std::optional<int> piece_at(int sq) const;

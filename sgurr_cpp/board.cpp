@@ -2,6 +2,7 @@
 #include "nnue.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -533,6 +534,8 @@ void Board::set_fen(const std::string& fen) {
         fullmove_number = 1;
     }
 
+    refresh_occupancy();
+
     hash_key = compute_hash();
 }
 
@@ -563,23 +566,35 @@ U64 Board::compute_hash() const {
 }
 
 U64 Board::occupancy(std::optional<int> colour) const {
-    if (colour.has_value() && *colour == WHITE) {
-        return bitboards[WP] | bitboards[WN] | bitboards[WB] |
-               bitboards[WR] | bitboards[WQ] | bitboards[WK];
+    if (!colour.has_value()) {
+        return occ_all;
     }
 
-    if (colour.has_value() && *colour == BLACK) {
-        return bitboards[BP] | bitboards[BN] | bitboards[BB] |
-               bitboards[BR] | bitboards[BQ] | bitboards[BK];
-    }
+    return *colour == WHITE ? occ_white : occ_black;
+}
 
-    U64 occ = 0;
+void Board::refresh_occupancy() {
+    occ_white = bitboards[WP] | bitboards[WN] | bitboards[WB] |
+                bitboards[WR] | bitboards[WQ] | bitboards[WK];
+    occ_black = bitboards[BP] | bitboards[BN] | bitboards[BB] |
+                bitboards[BR] | bitboards[BQ] | bitboards[BK];
+    occ_all = occ_white | occ_black;
+}
 
-    for (U64 bb : bitboards) {
-        occ |= bb;
-    }
+void Board::assert_occupancy_sync() const {
+#ifndef NDEBUG
+    // The failure mode this guards against is silent: a stale occupancy makes
+    // movegen and SEE reason about a board that does not exist, and the search
+    // carries on producing plausible numbers. Check it on every make/unmake.
+    U64 white = bitboards[WP] | bitboards[WN] | bitboards[WB] |
+                bitboards[WR] | bitboards[WQ] | bitboards[WK];
+    U64 black = bitboards[BP] | bitboards[BN] | bitboards[BB] |
+                bitboards[BR] | bitboards[BQ] | bitboards[BK];
 
-    return occ;
+    assert(occ_white == white);
+    assert(occ_black == black);
+    assert(occ_all == (white | black));
+#endif
 }
 
 std::optional<int> Board::piece_at(int sq) const {
@@ -1301,29 +1316,55 @@ UndoInfo Board::make_move(const Move& move) {
     bitboards[placed_piece] |= to_mask;
     mailbox[move.to()] = placed_piece;
 
+    U64 rook_delta = 0;   // the castling rook's two squares, if any
+
     if (move.is_castling()) {
         if (move.to() == 6) {
             bitboards[WR] &= ~bit(7) & FULL;
             bitboards[WR] |= bit(5);
             mailbox[7] = -1;
             mailbox[5] = WR;
+            rook_delta = bit(7) | bit(5);
         } else if (move.to() == 2) {
             bitboards[WR] &= ~bit(0) & FULL;
             bitboards[WR] |= bit(3);
             mailbox[0] = -1;
             mailbox[3] = WR;
+            rook_delta = bit(0) | bit(3);
         } else if (move.to() == 62) {
             bitboards[BR] &= ~bit(63) & FULL;
             bitboards[BR] |= bit(61);
             mailbox[63] = -1;
             mailbox[61] = BR;
+            rook_delta = bit(63) | bit(61);
         } else if (move.to() == 58) {
             bitboards[BR] &= ~bit(56) & FULL;
             bitboards[BR] |= bit(59);
             mailbox[56] = -1;
             mailbox[59] = BR;
+            rook_delta = bit(56) | bit(59);
         }
     }
+
+    // Mirror the piece edits above into the occupancy cache. side_to_move is
+    // still the mover here; it is flipped further down.
+    //
+    // Each edit is one XOR. For the mover, `from` is ours and empties, `to`
+    // becomes ours -- and `to` is never already in our set, because a move
+    // cannot capture its own colour -- so both squares toggle. The castling
+    // rook toggles its pair the same way. For the opponent, only a captured
+    // square toggles, and captured_square is the en-passant victim's square,
+    // not move.to(), when the two differ.
+    U64& occ_us = side_to_move == WHITE ? occ_white : occ_black;
+    U64& occ_them = side_to_move == WHITE ? occ_black : occ_white;
+
+    occ_us ^= from_mask | to_mask | rook_delta;
+
+    if (captured >= 0) {
+        occ_them ^= bit(captured_square);
+    }
+
+    occ_all = occ_white | occ_black;
 
     update_castling_rights(piece, move, captured);
 
@@ -1390,6 +1431,8 @@ UndoInfo Board::make_move(const Move& move) {
 
     if (nnue::active()) nnue::on_make(undo, hash_key);
 
+    assert_occupancy_sync();
+
     return undo;
 }
 
@@ -1414,35 +1457,57 @@ void Board::unmake_move(const UndoInfo& undo) {
         mailbox[undo.captured_square] = undo.captured_piece;
     }
 
+    U64 rook_delta = 0;
+
     if (move.is_castling()) {
         if (move.to() == 6) {
             bitboards[WR] &= ~bit(5) & FULL;
             bitboards[WR] |= bit(7);
             mailbox[5] = -1;
             mailbox[7] = WR;
+            rook_delta = bit(5) | bit(7);
         } else if (move.to() == 2) {
             bitboards[WR] &= ~bit(3) & FULL;
             bitboards[WR] |= bit(0);
             mailbox[3] = -1;
             mailbox[0] = WR;
+            rook_delta = bit(3) | bit(0);
         } else if (move.to() == 62) {
             bitboards[BR] &= ~bit(61) & FULL;
             bitboards[BR] |= bit(63);
             mailbox[61] = -1;
             mailbox[63] = BR;
+            rook_delta = bit(61) | bit(63);
         } else if (move.to() == 58) {
             bitboards[BR] &= ~bit(59) & FULL;
             bitboards[BR] |= bit(56);
             mailbox[59] = -1;
             mailbox[56] = BR;
+            rook_delta = bit(59) | bit(56);
         }
     }
+
+    // Undo the occupancy edits. side_to_move was flipped back to the mover at
+    // the top of this function, so these are exactly the XORs make_move
+    // applied -- and an XOR is its own inverse.
+    U64& occ_us = side_to_move == WHITE ? occ_white : occ_black;
+    U64& occ_them = side_to_move == WHITE ? occ_black : occ_white;
+
+    occ_us ^= bit(move.from()) | bit(move.to()) | rook_delta;
+
+    if (undo.captured_piece >= 0) {
+        occ_them ^= bit(undo.captured_square);
+    }
+
+    occ_all = occ_white | occ_black;
 
     castling_rights = undo.old_castling;
     en_passant = undo.old_en_passant;
     halfmove_clock = undo.old_halfmove_clock;
     fullmove_number = undo.old_fullmove_number;
     hash_key = undo.old_hash_key;
+
+    assert_occupancy_sync();
 }
 
 NullMoveUndo Board::make_null_move() {
