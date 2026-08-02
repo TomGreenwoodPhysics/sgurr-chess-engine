@@ -75,7 +75,9 @@ public:
     std::optional<int> piece_at(int sq) const;
     int king_square(int colour) const;
 
-    U64 attacks_from_slider(int sq, const std::vector<int>& deltas, U64 occ) const;
+    U64 bishop_attacks_from(int sq, U64 occ) const;
+    U64 rook_attacks_from(int sq, U64 occ) const;
+    U64 queen_attacks_from(int sq, U64 occ) const;
     U64 knight_attacks(int sq) const;
     U64 king_attacks(int sq) const;
     U64 pawn_attacks_from(int sq, int colour) const;
@@ -130,13 +132,6 @@ public:
 
 private:
     void add_pawn_move(MoveList& moves, int from_sq, int to_sq, int colour);
-    void add_piece_moves(
-        MoveList& moves,
-        int piece,
-        const std::vector<int>& deltas,
-        U64 own,
-        U64 occ
-    );
     void add_knight_moves(MoveList& moves, int piece, U64 own);
     void add_king_moves(MoveList& moves, int piece, U64 own);
     void add_castling_moves(MoveList& moves);

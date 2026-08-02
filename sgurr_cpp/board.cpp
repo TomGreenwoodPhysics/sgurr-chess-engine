@@ -9,11 +9,11 @@
 
 const std::string PIECES = "PNBRQKpnbrqk";
 
+// Step offsets, used once at startup to build the knight and king attack
+// tables. Sliders do not appear here: they are answered by magic lookup, and
+// their delta sets were only ever a way of naming the piece type.
 const std::vector<int> KNIGHT_DELTAS = {17, 15, 10, 6, -17, -15, -10, -6};
 const std::vector<int> KING_DELTAS = {8, -8, 1, -1, 9, 7, -9, -7};
-const std::vector<int> BISHOP_DELTAS = {9, 7, -9, -7};
-const std::vector<int> ROOK_DELTAS = {8, -8, 1, -1};
-const std::vector<int> QUEEN_DELTAS = {9, 7, -9, -7, 8, -8, 1, -1};
 
 // SEE piece values, indexed by piece type (0..5 = P,N,B,R,Q,K). Same simple
 // material scale as the MVV-LVA / delta pruning values in search.cpp, not the
@@ -603,20 +603,16 @@ int Board::king_square(int colour) const {
     return 63 - __builtin_clzll(bb);
 }
 
-U64 Board::attacks_from_slider(int sq, const std::vector<int>& deltas, U64 occ) const {
-    // The delta set identifies the piece type; the lookup itself is magic-based.
-    if (deltas.size() >= 8) {
-        return bishop_attacks(sq, occ) | rook_attacks(sq, occ);   // queen
-    }
-
-    for (int delta : deltas) {
-        int ad = delta < 0 ? -delta : delta;
-        if (ad == 8 || ad == 1) {
-            return rook_attacks(sq, occ);
-        }
-    }
-
+U64 Board::bishop_attacks_from(int sq, U64 occ) const {
     return bishop_attacks(sq, occ);
+}
+
+U64 Board::rook_attacks_from(int sq, U64 occ) const {
+    return rook_attacks(sq, occ);
+}
+
+U64 Board::queen_attacks_from(int sq, U64 occ) const {
+    return bishop_attacks(sq, occ) | rook_attacks(sq, occ);
 }
 
 U64 Board::knight_attacks(int sq) const {
@@ -1079,22 +1075,22 @@ void Board::add_king_moves(MoveList& moves, int piece, U64 own) {
     }
 }
 
-void Board::add_piece_moves(
-    MoveList& moves,
-    int piece,
-    const std::vector<int>& deltas,
-    U64 own,
-    U64 occ
-) {
-    U64 bb = bitboards[piece];
+namespace {
 
+// Emit every move for one slider bitboard. Templated on the attack generator
+// so each call site below compiles down to its own magic lookup with no
+// dispatch: the piece type is a property of the call, not of the data.
+//
+// `targets` is the already-masked destination set (everything except our own
+// pieces and the enemy king). It does not vary between sliders, so it is
+// computed once by the caller instead of per piece.
+template <typename AttackFn>
+void add_slider_moves(MoveList& moves, U64 bb, U64 targets, U64 occ, AttackFn attacks_of) {
     while (bb) {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
 
-        int them = piece <= WK ? BLACK : WHITE;
-        U64 enemy_king = bitboards[them == WHITE ? WK : BK];
-        U64 attacks = attacks_from_slider(sq, deltas, occ) & ~own & ~enemy_king & FULL;
+        U64 attacks = attacks_of(sq, occ) & targets;
 
         while (attacks) {
             auto [to_sq, next_attacks] = pop_lsb(attacks);
@@ -1103,6 +1099,8 @@ void Board::add_piece_moves(
         }
     }
 }
+
+} // namespace
 
 void Board::add_castling_moves(MoveList& moves) {
     int us = side_to_move;
@@ -1222,9 +1220,16 @@ MoveList Board::generate_pseudo_legal_moves() {
     }
 
     add_knight_moves(moves, us == WHITE ? WN : BN, own);
-    add_piece_moves(moves, us == WHITE ? WB : BB, BISHOP_DELTAS, own, occ);
-    add_piece_moves(moves, us == WHITE ? WR : BR, ROOK_DELTAS, own, occ);
-    add_piece_moves(moves, us == WHITE ? WQ : BQ, QUEEN_DELTAS, own, occ);
+
+    U64 targets = ~own & ~enemy_king;
+
+    add_slider_moves(moves, bitboards[us == WHITE ? WB : BB], targets, occ,
+                     [](int sq, U64 o) { return bishop_attacks(sq, o); });
+    add_slider_moves(moves, bitboards[us == WHITE ? WR : BR], targets, occ,
+                     [](int sq, U64 o) { return rook_attacks(sq, o); });
+    add_slider_moves(moves, bitboards[us == WHITE ? WQ : BQ], targets, occ,
+                     [](int sq, U64 o) { return bishop_attacks(sq, o) | rook_attacks(sq, o); });
+
     add_king_moves(moves, us == WHITE ? WK : BK, own);
 
     add_castling_moves(moves);

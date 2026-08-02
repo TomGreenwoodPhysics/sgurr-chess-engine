@@ -210,9 +210,6 @@ EVAL_PARAM int BISHOP_MOBILITY_BONUS = 3;
 EVAL_PARAM int ROOK_MOBILITY_BONUS = 4;
 EVAL_PARAM int QUEEN_MOBILITY_BONUS = 3;
 
-const std::vector<int> BISHOP_DELTAS = {9, 7, -9, -7};
-const std::vector<int> ROOK_DELTAS = {8, -8, 1, -1};
-const std::vector<int> QUEEN_DELTAS = {9, 7, -9, -7, 8, -8, 1, -1};
 
 U64 file_mask(int file) {
     U64 mask = 0;
@@ -612,7 +609,7 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
         pressure += PRESSURE_MINOR
-            * count_bits(attacks_from_slider(sq, BISHOP_DELTAS, occ) & zone);
+            * count_bits(bishop_attacks_from(sq, occ) & zone);
     }
 
     bb = bitboards[enemy == WHITE ? WR : BR];
@@ -620,7 +617,7 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
         pressure += PRESSURE_ROOK
-            * count_bits(attacks_from_slider(sq, ROOK_DELTAS, occ) & zone);
+            * count_bits(rook_attacks_from(sq, occ) & zone);
     }
 
     bb = bitboards[enemy == WHITE ? WQ : BQ];
@@ -628,7 +625,7 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
         pressure += PRESSURE_QUEEN
-            * count_bits(attacks_from_slider(sq, QUEEN_DELTAS, occ) & zone);
+            * count_bits(queen_attacks_from(sq, occ) & zone);
     }
 
     score -= pressure * KING_ZONE_PRESSURE_PENALTY;
@@ -696,7 +693,7 @@ int Board::evaluate_mobility_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
 
-        U64 moves = attacks_from_slider(sq, BISHOP_DELTAS, occ) & ~own;
+        U64 moves = bishop_attacks_from(sq, occ) & ~own;
         score += count_bits(moves) * BISHOP_MOBILITY_BONUS;
     }
 
@@ -705,7 +702,7 @@ int Board::evaluate_mobility_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
 
-        U64 moves = attacks_from_slider(sq, ROOK_DELTAS, occ) & ~own;
+        U64 moves = rook_attacks_from(sq, occ) & ~own;
         score += count_bits(moves) * ROOK_MOBILITY_BONUS;
 
         U64 file = file_mask(file_of(sq));
@@ -722,7 +719,7 @@ int Board::evaluate_mobility_for_colour(int colour) const {
         auto [sq, next] = pop_lsb(bb);
         bb = next;
 
-        U64 moves = attacks_from_slider(sq, QUEEN_DELTAS, occ) & ~own;
+        U64 moves = queen_attacks_from(sq, occ) & ~own;
         score += count_bits(moves) * QUEEN_MOBILITY_BONUS;
     }
 
