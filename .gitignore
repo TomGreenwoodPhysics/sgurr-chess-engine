@@ -53,8 +53,10 @@ benchmarks/ratings.csv
 runs/
 
 # fastchess run state: rewritten in place with live match stats on every run,
-# so it is scratch output rather than source.
-sgurr_cpp/config.json
+# so it is scratch output rather than source. fastchess drops config.json in
+# whatever directory it is invoked from, so match the NAME rather than listing
+# paths -- naming paths is how a root-level one slipped through once.
+config.json
 
 # local web demo server logs
 web/*.log
