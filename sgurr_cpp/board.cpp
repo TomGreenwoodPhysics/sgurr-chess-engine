@@ -1338,14 +1338,25 @@ MoveList Board::generate_pseudo_legal_moves() {
                 }
             }
 
-            for (int to_sq : {sq + 7, sq + 9}) {
-                if (!on_board(to_sq)) {
-                    continue;
-                }
+            // Capture directions, visited in the same order the two-element
+            // loop used: +7 (toward the a-file) then +9. A white pawn is never
+            // on the 8th rank, so the only way either target leaves the board
+            // is wrapping round a file edge -- which one file test settles,
+            // replacing the old on_board / file_of / std::abs guard.
+            int file = file_of(sq);
 
-                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
-                    continue;
+            if (file > 0) {
+                int to_sq = sq + 7;
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, WHITE);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
+            }
+
+            if (file < 7) {
+                int to_sq = sq + 9;
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, WHITE);
@@ -1372,14 +1383,22 @@ MoveList Board::generate_pseudo_legal_moves() {
                 }
             }
 
-            for (int to_sq : {sq - 7, sq - 9}) {
-                if (!on_board(to_sq)) {
-                    continue;
-                }
+            // Same, mirrored: -7 moves toward the h-file, -9 toward the
+            // a-file, and the order (-7 then -9) is preserved.
+            int file = file_of(sq);
 
-                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
-                    continue;
+            if (file < 7) {
+                int to_sq = sq - 7;
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, BLACK);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
+            }
+
+            if (file > 0) {
+                int to_sq = sq - 9;
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, BLACK);
@@ -1453,14 +1472,25 @@ MoveList Board::generate_noisy_moves() {
                 add_pawn_move(moves, sq, one, WHITE);
             }
 
-            for (int to_sq : {sq + 7, sq + 9}) {
-                if (!on_board(to_sq)) {
-                    continue;
-                }
+            // Capture directions, visited in the same order the two-element
+            // loop used: +7 (toward the a-file) then +9. A white pawn is never
+            // on the 8th rank, so the only way either target leaves the board
+            // is wrapping round a file edge -- which one file test settles,
+            // replacing the old on_board / file_of / std::abs guard.
+            int file = file_of(sq);
 
-                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
-                    continue;
+            if (file > 0) {
+                int to_sq = sq + 7;
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, WHITE);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
+            }
+
+            if (file < 7) {
+                int to_sq = sq + 9;
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, WHITE);
@@ -1482,14 +1512,22 @@ MoveList Board::generate_noisy_moves() {
                 add_pawn_move(moves, sq, one, BLACK);
             }
 
-            for (int to_sq : {sq - 7, sq - 9}) {
-                if (!on_board(to_sq)) {
-                    continue;
-                }
+            // Same, mirrored: -7 moves toward the h-file, -9 toward the
+            // a-file, and the order (-7 then -9) is preserved.
+            int file = file_of(sq);
 
-                if (std::abs(file_of(sq) - file_of(to_sq)) != 1) {
-                    continue;
+            if (file < 7) {
+                int to_sq = sq - 7;
+
+                if (enemy & bit(to_sq)) {
+                    add_pawn_move(moves, sq, to_sq, BLACK);
+                } else if (en_passant == to_sq) {
+                    moves.add(Move(sq, to_sq, 0, MT_EP));
                 }
+            }
+
+            if (file > 0) {
+                int to_sq = sq - 9;
 
                 if (enemy & bit(to_sq)) {
                     add_pawn_move(moves, sq, to_sq, BLACK);
