@@ -17,9 +17,17 @@ constexpr std::array<int, 12> PIECE_VALUE = {
 
 constexpr int MAX_PIECE_VALUE = 900;
 
-constexpr std::array<int, 3> FUTILITY_MARGIN = {
-    0, 150, 300
-};
+// The LMP quiet budget by depth. Was a constexpr table {0, 6, 12, 18};
+// the three live entries are tunable now, so it becomes a lookup that
+// reads them. Depth is already guarded to <= lmp_max_depth by the caller.
+int lmp_count_for(int depth) {
+    switch (depth) {
+        case 1:  return params.lmp_count_1;
+        case 2:  return params.lmp_count_2;
+        case 3:  return params.lmp_count_3;
+        default: return params.lmp_count_3;
+    }
+}
 
 double elapsed_seconds(std::chrono::steady_clock::time_point start) {
     using namespace std::chrono;
@@ -29,6 +37,11 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
 } // namespace
 
 Engine::Engine() {
+    // The LMR table is derived from params and starts zeroed. Without this the
+    // engine would reduce every late move by 0 plies -- a silent, catastrophic
+    // behaviour change rather than a crash, so it is built here where every
+    // path that can search must pass.
+    refresh_derived_params();
     resize_hash(DEFAULT_HASH_MB);
     reset_killers();
     reset_history();
@@ -258,7 +271,8 @@ SearchResult Engine::search_best_move(
         if (depth > 1 && soft_time_limit.has_value()) {
             double soft = *soft_time_limit;
 #if SGR_BMSTAB
-            soft *= BM_STABILITY_FACTOR[std::min(bm_stable, BM_STABILITY_COUNT - 1)];
+            soft *= params.bm_stability_x100[
+                        std::min(bm_stable, BM_STABILITY_COUNT - 1)] / 100.0;
 #endif
             if (time_limit.has_value()) {
                 soft = std::min(soft, *time_limit);
@@ -278,8 +292,8 @@ SearchResult Engine::search_best_move(
             score = result.first;
             move = result.second;
         } else {
-            int alpha = best_score - ASPIRATION_WINDOW;
-            int beta = best_score + ASPIRATION_WINDOW;
+            int alpha = best_score - params.aspiration_window;
+            int beta = best_score + params.aspiration_window;
 
             auto result = negamax_root(board, depth, alpha, beta);
             score = result.first;
@@ -287,8 +301,8 @@ SearchResult Engine::search_best_move(
 
             if (!stop_search && (score <= alpha || score >= beta)) {
                 // Widen progressively before falling back to a full window.
-                alpha = score - ASPIRATION_WINDOW * 4;
-                beta = score + ASPIRATION_WINDOW * 4;
+                alpha = score - params.aspiration_window * 4;
+                beta = score + params.aspiration_window * 4;
 
                 result = negamax_root(board, depth, alpha, beta);
                 score = result.first;
@@ -513,7 +527,7 @@ bool Engine::can_reduce_late_move(
     const std::optional<Move>& tt_move_key,
     bool in_check
 ) const {
-    if (depth < LMR_MIN_DEPTH) {
+    if (depth < params.lmr_min_depth) {
         return false;
     }
 
@@ -521,7 +535,7 @@ bool Engine::can_reduce_late_move(
         return false;
     }
 
-    if (legal_moves_searched <= LMR_FULL_DEPTH_MOVES) {
+    if (legal_moves_searched <= params.lmr_full_depth_moves) {
         return false;
     }
 
@@ -556,30 +570,36 @@ constexpr int LMR_DIM = 64;
 // arithmetic, same truncating cast, same clamp. Both clamp inputs are table
 // indices, so the clamp is folded into the table rather than left at the call
 // site -- there is nothing at the call site it could depend on.
+//
+// The divisor is now params.lmr_div_x100 / 100.0. At the default 250 that is
+// 2.5, i.e. bit-for-bit the original expression.
 int lmr_formula(int depth, int legal_moves_searched) {
     int reduction = 1 + static_cast<int>(
-        std::log(depth) * std::log(std::max(legal_moves_searched, 1)) / 2.5
+        std::log(depth) * std::log(std::max(legal_moves_searched, 1))
+        / (params.lmr_div_x100 / 100.0)
     );
 
     return std::max(1, std::min(reduction, depth - 1));
 }
 
-const std::array<std::array<int, LMR_DIM>, LMR_DIM> LMR_TABLE = [] {
-    std::array<std::array<int, LMR_DIM>, LMR_DIM> table{};
-
-    // Row 0 is left zeroed. log(0) is -inf and -inf * 0 is NaN, so depth 0 has
-    // no defined value here -- it is also unreachable, since the caller is
-    // gated on depth >= LMR_MIN_DEPTH.
-    for (int depth = 1; depth < LMR_DIM; ++depth) {
-        for (int moves = 0; moves < LMR_DIM; ++moves) {
-            table[depth][moves] = lmr_formula(depth, moves);
-        }
-    }
-
-    return table;
-}();
+// No longer const: the divisor is tunable, so the table is derived state that
+// must be rebuilt whenever it changes. See refresh_derived_params().
+std::array<std::array<int, LMR_DIM>, LMR_DIM> LMR_TABLE{};
 
 } // namespace
+
+SearchParams params;
+
+void refresh_derived_params() {
+    // Row 0 is left zeroed. log(0) is -inf and -inf * 0 is NaN, so depth 0 has
+    // no defined value here -- it is also unreachable, since the caller is
+    // gated on depth >= lmr_min_depth.
+    for (int depth = 1; depth < LMR_DIM; ++depth) {
+        for (int moves = 0; moves < LMR_DIM; ++moves) {
+            LMR_TABLE[depth][moves] = lmr_formula(depth, moves);
+        }
+    }
+}
 
 int Engine::lmr_reduction(int depth, int legal_moves_searched) const {
     if (depth < LMR_DIM && legal_moves_searched < LMR_DIM) {
@@ -704,7 +724,7 @@ int Engine::negamax(
     // cannot pull it back under, trust it and stand pat. Same mate and check
     // guards as futility; like the futility return, nothing is TT-stored.
     if (
-        depth <= RFP_MAX_DEPTH
+        depth <= params.rfp_max_depth
         && !in_check_node
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
@@ -714,11 +734,11 @@ int Engine::negamax(
         // waived; at depth 1 improving this prunes on eval >= beta alone.
         int rfp_eval = node_static_eval;
 
-        if (rfp_eval - RFP_MARGIN * (depth - (improving ? 1 : 0)) >= beta) {
+        if (rfp_eval - params.rfp_margin * (depth - (improving ? 1 : 0)) >= beta) {
 #else
         int rfp_eval = evaluate_position(board);
 
-        if (rfp_eval - RFP_MARGIN * depth >= beta) {
+        if (rfp_eval - params.rfp_margin * depth >= beta) {
 #endif
             return rfp_eval;
         }
@@ -737,7 +757,10 @@ int Engine::negamax(
         int static_eval = evaluate_position(board);
 #endif
 
-        if (static_eval + FUTILITY_MARGIN[depth] <= alpha) {
+        int futility_margin = (depth == 1) ? params.futility_margin_1
+                                   : params.futility_margin_2;
+
+        if (static_eval + futility_margin <= alpha) {
             return quiescence(board, alpha, beta, ply);
         }
     }
@@ -752,7 +775,7 @@ int Engine::negamax(
 
         int score = -negamax(
             board,
-            depth - 1 - (NULL_MOVE_REDUCTION + (depth >= 6 ? 1 : 0)),
+            depth - 1 - (params.null_move_reduction + (depth >= 6 ? 1 : 0)),
             -beta,
             -beta + 1,
             ply + 1
@@ -797,20 +820,20 @@ int Engine::negamax(
     int singular_extension = 0;
 
     if (
-        depth >= SINGULAR_MIN_DEPTH
+        depth >= params.singular_min_depth
         && !excluded.has_value()
         && tt_move_key.has_value()
         && ply < MAX_PLY - 2
         && tt_slot.key == board_hash
         && tt_slot.flag != TT_UPPER
-        && tt_slot.depth >= depth - SINGULAR_TT_DEPTH_SLACK
+        && tt_slot.depth >= depth - params.singular_tt_depth_slack
     ) {
         // Copy out of the TT before recursing: the helper search may replace
         // this slot.
         int tt_score = score_from_tt(tt_slot.score, ply);
 
         if (std::abs(tt_score) < MATE_THRESHOLD) {
-            int singular_beta = tt_score - SINGULAR_MARGIN * depth;
+            int singular_beta = tt_score - params.singular_margin * depth;
 
             int singular_score = negamax(
                 board,
@@ -856,19 +879,19 @@ int Engine::negamax(
         // are never pruned, and the threshold guarantees legal_found is
         // already true. Placed before the malus recording below so a pruned
         // (never-searched) quiet cannot be penalised at a cutoff.
-        // The depth guard must precede the LMP_COUNT[] lookup: the table only
-        // covers depths 0..LMP_MAX_DEPTH.
+        // The depth guard must precede the lmp_count_for() lookup: it only
+        // covers depths 0..params.lmp_max_depth.
 #if SGR_IMPROVING
         // A falling eval halves the quiet budget: the worst-ordered quiets
         // are even less likely to rescue a position trending downward.
-        int lmp_budget = depth <= LMP_MAX_DEPTH
-            ? (improving ? LMP_COUNT[depth] : LMP_COUNT[depth] / 2)
+        int lmp_budget = depth <= params.lmp_max_depth
+            ? (improving ? lmp_count_for(depth) : lmp_count_for(depth) / 2)
             : 0;
 #else
-        int lmp_budget = depth <= LMP_MAX_DEPTH ? LMP_COUNT[depth] : 0;
+        int lmp_budget = depth <= params.lmp_max_depth ? lmp_count_for(depth) : 0;
 #endif
         if (
-            depth <= LMP_MAX_DEPTH
+            depth <= params.lmp_max_depth
             && !in_check_node
             && legal_moves_searched >= lmp_budget
             && std::abs(alpha) < MATE - 1000
@@ -916,7 +939,7 @@ int Engine::negamax(
         ss_to[ply] = move.to();
 #endif
 
-        int extension = gives_check && depth <= CHECK_EXTENSION_MAX_DEPTH && ply < MAX_PLY - 2 ? 1 : 0;
+        int extension = gives_check && depth <= params.check_ext_max_depth && ply < MAX_PLY - 2 ? 1 : 0;
 #if SGR_SINGULAR
         if (
             singular_extension
@@ -955,7 +978,7 @@ int Engine::negamax(
                 }
 #endif
                 reduction -= std::clamp(
-                    hist_score / HISTLMR_DIV, -HISTLMR_MAX, HISTLMR_MAX);
+                    hist_score / params.histlmr_div, -params.histlmr_max, params.histlmr_max);
                 reduction = std::max(0, std::min(reduction, next_depth - 1));
             }
 #endif
@@ -1120,7 +1143,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         return beta;
     }
 
-    if (stand_pat + MAX_PIECE_VALUE + DELTA_MARGIN < alpha) {
+    if (stand_pat + MAX_PIECE_VALUE + params.delta_margin < alpha) {
         return alpha;
     }
 
@@ -1142,7 +1165,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         if (captured.has_value()) {
             int captured_value = PIECE_VALUE[*captured];
 
-            if (stand_pat + captured_value + DELTA_MARGIN <= alpha) {
+            if (stand_pat + captured_value + params.delta_margin <= alpha) {
                 continue;
             }
         }

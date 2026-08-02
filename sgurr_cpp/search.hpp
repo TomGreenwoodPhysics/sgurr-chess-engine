@@ -13,10 +13,7 @@ constexpr int MATE = 1'000'000;
 
 constexpr int MAX_DEPTH = 5;
 constexpr int MAX_PLY = 128;
-constexpr int NULL_MOVE_REDUCTION = 2;
 
-constexpr int LMR_FULL_DEPTH_MOVES = 2;
-constexpr int LMR_MIN_DEPTH = 3;
 
 constexpr int TT_EXACT = 0;
 constexpr int TT_LOWER = 1;
@@ -34,7 +31,6 @@ constexpr int MIN_HASH_MB = 1;
 constexpr int MAX_HASH_MB = 4096;
 
 constexpr int TIME_CHECK_INTERVAL = 512;
-constexpr int CHECK_EXTENSION_MAX_DEPTH = 4;
 
 // Time-management knobs (clock play only; explicit `movetime` and node limits
 // are unaffected). MOVE_OVERHEAD_MS is the clock margin held back for GUI and
@@ -49,7 +45,6 @@ constexpr long long MOVE_OVERHEAD_MS = 30;
 #ifndef SGR_SOFT_TIME_FRACTION
 #define SGR_SOFT_TIME_FRACTION 0.6
 #endif
-constexpr double SOFT_TIME_FRACTION = SGR_SOFT_TIME_FRACTION;
 
 // Best-move stability scaling for the soft limit (clock play only). The soft
 // budget is stretched while the root best move is still changing (the position
@@ -58,7 +53,6 @@ constexpr double SOFT_TIME_FRACTION = SGR_SOFT_TIME_FRACTION;
 // iterations the root best move has been unchanged, capped at the final entry;
 // the scaled soft limit is always still clamped to the hard deadline. These are
 // starting values, to be swept before they are believed.
-constexpr double BM_STABILITY_FACTOR[] = {2.20, 1.30, 1.00, 0.85, 0.75};
 constexpr int BM_STABILITY_COUNT = 5;
 
 // Compile-time toggle for the scaling above (default on). Build with
@@ -106,10 +100,6 @@ constexpr int HISTORY_MAX = 1'000'000;
 #ifndef SGR_LMP
 #define SGR_LMP 1
 #endif
-constexpr int RFP_MAX_DEPTH = 6;
-constexpr int RFP_MARGIN = 100;               // centipawns per remaining ply
-constexpr int LMP_MAX_DEPTH = 3;
-constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning, by depth
 
 // Improving flag, history-adjusted LMR, and singular extensions (the v6.0
 // package -- SPRT vs v5.0: +57.3 +/-17.3, H1 at 1,139 games, undecomposed.
@@ -141,14 +131,72 @@ constexpr int LMP_COUNT[] = {0, 6, 12, 18};   // quiets searched before pruning,
 #define SGR_SINGULAR 1
 #endif
 constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
-constexpr int HISTLMR_DIV = 400'000;          // history per ply of adjustment
-constexpr int HISTLMR_MAX = 2;                // adjustment cap, plies
-constexpr int SINGULAR_MIN_DEPTH = 7;
-constexpr int SINGULAR_TT_DEPTH_SLACK = 3;    // TT depth must be >= depth - this
-constexpr int SINGULAR_MARGIN = 2;            // cp per ply below the TT score
 
-constexpr int ASPIRATION_WINDOW = 50;
-constexpr int DELTA_MARGIN = 200;
+
+// Tunable search parameters.
+//
+// Every value here was a hand-set compile-time constant, and NOT ONE has ever
+// been swept -- three separate comments in this file say so ("starting values,
+// to be swept before they are believed"). They are gathered into one struct so
+// they can be exposed as UCI options and driven by an SPSA harness.
+//
+// The defaults are EXACTLY the constants they replace, so the engine at default
+// settings searches an identical tree. That is enforced by the bench
+// fingerprint, not assumed.
+//
+// Conceptually-fractional values are stored as integers scaled by 100, because
+// UCI `spin` options are integral and SPSA steps in integers.
+//
+// WARNING on the time-management block. METHODOLOGY.md 6 records that the v3.1
+// soft time limit measured +24.6 in self-play and NEGATIVE in the pool. Time
+// parameters have a documented history of self-play/pool divergence in this
+// project, so tuning them against self-play will produce settings that win the
+// tuning run and lose real games. Tune them against a pool gauntlet or not at
+// all; they are exposed here for completeness, not as an invitation.
+struct SearchParams {
+    // pruning
+    int rfp_margin              = 100;
+    int rfp_max_depth           = 6;
+    int lmp_max_depth           = 3;
+    int lmp_count_1             = 6;
+    int lmp_count_2             = 12;
+    int lmp_count_3             = 18;
+    int futility_margin_1       = 150;
+    int futility_margin_2       = 300;
+
+    // reductions
+    int null_move_reduction     = 2;
+    int lmr_min_depth           = 3;
+    int lmr_full_depth_moves    = 2;
+    int lmr_div_x100            = 250;   // the 2.5 divisor in the LMR formula
+    int histlmr_div             = 400'000;
+    int histlmr_max             = 2;
+
+    // extensions
+    int singular_min_depth      = 7;
+    int singular_tt_depth_slack = 3;
+    int singular_margin         = 2;
+    int check_ext_max_depth     = 4;
+
+    // windows
+    int aspiration_window       = 50;
+    int delta_margin            = 200;
+
+    // time management -- see the warning above
+    int soft_time_fraction_x100 = static_cast<int>(SGR_SOFT_TIME_FRACTION * 100);
+    int bm_stability_x100[BM_STABILITY_COUNT] = {220, 130, 100, 85, 75};
+};
+
+// One global instance. The engine is single-threaded by design, and this
+// mirrors how nnue.cpp already holds its network and accumulators.
+extern SearchParams params;
+
+// Rebuild anything derived from `params`. Currently the LMR reduction table,
+// which is precomputed from lmr_div_x100. MUST be called after any setoption
+// that changes a parameter feeding a derived table, or the table silently keeps
+// describing the old value -- a stale-derived-state bug of exactly the kind
+// METHODOLOGY.md 7 catalogues.
+void refresh_derived_params();
 
 struct SearchResult {
     std::optional<Move> best_move = std::nullopt;

@@ -44,6 +44,67 @@ int g_move_overhead_ms = static_cast<int>(MOVE_OVERHEAD_MS);
 
 std::vector<std::string> split(const std::string& text);   // defined below
 
+// The tunable search parameters, as UCI options.
+//
+// ONE table drives both `uci` output and `setoption`, so an option cannot be
+// advertised without being settable, or settable without being advertised --
+// the standard way this goes wrong, and a silent one, since a GUI or tuner
+// would just see its value ignored.
+//
+// Ranges are deliberately generous. SPSA should be free to walk somewhere
+// surprising; these bounds exist to stop a typo producing a nonsense engine,
+// not to encode an opinion about where the optimum is.
+struct Tunable {
+    const char* name;
+    int SearchParams::* member;
+    int min;
+    int max;
+};
+
+const Tunable TUNABLES[] = {
+    // pruning
+    {"RfpMargin",             &SearchParams::rfp_margin,               20,     400},
+    {"RfpMaxDepth",           &SearchParams::rfp_max_depth,             1,      12},
+    {"LmpMaxDepth",           &SearchParams::lmp_max_depth,             1,       8},
+    {"LmpCount1",             &SearchParams::lmp_count_1,               1,      20},
+    {"LmpCount2",             &SearchParams::lmp_count_2,               2,      40},
+    {"LmpCount3",             &SearchParams::lmp_count_3,               3,      60},
+    {"FutilityMargin1",       &SearchParams::futility_margin_1,        20,     500},
+    {"FutilityMargin2",       &SearchParams::futility_margin_2,        40,     900},
+    // reductions
+    {"NullMoveReduction",     &SearchParams::null_move_reduction,       1,       5},
+    {"LmrMinDepth",           &SearchParams::lmr_min_depth,             2,       8},
+    {"LmrFullDepthMoves",     &SearchParams::lmr_full_depth_moves,      1,       8},
+    {"LmrDivX100",            &SearchParams::lmr_div_x100,            100,     600},
+    // The lower bound is deliberately far below the 400'000 default. Probing
+    // this parameter showed it is very nearly INERT as shipped: history earns
+    // depth*depth per cutoff (169 at depth 13) and is halved every move, so
+    // hist_score / 400'000 rounds to zero almost always -- setting HistLmrMax
+    // to 0, which disables the adjustment outright, changes the bench tree not
+    // at all. That is also why the v6.0 leave-one-out put history-adjusted LMR
+    // at just +1.3% of tree. The technique may be fine; the SCALING is wrong,
+    // and a tuner cannot discover that from inside a range that starts at
+    // 50'000.
+    {"HistLmrDiv",            &SearchParams::histlmr_div,           1'000, 2'000'000},
+    {"HistLmrMax",            &SearchParams::histlmr_max,               0,       6},
+    // extensions
+    {"SingularMinDepth",      &SearchParams::singular_min_depth,        4,      16},
+    {"SingularTtDepthSlack",  &SearchParams::singular_tt_depth_slack,   0,       8},
+    {"SingularMargin",        &SearchParams::singular_margin,           1,      20},
+    {"CheckExtMaxDepth",      &SearchParams::check_ext_max_depth,       0,      16},
+    // windows
+    {"AspirationWindow",      &SearchParams::aspiration_window,        10,     300},
+    {"DeltaMargin",           &SearchParams::delta_margin,             50,     600},
+    // time management -- see the warning in search.hpp before tuning these
+    {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
+};
+
+// bm_stability_x100 is an array, so it cannot be reached by a plain
+// pointer-to-member; these are handled by index alongside the table above.
+const char* const BM_STABILITY_NAMES[BM_STABILITY_COUNT] = {
+    "BmStability0", "BmStability1", "BmStability2", "BmStability3", "BmStability4"
+};
+
 void print_uci_options(const Engine& engine) {
     std::cout << "option name Hash type spin default " << DEFAULT_HASH_MB
               << " min " << MIN_HASH_MB << " max " << MAX_HASH_MB << "\n";
@@ -51,6 +112,21 @@ void print_uci_options(const Engine& engine) {
     std::cout << "option name Move Overhead type spin default "
               << MOVE_OVERHEAD_MS << " min 0 max 5000\n";
     std::cout << "option name Threads type spin default 1 min 1 max 1\n";
+
+    const SearchParams defaults{};
+
+    for (const Tunable& t : TUNABLES) {
+        std::cout << "option name " << t.name << " type spin default "
+                  << defaults.*(t.member) << " min " << t.min
+                  << " max " << t.max << "\n";
+    }
+
+    for (int i = 0; i < BM_STABILITY_COUNT; ++i) {
+        std::cout << "option name " << BM_STABILITY_NAMES[i]
+                  << " type spin default " << defaults.bm_stability_x100[i]
+                  << " min 25 max 400\n";
+    }
+
     (void)engine;
 }
 
@@ -101,8 +177,31 @@ void handle_setoption(const std::string& command, Engine& engine) {
         g_move_overhead_ms = std::max(0, as_int(g_move_overhead_ms));
     } else if (name == "Threads") {
         // Accepted and pinned at 1; see the note above.
-    } else if (!name.empty()) {
-        std::cerr << "info string unknown option '" << name << "' ignored\n";
+    } else {
+        for (const Tunable& t : TUNABLES) {
+            if (name == t.name) {
+                int v = std::clamp(as_int(params.*(t.member)), t.min, t.max);
+                params.*(t.member) = v;
+                // Cheap, and unconditional on purpose: some parameters feed
+                // precomputed tables (LmrDivX100 -> the LMR table), and
+                // rebuilding only "when needed" is how derived state silently
+                // goes stale.
+                refresh_derived_params();
+                return;
+            }
+        }
+
+        for (int i = 0; i < BM_STABILITY_COUNT; ++i) {
+            if (name == BM_STABILITY_NAMES[i]) {
+                params.bm_stability_x100[i] =
+                    std::clamp(as_int(params.bm_stability_x100[i]), 25, 400);
+                return;
+            }
+        }
+
+        if (!name.empty()) {
+            std::cerr << "info string unknown option '" << name << "' ignored\n";
+        }
     }
 }
 
@@ -248,7 +347,7 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
 
     // Stop starting fresh iterations partway through the budget: the final
     // pass then completes instead of being aborted, unused, at the hard limit.
-    long long soft = std::max(10LL, static_cast<long long>(hard * SOFT_TIME_FRACTION));
+    long long soft = std::max(10LL, static_cast<long long>(hard * (params.soft_time_fraction_x100 / 100.0)));
 
     return TimeBudget{ hard / 1000.0, soft / 1000.0 };
 }
