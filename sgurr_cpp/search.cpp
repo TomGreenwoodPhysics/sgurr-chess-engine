@@ -488,12 +488,53 @@ bool Engine::can_reduce_late_move(
     return true;
 }
 
-int Engine::lmr_reduction(int depth, int legal_moves_searched) const {
+namespace {
+
+// LMR reductions, precomputed. The formula costs two std::log calls, and it was
+// evaluating them at every late move of every node -- but both inputs are small
+// integers, so every result it can produce fits in a table.
+//
+// LMR_DIM covers depth and move number up to 63. Depth is bounded by the root
+// depth (extensions only ever restore a ply, never add one beyond the parent),
+// so a `go depth 64`+ search or a position with 64+ legal moves falls through to
+// the formula rather than reading off the end.
+constexpr int LMR_DIM = 64;
+
+// Exactly the expression lmr_reduction used to evaluate inline: same double
+// arithmetic, same truncating cast, same clamp. Both clamp inputs are table
+// indices, so the clamp is folded into the table rather than left at the call
+// site -- there is nothing at the call site it could depend on.
+int lmr_formula(int depth, int legal_moves_searched) {
     int reduction = 1 + static_cast<int>(
         std::log(depth) * std::log(std::max(legal_moves_searched, 1)) / 2.5
     );
 
     return std::max(1, std::min(reduction, depth - 1));
+}
+
+const std::array<std::array<int, LMR_DIM>, LMR_DIM> LMR_TABLE = [] {
+    std::array<std::array<int, LMR_DIM>, LMR_DIM> table{};
+
+    // Row 0 is left zeroed. log(0) is -inf and -inf * 0 is NaN, so depth 0 has
+    // no defined value here -- it is also unreachable, since the caller is
+    // gated on depth >= LMR_MIN_DEPTH.
+    for (int depth = 1; depth < LMR_DIM; ++depth) {
+        for (int moves = 0; moves < LMR_DIM; ++moves) {
+            table[depth][moves] = lmr_formula(depth, moves);
+        }
+    }
+
+    return table;
+}();
+
+} // namespace
+
+int Engine::lmr_reduction(int depth, int legal_moves_searched) const {
+    if (depth < LMR_DIM && legal_moves_searched < LMR_DIM) {
+        return LMR_TABLE[depth][legal_moves_searched];
+    }
+
+    return lmr_formula(depth, legal_moves_searched);
 }
 
 bool Engine::can_try_null_move(Board& board, int depth, int beta, int ply) const {
