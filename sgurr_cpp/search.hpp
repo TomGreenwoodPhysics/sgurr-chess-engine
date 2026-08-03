@@ -166,6 +166,31 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 #define SGR_RAZOR 1
 #endif
 
+// Move-loop futility. LMP already skips late quiets on COUNT; this skips them
+// on MARGIN. A quiet move cannot usually swing the score by more than a bound
+// per remaining ply, so at shallow depth a static eval that far below alpha
+// means this particular quiet is not going to rescue the node either. The two
+// are complementary: LMP catches "we have tried enough", this catches "the
+// position is too far behind for a quiet move to matter".
+#ifndef SGR_FUTILITY
+#define SGR_FUTILITY 1
+#endif
+
+// SEE pruning in the main search. Quiescence already refuses captures that lose
+// material by static exchange; the main loop never did. Skips moves whose
+// exchange value is worse than a depth-scaled allowance -- shallow nodes have
+// less depth left to recover a sacrifice, so they permit less.
+#ifndef SGR_SEEPRUNE
+#define SGR_SEEPRUNE 1
+#endif
+
+// History pruning. A quiet whose history is deeply negative has failed here
+// repeatedly, in this exact context, at this exact continuation. At shallow
+// depth that is enough to skip it outright rather than merely reduce it.
+#ifndef SGR_HISTPRUNE
+#define SGR_HISTPRUNE 1
+#endif
+
 
 // Tunable search parameters.
 //
@@ -258,6 +283,27 @@ struct SearchParams {
     // on histlmr_div -- but a pruning feature that grows the tree is not doing
     // its job either way.
     int razor_margin            = 100;
+
+    int fut_max_depth           = 6;     // move-loop futility applies at <= this
+    int fut_margin              = 120;   // cp per ply of remaining depth
+    int see_max_depth           = 8;     // SEE pruning applies at <= this
+    int see_quiet_margin        = 50;    // quiets need see >= -this * depth
+    int see_cap_margin          = 20;    // captures need see >= -this * depth^2
+    int histprune_max_depth     = 3;
+    // Prune a quiet whose history is below -this * depth. Sized against the
+    // measured distribution (see histlmr_div): |hist| is tens to low hundreds,
+    // so -50*depth reaches the negative tail without swallowing the bulk.
+    //
+    // The WEAKEST member of the v9.0 batch, and the honest reason is recorded
+    // here rather than discovered later. Swept across margin 10..400 and
+    // maxdepth 3..5, it never behaves like a reliable pruner: -10.6% at
+    // (25, 5) but +4.6% at (50, 5), -4.7% at (50, 3) but +1.1% at (100, 3).
+    // That is cascade noise, not a signal, so this value is chosen on the
+    // distribution and on convention (shallow depth only) rather than by
+    // picking the best number off a noisy sweep -- which is how histlmr_div
+    // got its original nonsense value. Bisect candidate #2 if the batch fails,
+    // and a good SPSA target once the harness exists.
+    int histprune_margin        = 50;
 
     // time management -- see the warning above
     int soft_time_fraction_x100 = static_cast<int>(SGR_SOFT_TIME_FRACTION * 100);

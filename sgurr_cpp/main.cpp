@@ -98,6 +98,13 @@ const Tunable TUNABLES[] = {
     {"NmpEvalMax",            &SearchParams::nmp_eval_max,              0,       6},
     {"RazorMaxDepth",         &SearchParams::razor_max_depth,           3,       8},
     {"RazorMargin",           &SearchParams::razor_margin,             50,    1200},
+    {"FutMaxDepth",           &SearchParams::fut_max_depth,             1,      12},
+    {"FutMargin",             &SearchParams::fut_margin,               20,     500},
+    {"SeeMaxDepth",           &SearchParams::see_max_depth,             1,      16},
+    {"SeeQuietMargin",        &SearchParams::see_quiet_margin,          5,     300},
+    {"SeeCapMargin",          &SearchParams::see_cap_margin,            2,     150},
+    {"HistPruneMaxDepth",     &SearchParams::histprune_max_depth,       1,       8},
+    {"HistPruneMargin",       &SearchParams::histprune_margin,         10,    2000},
     // time management -- see the warning in search.hpp before tuning these
     {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
 };

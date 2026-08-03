@@ -971,6 +971,75 @@ int Engine::negamax(
         }
 #endif
 
+        // ---- shallow-depth move pruning ------------------------------------
+        // All of these sit BEFORE the malus recording below, for the same
+        // reason LMP does: a move that is never searched must not be punished
+        // at a later cutoff for failing.
+        //
+        // Common guards: never prune the first move (legal_found would stay
+        // false and a legal position could be reported as mate), never prune
+        // while in check, never prune near mate scores, and never prune the TT
+        // move or a killer. Ordered cheapest test first -- a history lookup
+        // costs an array read, SEE costs an exchange simulation.
+        if (
+            legal_moves_searched > 0
+            && !in_check_node
+            && std::abs(alpha) < MATE - 1000
+            && !(tt_move_key.has_value() && move == *tt_move_key)
+            && !is_killer_move(ply, move)
+        ) {
+            const bool quiet = !is_noisy_move(board, move);
+
+#if SGR_HISTPRUNE
+            // A quiet that keeps failing in this exact continuation.
+            if (quiet && depth <= params.histprune_max_depth) {
+                int h = history[move.from()][move.to()];
+#if SGR_CONTHIST
+                if (ply > 0 && ss_piece[ply - 1] >= 0) {
+                    auto pc = board.piece_at(move.from());
+                    if (pc.has_value()) {
+                        h += conthist[conthist_index(
+                            ss_piece[ply - 1], ss_to[ply - 1], *pc, move.to())];
+                    }
+                }
+#endif
+                if (h < -params.histprune_margin * depth) {
+                    continue;
+                }
+            }
+#endif
+
+#if SGR_FUTILITY
+            // Too far behind for a quiet move to matter at this depth.
+            if (quiet && depth <= params.fut_max_depth) {
+#if SGR_IMPROVING
+                int fe = node_static_eval;
+#else
+                int fe = evaluate_position(board);
+#endif
+                if (fe != NO_STATIC_EVAL
+                        && fe + params.fut_margin * depth <= alpha) {
+                    continue;
+                }
+            }
+#endif
+
+#if SGR_SEEPRUNE
+            // Loses too much material by static exchange to be worth the
+            // remaining depth. Captures get a quadratic allowance because a
+            // sacrifice has more scope to pay off than a quiet blunder does.
+            if (depth <= params.see_max_depth && !move.is_promotion()) {
+                int threshold = quiet
+                    ? -params.see_quiet_margin * depth
+                    : -params.see_cap_margin * depth * depth;
+                if (!board.see_ge(move, threshold)) {
+                    continue;
+                }
+            }
+#endif
+        }
+        // --------------------------------------------------------------------
+
 #if SGR_HMALUS
         if (!is_noisy_move(board, move)) {
             tried_quiets[n_tried++] = move;
