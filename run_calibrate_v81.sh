@@ -29,6 +29,12 @@ set -u
 
 ROOT=/c/Coding/Sgurr
 BM="$ROOT/benchmarks"
+
+# Windows-style path for the embedded python calls. Windows Python cannot open
+# an MSYS "/c/..." path, and the failure is silent in the worst way: the pool
+# list comes back EMPTY and fastchess is launched with no opponents at all,
+# which looks like a crash rather than a bad path.
+WIN_BM=$(cygpath -m "$BM")
 CPP="$ROOT/sgurr_cpp"
 FC="$BM/tools/fastchess.exe"
 ORDO="$BM/tools/ordo.exe"
@@ -55,6 +61,18 @@ MIN_GAMES=400          # do not even solve before this many v8.1 games
 mkdir -p "$OUT" "$BM/games"
 export SGR_EVALFILE="$NET"
 
+# shellcheck source=testing/gauntlet_lib.sh
+. "$ROOT/testing/gauntlet_lib.sh"
+
+# Every process this run can leave behind. Killing fastchess alone orphans its
+# engines mid-search -- 13 of them once sat at 83% CPU after a "stopped" run.
+ENGINE_PROCS="sgr_v8_1 blunder-7.4.0 blunder-7.6.0 blunder-8.0.0 zahak-4.0 zahak-5.0 weiss-1.0 weiss-1.2 igel-2.2.2"
+
+# Ctrl+C must clean up too, or an interrupted run leaves the machine loaded and
+# the next timed measurement is quietly invalid.
+# shellcheck disable=SC2086
+trap 'echo; echo "interrupted -- stopping engines"; stop_gauntlet $ENGINE_PROCS; assert_engines_stopped $ENGINE_PROCS; exit 130' INT TERM
+
 echo "v8.1 pool calibration  ->  $OUT"
 date
 echo
@@ -72,7 +90,7 @@ fi
 # drags the whole Ordo solve off its anchors -- a wrong rating that looks fine.
 POOL_EXES=$(python -c "
 import json,sys
-p=json.load(open(r'$BM/pool.json'))
+p=json.load(open(r'$WIN_BM/pool.json'))
 print(' '.join(r'$BM/'+e['cmd'] for e in p['engines']))
 ")
 PY="$ROOT/.venv/Scripts/python.exe"; [ -f "$PY" ] || PY=python
@@ -94,7 +112,7 @@ echo
     echo "commit    : $(cd "$ROOT" && git rev-parse HEAD)"
     echo "engine    : $REL_EXE  ($(printf 'uci\nquit\n' | "$REL_EXE" 2>/dev/null | sed -n 's/^id name //p'))"
     echo "net       : $NET"
-    echo "pool      : $(python -c "import json;print(json.load(open(r'$BM/pool.json'))['pool_id'])")"
+    echo "pool      : $(python -c "import json;print(json.load(open(r'$WIN_BM/pool.json'))['pool_id'])")"
     echo "tc        : $TC   concurrency $CONCURRENCY"
     echo "stop when : +/-$TARGET_ERR   (checked every $((CHECK_EVERY/60)) min after $MIN_GAMES games)"
     echo "pgn       : $PGN"
@@ -129,23 +147,35 @@ games_so_far() {
 }
 
 # ---- launch the gauntlet in the background ---------------------------------
-CMD=("$FC" -tournament gauntlet -seeds 1
-     -engine "cmd=$REL_EXE" "name=$ENGINE_NAME")
+# fastchess is a Windows binary and cannot resolve MSYS "/c/..." paths, so
+# everything handed to it is either a Windows path (cygpath -m) or relative to
+# its working directory. pipeline.py sidesteps this by running from benchmarks/
+# with the relative paths pool.json already stores; this does the same.
+CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds 1
+     -engine "cmd=$(cygpath -m "$REL_EXE")" "name=$ENGINE_NAME")
 while read -r name cmd; do
-    [ -n "$name" ] && CMD+=(-engine "cmd=$BM/$cmd" "name=$name")
+    # Absolute Windows path per engine. The relative form pool.json stores works
+    # for pipeline.py because Python launches fastchess with cwd=benchmarks; it
+    # does NOT resolve when fastchess is started from an MSYS shell, and the
+    # symptom is "process creation failed" on the first engine tried.
+    [ -n "$name" ] && CMD+=(-engine "cmd=$(cygpath -m "$BM/$cmd")" "name=$name")
 done < <(python -c "
 import json
-p=json.load(open(r'$BM/pool.json'))
+p=json.load(open(r'$WIN_BM/pool.json'))
 for e in p['engines']: print(e['name'], e['cmd'])
-")
+" | tr -d '\r')
+# tr -d '\r' is load-bearing: Windows Python writes CRLF, so without it every
+# engine path ends in a carriage return and fastchess reports
+# "Engine binary does not exist: ...blunder-7.4.0.exe?" -- the '?' being the CR
+# rendered back at you.
 CMD+=(-each "tc=$TC" -rounds "$ROUNDS" -repeat
       -concurrency "$CONCURRENCY" -recover
-      -openings "file=$BOOK" format=epd order=random
-      -pgnout "file=$PGN" -ratinginterval 60)
+      -openings "file=$(cygpath -m "$BOOK")" format=epd order=random
+      -pgnout "file=$(cygpath -m "$PGN")" -ratinginterval 60)
 
 echo "=== gauntlet: $ENGINE_NAME vs 8 pool engines, up to $((ROUNDS*16)) games ==="
 date
-"${CMD[@]}" > "$OUT/gauntlet.log" 2>&1 &
+( cd "$BM" && "${CMD[@]}" ) > "$OUT/gauntlet.log" 2>&1 &
 FC_PID=$!
 echo "fastchess pid $FC_PID, log $OUT/gauntlet.log"
 echo
@@ -170,7 +200,8 @@ while kill -0 "$FC_PID" 2>/dev/null; do
     echo "[$(date +%H:%M)] $n games -- $ENGINE_NAME = $rating +/- $err"
     if awk -v e="$err" -v t="$TARGET_ERR" 'BEGIN{exit !(e<=t)}'; then
         echo "TARGET REACHED: +/-$err <= +/-$TARGET_ERR after $n games. Stopping."
-        taskkill //IM fastchess.exe //F >/dev/null 2>&1
+        # shellcheck disable=SC2086
+        stop_gauntlet $ENGINE_PROCS
         break
     fi
 done
@@ -179,6 +210,14 @@ wait "$FC_PID" 2>/dev/null
 echo
 echo "=== gauntlet ended ==="
 date
+
+# Unconditional sweep. fastchess exiting normally usually shuts its engines
+# down, but "usually" is not a property to rely on before an Ordo solve that
+# takes minutes -- and the next thing to run deserves an idle machine.
+# shellcheck disable=SC2086
+stop_gauntlet $ENGINE_PROCS
+# shellcheck disable=SC2086
+assert_engines_stopped $ENGINE_PROCS
 
 # ---- final solve -----------------------------------------------------------
 read -r rating err <<< "$(solve)"

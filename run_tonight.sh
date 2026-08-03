@@ -89,6 +89,18 @@ JOB4_ROUNDS=2000       # fixed 4,000 games -> ~+/-10 Elo at 95%
 mkdir -p "$OUT"
 export SGR_EVALFILE="$NET"
 
+# shellcheck source=testing/gauntlet_lib.sh
+. "$ROOT/testing/gauntlet_lib.sh"
+
+# Killing fastchess orphans its engines mid-search rather than stopping them --
+# 13 were once left spinning at 83% CPU after a run had "ended". With four jobs
+# back to back that matters twice over: leftovers from one job would corrupt the
+# timing of the next, and every result after it.
+ENGINE_PROCS="ab_base ab_nosing ab_noimp ab_nohlmr ab_v81 sgr_gen8"
+
+# shellcheck disable=SC2086
+trap 'echo; echo "interrupted -- stopping engines"; stop_gauntlet $ENGINE_PROCS; assert_engines_stopped $ENGINE_PROCS; exit 130' INT TERM
+
 echo "overnight run  ->  $OUT"
 date
 echo
@@ -161,6 +173,12 @@ run_match() {   # name, new_exe, new_label, base_exe, base_label, rounds, sprt(0
         -ratinginterval 100 \
         -recover \
         2>&1 | tee "$OUT/$tag.log"
+
+    # Between jobs, not just at the end. A job that leaves engines running would
+    # load the machine for every job after it, and timed results under load are
+    # invalid (METHODOLOGY 8 rule 5) -- silently so.
+    # shellcheck disable=SC2086
+    stop_gauntlet $ENGINE_PROCS
 }
 
 echo "=== JOB 1/4  no-singular vs baseline   SPRT, cap $((JOB1_ROUNDS*2)) games ==="
@@ -191,6 +209,12 @@ run_match job4_nohistlmr ab_nohlmr.exe no-histlmr ab_base.exe baseline "$JOB4_RO
 echo "job 4 finished"; date; echo
 
 # ---- summary ---------------------------------------------------------------
+# shellcheck disable=SC2086
+stop_gauntlet $ENGINE_PROCS
+# shellcheck disable=SC2086
+assert_engines_stopped $ENGINE_PROCS
+echo
+
 echo "=============================================================="
 echo "RESULTS  ->  $OUT"
 date
