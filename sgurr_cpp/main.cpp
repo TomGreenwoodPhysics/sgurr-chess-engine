@@ -76,16 +76,11 @@ const Tunable TUNABLES[] = {
     {"LmrMinDepth",           &SearchParams::lmr_min_depth,             2,       8},
     {"LmrFullDepthMoves",     &SearchParams::lmr_full_depth_moves,      1,       8},
     {"LmrDivX100",            &SearchParams::lmr_div_x100,            100,     600},
-    // The lower bound is deliberately far below the 400'000 default. Probing
-    // this parameter showed it is very nearly INERT as shipped: history earns
-    // depth*depth per cutoff (169 at depth 13) and is halved every move, so
-    // hist_score / 400'000 rounds to zero almost always -- setting HistLmrMax
-    // to 0, which disables the adjustment outright, changes the bench tree not
-    // at all. That is also why the v6.0 leave-one-out put history-adjusted LMR
-    // at just +1.3% of tree. The technique may be fine; the SCALING is wrong,
-    // and a tuner cannot discover that from inside a range that starts at
-    // 50'000.
-    {"HistLmrDiv",            &SearchParams::histlmr_div,           1'000, 2'000'000},
+    // Range spans four orders of magnitude on purpose. The old 400'000 default
+    // was inert (see the distribution recorded in search.hpp) and the useful
+    // region turned out to be two decades below where the original bound even
+    // started. A tuner cannot find a scaling error it is fenced out of.
+    {"HistLmrDiv",            &SearchParams::histlmr_div,              16, 2'000'000},
     {"HistLmrMax",            &SearchParams::histlmr_max,               0,       6},
     // extensions
     {"SingularMinDepth",      &SearchParams::singular_min_depth,        4,      16},

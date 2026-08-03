@@ -169,7 +169,33 @@ struct SearchParams {
     int lmr_min_depth           = 3;
     int lmr_full_depth_moves    = 2;
     int lmr_div_x100            = 250;   // the 2.5 divisor in the LMR formula
-    int histlmr_div             = 400'000;
+    // 400'000 shipped from v6.0 to v8.1 and did nothing whatsoever. Measured
+    // 2026-08-03 by instrumenting every histLMR decision over bench 10
+    // (493,781 samples), the actual |hist_score| distribution is:
+    //
+    //     exactly 0   15.4%      64..255     33.4%   (cum 94.9%)
+    //     1..15       10.4%      256..1023    4.3%   (cum 99.2%)
+    //     16..63      35.7%      1024+        0.8%
+    //
+    // Typical magnitude is tens to low hundreds, because history earns
+    // depth*depth per cutoff and is halved every move. hist_score / 400'000
+    // was therefore zero for essentially every move in the engine's life;
+    // setting histlmr_max to 0, which disables the adjustment outright, changed
+    // the bench tree not at all.
+    //
+    // 128 puts the ±1 step at the ~75th percentile of that distribution and ±2
+    // at the ~95th, so the adjustment engages on the moves whose history
+    // actually says something. Chosen on the distribution, NOT on tree size:
+    // node counts across the range are non-monotonic and therefore useless as
+    // a guide (+31.3% at 32, +21.0% at 64, +14.4% at 128, +34.3% at 256,
+    // +12.2% at 512). Reduction changes cascade, and a smaller tree is not a
+    // stronger engine -- see METHODOLOGY 5 on singular extensions.
+    //
+    // A reasoned starting point, not a tuned one. No games have chosen it, so
+    // it is the first thing to suspect if the batch regresses. It is also a
+    // UCI option, so sweeping it needs no rebuild: fastchess can drive it with
+    // -engine option.HistLmrDiv=<n> in the same testing session.
+    int histlmr_div             = 128;
     int histlmr_max             = 2;
 
     // extensions
