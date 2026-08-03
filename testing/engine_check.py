@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 DEFAULT_TIMEOUT = 20.0
@@ -74,25 +76,76 @@ def verify_engine(path, timeout: float = DEFAULT_TIMEOUT) -> str:
     if p.stat().st_size == 0:
         raise EngineUnusable(f"{p}: file is empty (a truncated or failed link?)")
 
+    # A real UCI handshake, not a batch write.
+    #
+    # Two things here are load-bearing, and both were learned the hard way when
+    # this check declared three healthy pool engines broken:
+    #
+    #  1. Launch with NO arguments and keep stdin OPEN. Writing the whole
+    #     handshake and closing the pipe looks equivalent and is not: Blunder
+    #     7.4/7.6/8.0 print their banner and exit without ever sending uciok
+    #     once stdin is at EOF, while playing perfectly under fastchess, which
+    #     holds the pipe open. Passing "uci" as argv is also Sgurr-specific.
+    #  2. errors="replace". Engines print banners in whatever encoding they
+    #     like, and one stray byte (0x90, in Blunder's) otherwise raises inside
+    #     subprocess's reader THREAD -- killing the reader, losing the
+    #     handshake, and surfacing as a bogus timeout on a healthy engine.
     try:
-        proc = subprocess.run(
-            [str(p), "uci"],
-            input="uci\nisready\nquit\n",
-            capture_output=True,
+        proc = subprocess.Popen(
+            [str(p)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=timeout,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
         )
-    except subprocess.TimeoutExpired:
-        raise EngineUnusable(
-            f"{p}: started but did not answer the UCI handshake within "
-            f"{timeout:g}s. It is running yet unresponsive -- a hang on "
-            f"startup, or waiting on something (a missing network file?)."
-        ) from None
     except (OSError, ValueError) as exc:
         # PermissionError / OSError is what a security-policy block surfaces as.
         raise EngineUnusable(f"{p}: could not be started ({exc}).\n{_BLOCKED_HINT}") from None
 
-    out = (proc.stdout or "") + (proc.stderr or "")
+    collected: list[str] = []
+
+    def _reader() -> None:
+        try:
+            for line in proc.stdout:                       # type: ignore[union-attr]
+                collected.append(line)
+        except Exception:                                  # pipe closed under us
+            pass
+
+    reader = threading.Thread(target=_reader, daemon=True)
+    reader.start()
+
+    def _seen(token: str) -> bool:
+        return any(line.strip().startswith(token) for line in list(collected))
+
+    def _await(token: str, deadline: float) -> bool:
+        while time.monotonic() < deadline:
+            if _seen(token):
+                return True
+            if proc.poll() is not None:                    # died before answering
+                return _seen(token)
+            time.sleep(0.02)
+        return _seen(token)
+
+    deadline = time.monotonic() + timeout
+    try:
+        proc.stdin.write("uci\n"); proc.stdin.flush()      # type: ignore[union-attr]
+        if _await("uciok", deadline):
+            proc.stdin.write("isready\n"); proc.stdin.flush()   # type: ignore[union-attr]
+            _await("readyok", deadline)
+        proc.stdin.write("quit\n"); proc.stdin.flush()     # type: ignore[union-attr]
+    except (BrokenPipeError, OSError):
+        pass                                               # died mid-handshake
+
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    reader.join(timeout=1)
+
+    out = "".join(collected)
 
     if "uciok" not in out:
         detail = out.strip().splitlines()
