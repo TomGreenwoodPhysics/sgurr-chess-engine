@@ -765,6 +765,38 @@ int Engine::negamax(
         }
     }
 
+#if SGR_RAZOR
+    // Verified razoring at depth 3..razor_max_depth. Same idea as the block
+    // above -- a static eval this far below alpha is not being rescued by quiet
+    // moves -- but with a wider, depth-scaled margin, and it CONFIRMS with a
+    // quiescence search before bailing out. The shallow block returns the
+    // quiescence score outright; at these depths there is more to lose from a
+    // wrong bail, so a qsearch that comes back above alpha means the position
+    // is not actually lost and the node is searched normally.
+    if (
+        depth > 2
+        && depth <= params.razor_max_depth
+        && !in_check_node
+        && std::abs(alpha) < MATE - 1000
+        && std::abs(beta) < MATE - 1000
+    ) {
+#if SGR_IMPROVING
+        int razor_eval = node_static_eval;
+#else
+        int razor_eval = evaluate_position(board);
+#endif
+        if (razor_eval + params.razor_margin * depth <= alpha) {
+            int q = quiescence(board, alpha, alpha + 1, ply);
+            if (stop_search) {
+                return 0;
+            }
+            if (q <= alpha) {
+                return q;
+            }
+        }
+    }
+#endif
+
     // No null move with a move excluded: the verdict must come from the
     // remaining moves themselves.
     if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)) {
@@ -773,9 +805,30 @@ int Engine::negamax(
         ss_piece[ply] = -1;   // a null move is no follow-up context
 #endif
 
+#if SGR_NMPSCALE
+        // R grows with depth, and with how far the static eval already sits
+        // above beta: the bigger that surplus, the more certain the null move
+        // is to fail high and the less tree is worth spending to confirm it.
+        // The eval term is only available when a static eval was computed at
+        // this node -- in-check plies record the sentinel, but can_try_null_move
+        // has already excluded those.
+        int R = params.null_move_reduction + depth / params.nmp_depth_div;
+#if SGR_IMPROVING
+        if (node_static_eval != NO_STATIC_EVAL) {
+            R += std::min((node_static_eval - beta) / params.nmp_eval_div,
+                          params.nmp_eval_max);
+        }
+#endif
+        // Never reduce past the node itself; a negative depth would hand the
+        // child a quiescence search whose bound is not what this test means.
+        R = std::clamp(R, 1, depth - 1);
+#else
+        int R = params.null_move_reduction + (depth >= 6 ? 1 : 0);
+#endif
+
         int score = -negamax(
             board,
-            depth - 1 - (params.null_move_reduction + (depth >= 6 ? 1 : 0)),
+            depth - 1 - R,
             -beta,
             -beta + 1,
             ply + 1
@@ -804,6 +857,22 @@ int Engine::negamax(
     std::optional<Move> tt_move_key = valid_tt_move_key(board_hash, moves);
     moves = order_moves(board, moves, tt_move_key, ply);
     LegalityInfo li = board.legality_info();
+
+#if SGR_IIR
+    // Internal iterative reduction. No TT move means this node has never been
+    // searched usefully, so its ordering is guesswork and a full-depth pass
+    // mostly buys a re-search. Take a ply off; the shallower search populates
+    // the TT, and the ordering on any revisit is real.
+    //
+    // Deliberately AFTER the singular test's depth gate would read `depth`, so
+    // it cannot silently disqualify a node from singular extension -- the
+    // reduction is applied here, before the loop, and the singular block below
+    // sees the reduced value, which is the intended relationship: a node too
+    // poorly ordered to have a TT move is not one to spend a singular search on.
+    if (depth >= params.iir_min_depth && !tt_move_key.has_value()) {
+        depth -= params.iir_reduction;
+    }
+#endif
 
     // Check geometry for this node, computed once. The move loop below tests
     // each move against it instead of making the move and scanning the board.

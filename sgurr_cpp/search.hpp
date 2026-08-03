@@ -132,6 +132,40 @@ constexpr int HISTORY_MAX = 1'000'000;
 #endif
 constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 
+// ---------------------------------------------------------------------------
+// The v9.0 batch. Each carries its own toggle so a failing package can be
+// bisected by halves without a source edit, as the v6.0 package could not be.
+// ---------------------------------------------------------------------------
+
+// Internal iterative reduction. A node with no TT move has never been searched
+// to a useful depth here, so its move ordering is guesswork and a full-depth
+// search is largely wasted -- the first move tried is unlikely to be best.
+// Reduce a ply instead and let the shallower pass populate the TT; the ordering
+// on any re-visit is then real. Cheaper than the classic internal iterative
+// DEEPENING it replaces, which ran a whole extra search to get the same
+// information.
+#ifndef SGR_IIR
+#define SGR_IIR 1
+#endif
+
+// Eval-scaled null-move reduction. The reduction was flat: 2 plies, 3 from
+// depth 6. But the further the static eval already sits above beta, the more
+// certain the null move is to fail high, and the less of the tree is worth
+// spending to confirm it. Scale R with depth and with that surplus.
+#ifndef SGR_NMPSCALE
+#define SGR_NMPSCALE 1
+#endif
+
+// Razoring above depth 2. The existing block drops straight into quiescence
+// when the static eval is far enough below alpha, but only at depth 1-2. The
+// same reasoning holds deeper with a wider margin: a position this far behind
+// is not going to be rescued by quiet moves. Unlike the shallow case this
+// VERIFIES -- it runs quiescence and only returns if that also fails low, since
+// a deeper node has more to lose from a wrong bail-out.
+#ifndef SGR_RAZOR
+#define SGR_RAZOR 1
+#endif
+
 
 // Tunable search parameters.
 //
@@ -207,6 +241,23 @@ struct SearchParams {
     // windows
     int aspiration_window       = 50;
     int delta_margin            = 200;
+
+    // v9.0 batch
+    int iir_min_depth           = 4;     // no TT move at this depth or more -> reduce
+    int iir_reduction           = 1;
+    int nmp_depth_div           = 6;     // R += depth / this
+    int nmp_eval_div            = 200;   // R += (eval - beta) / this ...
+    int nmp_eval_max            = 3;     // ... capped here
+    int razor_max_depth         = 4;     // verified razoring applies at 3..this
+    // cp per ply of depth: the node razors when eval + margin*depth <= alpha,
+    // so a SMALLER margin fires more often. 100 gives alpha-300 at depth 3 and
+    // alpha-400 at depth 4, which is the conventional range, and it is the only
+    // setting swept where the feature behaves like a pruning feature at all
+    // (-14.9% tree vs razoring off; 200-800 fired less and cost 3-12% MORE,
+    // 1200 never fired). Tree size is not evidence of strength -- see the note
+    // on histlmr_div -- but a pruning feature that grows the tree is not doing
+    // its job either way.
+    int razor_margin            = 100;
 
     // time management -- see the warning above
     int soft_time_fraction_x100 = static_cast<int>(SGR_SOFT_TIME_FRACTION * 100);

@@ -90,6 +90,14 @@ const Tunable TUNABLES[] = {
     // windows
     {"AspirationWindow",      &SearchParams::aspiration_window,        10,     300},
     {"DeltaMargin",           &SearchParams::delta_margin,             50,     600},
+    // v9.0 batch
+    {"IirMinDepth",           &SearchParams::iir_min_depth,             2,      10},
+    {"IirReduction",          &SearchParams::iir_reduction,             1,       3},
+    {"NmpDepthDiv",           &SearchParams::nmp_depth_div,             2,      12},
+    {"NmpEvalDiv",            &SearchParams::nmp_eval_div,             50,     800},
+    {"NmpEvalMax",            &SearchParams::nmp_eval_max,              0,       6},
+    {"RazorMaxDepth",         &SearchParams::razor_max_depth,           3,       8},
+    {"RazorMargin",           &SearchParams::razor_margin,             50,    1200},
     // time management -- see the warning in search.hpp before tuning these
     {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
 };
