@@ -4,6 +4,84 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v8.1 "Thearlaich" (Sgùrr Thearlaich) — 2026-08-03
+
+A speed-only release: the same net, the same search, the same moves, about 20%
+faster. There is no behavioural change here at all.
+
+- **Strength: +21.2 ±8.7 Elo vs v8.0** (+1521 =1202 −1277, 4,000 games,
+  8+0.08s). **CCRL-Blitz-anchored: 3027 ±11** on pool-2026-07-B (+2492 =388
+  −576, 3,456-game gauntlet @ 10+0.1), **+20.9 vs v8.0 in the same solve**.
+  The two figures agree to 0.3 Elo.
+- **First version whose interval clears 3000 outright.** v8.0's [2995, 3016]
+  straddled it at ~84% confidence; v8.1's [3016, 3038] does not touch it.
+- **PGO + ThinLTO release build** (+11.3% NPS). Profile-guided optimisation
+  replaces the compiler's guesses about which branches are hot with a recording
+  of the branches this engine actually takes; ThinLTO lets it optimise across
+  `.cpp` boundaries at link time. `build.sh -r` runs the whole recipe.
+- **Nine node-identical optimisations** (+7.98% NPS): a precomputed LMR
+  reduction table (it was calling `std::log` twice per late move), direct
+  slider dispatch, TT prefetch after make_move, `std::optional` out of the hot
+  structures, a fixed repetition ring instead of a heap vector, incrementally
+  cached occupancy, `gives_check` from precomputed geometry rather than a full
+  attack scan, and capture-only generation for quiescence.
+- **Every one verified byte-identical** on the new `bench` fingerprint
+  (13,614,729 nodes at depth 13) before being kept. A tenth change — bulk-shift
+  pawn generation — moved the fingerprint and was reverted, correct move set or
+  not.
+- **`bench` command**: a fixed position list at fixed depth, deterministic, so
+  its node counts fingerprint what the engine searches. Any change meant to be
+  speed-only must leave it unchanged. This is what made the above provable
+  without playing a single game.
+- **30 UCI options**, where there were previously none: `Hash`, `Clear Hash`,
+  `Move Overhead`, `Threads`, and 26 search parameters. Defaults reproduce the
+  previous constants exactly.
+- **UCI conformance fixes**: mate scores are now `score mate <n>` rather than a
+  ~10,000-pawn centipawn value; transposition-table telemetry moved from
+  `tbhits` (which means *tablebase* hits, and this engine has none) to
+  `hashfull`; `nps` added; a terminal root no longer reports the −INF sentinel
+  as a score. The `id name` string had also read "Sgurr 7.0" throughout v8.0's
+  life, including its calibration.
+- **Validates the NPS→Elo conversion.** Speed gains had been converted through
+  the ~70-Elo-per-doubling rule since 2026-07-22 and flagged *inferred*.
+  Predicted +18.4; measured +21.2 self-play and +20.9 pooled.
+
+## v8.0 "Thearlaich" (Sgùrr Thearlaich) — 2026-07-29
+
+The gen8 flywheel turn, and the largest single-cycle gain in the project.
+
+- **Strength: +126.5 ±26.6 Elo vs v7.0** (SPRT, H1). **CCRL-Blitz-anchored:
+  3006 ±11** on pool-2026-07-B (3,329-game gauntlet @ 10+0.1), **+103 vs v7.0
+  same-solve** — mild ~0.8× compression, consistent with the large-gain
+  pattern.
+- **gen8 net on 55.9M clean positions**, labelled by the v7.0 net at 150k
+  nodes/position over ~7 days. The student beating its teacher by +126 is the
+  flywheel working as designed: search-amplified labels carry far more than the
+  labeller's own evaluation.
+- **King buckets tested and rejected.** An 8-bucket variant on the same data
+  measured −10.7 ±16 despite 12% lower training loss. The shipped net is the
+  plain 768→384. The bucket code remains, verified and dormant, for retest when
+  the dataset grows.
+- λ-sweep winner 0.9.
+
+## v7.0 "Ghreadaidh" (Sgùrr a'Ghreadaidh) — 2026-07-22
+
+The first clean regeneration, and proof that the labels were the bottleneck.
+
+- **Strength: +44.4 ±18.8 Elo vs v6.0** (SPRT, both AVX-512 int16 builds so the
+  net was the only variable). **CCRL-Blitz-anchored: 2903 ±6** on pool-2026-07-B
+  over an 8,522-game solve.
+- **gen7 net, generated RFP-free.** gen6 had been produced by a labeller built
+  with reverse futility pruning, which returns an unsearched static eval where a
+  searched score is expected; under a fixed node budget that quietly poisoned
+  every label and cost the entire generation (+6 ±20, a wash). Labeller builds
+  are now required to pass `-DSGR_RFP=0`.
+- **AVX-512 / int16 NNUE inference** (~+22% NPS), bit-identical to the scalar
+  path and verified node-identical at fixed depth. The evaluation had been
+  running plain scalar loops until this point.
+- ⚠️ The absolute figure is cross-hardware: v6.0 and earlier were measured on an
+  i5-9400F, v7.0 onward on a Ryzen 7 7800X3D.
+
 ## v6.0 "Banachdaich" (Sgùrr na Banachdaich) — 2026-07-16
 
 A search-refinement package on the unchanged gen5 net — the second search-only

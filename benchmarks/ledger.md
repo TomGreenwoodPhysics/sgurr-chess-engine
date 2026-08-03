@@ -8,6 +8,7 @@ scale, not official CCRL ratings.
 
 | date | engine | rating | ±95% | games | W-D-L | TC | pool | hardware | notes |
 |------|--------|--------|------|-------|-------|----|------|----------|-------|
+| 2026-08-03 | Sgurr v8.1 "Thearlaich" | 3027 | 11 | 3456 | +2492 =388 -576 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Speed-only release: same net, same search, same moves.** v8.1 is v8.0 compiled better — PGO + ThinLTO plus nine node-identical data-layout changes, ~20% NPS. Verified bench-fingerprint-identical (13,614,729 nodes @ depth 13) and move-identical at fixed depth to the shipped `sgr_gen8.exe`, so speed is the only variable between them. **3026.7 ±11.1**, 77.7%. **+20.9 vs v8.0 same-solve** (3005.8 ±10.6). Self-play SPRT vs v8.0 **+21.2 ±8.7** (4,000 games @ 8+0.08) — the two agree to 0.3 Elo, i.e. **no pool compression**, unlike every prior search change (§6 of METHODOLOGY: RFP 0.68×, gen8 net 0.81×). A speed change cannot overfit to self-play the way a heuristic can, which is the likely reason. **First version whose interval clears 3000 outright** — [3016, 3038] does not touch it, where v8.0's [2995, 3016] straddled it. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below — measured, not extrapolated. Also validates the ~70-Elo-per-doubling rule the project had been converting NPS through since 2026-07-22 without ever checking it in games. |
 | 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3006 | 11 | 3329 | +2345 =375 -609 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (246-game pipeline solve). Extended to 3329 gauntlet games, Ordo re-solved over all accumulated PGNs: **3005.5 ±11**, 76.1%. Unbucketed 768 net on the gen8 56M (gen7 labeller); 8-king-bucket variant measured −10.7 ±16 in a net-isolated A/B despite 12% lower loss and is NOT shipped (see DEVLOG 2026-07-29). SPRT vs v7.0 **+126.5 ±26.6 H1**; pool gap **+103 same-solve** (v7.0 2903) — mild ~0.8x compression, consistent with the large-gain pattern. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below — measured, not extrapolated. **3000 milestone: point estimate over, but 95% CI [2994, 3016] straddles it — P(>3000) ≈ 84%, i.e. most-likely-crossed, not yet proven at 95%.** lambda-sweep winner 0.9. |
 | 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3014 | 40 | 246 | +171 =38 -37 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | Pipeline run; SPRT vs v7.0: +126.5 +/-26.6 (H1); lambda sweep winner 0.9. **Superseded by the corrected row above** — rating refined from 246→3329 games (3014→3006, the small-sample high regressing to the tighter estimate). |
 | 2026-07-22 | Sgurr v7.0 "Ghreadaidh" | 2903 | 6 | 8522 | +5087 =1181 -2254 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (which mislabelled the machine as i5-9400F — a stale hardcoded string in pipeline.py, now config-driven — and reported only the pipeline's initial 240-game solve). Extended overnight to 8522 gauntlet games, Ordo re-solved over all accumulated PGNs: **2903 ±6**, 66.6%. gen7 is the first clean (RFP-free) regen: **SPRT vs v6.0 = +44.4 ±18.8** (both new-hardware SIMD builds, net the only variable), vs gen6's +6 ±20 wash — the data really was the bottleneck. ⚠️ **Absolute is cross-hardware:** v6.0's 2807 was measured on the old i5, so the +96 pool gap overstates the true +44 net gain; re-baseline v6.0/v5.0 on the 7800X3D before trusting this absolute against older rows. lambda-sweep winner 1.0. |
@@ -22,6 +23,35 @@ scale, not official CCRL ratings.
 | 2026-07-04 | Sgurr classical (HCE) | 2398 | 34 | 270 | +80 =30 -160 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. Supersedes the old ~2520 SF-limited estimate (flawed method + different scale). |
 
 ## Run log
+
+### 2026-08-03 — v8.1 "Thearlaich" release calibration (speed-only)
+
+- **Tool:** fastchess gauntlet, 3,456 games (8 opponents), 10+0.1,
+  `testing/book.epd`, concurrency 7, idle machine. Ordo 1.0 over ALL
+  accumulated calibration PGNs, `-m anchors.txt`, `-W`, `-s 1500`.
+- **Result:** **Sgurr v8.1 = 3026.7 ±11.1** (+2492 =388 −576, 77.7%).
+  **+20.9 vs v8.0 in the same solve** (3005.8 ±10.6).
+- **Provenance:** `sgr_v8_1.exe` = the gen8 net (`nets/gen8.nnue`) with the v8.0
+  search, built with PGO + ThinLTO. Verified bench-fingerprint-identical to
+  the shipped `sgr_gen8.exe` (13,614,729 nodes at depth 13) and move-identical
+  at fixed depth on three positions — same nodes, same scores, same moves.
+  There is no behavioural change to attribute anything to; it is v8.0 running
+  ~20% faster.
+- **Two instruments, no compression.** Self-play SPRT +21.2 ±8.7 (4,000 games
+  @ 8+0.08) against pooled +20.9. A 0.3 Elo discrepancy between independent
+  measurements. Every prior comparison in §6 of `METHODOLOGY.md` showed
+  self-play gains shrinking against the pool (RFP 0.68×, gen8 net 0.81×,
+  history malus and the v3.1 soft limit to zero or worse). This one survives
+  at 1.0×, which sharpens the explanation: compression applies to *behaviour*
+  changes, which can overfit to playing a mirror of yourself. A faster binary
+  is the same engine and transfers perfectly across opponents.
+- **The 3000 milestone, settled.** v8.0's interval [2995, 3016] straddled 3000
+  at ~84% confidence. v8.1's [3016, 3038] does not touch it.
+- **Validates the NPS→Elo conversion.** Since 2026-07-22 every speed gain had
+  been valued through the ~70-Elo-per-doubling rule of thumb and flagged
+  *inferred* — the AVX-512 row said so explicitly. Predicted +18.4 from
+  70 × log₂(1.20); measured +21.2 self-play and +20.9 pooled. The rule holds,
+  slightly conservatively, and the flag is removed.
 
 ### 2026-07-16 — v6.0 "Banachdaich" release calibration (search refinement package)
 

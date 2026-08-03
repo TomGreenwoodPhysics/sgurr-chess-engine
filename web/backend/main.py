@@ -63,19 +63,17 @@ ENGINE_SPECS: list[dict[str, object]] = [
         # depth 13) and move-identical at fixed depth, so it cannot play
         # differently -- it only gets deeper in the same clock.
         #
-        # RATING IS PROVISIONAL. 3006 is v8.0's measured value carried over as
-        # a FLOOR, not an estimate: identical search plus more speed cannot be
-        # weaker. The real figure is being measured (predicted +18, see
-        # benchmarks/v81_speed_prediction.md); update this and add a ledger row
-        # once that lands. It is deliberately not pre-set to the prediction --
-        # putting an unmeasured number on a public page is exactly what this
-        # project's methodology exists to prevent.
+        # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,
+        # +20.9 vs v8.0 in the same Ordo solve, against +21.2 +/-8.7 in
+        # self-play. It held the 3006 floor until then rather than displaying
+        # the prediction, since an unmeasured number on a public page is what
+        # this project's methodology exists to prevent.
         "id": "v8.1",
         "exe": CPP_DIR / "sgr_v8_1.exe",
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.1 "Thearlaich"',
         "tech": "GEN8 NNUE + PGO SPEED",
-        "rating": 3006,
+        "rating": 3027,
     },
     {
         "id": "v8.0",

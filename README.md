@@ -1,7 +1,7 @@
 # Sgurr
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. Current release is **v8.0 "Thearlaich"** at **3006 ±11** on a
+self-play games. Current release is **v8.1 "Thearlaich"** at **3027 ±11** on a
 CCRL-Blitz-anchored scale.
 
 The evaluation pipeline is built end to end in this repository: the self-play
@@ -19,7 +19,8 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 
 | engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v8.0 "Thearlaich" | **3006 ±11** |
+| Sgurr v8.1 "Thearlaich" | **3027 ±11** |
+| Sgurr v8.0 "Thearlaich" | 3006 ±11 |
 | Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
 | Sgurr v6.0 "Banachdaich" | 2807 ±36 |
 | Sgurr v5.0 "Gillean" | 2724 ±36 |
@@ -38,7 +39,7 @@ as good as the anchors. The *gaps* between versions are anchor-independent.
 
 Anchors were re-sourced from the live CCRL list on 2026-07-15 after an audit
 found the previous set inflated by a mean of ~31 Elo; every row above is from
-one consistent solve. v7.0 and v8.0 were measured on a Ryzen 7 7800X3D, v6.0
+one consistent solve. v7.0 onward were measured on a Ryzen 7 7800X3D, v6.0
 and earlier on an i5-9400F. A single Ordo solve places them on one scale, but
 cross-hardware absolute gaps carry that caveat — the version-to-version SPRTs,
 run on one machine, do not.
@@ -102,6 +103,7 @@ canonical; peak names are codenames.
 | v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package: improving flag, history-adjusted LMR, singular extensions. +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); **2807 ±36**, first version above the old pool's ceiling |
 | v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash — the labels really were the bottleneck. 2903 ±6 over an 8,522-game solve. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
 | v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. **3005.5 ±11** over 3,329 games. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
+| v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled** — the two agree to 0.3 Elo, so no compression. **3027 ±11**; the first version whose interval clears 3000 outright. Same net, same search, same moves |
 
 ---
 

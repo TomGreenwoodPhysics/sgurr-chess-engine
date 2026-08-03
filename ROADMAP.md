@@ -75,18 +75,23 @@ happened the last time that was tried.
   was measured on the old i5; v7.0 and v8.0 on the 7800X3D. One Ordo solve
   places them on a single scale, but the cross-hardware caveat is currently
   carried in prose on each row.
-* **Firm up the 3000 milestone.** v8.0 is 3006 ±11 — the interval brackets
-  3000. A few thousand more gauntlet games would settle whether it is crossed.
+* ~~**Firm up the 3000 milestone.**~~ **Done 2026-08-03**, though not the way
+  this line expected. More games on v8.0 were never needed: v8.1's **3027 ±11**
+  gives an interval of [3016, 3038] that does not touch 3000, where v8.0's
+  [2995, 3016] straddled it at ~84%. The milestone was crossed by making the
+  engine faster, not by measuring it harder.
 * ~~**Leave-one-out decomposition of the v6.0 package.**~~ **Done 2026-08-03.**
   Singular **−77.2 ±19.6** when removed, improving **−19.6 ±10.5**,
   history-adjusted LMR **+1.1 ±8.7**. The premise above was wrong on both
   counts: the components were not "likely sub-20", and the exercise found no
   passenger to delete — histLMR is inert only because its divisor is
   mis-scaled, not because the technique is worthless.
-* **Pool-calibrate v8.1.** Self-play **+21.2 ±8.7** vs v8.0 is measured, but
-  the ledger holds pool-anchored ratings only and self-play gains have
-  compressed against the pool before (§6). ~3 h of gauntlet. Blocks the ledger
-  row, the website rating, and the CHANGELOG entry.
+* ~~**Pool-calibrate v8.1.**~~ **Done 2026-08-03: 3026.7 ±11.1** over 3,456
+  games, **+20.9 vs v8.0 same-solve** against +21.2 ±8.7 self-play. No
+  compression — the two agree to 0.3 Elo, which is itself the finding: §6's
+  compression pattern applies to *behaviour* changes, not speed. Ledger,
+  CHANGELOG, README and the website are updated. **3000 is now cleared
+  outright** — [3016, 3038] does not touch it, so that milestone is closed too.
 
 ---
 
