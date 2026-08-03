@@ -50,14 +50,22 @@ returns are large (RFP +176 self-play; the v6.0 package +57.3).
 
 | # | change | est. | notes |
 |---|---|---|---|
-| 1 | **UCI `setoption` infrastructure** | 0 | there are currently *zero* UCI options; hard prerequisite for #3, and a standards fix |
-| 2 | **Correction history** | +20…+35 | largest single missing search feature; corrects static eval by eval-vs-search disagreement history |
-| 3 | **SPSA harness + first parameter tune** | +30…+60 | every margin, reduction and threshold is hand-set and has *never* been tuned; needs #1 |
-| 4 | **Batch: IIR + capture history + razoring** | +15…+30 | individually these are sub-20 and unmeasurable; run them as one SPRT or not at all |
-| 5 | ProbCut | +10…+20 | interacts with RFP; measure jointly |
+| ~~1~~ | ~~UCI `setoption` infrastructure~~ | 0 | **done 2026-08-02** — 30 options, 26 of them tunable search parameters |
+| 2 | **SPSA: singular extensions first** | +20…+50 | promoted. Singular measured **+77.2** on 2026-08-03 as an *unrefined* implementation with three never-tuned constants (`SingularMinDepth`, `SingularTtDepthSlack`, `SingularMargin`). The most valuable thing in the search is also among the least tuned |
+| 3 | **Correction history** | +20…+35 | largest single missing search feature; corrects static eval by eval-vs-search disagreement history |
+| 4 | **Retune `HistLmrDiv`** | +0…+15 | history-adjusted LMR has been shipped INERT since v6.0 — the divisor is ~2 orders of magnitude too large, and removing the feature measures +1.1 ±8.7. At 5,000 the tree moves ~10%. Cheap, and it is already an exposed option |
+| 5 | **SPSA: everything else** | +20…+40 | the remaining 22 parameters. Exclude the time-management block or tune it against the pool — §6 records the v3.1 soft limit at +24.6 self-play and NEGATIVE pooled |
+| 6 | **Batch: IIR + capture history + move-loop futility + SEE pruning + null-move R scaling** | +40…+80 | individually sub-20 and unmeasurable; one SPRT resolves the batch in ~2 h. Bisect by halves on failure, never by item |
+| 7 | **Singular refinements** | +15…+30 | double extensions, negative extensions, multicut return from the singular search. Raised from the original +10…+20: the base feature is worth far more than assumed, so its refinements plausibly are too |
+| 8 | ProbCut | +8…+15 | interacts with RFP; measure jointly |
 
-Ordering is deliberate: #1 unlocks #3, and #3 is the largest untouched surface
-in the engine.
+Ordering changed on 2026-08-03. The decomposition put singular extensions at
+**+77.2** — roughly four times the improving flag, and the single most valuable
+thing in the search — while its three constants have never been swept. Tuning
+the most valuable and least tuned feature now outranks adding a new one.
+
+Do not judge any of these by tree size. §5 of `METHODOLOGY.md` records what
+happened the last time that was tried.
 
 ---
 
@@ -69,11 +77,16 @@ in the engine.
   carried in prose on each row.
 * **Firm up the 3000 milestone.** v8.0 is 3006 ±11 — the interval brackets
   3000. A few thousand more gauntlet games would settle whether it is crossed.
-* **Leave-one-out decomposition of the v6.0 package** (improving / histLMR /
-  singular). Owed since 07-16. Purpose is finding *passengers* to delete, not
-  Elo — note each component is likely sub-20 and therefore individually
-  unmeasurable against the noise floor, so treat it as a simplification
-  exercise.
+* ~~**Leave-one-out decomposition of the v6.0 package.**~~ **Done 2026-08-03.**
+  Singular **−77.2 ±19.6** when removed, improving **−19.6 ±10.5**,
+  history-adjusted LMR **+1.1 ±8.7**. The premise above was wrong on both
+  counts: the components were not "likely sub-20", and the exercise found no
+  passenger to delete — histLMR is inert only because its divisor is
+  mis-scaled, not because the technique is worthless.
+* **Pool-calibrate v8.1.** Self-play **+21.2 ±8.7** vs v8.0 is measured, but
+  the ledger holds pool-anchored ratings only and self-play gains have
+  compressed against the pool before (§6). ~3 h of gauntlet. Blocks the ledger
+  row, the website rating, and the CHANGELOG entry.
 
 ---
 

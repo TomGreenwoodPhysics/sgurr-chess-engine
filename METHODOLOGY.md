@@ -149,19 +149,61 @@ Ranked by measured Elo per unit of effort:
 | RFP + LMP search (v5.0) | +176 self-play → **+119** pooled | days of coding |
 | Search refinement package (v6.0) | **+57.3** | days of coding |
 | Clean RFP-free data regen (gen7) | **+44.4** | ~2 days datagen |
-| AVX-512 / int16 NNUE inference | ~+22% NPS (≈+15 Elo, *inferred*) | ~3 h coding |
+| Singular extensions alone (inside the v6.0 package) | **+77.2** | part of days |
+| PGO + ThinLTO + data layout (v8.1) | ~+20% NPS → **+21.2 measured** | ~2 days |
+| AVX-512 / int16 NNUE inference | ~+22% NPS (≈+15…+22 Elo) | ~3 h coding |
+| Improving flag alone (inside the v6.0 package) | **+19.6** | part of days |
 | King buckets (naive, then factorized) | ~0 | ~2 days |
 | Width, λ tuning | ~0 (inside noise) | ~1 day |
+| History-adjusted LMR as shipped | **~0** (inert divisor) | part of days |
 
 Two observations. **Data and search dominate; architecture is a rounding
 error.** And the two big categories are complementary in resource terms —
 datagen consumes CPU for days while coding consumes none, so they should run
 concurrently.
 
-The SIMD row is flagged *inferred*: the speedup was verified bit-identical and
-node-identical, but converted to Elo via the ~70-per-doubling rule of thumb
-rather than measured in games. It is the most mechanically defensible
-inference in the project, and still an inference.
+**Speed converts to Elo at about the assumed rate — now measured, 2026-08-03.**
+The SIMD row was flagged *inferred* for months: verified bit-identical and
+node-identical, but converted to Elo through the ~70-per-doubling rule of thumb
+rather than checked in games. v8.1 tested the rule directly. It is v8.0's
+search compiled better (PGO + ThinLTO plus nine node-identical data-layout
+changes, ~20% NPS), bench-fingerprint-identical and move-identical to the
+shipped v8.0 binary, so speed was the only variable in existence between them.
+
+**+21.2 ±8.7 over 4,000 games, against +18.4 predicted from 70 × log₂(1.20).**
+The rule holds for this engine at 8+0.08, and was slightly conservative. Speed
+work can be valued by it going forward, with the caveat that one point on one
+control does not pin the constant at exactly 70.
+
+That experiment was only available once. Any search change confounds speed with
+behaviour permanently, so it had to be run before the next search feature
+landed.
+
+### Tree size measures what a feature spends, not what it buys
+
+The v6.0 package (improving flag + history-adjusted LMR + singular extensions)
+shipped as one undecomposed SPRT at +57.3. Node counts made the three look
+wildly unequal, which was true, and suggested an ordering, which was wrong:
+
+| component | tree change when removed | Elo when removed |
+|---|---|---|
+| singular extensions | **−46.0%** (it costs +85% of the tree) | **−77.2 ±19.6** |
+| improving flag | +27.6% | −19.6 ±10.5 |
+| history-adjusted LMR | +1.3% | +1.1 ±8.7 |
+
+Singular is by far the most expensive thing in the search and by far the most
+valuable. Reading its +85% tree cost as evidence it was over-firing produced a
+registered prediction of *positive* for its removal, at 60% confidence. The
+measured value was −77.2, rejecting in 36 minutes.
+
+Node counts did do one job well: they identified the inert component before any
+games were played, and explained *why* it was inert (a divisor two orders of
+magnitude too large). As a screen for "is this doing anything at all", tree size
+works. As a proxy for value, it is not merely uninformative — for singular it
+pointed the wrong way, which is the same failure mode as §3's loss result.
+
+This is the second cheap proxy in this project to be caught predicting strength
+backwards. There is unlikely to be a third that behaves better.
 
 ---
 
@@ -212,8 +254,9 @@ precondition fails.
 
 ## 8. Decision rules
 
-1. **Only games decide.** Never loss, never a probe, never intuition about
-   capacity.
+1. **Only games decide.** Never loss, never a probe, never node count, never
+   intuition about capacity. Two cheap proxies have now been caught predicting
+   strength *backwards* (§3 loss, §5 tree size); assume the next one will too.
 2. **Respect the ±14 net-training noise floor.** If a net change is predicted
    to be worth less than ~25 Elo, either budget for multi-seed averaging or do
    not run it.
@@ -225,3 +268,9 @@ precondition fails.
    corrupt each other; this happened and cost a night of games.
 6. **Record negative results with the same care as positive ones.** Most of
    this document is negative results.
+7. **Register the prediction before the run.** Point estimate, confidence, and
+   an explicit falsification condition, committed ahead of the games. It costs
+   ten minutes and it is the only thing that stops a wrong prediction being
+   quietly reshaped into a right one afterwards. The 2026-08-03 singular result
+   is the case in point: the reasoning was wrong in a way that would have been
+   easy to forget having believed.

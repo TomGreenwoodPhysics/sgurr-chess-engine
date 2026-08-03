@@ -952,3 +952,98 @@ cannot recover. Undertraining hurts more than overfitting at this scale.
 is convenient (it does not matter), and **as many positions as the calendar
 allows — more than 56M.** Datagen time is the product; everything else is
 noise around it.
+
+## 2026-08-03 — speed is worth what the rule said; singular was carrying v6.0
+
+Four jobs, 11,360 games, 9h 11m unattended on an idle 7800X3D, all at 8+0.08
+with the gen8 net fixed. Predictions were registered in
+`benchmarks/v60_decomp_predictions.md` and `benchmarks/v81_speed_prediction.md`
+before a single game was played.
+
+| job | measured | predicted | |
+|---|---|---|---|
+| v8.1 vs v8.0 | **+21.2 ±8.7** (4,000) | +18 to +19 | correct |
+| remove singular | **−77.2 ±19.6** (H0, 750) | +5 to +25 | **wrong** |
+| remove improving | **−19.6 ±10.5** (H0, 2,610) | −15 to −40 | correct |
+| remove histLMR | **+1.1 ±8.7** (4,000) | 0 ±8 | correct |
+
+### Speed converts to Elo at roughly the rate assumed
+
+v8.1 is v8.0's search compiled better: PGO + ThinLTO, then nine node-identical
+data-layout changes, ~20% NPS in total. The two binaries are
+bench-fingerprint-identical (13,614,729 nodes at depth 13) and move-identical
+at fixed depth, so speed is the only variable that exists between them.
+
+**+21.2 ±8.7 over 4,000 games**, against +18.4 predicted from
+70 × log₂(1.20). The interval is [+12.6, +29.9]; the prediction band was
+[+10, +27].
+
+This closes a gap that had been open since 2026-07-22. §5 of `METHODOLOGY.md`
+listed the AVX-512 result as "~+22% NPS (≈+15 Elo, *inferred*)" and said so
+explicitly — converted through a community rule of thumb, never checked in
+games — and every speed gain since inherited the same caveat. The rule holds
+for this engine at this control, and was if anything slightly conservative.
+
+It was also the last chance to ask cleanly. Any search change confounds speed
+with behaviour permanently.
+
+### Singular extensions were carrying the v6.0 package, and the prediction was badly wrong
+
+Removing singular measured **−77.2**, rejecting in 36 minutes. I had predicted
+**positive**, at 60% confidence, with "anything below −5" as the stated
+falsification condition.
+
+The reasoning that failed: singular costs **+85% of the tree**
+(13,614,729 → 7,351,781 nodes with it off), which at a fixed control is paid
+out of the clock — about one ply, or ~60 Elo of free depth by the same
+conversion rule validated above. I treated that cost as the dominant term, and
+read the tight `SINGULAR_MARGIN` of 2 cp/ply as evidence of over-firing.
+
+It is not close. Singular is worth more than a full ply of depth, and the
+implementation is unrefined — no double extensions, no negative extensions, no
+multicut return from the singular search, and three constants that have never
+been tuned.
+
+**The lesson is about the instrument, not the feature.** Node counts said the
+three v6.0 components were wildly unequal, and they were — but the ordering
+node counts implied was inverted for singular. Tree cost measures what a
+feature *spends*, and carries almost no information about what it *buys*. A
+60% confidence built on it was overstated; the honest figure was nearer 40%.
+
+The composite claim from the pre-registration — "+57.3 was mostly the
+improving flag, with singular break-even-to-negative" — is dead. Decomposed:
+
+| component | Elo when removed | share of the +57.3 |
+|---|---|---|
+| singular extensions | −77.2 ±19.6 | dominant |
+| improving flag | −19.6 ±10.5 | secondary |
+| history-adjusted LMR | +1.1 ±8.7 | none |
+
+The three do not sum to +57.3, and should not be expected to — they interact,
+and leave-one-out on an interacting set measures marginal not additive
+contribution. The ordering is the result.
+
+### History-adjusted LMR is inert, and that is a tuning bug not a dead feature
+
+**+1.1 ±8.7** — removing it costs nothing measurable, exactly as the mechanism
+predicted on 2026-08-02. History earns `depth * depth` per cutoff (169 at
+depth 13) and is halved every move, so `hist_score / 400'000` rounds to zero
+almost always. `HistLmrMax = 0`, which disables the adjustment outright,
+changes the bench tree not at all.
+
+This is "worth nothing at `HistLmrDiv = 400'000`", not "the technique is
+worthless". At a divisor where it functions the tree moves ~10% (5,000 →
+12,239,286 nodes). It has been shipped switched off since v6.0. Do not delete
+it; tune it.
+
+### Consequences
+
+* **Release v8.1.** +21.2 self-play on a node-identical binary. Pool
+  calibration still owed before it earns a ledger row or a website rating —
+  self-play gains have compressed against the pool before (§6), so the pooled
+  figure is not simply 3006 + 21.
+* **Singular is now a first-wave SPSA target, not a mid-tier one.** A feature
+  worth ~+77 unrefined, with three untuned constants, has more headroom than
+  anything else currently on the list.
+* **Stop using tree size as a proxy for feature value.** It was useful for
+  finding the inert one, and actively misleading about the valuable one.
