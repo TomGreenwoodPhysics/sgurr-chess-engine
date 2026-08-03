@@ -96,6 +96,10 @@ void Engine::reset_history() {
 #if SGR_CONTHIST
     conthist.assign(12 * 64 * 12 * 64, 0);
 #endif
+
+#if SGR_CAPHIST
+    caphist.fill(0);
+#endif
 }
 
 namespace {
@@ -184,6 +188,12 @@ void Engine::clear_for_new_position() {
 
 #if SGR_CONTHIST
     for (int& value : conthist) {
+        value /= 2;
+    }
+#endif
+
+#if SGR_CAPHIST
+    for (int& value : caphist) {
         value /= 2;
     }
 #endif
@@ -404,11 +414,51 @@ bool Engine::time_is_up() const {
 }
 
 int Engine::evaluate_position(const Board& board) const {
+#if SGR_EVALSCALE
+    return scale_for_fifty_move(board, board.evaluate());
+#else
     return board.evaluate();
+#endif
 }
 
+#if SGR_EVALSCALE
+// A position's evaluation means less the closer it sits to a draw by the
+// halfmove clock: two plies short of the fifty-move reset, a "winning"
+// position is not winning. Scale linearly from evalscale_start toward
+// evalscale_min_pct at 100.
+//
+// Mate scores are left alone -- a forced mate is not diluted by the clock,
+// it ENDS the game before the clock matters, and rescaling it would corrupt
+// the mate-distance encoding the TT relies on.
+int Engine::scale_for_fifty_move(const Board& board, int score) const {
+    if (std::abs(score) > MATE_THRESHOLD) {
+        return score;
+    }
+
+    int hmc = board.halfmove_clock;
+
+    if (hmc <= params.evalscale_start) {
+        return score;
+    }
+
+    int span = 100 - params.evalscale_start;
+    if (span <= 0) {
+        return score;
+    }
+
+    int over = std::min(hmc, 100) - params.evalscale_start;
+    int pct = 100 - (100 - params.evalscale_min_pct) * over / span;
+
+    return score * pct / 100;
+}
+#endif
+
 int Engine::evaluate_quiet_position(const Board& board) const {
+#if SGR_EVALSCALE
+    return scale_for_fifty_move(board, board.evaluate_quiet());
+#else
     return board.evaluate_quiet();
+#endif
 }
 
 MoveList Engine::generate_moves(Board& board) const {
@@ -434,6 +484,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     int original_alpha = alpha;
     int us = board.side_to_move;
     bool legal_found = false;
+#if SGR_ROOTPVS
+    bool legal_found_any = false;   // first SEARCHED root move gets the full window
+#endif
 
 #if SGR_IMPROVING
     // Seed ply 0 so interior nodes at ply 2 have a same-side reference.
@@ -465,7 +518,29 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         ss_piece[0] = undo.placed_piece;
         ss_to[0] = move.to();
 #endif
+#if SGR_ROOTPVS
+        // PVS at the root. The first move gets the full window as the presumed
+        // PV; every later one only has to be PROVED worse, which a null window
+        // does for a fraction of the cost. Re-search fully only when one
+        // surprises us by beating alpha -- and only while it is still inside
+        // the aspiration window, since a score at or above beta is a fail-high
+        // the caller will widen and re-run anyway.
+        int score;
+
+        if (!legal_found_any) {
+            score = -negamax(board, depth - 1, -beta, -alpha, 1);
+        } else {
+            score = -negamax(board, depth - 1, -alpha - 1, -alpha, 1);
+
+            if (score > alpha && score < beta && !stop_search) {
+                score = -negamax(board, depth - 1, -beta, -alpha, 1);
+            }
+        }
+
+        legal_found_any = true;
+#else
         int score = -negamax(board, depth - 1, -beta, -alpha, 1);
+#endif
         board.unmake_move(undo);
 
         if (stop_search) {
@@ -932,6 +1007,14 @@ int Engine::negamax(
     int n_tried = 0;
 #endif
 
+#if SGR_CAPHIST
+    // Captures searched at this node, in order. On a NOISY beta cutoff every
+    // earlier entry is a capture that failed where the cutoff capture worked --
+    // the same malus logic the quiets already get.
+    Move tried_caps[256];
+    int n_caps = 0;
+#endif
+
     for (const Move& move : moves) {
         if (!board.is_legal(move, li)) {
             continue;
@@ -1043,6 +1126,12 @@ int Engine::negamax(
 #if SGR_HMALUS
         if (!is_noisy_move(board, move)) {
             tried_quiets[n_tried++] = move;
+        }
+#endif
+
+#if SGR_CAPHIST
+        if (is_noisy_move(board, move) && !move.is_promotion()) {
+            tried_caps[n_caps++] = move;
         }
 #endif
 
@@ -1191,6 +1280,32 @@ int Engine::negamax(
                 }
 #endif
             }
+#if SGR_CAPHIST
+            else if (!move.is_promotion()) {
+                // Noisy cutoff. Reward this capture and penalise the captures
+                // tried before it, exactly as quiets are handled above. The
+                // move is unmade, so piece_at(from) is the mover and
+                // piece_at(to) is the victim again.
+                int bonus = depth * depth;
+                auto pc = board.piece_at(move.from());
+
+                if (pc.has_value()) {
+                    int& ch = caphist[caphist_index(
+                        *pc, move.to(), caphist_victim(board, move))];
+                    ch = std::min(ch + bonus, HISTORY_MAX);
+                }
+
+                for (int i = 0; i < n_caps - 1; ++i) {
+                    const Move& c = tried_caps[i];
+                    auto cp = board.piece_at(c.from());
+                    if (cp.has_value()) {
+                        int& cch = caphist[caphist_index(
+                            *cp, c.to(), caphist_victim(board, c))];
+                        cch = std::max(cch - bonus, -HISTORY_MAX);
+                    }
+                }
+            }
+#endif
 
             break;
         }
@@ -1275,7 +1390,13 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         return alpha;
     }
 
+#if SGR_EVALSCALE
+    // The stand-pat must be scaled the same way evaluate_position is, or
+    // quiescence and the main search would disagree about the same position.
+    int stand_pat = scale_for_fifty_move(board, board.evaluate(alpha, beta));
+#else
     int stand_pat = board.evaluate(alpha, beta);
+#endif
 
     if (stand_pat >= beta) {
         return beta;
@@ -1510,7 +1631,18 @@ int Engine::capture_score(const Board& board, const Move& move) const {
         return 0;
     }
 
-    return 10'000 + 10 * PIECE_VALUE[*victim] - PIECE_VALUE[*attacker];
+    int score = 10'000 + 10 * PIECE_VALUE[*victim] - PIECE_VALUE[*attacker];
+
+#if SGR_CAPHIST
+    // Nudges within an MVV-LVA tier rather than across tiers: the divisor keeps
+    // the history term small against a base that is already ~10,000 with a 10x
+    // victim multiplier.
+    score += std::clamp(
+        caphist[caphist_index(*attacker, move.to(), *victim % 6)] / params.caphist_div,
+        -params.caphist_max, params.caphist_max);
+#endif
+
+    return score;
 }
 
 void Engine::store_tt(

@@ -191,6 +191,34 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 #define SGR_HISTPRUNE 1
 #endif
 
+// Capture history. Captures are ordered by MVV-LVA plus a SEE good/bad split,
+// which is static: it knows what a capture wins on paper and nothing about
+// whether THIS capture has actually been working. Indexed by moving piece,
+// destination, and victim type, so "rook takes the pawn on d5" accumulates a
+// record of its own the way quiet moves already do.
+#ifndef SGR_CAPHIST
+#define SGR_CAPHIST 1
+#endif
+
+// Principal variation search at the ROOT. Interior nodes have used PVS since
+// v1.0; the root never did, searching every move with a full window. After the
+// first root move an ordinary move only has to be PROVED worse, which a null
+// window does for a fraction of the cost, with a re-search only on surprise.
+#ifndef SGR_ROOTPVS
+#define SGR_ROOTPVS 1
+#endif
+
+// Fifty-move-rule eval scaling. A position's evaluation means less the closer
+// it sits to a draw by the halfmove clock: a winning position with two plies
+// left before the fifty-move reset is not winning. Scales the returned score
+// toward zero as the clock runs up.
+//
+// Search-side, so it uses the FIXED net and carries no training-seed variance
+// (METHODOLOGY 2) -- an evaluation change that is nonetheless cheap to test.
+#ifndef SGR_EVALSCALE
+#define SGR_EVALSCALE 1
+#endif
+
 
 // Tunable search parameters.
 //
@@ -305,6 +333,29 @@ struct SearchParams {
     // and a good SPSA target once the harness exists.
     int histprune_margin        = 50;
 
+    // Capture-history weight in the ordering score. capture_score works on a
+    // ~10,000 base with a 10x victim multiplier, so the history term must nudge
+    // WITHIN an MVV-LVA tier, never across it.
+    //
+    // Measured: caphist values live in the tens. Any divisor >= 64 made the
+    // term round to zero -- 64, 256, 1024, 4096 and 16384 all produced byte-
+    // identical trees, which is what inert looks like. So the divisor is 1 and
+    // the raw value IS the nudge.
+    //
+    // The clamp is what makes that safe rather than lucky. Nothing stops the
+    // table reaching HISTORY_MAX in principle, and at div=1 that would swamp
+    // MVV-LVA entirely. Capping the CONTRIBUTION makes the "within a tier"
+    // intent structural instead of a property the table happens to have today.
+    // 256 is below the pawn-to-knight victim step (2200), so a pawn capture can
+    // never be promoted over a queen capture however the history runs.
+    int caphist_div             = 1;
+    int caphist_max             = 256;
+    // Halfmove clock at which eval scaling starts biting, and the floor it
+    // scales toward. 100 plies is the draw, so scaling from ~40 leaves normal
+    // play untouched and only compresses scores as a real reset approaches.
+    int evalscale_start         = 40;
+    int evalscale_min_pct       = 40;    // never scale below this % of the eval
+
     // time management -- see the warning above
     int soft_time_fraction_x100 = static_cast<int>(SGR_SOFT_TIME_FRACTION * 100);
     int bm_stability_x100[BM_STABILITY_COUNT] = {220, 130, 100, 85, 75};
@@ -368,6 +419,11 @@ public:
     void clear_for_new_game();
 
     int evaluate_position(const Board& board) const;
+#if SGR_EVALSCALE
+    // Damp the evaluation as the fifty-move clock runs up. Mate scores pass
+    // through untouched.
+    int scale_for_fifty_move(const Board& board, int score) const;
+#endif
     int evaluate_quiet_position(const Board& board) const;
     MoveList generate_moves(Board& board) const;
 
@@ -404,6 +460,27 @@ private:
 
     static int conthist_index(int prev_piece, int prev_to, int piece, int to) {
         return ((prev_piece * 64 + prev_to) * 12 + piece) * 64 + to;
+    }
+#endif
+
+#if SGR_CAPHIST
+    // Capture history, [piece][to][victim type] flattened. 12*64*6 ints is
+    // ~18 KB, small enough to sit inline rather than on the heap as conthist
+    // does.
+    std::array<int, 12 * 64 * 6> caphist{};
+
+    static int caphist_index(int piece, int to, int victim_type) {
+        return (piece * 64 + to) * 6 + victim_type;
+    }
+
+    // Victim type for the table: 0-5 by piece type, and en passant / a missing
+    // victim both read as a pawn, which is what they capture.
+    int caphist_victim(const Board& board, const Move& move) const {
+        if (move.is_en_passant()) {
+            return 0;
+        }
+        auto v = board.piece_at(move.to());
+        return v.has_value() ? (*v % 6) : 0;
     }
 #endif
 

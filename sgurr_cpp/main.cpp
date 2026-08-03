@@ -105,6 +105,10 @@ const Tunable TUNABLES[] = {
     {"SeeCapMargin",          &SearchParams::see_cap_margin,            2,     150},
     {"HistPruneMaxDepth",     &SearchParams::histprune_max_depth,       1,       8},
     {"HistPruneMargin",       &SearchParams::histprune_margin,         10,    2000},
+    {"CapHistDiv",            &SearchParams::caphist_div,               1,      64},
+    {"CapHistMax",            &SearchParams::caphist_max,              16,    2000},
+    {"EvalScaleStart",        &SearchParams::evalscale_start,           0,      90},
+    {"EvalScaleMinPct",       &SearchParams::evalscale_min_pct,        10,     100},
     // time management -- see the warning in search.hpp before tuning these
     {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
 };
