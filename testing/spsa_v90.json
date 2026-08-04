@@ -1,0 +1,61 @@
+{
+  "name": "v90_guessed_params",
+  "_why": [
+    "The v9.0 batch measured -1.0 +/-21.1 vs v8.1 over 698 games despite adding",
+    "ten standard techniques. Three of the ten carry parameters chosen by",
+    "REASONING rather than by games, because sweeping them returned",
+    "non-monotonic noise: HistLmrDiv, the history-prune margin, and the",
+    "capture-history clamp. A package of good ideas at guessed settings landing",
+    "on zero is the exact case SPSA exists for.",
+    "",
+    "This config tunes the guessed parameters FIRST, and the ones with a real",
+    "prior second. It deliberately does NOT tune everything at once: SPSA's",
+    "noise per step grows with the number of parameters, and there is no point",
+    "spending games refining values that were already sensible.",
+    "",
+    "EXCLUDED ON PURPOSE: every time-management parameter",
+    "(SoftTimeFractionX100, BmStability*). METHODOLOGY 6 records the v3.1 soft",
+    "limit at +24.6 self-play and NEGATIVE pooled. Tuning those against",
+    "self-play produces settings that win the tuning run and lose real games.",
+    "They need a pool gauntlet or nothing."
+  ],
+
+  "engine": "sgurr_cpp/sgr_v9_rc.exe",
+  "net": "nets/gen8.nnue",
+  "book": "testing/book.epd",
+
+  "tc": "8+0.08",
+  "_tc_note": [
+    "The project's standard control, kept deliberately. Tuning at a faster TC",
+    "would roughly double throughput, but v3.1 is on record as a TC-dependent",
+    "result -- a setting tuned at 4+0.04 is not known to hold at 8+0.08, and",
+    "discovering that later would cost more than the games saved."
+  ],
+
+  "concurrency": 7,
+  "games_per_iter": 8,
+  "iterations": 3000,
+  "seed": 1,
+
+  "params": [
+    { "name": "HistLmrDiv",       "start": 128,  "c": 24,
+      "_note": "Suspect #1. Shipped inert at 400000 for four versions; 128 was picked off a measured |hist| distribution, never off games. Range is 16..2000000, so c is set by hand rather than from the range." },
+
+    { "name": "HistPruneMargin",  "start": 50,   "c": 12,
+      "_note": "Suspect #2. Never behaved like a pruner at any swept setting." },
+
+    { "name": "CapHistMax",       "start": 256,  "c": 48,
+      "_note": "The clamp that makes capture history structurally safe. 256 was reasoned from MVV-LVA tier spacing, not measured." },
+
+    { "name": "RazorMargin",      "start": 100,  "c": 25,
+      "_note": "Only value swept where razoring pruned at all; the neighbours went non-monotonic." },
+
+    { "name": "FutMargin",        "start": 120,  "c": 25 },
+    { "name": "SeeQuietMargin",   "start": 50,   "c": 12 },
+    { "name": "SeeCapMargin",     "start": 20,   "c": 6  },
+    { "name": "NmpEvalDiv",       "start": 200,  "c": 40 },
+    { "name": "IirMinDepth",      "start": 4,    "c": 1  },
+    { "name": "LmrDivX100",       "start": 250,  "c": 30,
+      "_note": "Not new, and never swept either -- the 2.5 divisor has been hand-set since v1.0." }
+  ]
+}
