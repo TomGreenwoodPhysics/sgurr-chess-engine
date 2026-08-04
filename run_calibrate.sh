@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 #
-# Pool calibration for v8.1, with an early stop once the interval is tight.
+# Pool calibration for a release, with an early stop once the interval is tight.
 #
-# v8.1 has a measured SELF-PLAY result (+21.2 +/-8.7 vs v8.0, 2026-08-03) but
-# no pool-anchored rating, and the ledger holds pool ratings only. Self-play
-# gains have compressed against the pool before (METHODOLOGY 6: RFP 0.68x, the
-# gen8 net 0.81x), so the pooled figure is NOT simply 3006 + 21. This measures
-# it rather than assuming it.
+# The ledger holds pool-anchored ratings only, so a release without a gauntlet
+# has no row. v8.2 currently carries an NPS-INFERRED 3041 on the website and in
+# the README -- the only unsolved number on that ladder. This replaces it with
+# a measured one.
+#
+# The inference is well founded (v8.1 predicted +18.4 from its speed gain and
+# measured +20.9 pooled), which is exactly why it is worth checking: a second
+# confirmation makes the ~70-per-doubling rule something this project can lean
+# on, and a contradiction would be more valuable still.
 #
 # Gauntlet against pool-2026-07-B (8 engines, 2105-3055 CCRL Blitz anchored) at
 # 10+0.1, exactly as every previous calibration. Ordo then solves over ALL
@@ -14,7 +18,7 @@
 # consistent scale.
 #
 # EARLY STOP. Every CHECK_EVERY seconds the monitor concatenates the accumulated
-# PGNs, runs Ordo, and reads v8.1's 95% interval. If it reaches +/-TARGET_ERR the
+# PGNs, runs Ordo, and reads the engine's 95% interval. If it reaches +/-TARGET_ERR the
 # gauntlet is stopped, because more games past that point buy nothing worth
 # waiting for. For scale: v8.0 reached +/-11 at 3,329 games and error shrinks as
 # 1/sqrt(n), so +/-5 needs roughly 16,000 -- some hours beyond this window. The
@@ -41,12 +45,24 @@ ORDO="$BM/tools/ordo.exe"
 BOOK="$ROOT/testing/book.epd"
 NET="C:/Coding/Sgurr/nets/gen8.nnue"
 
-VERSION="v8.1"
+# Version and binary are arguments so this does not have to be copied per
+# release -- two near-identical runner scripts is how run_v60_decomp and
+# run_tonight started drifting apart.
+#   usage: ./run_calibrate.sh [version] [exe-name] [openings-seed]
+VERSION="${1:-v8.2}"
+REL_EXE="$CPP/${2:-sgr_v8_2.exe}"
 ENGINE_NAME="Sgurr-$VERSION"
-REL_EXE="$CPP/sgr_v8_1.exe"
+
+# Openings seed. fastchess shuffles the book deterministically, so a run that is
+# stopped and restarted with the same seed replays the SAME openings from the
+# top rather than sampling new ones. The games are not identical -- the clock
+# makes them diverge -- but they are correlated, and Ordo's interval assumes
+# independent games, so it would report a tighter number than the sample earns.
+# Pass a fresh seed when continuing a calibration across a break.
+SEED="${3:-1}"
 
 STAMP=$(date +%Y-%m-%d_%H%M)
-OUT="$ROOT/runs/calibrate_v81/$STAMP"
+OUT="$ROOT/runs/calibrate/${VERSION}_$STAMP"
 PGN="$BM/games/calib-$VERSION-$(date +%Y-%m-%d).pgn"
 
 # ---- knobs -----------------------------------------------------------------
@@ -54,8 +70,8 @@ TC=10+0.1              # the pool's control, unchanged since pool-2026-07-A
 CONCURRENCY=7
 ROUNDS=500             # 8 opponents x2 games x 500 = up to 8,000 games (~9 h)
 TARGET_ERR=5           # stop once Ordo reports +/- this or tighter
-CHECK_EVERY=900        # seconds between Ordo checks
-MIN_GAMES=400          # do not even solve before this many v8.1 games
+CHECK_EVERY=1800       # seconds between Ordo checks (solve time adds to this)
+MIN_GAMES=400          # do not even solve before this many of OUR games
 # ----------------------------------------------------------------------------
 
 mkdir -p "$OUT" "$BM/games"
@@ -66,14 +82,21 @@ export SGR_EVALFILE="$NET"
 
 # Every process this run can leave behind. Killing fastchess alone orphans its
 # engines mid-search -- 13 of them once sat at 83% CPU after a "stopped" run.
-ENGINE_PROCS="sgr_v8_1 blunder-7.4.0 blunder-7.6.0 blunder-8.0.0 zahak-4.0 zahak-5.0 weiss-1.0 weiss-1.2 igel-2.2.2"
+#
+# OUR engine's name is derived from the binary, never hardcoded. It was
+# hardcoded to sgr_v8_1 while this script was already running v8.2, so the
+# name-sweep backstop covered all eight POOL engines and not the seven copies
+# of the engine under test -- the one process guaranteed to be in every game.
+# The PID capture in stop_gauntlet happened to catch them, so the gap was
+# invisible: a safety net with a hole exactly where the load would be.
+ENGINE_PROCS="$(basename "$REL_EXE" .exe) blunder-7.4.0 blunder-7.6.0 blunder-8.0.0 zahak-4.0 zahak-5.0 weiss-1.0 weiss-1.2 igel-2.2.2"
 
 # Ctrl+C must clean up too, or an interrupted run leaves the machine loaded and
 # the next timed measurement is quietly invalid.
 # shellcheck disable=SC2086
 trap 'echo; echo "interrupted -- stopping engines"; stop_gauntlet $ENGINE_PROCS; assert_engines_stopped $ENGINE_PROCS; exit 130' INT TERM
 
-echo "v8.1 pool calibration  ->  $OUT"
+echo "$ENGINE_NAME pool calibration  ->  $OUT"
 date
 echo
 
@@ -104,7 +127,7 @@ if ! printf 'uci\nquit\n' | "$REL_EXE" 2>&1 >/dev/null | grep -q "nnue: loaded";
     echo "ABORT: $REL_EXE is NOT loading the net -- it would play as HCE." >&2
     exit 1
 fi
-echo "preflight: v8.1 and all 8 pool engines start; v8.1 loads the net"
+echo "preflight: $ENGINE_NAME and all 8 pool engines start; $ENGINE_NAME loads the net"
 echo
 
 {
@@ -116,24 +139,54 @@ echo
     echo "tc        : $TC   concurrency $CONCURRENCY"
     echo "stop when : +/-$TARGET_ERR   (checked every $((CHECK_EVERY/60)) min after $MIN_GAMES games)"
     echo "pgn       : $PGN"
+    echo "seed      : $SEED   (openings shuffle; change it when continuing a run)"
     echo
-    echo "v8.1 bench 13: $("$REL_EXE" bench 13 2>/dev/null | grep '^nodes')"
-    echo "(v8.0 shipped binary is the same tree: 13614729)"
+    echo "bench 13  : $("$REL_EXE" bench 13 2>/dev/null | grep '^nodes')"
+    echo "(v8.0/v8.1 are the same node tree: 13614729)"
 } | tee "$OUT/manifest.txt"
 echo
 
 # ---- solve helper ----------------------------------------------------------
 # Ordo over EVERY accumulated calibration PGN, which is what keeps all versions
-# on one scale. Prints "<rating> <error>" for v8.1, or nothing if not solvable
-# yet.
+# on one scale. Prints "<rating> <error>" for $ENGINE_NAME, or nothing if not
+# solvable yet.
+#
+#   solve [threads]
+#
+# THE MONITOR MUST NOT COMPETE WITH THE GAMES. This ran at -n 5 (five threads)
+# against a growing archive, and by the v8.2 run a single solve took ~10
+# minutes: the checkpoints in console_v82.log are 25 minutes apart when
+# CHECK_EVERY is 900s. So for ~40% of that run's wall time, five Ordo threads
+# were competing with seven engines on eight physical cores -- a progress
+# monitor loading the machine whose timings it was reporting. Both engines in a
+# game slow together so it is roughly symmetric rather than one-sided, but
+# METHODOLOGY 8 rule 5 asks for an idle machine and this quietly was not one.
+#
+# Two changes. Fewer threads, and BelowNormal priority so the engines preempt
+# Ordo whenever they want a core: a checkpoint is informational, the games ARE
+# the measurement, and the games win every time.
 solve() {
+    local threads="${1:-2}"
     local combined="$OUT/all_calib.pgn"
     : > "$combined"
     for p in "$BM"/games/calib-*.pgn; do
         [ -f "$p" ] && cat "$p" >> "$combined"
     done
-    "$ORDO" -Q -p "$combined" -m "$BM/anchors.txt" -W -s 1500 -n 5 -N 1 \
-            -o "$OUT/ordo.txt" >/dev/null 2>&1
+
+    # Write to a scratch file and move it into place only on success. `-o`
+    # truncates its target the moment Ordo starts, so a solve that is killed
+    # mid-flight used to destroy the last good table as its first act -- which
+    # is exactly what happened when a 10-minute solve was interrupted.
+    local new="$OUT/ordo.new"
+    "$ORDO" -Q -p "$combined" -m "$BM/anchors.txt" -W -s 1500 -n "$threads" -N 1 \
+            -o "$new" >/dev/null 2>&1 &
+    local opid=$!
+    ( sleep 1
+      powershell -c "Get-Process ordo -ErrorAction SilentlyContinue | ForEach-Object { \$_.PriorityClass = 'BelowNormal' }" >/dev/null 2>&1
+    ) &
+    wait "$opid" 2>/dev/null
+
+    [ -s "$new" ] && mv -f "$new" "$OUT/ordo.txt"
     grep -oE "$ENGINE_NAME\s*:\s*-?[0-9.]+\s+[0-9.]+" "$OUT/ordo.txt" 2>/dev/null \
         | tail -1 | awk '{print $(NF-1), $NF}'
 }
@@ -151,7 +204,7 @@ games_so_far() {
 # everything handed to it is either a Windows path (cygpath -m) or relative to
 # its working directory. pipeline.py sidesteps this by running from benchmarks/
 # with the relative paths pool.json already stores; this does the same.
-CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds 1
+CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds "$SEED"
      -engine "cmd=$(cygpath -m "$REL_EXE")" "name=$ENGINE_NAME")
 while read -r name cmd; do
     # Absolute Windows path per engine. The relative form pool.json stores works
@@ -220,7 +273,9 @@ stop_gauntlet $ENGINE_PROCS
 assert_engines_stopped $ENGINE_PROCS
 
 # ---- final solve -----------------------------------------------------------
-read -r rating err <<< "$(solve)"
+# Five threads here, unlike the checkpoints: the games are over and the machine
+# is idle, so there is nothing left to steal CPU from.
+read -r rating err <<< "$(solve 5)"
 n=$(games_so_far)
 {
     echo
