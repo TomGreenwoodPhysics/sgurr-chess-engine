@@ -1,8 +1,9 @@
 # Sgurr
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. Current release is **v8.1 "Thearlaich"** at **3027 ±11** on a
-CCRL-Blitz-anchored scale.
+self-play games. Current release is **v8.2 "Thearlaich"**. The last calibrated figure is
+v8.1 at **3027 ±11** on a CCRL-Blitz-anchored scale; v8.2 is node-identical to
+it and ~15% faster, so its own calibration is owed.
 
 The evaluation pipeline is built end to end in this repository: the self-play
 data generator, the PyTorch trainer, the quantisation scheme, the network file
@@ -104,6 +105,7 @@ canonical; peak names are codenames.
 | v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash — the labels really were the bottleneck. 2903 ±6 over an 8,522-game solve. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
 | v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. **3005.5 ±11** over 3,329 games. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
 | v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled** — the two agree to 0.3 Elo, so no compression. **3027 ±11**; the first version whose interval clears 3000 outright. Same net, same search, same moves |
+| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. ≈ +14.5 Elo inferred; calibration owed. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
 
 ---
 

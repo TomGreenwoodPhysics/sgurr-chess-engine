@@ -71,6 +71,16 @@ happened the last time that was tried.
 
 ## Owed / housekeeping
 
+* **Pool-calibrate v8.2.** Node-identical to v8.1 (13,614,729 nodes at depth 13)
+  and **+15.4% NPS**, so ≈ **+14.5 Elo inferred** by the ~70-per-doubling rule
+  that v8.1 validated. No ledger row until games say so. ~3 h of gauntlet, and
+  it competes directly with gen10 datagen for the machine.
+* **Validate or drop the v9.0 batch.** Ten search features, measured
+  **−1.0 ±21.1** over 698 games, now default-OFF in the tree. The interval
+  spans −22…+20, so it is undecided rather than dead. Bisect order and outcome
+  bands: `benchmarks/v90_batch_prediction.md`. Needs machine time that gen10
+  will occupy for weeks.
+
 * **Re-baseline v6.0 and v5.0 on the current machine.** Every row up to v6.0
   was measured on the old i5; v7.0 and v8.0 on the 7800X3D. One Ordo solve
   places them on a single scale, but the cross-hardware caveat is currently

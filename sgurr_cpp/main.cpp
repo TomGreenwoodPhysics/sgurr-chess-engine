@@ -23,7 +23,7 @@
 // Overridable at build time (-DSGR_VERSION=\"8.1\") like the other build
 // switches, so a release build can stamp itself without a source edit.
 #ifndef SGR_VERSION
-#define SGR_VERSION "8.0"
+#define SGR_VERSION "8.2"
 #endif
 constexpr const char* ENGINE_NAME = "Sgurr";
 constexpr const char* ENGINE_AUTHOR = "Tom";

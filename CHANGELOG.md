@@ -4,6 +4,46 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars — never estimates.
 
+## v8.2 "Thearlaich" (Sgùrr Thearlaich) — 2026-08-04
+
+A second speed-only release. Node-identical to v8.1: same net, same search,
+same moves, ~15% faster.
+
+- **+15.4% NPS over v8.1** (median of 10 interleaved `bench 13` runs, release
+  builds either side, distributions non-overlapping across all 20). At the
+  ~70-Elo-per-doubling rule — which v8.1 validated by measurement rather than
+  assumption — that is **≈ +14.5 Elo, inferred**. Pool calibration owed.
+- **Transposition entry packed 24 → 16 bytes.** A 64-byte cache line now holds
+  exactly 4 entries instead of 2.67, on the hottest random-access structure in
+  the engine. The full 64-bit key is kept: truncating to 32 bits saves four
+  more bytes but raises collisions, and a collision changes what the search
+  finds — that would turn a free layout change into one needing hours of games.
+  Note the default `Hash=48` keeps the same 2,097,152 entries in 32 MB rather
+  than gaining capacity, because counts round down to a power of two; non-default
+  sizes do gain, with `Hash=64` now giving 4.2M entries instead of 2.1M.
+- **Lazy move picker.** `order_moves` bucketed every move, sorted all four
+  buckets, then returned a flat `MoveList` **by value** — 514 bytes copied per
+  node. Most nodes cut off within the first few moves, so the two quiet sorts
+  (the largest buckets) were paid for almost everywhere and thrown away. The
+  picker emits the identical sequence but sorts a bucket only when a move is
+  wanted from it. `std::sort` is not stable, so order preservation is enforced
+  by the bench fingerprint rather than argued.
+- **`go depth` is clamped to `MAX_PLY - 1`.** Previously unbounded, which would
+  have overflowed the packed entry's `int8` depth. `bench` runs at depth 11–13
+  and would never have caught it.
+- **Training loader can now exceed 150M positions.** `train.py` held the decoded
+  form of every position in RAM at ~137 B/position, which broke between 150M and
+  200M on a 33.5 GB machine — while the datagen script caps at 200M and the data
+  study found returns still accelerating at 56M. A memory-mapped streaming path
+  decodes per batch instead. Verified byte-identical: same batches, same loss to
+  five decimals, and the two exported nets share a sha256.
+
+**Held back:** the ten-item v9.0 search batch measured **−1.0 ±21.1** over 698
+games. Inconclusive rather than negative, but an interval spanning −22…+20 makes
+a true −15 entirely consistent with the data, and shipping it beside a validated
+speed gain would have risked a regression nothing could rule out. The code
+remains in the tree behind per-item toggles, default off, awaiting machine time.
+
 ## v8.1 "Thearlaich" (Sgùrr Thearlaich) — 2026-08-03
 
 A speed-only release: the same net, the same search, the same moves, about 20%

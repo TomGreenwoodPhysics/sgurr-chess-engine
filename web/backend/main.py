@@ -57,12 +57,19 @@ NETS_DIR = REPO_ROOT / "nets"
 # ladder, so a version added here shows up in the opponent picker for free.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
-        # v8.1 is v8.0's search, compiled better: PGO + ThinLTO and nine
-        # node-identical data-layout changes, together worth ~20% NPS. It is
-        # bench-fingerprint-identical to sgr_gen8.exe (13,614,729 nodes at
-        # depth 13) and move-identical at fixed depth, so it cannot play
-        # differently -- it only gets deeper in the same clock.
-        #
+        # v8.2 is v8.1 with a packed TT entry and a lazy move picker: same net,
+        # same search, same moves, ~15% faster. Rating held at v8.1's MEASURED
+        # 3027 as a floor, not an estimate -- identical search plus more speed
+        # cannot be weaker, and the inferred +14.5 has no games behind it.
+        # Update once calibrated.
+        "id": "v8.2",
+        "exe": CPP_DIR / "sgr_v8_2.exe",
+        "net": NETS_DIR / "gen8.nnue",
+        "label": 'Sgurr v8.2 "Thearlaich"',
+        "tech": "GEN8 NNUE + PACKED TT",
+        "rating": 3027,
+    },
+    {
         # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,
         # +20.9 vs v8.0 in the same Ordo solve, against +21.2 +/-8.7 in
         # self-play. It held the 3006 floor until then rather than displaying

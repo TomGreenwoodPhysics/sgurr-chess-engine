@@ -135,6 +135,17 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // ---------------------------------------------------------------------------
 // The v9.0 batch. Each carries its own toggle so a failing package can be
 // bisected by halves without a source edit, as the v6.0 package could not be.
+//
+// ALL DEFAULT OFF as of v8.2. The package measured -1.0 +/-21.1 against v8.1
+// over 698 games -- inconclusive, not negative, but an interval spanning
+// -22..+20 means a true -15 is entirely consistent with what was seen. Shipping
+// it alongside a validated +11.9% NPS speed gain would have risked a net
+// regression that the data could not rule out, and would have conflated a
+// measured change with an unmeasured one in the same ledger row.
+//
+// The code stays. Enable any subset with -DSGR_<NAME>=1 to resume validation
+// when there is machine time; the bisect order is in
+// benchmarks/v90_batch_prediction.md.
 // ---------------------------------------------------------------------------
 
 // Internal iterative reduction. A node with no TT move has never been searched
@@ -145,7 +156,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // DEEPENING it replaces, which ran a whole extra search to get the same
 // information.
 #ifndef SGR_IIR
-#define SGR_IIR 1
+#define SGR_IIR 0
 #endif
 
 // Eval-scaled null-move reduction. The reduction was flat: 2 plies, 3 from
@@ -153,7 +164,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // certain the null move is to fail high, and the less of the tree is worth
 // spending to confirm it. Scale R with depth and with that surplus.
 #ifndef SGR_NMPSCALE
-#define SGR_NMPSCALE 1
+#define SGR_NMPSCALE 0
 #endif
 
 // Razoring above depth 2. The existing block drops straight into quiescence
@@ -163,7 +174,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // VERIFIES -- it runs quiescence and only returns if that also fails low, since
 // a deeper node has more to lose from a wrong bail-out.
 #ifndef SGR_RAZOR
-#define SGR_RAZOR 1
+#define SGR_RAZOR 0
 #endif
 
 // Move-loop futility. LMP already skips late quiets on COUNT; this skips them
@@ -173,7 +184,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // are complementary: LMP catches "we have tried enough", this catches "the
 // position is too far behind for a quiet move to matter".
 #ifndef SGR_FUTILITY
-#define SGR_FUTILITY 1
+#define SGR_FUTILITY 0
 #endif
 
 // SEE pruning in the main search. Quiescence already refuses captures that lose
@@ -181,14 +192,14 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // exchange value is worse than a depth-scaled allowance -- shallow nodes have
 // less depth left to recover a sacrifice, so they permit less.
 #ifndef SGR_SEEPRUNE
-#define SGR_SEEPRUNE 1
+#define SGR_SEEPRUNE 0
 #endif
 
 // History pruning. A quiet whose history is deeply negative has failed here
 // repeatedly, in this exact context, at this exact continuation. At shallow
 // depth that is enough to skip it outright rather than merely reduce it.
 #ifndef SGR_HISTPRUNE
-#define SGR_HISTPRUNE 1
+#define SGR_HISTPRUNE 0
 #endif
 
 // Capture history. Captures are ordered by MVV-LVA plus a SEE good/bad split,
@@ -197,7 +208,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // destination, and victim type, so "rook takes the pawn on d5" accumulates a
 // record of its own the way quiet moves already do.
 #ifndef SGR_CAPHIST
-#define SGR_CAPHIST 1
+#define SGR_CAPHIST 0
 #endif
 
 // Principal variation search at the ROOT. Interior nodes have used PVS since
@@ -205,7 +216,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // first root move an ordinary move only has to be PROVED worse, which a null
 // window does for a fraction of the cost, with a re-search only on surprise.
 #ifndef SGR_ROOTPVS
-#define SGR_ROOTPVS 1
+#define SGR_ROOTPVS 0
 #endif
 
 // Fifty-move-rule eval scaling. A position's evaluation means less the closer
@@ -216,7 +227,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // in-check plies record no eval
 // Search-side, so it uses the FIXED net and carries no training-seed variance
 // (METHODOLOGY 2) -- an evaluation change that is nonetheless cheap to test.
 #ifndef SGR_EVALSCALE
-#define SGR_EVALSCALE 1
+#define SGR_EVALSCALE 0
 #endif
 
 
@@ -270,9 +281,18 @@ struct SearchParams {
     // setting histlmr_max to 0, which disables the adjustment outright, changed
     // the bench tree not at all.
     //
-    // 128 puts the ±1 step at the ~75th percentile of that distribution and ±2
-    // at the ~95th, so the adjustment engages on the moves whose history
-    // actually says something. Chosen on the distribution, NOT on tree size:
+    // REVERTED TO 400'000 FOR v8.2. 128 was part of the v9.0 batch, which
+    // measured -1.0 +/-21.1 and was held back; shipping the divisor change
+    // alone would have altered the search in a release meant to be
+    // behaviourally identical to v8.1. It stays inert until games say
+    // otherwise, and it is SPSA target #1 when there is machine time --
+    // testable via option.HistLmrDiv without a rebuild.
+    //
+    // The reasoning for 128, kept because it is still the right starting
+    // point: it puts the ±1 step at the ~75th percentile of that distribution
+    // and ±2 at the ~95th, so the adjustment engages on the moves whose
+    // history actually says something. Chosen on the distribution, NOT on
+    // tree size:
     // node counts across the range are non-monotonic and therefore useless as
     // a guide (+31.3% at 32, +21.0% at 64, +14.4% at 128, +34.3% at 256,
     // +12.2% at 512). Reduction changes cascade, and a smaller tree is not a
@@ -282,7 +302,7 @@ struct SearchParams {
     // it is the first thing to suspect if the batch regresses. It is also a
     // UCI option, so sweeping it needs no rebuild: fastchess can drive it with
     // -engine option.HistLmrDiv=<n> in the same testing session.
-    int histlmr_div             = 128;
+    int histlmr_div             = 400'000;
     int histlmr_max             = 2;
 
     // extensions
