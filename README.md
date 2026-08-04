@@ -1,9 +1,10 @@
 # Sgurr
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. Current release is **v8.2 "Thearlaich"**. The last calibrated figure is
-v8.1 at **3027 ±11** on a CCRL-Blitz-anchored scale; v8.2 is node-identical to
-it and ~15% faster, so its own calibration is owed.
+self-play games. Current release is **v8.2 "Thearlaich"** at roughly **3041** on a
+CCRL-Blitz-anchored scale — inferred from v8.1's calibrated 3027 plus a
+measured +15.4% NPS, since the two are node-identical. Its own gauntlet is
+owed.
 
 The evaluation pipeline is built end to end in this repository: the self-play
 data generator, the PyTorch trainer, the quantisation scheme, the network file
@@ -20,7 +21,8 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 
 | engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v8.1 "Thearlaich" | **3027 ±11** |
+| Sgurr v8.2 "Thearlaich" | **~3041** *(inferred, not calibrated)* |
+| Sgurr v8.1 "Thearlaich" | 3027 ±11 |
 | Sgurr v8.0 "Thearlaich" | 3006 ±11 |
 | Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
 | Sgurr v6.0 "Banachdaich" | 2807 ±36 |
@@ -31,6 +33,11 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 | Sgurr v2.0 "Notches" | 2467 ±34 |
 | Sgurr v1.0 "Fox" | 2386 ±34 |
 | Sgurr classical (HCE) | 2377 ±35 |
+
+Every row is solved from games **except v8.2**, which is marked. v8.2 is
+node-identical to v8.1 and 15.4% faster, so its figure is v8.1's measurement
+plus 70 × log₂(1.154). That conversion is not assumed: v8.1 tested it, predicting
++18.4 from its own speed gain and measuring +20.9 in the pool.
 
 Ratings come from a gauntlet against a fixed pool of open-source engines with
 published CCRL Blitz ratings (Blunder, Zahak, Weiss, Igel — four families,

@@ -47,8 +47,10 @@ NETS_DIR = REPO_ROOT / "nets"
 # Every canonical release, newest first (index 0 is the default, and what
 # SGURR_ENGINE_EXE overrides). Ratings are the pool-2026-07-B Ordo solve from
 # benchmarks/ledger.md -- CCRL-Blitz-ANCHORED ESTIMATES on one consistent
-# scale, not official CCRL ratings, hence the tilde. Only versions with a
-# ledger row appear here; experimental builds deliberately do not.
+# scale, not official CCRL ratings, hence the tilde.
+#
+# ONE EXCEPTION, flagged where it sits: v8.2 has no ledger row yet and carries
+# an NPS-inferred figure. Every other number here was solved from games.
 # Note v3.1 rates BELOW v3.0: it was a search-only release whose flat soft
 # time limit lost at the pool TC. That is real, measured, and left visible.
 # `rating` is the structured form of the number the subtitle carries; the
@@ -58,16 +60,30 @@ NETS_DIR = REPO_ROOT / "nets"
 ENGINE_SPECS: list[dict[str, object]] = [
     {
         # v8.2 is v8.1 with a packed TT entry and a lazy move picker: same net,
-        # same search, same moves, ~15% faster. Rating held at v8.1's MEASURED
-        # 3027 as a floor, not an estimate -- identical search plus more speed
-        # cannot be weaker, and the inferred +14.5 has no games behind it.
-        # Update once calibrated.
+        # same search, same moves, ~15% faster.
+        #
+        # 3041 is INFERRED, not calibrated -- the only figure on this ladder
+        # that is. 3026.7 measured for v8.1, plus 70*log2(1.1543) = +14.5 for a
+        # +15.43% NPS gain (median of 10 interleaved bench 13 runs, release
+        # builds either side, distributions non-overlapping).
+        #
+        # The inference is unusually well founded rather than a rule of thumb
+        # applied hopefully. v8.1 tested that exact conversion: it predicted
+        # +18.4 from its own +20% NPS and measured +21.2 self-play and +20.9
+        # pooled -- the two agreeing to 0.3 Elo, with no pool compression, which
+        # is what should happen when the engines play identical moves and differ
+        # only in how deep the clock lets them go. v8.2 is node-identical to
+        # v8.1 (13,614,729 nodes at depth 13), so speed is again the only
+        # variable that exists between them.
+        #
+        # Replace with the solved value once a gauntlet has run; ROADMAP.md
+        # carries it as owed.
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.2 "Thearlaich"',
         "tech": "GEN8 NNUE + PACKED TT",
-        "rating": 3027,
+        "rating": 3041,
     },
     {
         # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,
