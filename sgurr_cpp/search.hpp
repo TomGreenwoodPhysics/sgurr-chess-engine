@@ -381,13 +381,31 @@ struct SearchResult {
     double time_taken = 0.0;
 };
 
+// Packed to exactly 16 bytes, down from 24.
+//
+// The table is the hottest random-access structure in the engine and every
+// probe is a likely cache miss, so what matters is entries per cache line: at
+// 24 bytes a 64-byte line holds 2.67, at 16 it holds exactly 4. The same 48 MB
+// also now buys 3.1M entries instead of 2.1M.
+//
+// The full 64-bit key is KEPT. Truncating it to 32 bits would save four more
+// bytes and is what most engines do, but it raises the collision rate, and a
+// collision changes what the search finds -- that would make this a behaviour
+// change needing games rather than a layout change needing a bench diff.
+//
+// Field widths: score must stay 32-bit because mate scores run to +/-1,000,000.
+// depth fits int8 because MAX_PLY is 128 and the UCI layer now clamps a
+// requested depth to 127. flag holds three values. Move is already 16 bits.
 struct TTEntry {
-    U64 key = 0;                 // full hash for collision detection; 0 = empty
-    int depth = -1;
-    int score = 0;
-    int flag = TT_EXACT;
-    Move best_move = NO_MOVE;    // NO_MOVE = entry carries no move
+    U64 key = 0;                    // full hash; 0 = empty
+    std::int32_t score = 0;
+    std::int8_t depth = -1;
+    std::uint8_t flag = TT_EXACT;
+    Move best_move = NO_MOVE;       // NO_MOVE = entry carries no move
 };
+
+static_assert(sizeof(TTEntry) == 16,
+              "TTEntry must stay 16 bytes: 4 per cache line is the point");
 
 class Engine {
 public:
@@ -536,6 +554,57 @@ private:
     bool is_noisy_move(const Board& board, const Move& move) const;
 
     void store_killer(int ply, const Move& move);
+
+    // Lazy move picker.
+    //
+    // order_moves() bucketed every move, sorted all four buckets, then built a
+    // flat MoveList and returned it BY VALUE -- 514 bytes copied per node. Most
+    // nodes take a beta cutoff within the first few moves, so the two quiet
+    // sorts (the largest buckets) were being paid for at nearly every interior
+    // node and thrown away.
+    //
+    // This emits the identical sequence, but sorts a bucket only when a move is
+    // actually wanted from it, and hands moves back one at a time instead of
+    // materialising a list. Bucket contents, scores and comparator are
+    // unchanged, and std::sort is deterministic for a given input sequence, so
+    // the order is preserved exactly -- which the bench fingerprint enforces
+    // rather than assumes.
+    class MovePicker {
+    public:
+        MovePicker(const Engine& eng,
+                   Board& board,
+                   const MoveList& moves,
+                   const std::optional<Move>& tt_move_key,
+                   int ply,
+                   bool split_bad_captures);
+
+        // Next move in order, or false when exhausted.
+        bool next(Move& out);
+
+    private:
+        struct Scored { Move move; int score; };
+
+        enum Stage {
+            S_TT, S_CAPTURES, S_KILLER1, S_KILLER2,
+            S_BAD, S_GOOD_QUIET, S_OTHER_QUIET, S_DONE
+        };
+
+        Scored captures_[256];     int n_cap_ = 0;
+        Scored bad_captures_[256]; int n_bad_ = 0;
+        Scored good_quiets_[256];  int n_gq_  = 0;
+        Scored other_quiets_[256]; int n_oq_  = 0;
+
+        Move tt_move_ = NO_MOVE;   bool has_tt_ = false;
+        Move killer_one_ = NO_MOVE; bool has_k1_ = false;
+        Move killer_two_ = NO_MOVE; bool has_k2_ = false;
+
+        int stage_ = S_TT;
+        int index_ = 0;
+        bool sorted_cap_ = false;
+        bool sorted_bad_ = false;
+        bool sorted_gq_ = false;
+        bool sorted_oq_ = false;
+    };
 
     MoveList order_moves(
         Board& board,

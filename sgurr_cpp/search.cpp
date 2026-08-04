@@ -930,7 +930,7 @@ int Engine::negamax(
 
     MoveList moves = generate_moves(board);
     std::optional<Move> tt_move_key = valid_tt_move_key(board_hash, moves);
-    moves = order_moves(board, moves, tt_move_key, ply);
+    MovePicker picker(*this, board, moves, tt_move_key, ply, true);
     LegalityInfo li = board.legality_info();
 
 #if SGR_IIR
@@ -1015,7 +1015,8 @@ int Engine::negamax(
     int n_caps = 0;
 #endif
 
-    for (const Move& move : moves) {
+    Move move;
+    while (picker.next(move)) {
         if (!board.is_legal(move, li)) {
             continue;
         }
@@ -1357,12 +1358,13 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     if (board.in_check(us)) {
         MoveList moves = generate_moves(board);
-        moves = order_moves(board, moves, std::nullopt, ply, false);
+        MovePicker qpicker(*this, board, moves, std::nullopt, ply, false);
         LegalityInfo li = board.legality_info();
 
         bool legal_found = false;
 
-        for (const Move& move : moves) {
+        Move move;
+        while (qpicker.next(move)) {
             if (!board.is_legal(move, li)) {
                 continue;
             }
@@ -1415,10 +1417,11 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     // up.
     MoveList noisy_moves = board.generate_noisy_moves();
 
-    noisy_moves = order_moves(board, noisy_moves, std::nullopt, ply, false);
+    MovePicker npicker(*this, board, noisy_moves, std::nullopt, ply, false);
     LegalityInfo li = board.legality_info();
 
-    for (const Move& move : noisy_moves) {
+    Move move;
+    while (npicker.next(move)) {
         auto captured = board.piece_at(move.to());
 
         if (captured.has_value()) {
@@ -1479,6 +1482,157 @@ void Engine::store_killer(int ply, const Move& move) {
 
     killer_moves[ply][1] = killer_moves[ply][0];
     killer_moves[ply][0] = key;
+}
+
+namespace {
+// The one comparator, shared by the picker and by order_moves, so the two can
+// never drift into different orderings.
+struct ByScoreDesc {
+    template <class T>
+    bool operator()(const T& a, const T& b) const { return a.score > b.score; }
+};
+}  // namespace
+
+Engine::MovePicker::MovePicker(
+    const Engine& eng,
+    Board& board,
+    const MoveList& moves,
+    const std::optional<Move>& tt_move_key,
+    int ply,
+    bool split_bad_captures
+) {
+    // Bucketing is EAGER and byte-for-byte the same pass order_moves does. Only
+    // the sorting is deferred: deferring the bucketing too would mean deciding
+    // the good/bad capture split lazily, and that split needs SEE, which is
+    // exactly the expensive thing worth keeping in one predictable place.
+    std::optional<Move> killer_key_one = std::nullopt;
+    std::optional<Move> killer_key_two = std::nullopt;
+
+    if (ply < MAX_PLY) {
+        killer_key_one = eng.killer_moves[ply][0];
+        killer_key_two = eng.killer_moves[ply][1];
+    }
+
+    for (const Move& move : moves) {
+        Move key = move;
+
+        if (tt_move_key.has_value() && key == *tt_move_key) {
+            tt_move_ = move;
+            has_tt_ = true;
+            continue;
+        }
+
+        if (eng.is_noisy_move(board, move)) {
+            int cscore = eng.capture_score(board, move);
+
+            if (split_bad_captures && !move.is_promotion()
+                    && !board.see_ge(move, 0)) {
+                bad_captures_[n_bad_++] = {move, cscore};
+            } else {
+                captures_[n_cap_++] = {move, cscore};
+            }
+            continue;
+        }
+
+        if (killer_key_one.has_value() && key == *killer_key_one) {
+            killer_one_ = move;
+            has_k1_ = true;
+            continue;
+        }
+
+        if (killer_key_two.has_value() && key == *killer_key_two) {
+            killer_two_ = move;
+            has_k2_ = true;
+            continue;
+        }
+
+        int hist = eng.history[move.from()][move.to()];
+
+#if SGR_CONTHIST
+        if (split_bad_captures && ply > 0 && eng.ss_piece[ply - 1] >= 0) {
+            auto piece = board.piece_at(move.from());
+            if (piece.has_value()) {
+                hist += eng.conthist[conthist_index(
+                    eng.ss_piece[ply - 1], eng.ss_to[ply - 1], *piece, move.to())];
+            }
+        }
+#endif
+
+        if (hist > 0) {
+            good_quiets_[n_gq_++] = {move, hist};
+        } else {
+            other_quiets_[n_oq_++] = {move, hist};
+        }
+    }
+}
+
+bool Engine::MovePicker::next(Move& out) {
+    for (;;) {
+        switch (stage_) {
+            case S_TT:
+                stage_ = S_CAPTURES;
+                index_ = 0;
+                if (has_tt_) { out = tt_move_; return true; }
+                break;
+
+            case S_CAPTURES:
+                if (!sorted_cap_) {
+                    std::sort(captures_, captures_ + n_cap_, ByScoreDesc{});
+                    sorted_cap_ = true;
+                }
+                if (index_ < n_cap_) { out = captures_[index_++].move; return true; }
+                stage_ = S_KILLER1;
+                break;
+
+            case S_KILLER1:
+                stage_ = S_KILLER2;
+                if (has_k1_) { out = killer_one_; return true; }
+                break;
+
+            case S_KILLER2:
+                stage_ = S_BAD;
+                index_ = 0;
+                if (has_k2_) { out = killer_two_; return true; }
+                break;
+
+            case S_BAD:
+                if (!sorted_bad_) {
+                    std::sort(bad_captures_, bad_captures_ + n_bad_, ByScoreDesc{});
+                    sorted_bad_ = true;
+                }
+                if (index_ < n_bad_) { out = bad_captures_[index_++].move; return true; }
+                stage_ = S_GOOD_QUIET;
+                index_ = 0;
+                break;
+
+            case S_GOOD_QUIET:
+                if (!sorted_gq_) {
+                    std::sort(good_quiets_, good_quiets_ + n_gq_, ByScoreDesc{});
+                    sorted_gq_ = true;
+                }
+                if (index_ < n_gq_) { out = good_quiets_[index_++].move; return true; }
+                stage_ = S_OTHER_QUIET;
+                index_ = 0;
+                break;
+
+            case S_OTHER_QUIET:
+#if SGR_HMALUS || SGR_CONTHIST
+                // With malus or continuation scores these are genuinely
+                // negative, so they order least-bad first. Without either,
+                // every score here is exactly zero and the sort is a no-op.
+                if (!sorted_oq_) {
+                    std::sort(other_quiets_, other_quiets_ + n_oq_, ByScoreDesc{});
+                    sorted_oq_ = true;
+                }
+#endif
+                if (index_ < n_oq_) { out = other_quiets_[index_++].move; return true; }
+                stage_ = S_DONE;
+                break;
+
+            default:
+                return false;
+        }
+    }
 }
 
 MoveList Engine::order_moves(
@@ -1657,7 +1811,17 @@ void Engine::store_tt(
     // Replace if the slot holds a different position, or ours is searched at
     // least as deep. The table never wipes; old entries age out per slot.
     if (slot.key != board_hash || depth >= slot.depth) {
-        slot = TTEntry{board_hash, depth, score, flag, best_move_key};
+        // Explicit narrowing at the one place it happens. depth is bounded by
+        // MAX_PLY - 1 = 127 (the UCI layer clamps, and the search never
+        // extends past its own root depth), flag holds 0-2, and score keeps
+        // its full 32 bits for mate encoding.
+        slot = TTEntry{
+            board_hash,
+            static_cast<std::int32_t>(score),
+            static_cast<std::int8_t>(depth),
+            static_cast<std::uint8_t>(flag),
+            best_move_key
+        };
     }
 }
 

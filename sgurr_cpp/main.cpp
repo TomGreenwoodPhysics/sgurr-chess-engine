@@ -409,6 +409,12 @@ void uci_loop() {
                 (budget.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
             );
 
+            // Clamp what the GUI asked for. Anything past MAX_PLY - 1 is
+            // meaningless -- the ply guard in negamax stops the search there
+            // anyway -- and leaving it unbounded means a `go depth 200` writes
+            // a depth the packed TT entry cannot represent.
+            depth = std::clamp(depth, 1, MAX_PLY - 1);
+
             SearchResult result = engine.search_best_move(
                 board,
                 depth,
