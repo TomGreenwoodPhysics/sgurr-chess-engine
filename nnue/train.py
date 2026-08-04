@@ -13,7 +13,7 @@ is scored each epoch under no_grad; --val_frac 0 trains on everything. The
 holdout is by contiguous block (~whole games), not by random position -- see
 make_split for why a per-position split silently inflates val accuracy.
 """
-import argparse, time
+import argparse, os, time
 import numpy as np
 import nnue_tools as nt
 import torch
@@ -110,7 +110,12 @@ def _decode_chunk(arr, bmap=None, pad=PAD):
 
 def load_dataset(path, chunk=1_000_000, buckets=1):
     """Chunked vectorised loader -> (wf, bf, stm, score, result, n).
-    buckets>1 applies the shared king-bucket map (nt.KING_BUCKET_MAP)."""
+    buckets>1 applies the shared king-bucket map (nt.KING_BUCKET_MAP).
+
+    Decodes the WHOLE file into RAM. Kept for small datasets and for the
+    equivalence test against StreamingDataset; see that class for why anything
+    past ~100M positions must not use this path.
+    """
     bmap = nt.KING_BUCKET_MAP if buckets > 1 else None
     pad = INPUT * buckets
     raw = np.fromfile(path, dtype=np.uint8)
@@ -129,6 +134,50 @@ def load_dataset(path, chunk=1_000_000, buckets=1):
         wf[lo:hi] = w; bf[lo:hi] = b
         stm[lo:hi] = s; score[lo:hi] = sc; result[lo:hi] = r
     return wf, bf, stm, score, result, n
+
+
+class StreamingDataset:
+    """Memory-mapped dataset that decodes each batch on demand.
+
+    load_dataset() materialises the decoded form of every position up front:
+    wf and bf are (n, 32) int16, so 128 bytes per position, plus 9 for
+    stm/score/result -- about 137 B/position steady, and the raw array is live
+    alongside during the load, peaking near 169 B/position.
+
+    On the 32 GB development machine that is fine at gen8's 56M (7.7 GB) and
+    breaks somewhere around 130-150M:
+
+        56M   ->  7.7 GB steady,  9.5 GB peak
+        110M  -> 15.1 GB steady, 18.6 GB peak
+        200M  -> 27.4 GB steady, 33.8 GB peak   -- exceeds RAM
+
+    That matters because the datagen script caps at 200M and the 2026-08-01
+    data study found returns still ACCELERATING at 56M (14M->28M +17 Elo,
+    28M->56M +48). The single most valuable lever in this project was gated by
+    a loader that could not open the file it was going to produce.
+
+    This holds only the raw 32-byte records, memory-mapped, and runs the same
+    _decode_chunk per batch. Resident memory becomes evictable page cache
+    rather than a hard allocation, so the ceiling is disk size, not RAM. The
+    cost is re-decoding each position once per epoch -- vectorised numpy over a
+    16k batch, minutes per epoch against a run measured in hours.
+    """
+
+    def __init__(self, path, buckets=1):
+        self.bmap = nt.KING_BUCKET_MAP if buckets > 1 else None
+        self.pad = INPUT * buckets
+        size = os.path.getsize(path)
+        self.n = size // 32
+        self.raw = np.memmap(path, dtype=np.uint8, mode="r",
+                             shape=(self.n, 32))
+
+    def __len__(self):
+        return self.n
+
+    def batch(self, idx):
+        """Decode the positions at `idx` (a 1-D index array)."""
+        rows = np.ascontiguousarray(self.raw[idx])
+        return _decode_chunk(rows, self.bmap, self.pad)
 
 
 def make_split(n, val_frac, seed, block=65536):
@@ -230,21 +279,25 @@ class NNUE(nn.Module):
         return self.out(x).squeeze(1)                  # output; *SCALE = centipawns
 
 
-def batch_loss(model, WF, BF, STM, SC, RES, sel, dev, lambda_):
+def batch_loss(model, fetch, sel, dev, lambda_):
     """Forward + MSE-in-sigmoid-space loss for one batch of indices `sel`.
-    Features are stored int16 (RAM) and widened to int64 here, after the
-    device copy, so the PCIe transfer stays half-width too."""
-    wfb = WF[sel].to(dev, non_blocking=True).long()
-    bfb = BF[sel].to(dev, non_blocking=True).long()
-    stmb = STM[sel].to(dev, non_blocking=True)
-    scb = SC[sel].to(dev, non_blocking=True)
-    resb = RES[sel].to(dev, non_blocking=True)
+
+    `fetch` returns the five CPU tensors for those indices -- either sliced
+    from RAM or decoded on the fly from the memory map. Features are int16 on
+    the host and widened to int64 only after the device copy, so the PCIe
+    transfer stays half-width either way."""
+    wf_c, bf_c, stm_c, sc_c, res_c = fetch(sel)
+    wfb = wf_c.to(dev, non_blocking=True).long()
+    bfb = bf_c.to(dev, non_blocking=True).long()
+    stmb = stm_c.to(dev, non_blocking=True)
+    scb = sc_c.to(dev, non_blocking=True)
+    resb = res_c.to(dev, non_blocking=True)
     pred = model(wfb, bfb, stmb)
     target = lambda_ * torch.sigmoid(scb / SCALE) + (1 - lambda_) * resb
     return ((torch.sigmoid(pred) - target) ** 2).mean()
 
 
-def eval_loss(model, WF, BF, STM, SC, RES, idx, batch, dev, lambda_):
+def eval_loss(model, fetch, idx, batch, dev, lambda_):
     """Mean loss over the positions in idx, no grad / no weight updates."""
     if idx.numel() == 0:
         return float("nan")
@@ -253,7 +306,7 @@ def eval_loss(model, WF, BF, STM, SC, RES, idx, batch, dev, lambda_):
     with torch.no_grad():
         for i in range(0, idx.numel(), batch):
             sel = idx[i:i + batch]
-            total += batch_loss(model, WF, BF, STM, SC, RES, sel, dev, lambda_).item() * sel.numel()
+            total += batch_loss(model, fetch, sel, dev, lambda_).item() * sel.numel()
     model.train()
     return total / idx.numel()
 
@@ -290,6 +343,12 @@ def main():
                          "--buckets > 1.")
     ap.add_argument("--val_frac", type=float, default=0.05,
                     help="held-out validation fraction (0 = train on everything)")
+    ap.add_argument("--loader", choices=["auto", "memory", "stream"], default="auto",
+                    help="auto switches to the memory map past --stream_threshold "
+                         "positions; the in-memory path is faster but holds "
+                         "~137 bytes per position")
+    ap.add_argument("--stream_threshold", type=int, default=60_000_000,
+                    help="positions above which auto picks the streaming loader")
     ap.add_argument("--seed", type=int, default=0,
                     help="seed for the train/val split and weight init")
     args = ap.parse_args()
@@ -311,15 +370,39 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print("device:", dev)
     t0 = time.time()
-    wf, bf, stm, score, result, n = load_dataset(args.data, buckets=args.buckets)
-    print(f"loaded {n} positions  ({time.time()-t0:.1f}s)")
 
-    # The dataset stays in CPU memory and each batch is copied to the device
-    # inside the loop: 20M positions of int64 features is ~10 GB, too much to
-    # hold on most GPUs. from_numpy shares the buffer, so nothing is copied.
-    WF = torch.from_numpy(wf); BF = torch.from_numpy(bf)
-    STM = torch.from_numpy(stm)
-    SC = torch.from_numpy(score); RES = torch.from_numpy(result)
+    # Loader choice. The decoded form costs ~137 B/position resident; the raw
+    # record is 32. Past roughly 60M positions the decoded form stops being a
+    # sensible thing to hold, so `auto` switches to the memory map.
+    n_positions = os.path.getsize(args.data) // 32
+    kind = args.loader
+    if kind == "auto":
+        kind = "stream" if n_positions > args.stream_threshold else "memory"
+
+    if kind == "memory":
+        wf, bf, stm, score, result, n = load_dataset(args.data, buckets=args.buckets)
+        # from_numpy shares the buffer, so nothing is copied here.
+        WF = torch.from_numpy(wf); BF = torch.from_numpy(bf)
+        STM = torch.from_numpy(stm)
+        SC = torch.from_numpy(score); RES = torch.from_numpy(result)
+
+        def fetch(sel):
+            return WF[sel], BF[sel], STM[sel], SC[sel], RES[sel]
+
+        gb = (wf.nbytes + bf.nbytes + stm.nbytes + score.nbytes + result.nbytes) / 1e9
+        print(f"loaded {n} positions in memory, {gb:.1f} GB  ({time.time()-t0:.1f}s)")
+    else:
+        ds = StreamingDataset(args.data, buckets=args.buckets)
+        n = len(ds)
+
+        def fetch(sel):
+            w, b, st, sc_, r = ds.batch(sel.numpy())
+            return (torch.from_numpy(w), torch.from_numpy(b), torch.from_numpy(st),
+                    torch.from_numpy(sc_), torch.from_numpy(r))
+
+        print(f"streaming {n} positions from a memory map, "
+              f"{os.path.getsize(args.data)/1e9:.1f} GB on disk  "
+              f"({time.time()-t0:.1f}s)")
 
     # train/val split
     torch.manual_seed(args.seed)
@@ -346,7 +429,7 @@ def main():
         model.train()
         for i in range(0, n_train, args.batch):
             sel = ti[i:i + args.batch]
-            loss = batch_loss(model, WF, BF, STM, SC, RES, sel, dev, args.lambda_)
+            loss = batch_loss(model, fetch, sel, dev, args.lambda_)
             opt.zero_grad(); loss.backward(); opt.step()
             if sched is not None:
                 sched.step()
@@ -363,7 +446,7 @@ def main():
         train_loss = total / n_train
 
         if val_idx.numel() > 0:
-            val = eval_loss(model, WF, BF, STM, SC, RES, val_idx, args.batch, dev, args.lambda_)
+            val = eval_loss(model, fetch, val_idx, args.batch, dev, args.lambda_)
             print(f"epoch {epoch+1:3d}/{args.epochs}  train {train_loss:.5f}  "
                   f"val {val:.5f}  ({time.time()-t0:.1f}s)")
         else:
