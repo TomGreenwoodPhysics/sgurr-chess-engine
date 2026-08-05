@@ -1,10 +1,8 @@
 # Sgurr
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. Current release is **v8.2 "Thearlaich"** at roughly **3041** on a
-CCRL-Blitz-anchored scale — inferred from v8.1's calibrated 3027 plus a
-measured +15.4% NPS, since the two are node-identical. Its own gauntlet is
-owed.
+self-play games. Current release is **v8.2 "Thearlaich"** at **3058 ±7** on a
+CCRL-Blitz-anchored scale, measured over an 11,144-game gauntlet.
 
 The evaluation pipeline is built end to end in this repository: the self-play
 data generator, the PyTorch trainer, the quantisation scheme, the network file
@@ -21,7 +19,7 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 
 | engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
 |---|---|
-| Sgurr v8.2 "Thearlaich" | **~3041** *(inferred, not calibrated)* |
+| Sgurr v8.2 "Thearlaich" | **3058 ±7** |
 | Sgurr v8.1 "Thearlaich" | 3027 ±11 |
 | Sgurr v8.0 "Thearlaich" | 3006 ±11 |
 | Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
@@ -34,16 +32,36 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 | Sgurr v1.0 "Fox" | 2386 ±34 |
 | Sgurr classical (HCE) | 2377 ±35 |
 
-Every row is solved from games **except v8.2**, which is marked. v8.2 is
-node-identical to v8.1 and 15.4% faster, so its figure is v8.1's measurement
-plus 70 × log₂(1.154). That conversion is not assumed: v8.1 tested it, predicting
-+18.4 from its own speed gain and measuring +20.9 in the pool.
+Every row is solved from games. None is estimated.
+
+v8.2 is worth a note. It is node-identical to v8.1 and 15.4% faster, so before
+the gauntlet ran its rating was predicted at 3041 — v8.1's measurement plus
+70 × log₂(1.154), the conversion v8.1 itself appeared to confirm. It measured
+**3058**, a gap of +31.5 where +14.5 was predicted. The prediction was
+registered in advance and it was wrong. Solving each anchor separately gives
++29, +21, +31 and +28, so the miss is not an artefact of the rating solver, and
+that conversion is no longer used to predict anything here.
 
 Ratings come from a gauntlet against a fixed pool of open-source engines with
 published CCRL Blitz ratings (Blunder, Zahak, Weiss, Igel — four families,
 2105–3055), solved with Ordo anchored to those values. They are estimates on
 the CCRL Blitz scale, not official CCRL ratings, and the absolute scale is only
 as good as the anchors. The *gaps* between versions are anchor-independent.
+
+That last sentence is doing more work than it looks. v8.2's 11,144 games are
+enough to place it against each anchor separately, and the four anchors disagree
+by **90 Elo** about where it sits — Igel says 3106, Weiss-1.0 says 3016. The
+spread is not new (63, 100 and 90 for v8.0, v8.1 and v8.2) and it is not
+sampling noise: it is what happens when ratings measured under CCRL's conditions
+are transferred to a different book, time control and machine. So the ±7 above
+counts coin-flip noise only; systematic uncertainty on the *absolute* number is
+nearer ±45. Version-to-version gaps, measured inside one solve against one pool,
+do not carry it.
+
+One further limit, stated plainly: v8.2 scores **50.8%** against Weiss-1.2, the
+strongest engine in the pool, and 86–97% against five of the other seven. The
+pool can no longer resolve improvements at this level, and a stronger one is
+needed before v8.3 means anything.
 
 Anchors were re-sourced from the live CCRL list on 2026-07-15 after an audit
 found the previous set inflated by a mean of ~31 Elo; every row above is from
@@ -112,7 +130,7 @@ canonical; peak names are codenames.
 | v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash — the labels really were the bottleneck. 2903 ±6 over an 8,522-game solve. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
 | v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. **3005.5 ±11** over 3,329 games. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
 | v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled** — the two agree to 0.3 Elo, so no compression. **3027 ±11**; the first version whose interval clears 3000 outright. Same net, same search, same moves |
-| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. ≈ +14.5 Elo inferred; calibration owed. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
+| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. **3058 ±7** over 11,144 games, **+31.5 vs v8.1** against +14.5 predicted. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
 
 ---
 

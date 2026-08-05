@@ -59,11 +59,23 @@ class EngineUnusable(RuntimeError):
     """A binary that cannot be trusted to play games, with the reason why."""
 
 
-def verify_engine(path, timeout: float = DEFAULT_TIMEOUT) -> str:
+def verify_engine(path, timeout: float = DEFAULT_TIMEOUT,
+                  attempts: int = 3, retry_delay: float = 3.0) -> str:
     """Launch `path` and complete a UCI handshake.
 
     Returns the engine's advertised `id name` on success. Raises
     EngineUnusable, with a diagnosis specific enough to act on, otherwise.
+
+    Retries on a spawn failure, and that is not belt-and-braces. Smart App
+    Control blocks were assumed to be sticky -- once a binary ran, it kept
+    running -- and on 2026-08-04 zahak-4.0.exe, an unchanged third-party pool
+    engine that had passed this same check three hours earlier, was refused
+    once and then started immediately on the next attempt. A single-attempt
+    preflight would have aborted an overnight calibration over a momentary
+    reputation lookup.
+
+    Deterministic failures (missing, empty, a directory) are not retried; there
+    is nothing for a second attempt to change.
     """
     p = Path(path)
 
@@ -75,6 +87,20 @@ def verify_engine(path, timeout: float = DEFAULT_TIMEOUT) -> str:
 
     if p.stat().st_size == 0:
         raise EngineUnusable(f"{p}: file is empty (a truncated or failed link?)")
+
+    last = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            return _try_handshake(p, timeout)
+        except EngineUnusable as exc:
+            last = exc
+            if attempt < attempts:
+                time.sleep(retry_delay)
+    raise last if last else EngineUnusable(f"{p}: unusable")
+
+
+def _try_handshake(p: Path, timeout: float) -> str:
+    """One launch-and-handshake attempt. See verify_engine for the retry policy."""
 
     # A real UCI handshake, not a batch write.
     #

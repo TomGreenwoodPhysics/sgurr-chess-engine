@@ -49,8 +49,8 @@ NETS_DIR = REPO_ROOT / "nets"
 # benchmarks/ledger.md -- CCRL-Blitz-ANCHORED ESTIMATES on one consistent
 # scale, not official CCRL ratings, hence the tilde.
 #
-# ONE EXCEPTION, flagged where it sits: v8.2 has no ledger row yet and carries
-# an NPS-inferred figure. Every other number here was solved from games.
+# Every number here was solved from games -- as of 2026-08-05 there is no
+# longer an inferred figure on this ladder.
 # Note v3.1 rates BELOW v3.0: it was a search-only release whose flat soft
 # time limit lost at the pool TC. That is real, measured, and left visible.
 # `rating` is the structured form of the number the subtitle carries; the
@@ -62,28 +62,19 @@ ENGINE_SPECS: list[dict[str, object]] = [
         # v8.2 is v8.1 with a packed TT entry and a lazy move picker: same net,
         # same search, same moves, ~15% faster.
         #
-        # 3041 is INFERRED, not calibrated -- the only figure on this ladder
-        # that is. 3026.7 measured for v8.1, plus 70*log2(1.1543) = +14.5 for a
-        # +15.43% NPS gain (median of 10 interleaved bench 13 runs, release
-        # builds either side, distributions non-overlapping).
+        # Measured 2026-08-05: 3058.5 +/-6.5 over an 11,144-game pool gauntlet,
+        # +31.5 vs v8.1 in the same Ordo solve.
         #
-        # The inference is unusually well founded rather than a rule of thumb
-        # applied hopefully. v8.1 tested that exact conversion: it predicted
-        # +18.4 from its own +20% NPS and measured +21.2 self-play and +20.9
-        # pooled -- the two agreeing to 0.3 Elo, with no pool compression, which
-        # is what should happen when the engines play identical moves and differ
-        # only in how deep the clock lets them go. v8.2 is node-identical to
-        # v8.1 (13,614,729 nodes at depth 13), so speed is again the only
-        # variable that exists between them.
-        #
-        # Replace with the solved value once a gauntlet has run; ROADMAP.md
-        # carries it as owed.
+        # This page carried 3041 for a day, marked INFERRED: v8.1's 3026.7 plus
+        # 70*log2(1.1543) = +14.5 for a +15.43% NPS gain. The games say +31.5.
+        # The rule under-predicted by 17 Elo, and the label is the only reason
+        # that is a footnote rather than a wrong number shipped as a fact.
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.2 "Thearlaich"',
         "tech": "GEN8 NNUE + PACKED TT",
-        "rating": 3041,
+        "rating": 3058,
     },
     {
         # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,

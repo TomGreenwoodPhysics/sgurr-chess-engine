@@ -71,10 +71,29 @@ happened the last time that was tried.
 
 ## Owed / housekeeping
 
-* **Pool-calibrate v8.2.** Node-identical to v8.1 (13,614,729 nodes at depth 13)
-  and **+15.4% NPS**, so ≈ **+14.5 Elo inferred** by the ~70-per-doubling rule
-  that v8.1 validated. No ledger row until games say so. ~3 h of gauntlet, and
-  it competes directly with gen10 datagen for the machine.
+* ~~**Pool-calibrate v8.2.**~~ **Done 2026-08-05: 3058.5 ±6.5** over 11,144
+  games, **+31.5 vs v8.1 same-solve** against **+14.5 predicted**. The
+  ~70-per-doubling rule missed low by 17 Elo; per-anchor solves give +29/+21/
+  +31/+28, so all four agree and it is not a solver artefact. Ledger, CHANGELOG,
+  README and the website carry the measured figure. Two limits surfaced, both
+  now blocking below: **anchor disagreement** and **pool saturation**.
+
+* **Rebuild the pool before v8.3.** Now the binding constraint on everything
+  else here, and it is measurement work rather than engine work.
+  * **Saturation.** v8.2 scores **50.8%** against Weiss-1.2, the strongest
+    engine in the pool, and 86–97% against five of the other seven. Those five
+    contribute almost no information. The pool cannot resolve the next
+    improvement, whatever it is — needs 2–3 engines in the 3050–3200 band.
+  * **Anchor disagreement.** The four anchored engines disagree by **90 Elo**
+    about v8.2's absolute rating (Igel 3106, Weiss-1.0 3016). Longstanding —
+    63/100/90 for v8.0/v8.1/v8.2 — and not sampling noise, so Ordo's ±6.5 is
+    sampling error only and the true systematic band is ~±45. Same-solve gaps
+    are unaffected, which is why the ledger has always led with them.
+  * **The 150-position opening book.** At 11,144 games every opening has been
+    played ~74 times. Ordo's interval assumes independent games; heavily
+    recycled openings are not, so reported errors are optimistic and the
+    estimate is partly *"strength on these 150 positions"*. A few thousand
+    positions is standard practice and this is the cheapest of the three fixes.
 * **Validate or drop the v9.0 batch.** Ten search features, measured
   **−1.0 ±21.1** over 698 games, now default-OFF in the tree. The interval
   spans −22…+20, so it is undecided rather than dead. Bisect order and outcome

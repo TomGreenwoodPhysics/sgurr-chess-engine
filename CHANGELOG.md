@@ -9,10 +9,21 @@ results with 95% error bars — never estimates.
 A second speed-only release. Node-identical to v8.1: same net, same search,
 same moves, ~15% faster.
 
-- **+15.4% NPS over v8.1** (median of 10 interleaved `bench 13` runs, release
-  builds either side, distributions non-overlapping across all 20). At the
-  ~70-Elo-per-doubling rule — which v8.1 validated by measurement rather than
-  assumption — that is **≈ +14.5 Elo, inferred**. Pool calibration owed.
+- **3058 ±7 on pool-2026-07-B**, over 11,144 games at 10+0.1 (+8332 =1204 -1608,
+  80.2%). That is **+31.5 vs v8.1 in the same solve**, from **+15.4% NPS**
+  (median of 10 interleaved `bench 13` runs, release builds either side,
+  distributions non-overlapping across all 20).
+- **The speed rule was predicted in advance and it missed.** ~70 Elo per
+  doubling of NPS put v8.2 at 3041, i.e. +14.5; the gauntlet says +31.5, an
+  implied ~131 per doubling. Solving each anchor independently gives +29
+  (Weiss-1.2), +21 (Igel), +31 (Weiss-1.0) and +28 (Zahak-5.0) — all four agree,
+  so this is not the rating solver. v8.1 had matched the same rule to 0.3 Elo,
+  which now reads as coincidence rather than confirmation, and the conversion is
+  no longer used to predict anything.
+- Two limits found while measuring this, both recorded in full in `ledger.md`:
+  the four anchors disagree by **90 Elo** about v8.2's absolute rating, so ±7 is
+  sampling noise only and systematic uncertainty is nearer ±45; and v8.2 scores
+  **50.8%** against the top of the pool, which therefore cannot measure v8.3.
 - **Transposition entry packed 24 → 16 bytes.** A 64-byte cache line now holds
   exactly 4 entries instead of 2.67, on the hottest random-access structure in
   the engine. The full 64-bit key is kept: truncating to 32 bits saves four

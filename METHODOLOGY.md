@@ -150,6 +150,7 @@ Ranked by measured Elo per unit of effort:
 | Search refinement package (v6.0) | **+57.3** | days of coding |
 | Clean RFP-free data regen (gen7) | **+44.4** | ~2 days datagen |
 | Singular extensions alone (inside the v6.0 package) | **+77.2** | part of days |
+| Packed TT + lazy move picker (v8.2) | +15.4% NPS → **+31.5 measured** | ~1 day |
 | PGO + ThinLTO + data layout (v8.1) | ~+20% NPS → **+21.2 measured** | ~2 days |
 | AVX-512 / int16 NNUE inference | ~+22% NPS (≈+15…+22 Elo) | ~3 h coding |
 | Improving flag alone (inside the v6.0 package) | **+19.6** | part of days |
@@ -162,22 +163,57 @@ error.** And the two big categories are complementary in resource terms —
 datagen consumes CPU for days while coding consumes none, so they should run
 concurrently.
 
-**Speed converts to Elo at about the assumed rate — now measured, 2026-08-03.**
-The SIMD row was flagged *inferred* for months: verified bit-identical and
-node-identical, but converted to Elo through the ~70-per-doubling rule of thumb
-rather than checked in games. v8.1 tested the rule directly. It is v8.0's
-search compiled better (PGO + ThinLTO plus nine node-identical data-layout
-changes, ~20% NPS), bench-fingerprint-identical and move-identical to the
-shipped v8.0 binary, so speed was the only variable in existence between them.
+**The ~70-Elo-per-doubling rule is retired as a predictor — 2026-08-05.**
 
-**+21.2 ±8.7 over 4,000 games, against +18.4 predicted from 70 × log₂(1.20).**
-The rule holds for this engine at 8+0.08, and was slightly conservative. Speed
-work can be valued by it going forward, with the caveat that one point on one
-control does not pin the constant at exactly 70.
+It was adopted as a rule of thumb, appeared to be confirmed once, then failed
+the second time it was used to predict something. Both tests were clean: a
+speed-only release, bench-fingerprint-identical to its predecessor, so speed
+was the only variable in existence between them.
 
-That experiment was only available once. Any search change confounds speed with
-behaviour permanently, so it had to be run before the next search feature
-landed.
+| release | NPS gain | predicted | measured | ratio |
+|---|---|---|---|---|
+| v8.1 (PGO + ThinLTO + layout) | +20% | +18.4 | **+21.2 ±8.7** self-play, +20.9 pooled | 1.14 |
+| v8.2 (packed TT + lazy picker) | +15.4% | +14.5 | **+31.5** pooled, 11,144 games | **2.17** |
+
+v8.2's implied rate is ~131 Elo per doubling, not 70. The obvious escape — that
+Ordo mis-weighted a saturating pool — does not survive checking: solving each
+anchor separately gives +29, +21, +31 and +28, mean +27.1, so all four
+independently disagree with the prediction in the same direction.
+
+The honest reading is that **one agreement was never evidence of a law.** v8.1
+matching to 0.3 Elo made the rule feel established when it rested on a single
+point; the second point is 2.2× off. A constant fitted to other engines,
+at other time controls, on other hardware, was being carried as though this
+project had derived it.
+
+What replaces it: nothing. Speed changes get a gauntlet like everything else.
+The rule is still useful for *ordering* candidate work — faster is better,
+monotonically — but a number produced by it is a guess, and this project's
+convention is that guesses do not enter the ledger, the README or the website
+without the word *inferred* attached. That convention is the only reason this
+cost a footnote instead of a wrong published rating.
+
+### Anchored ratings carry a systematic error the error bar does not show
+
+v8.2's 11,144 games are enough to place it against each anchor *separately*
+rather than through Ordo's joint fit. The four anchors disagree by **90 Elo**:
+
+| anchor | CCRL | implies Sgurr v8.2 at |
+|---|---|---|
+| Igel-2.2.2 | 2982 | 3106 |
+| Weiss-1.2 | 3055 | 3060 |
+| Zahak-5.0 | 2726 | 3046 |
+| Weiss-1.0 | 2896 | 3016 |
+
+Ordo's solve is 3058.5 **±6.5**, and that ±6.5 counts sampling noise only. The
+spread above is not noise — it is stable across releases (63, 100 and 90 Elo for
+v8.0, v8.1 and v8.2) and it is what happens when ratings measured under CCRL's
+book, control and hardware are transferred to ours. Systematic uncertainty on
+any *absolute* figure here is nearer **±45**.
+
+This does not touch version-to-version gaps, which are measured inside one solve
+against one pool and are why the ledger has always led with them. It does mean
+"3058 ±7" should never be read as 3058 ± 7.
 
 ### Tree size measures what a feature spends, not what it buys
 
