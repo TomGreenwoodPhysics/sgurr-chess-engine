@@ -53,13 +53,28 @@ VERSION="${1:-v8.2}"
 REL_EXE="$CPP/${2:-sgr_v8_2.exe}"
 ENGINE_NAME="Sgurr-$VERSION"
 
-# Openings seed. fastchess shuffles the book deterministically, so a run that is
-# stopped and restarted with the same seed replays the SAME openings from the
-# top rather than sampling new ones. The games are not identical -- the clock
-# makes them diverge -- but they are correlated, and Ordo's interval assumes
-# independent games, so it would report a tighter number than the sample earns.
-# Pass a fresh seed when continuing a calibration across a break.
+# Opening-book shuffle seed -- fastchess spells this `-srand`, NOT `-seeds`.
+#
+# Read the difference carefully, because getting it wrong does not fail:
+#   -srand SEED   seed for opening book randomisation        <- this one
+#   -seeds N      in a gauntlet, the first N engines play against all others
+#
+# Passing the openings seed as `-seeds 2` on 2026-08-05 quietly promoted
+# Blunder-7.4.0 to a second seeded engine, so it ran its own gauntlet against
+# the field alongside Sgurr: of the first 68 games, only 40 involved the engine
+# under test. Nothing errored, the log looked normal, and the scheduled total
+# (93,750) was the only visible tell. Those games were discarded.
+#
+# Note what this seed can and cannot buy. book.epd holds 150 positions, so at
+# 5,000+ games every opening has already been played ~36 times over -- changing
+# the seed changes the ORDER, not the diversity. It does not make a resumed run
+# sample fresh ground, because there is no fresh ground in a 150-position book.
 SEED="${3:-1}"
+
+# Early-stop threshold. Ordo's interval shrinks as 1/sqrt(games): from +/-9.6 at
+# 5,000 games, +/-5 needs ~18,500 and +/-1 needs ~460,000. Setting this to 1 is
+# therefore a way of DISABLING the early stop, not a target to expect.
+TARGET_ERR="${5:-5}"
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 OUT="$ROOT/runs/calibrate/${VERSION}_$STAMP"
@@ -68,8 +83,8 @@ PGN="$BM/games/calib-$VERSION-$(date +%Y-%m-%d).pgn"
 # ---- knobs -----------------------------------------------------------------
 TC=10+0.1              # the pool's control, unchanged since pool-2026-07-A
 CONCURRENCY=7
-ROUNDS=500             # 8 opponents x2 games x 500 = up to 8,000 games (~9 h)
-TARGET_ERR=5           # stop once Ordo reports +/- this or tighter
+ROUNDS="${4:-500}"     # 8 opponents x2 games x ROUNDS; 500 -> 8,000 games (~9 h)
+                       # TARGET_ERR is set from $5 above, next to the maths
 CHECK_EVERY=1800       # seconds between Ordo checks (solve time adds to this)
 MIN_GAMES=400          # do not even solve before this many of OUR games
 # ----------------------------------------------------------------------------
@@ -196,7 +211,14 @@ games_so_far() {
     # [Black] -- exactly ONE mention per game, so this is the game count, not
     # half of it. Verified against calib-v8.0-2026-07-29-extended.pgn: 3,083
     # Event tags, 3,083 name mentions.
-    grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null || echo 0
+    #
+    # Counted across EVERY PGN for this version, not just this run's file. The
+    # PGN name carries the date, so a calibration stopped and resumed the next
+    # day writes a second file -- and counting only the current one would report
+    # a game count far below what Ordo actually solved over, which is the sort of
+    # mismatch that makes a log look broken when it is fine.
+    grep -ch "\"$ENGINE_NAME\"" "$BM"/games/calib-"$VERSION"-*.pgn 2>/dev/null \
+        | awk '{s+=$1} END{print s+0}'
 }
 
 # ---- launch the gauntlet in the background ---------------------------------
@@ -204,7 +226,7 @@ games_so_far() {
 # everything handed to it is either a Windows path (cygpath -m) or relative to
 # its working directory. pipeline.py sidesteps this by running from benchmarks/
 # with the relative paths pool.json already stores; this does the same.
-CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds "$SEED"
+CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds 1 -srand "$SEED"
      -engine "cmd=$(cygpath -m "$REL_EXE")" "name=$ENGINE_NAME")
 while read -r name cmd; do
     # Absolute Windows path per engine. The relative form pool.json stores works
@@ -231,6 +253,29 @@ date
 ( cd "$BM" && "${CMD[@]}" ) > "$OUT/gauntlet.log" 2>&1 &
 FC_PID=$!
 echo "fastchess pid $FC_PID, log $OUT/gauntlet.log"
+echo
+
+# ---- structural check: is this actually a gauntlet? -------------------------
+# In a gauntlet the engine under test plays EVERY game, so the count of [Event]
+# tags and the count of games naming it must be equal. They were not on
+# 2026-08-05: `-seeds 2`, meant as an openings seed, promoted a second engine to
+# seed and 28 of the first 68 games did not involve Sgurr at all. fastchess did
+# not complain, the log read normally, and the only tell was a scheduled total
+# nobody had reason to check. Verify it in the first minutes instead.
+for _ in $(seq 60); do
+    [ "$(grep -c '^\[Event' "$PGN" 2>/dev/null || echo 0)" -ge 20 ] && break
+    sleep 5
+done
+ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null || echo 0)
+mine=$(grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null || echo 0)
+if [ "$ev" -gt 0 ] && [ "$ev" -ne "$mine" ]; then
+    echo "ABORT: $((ev - mine)) of the first $ev games do not involve $ENGINE_NAME." >&2
+    echo "       That is not a gauntlet. Check -tournament and -seeds." >&2
+    # shellcheck disable=SC2086
+    stop_gauntlet $ENGINE_PROCS
+    exit 1
+fi
+echo "structure: all $ev games so far involve $ENGINE_NAME -- gauntlet confirmed"
 echo
 
 # ---- monitor ---------------------------------------------------------------
