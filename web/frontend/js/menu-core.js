@@ -271,8 +271,11 @@ function onPointerMove(event) {
   cursor.y = event.clientY;
   const now = performance.now();
 
+  // Held still until the intro is over: the handoff measures where the menu
+  // core sits in order to land the intro core exactly on it, and a lean the
+  // player had already provoked would put the two orbs out of register.
   const menuCore = refs.menuCore;
-  if (menuCore && app.mode === "menu") {
+  if (menuCore && app.mode === "menu" && app.intro.complete) {
     const rect = menuCore.getBoundingClientRect();
     if (rect.width) {
       const nx = (event.clientX - (rect.left + rect.width / 2)) / (window.innerWidth / 2);

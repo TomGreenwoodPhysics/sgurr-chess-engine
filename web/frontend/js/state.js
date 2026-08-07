@@ -6,6 +6,7 @@ const refs = {
   introCoreTrigger: document.querySelector("#introCoreTrigger"),
   introCore: document.querySelector("#introCore"),
   introState: document.querySelector("#introState"),
+  introCopy: document.querySelector(".intro-copy"),
   wakeSgurrButton: document.querySelector("#wakeSgurrButton"),
   menuScreen: document.querySelector("#menuScreen"),
   menuCore: document.querySelector("#menuCore"),

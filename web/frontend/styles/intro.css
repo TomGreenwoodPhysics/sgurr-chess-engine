@@ -596,10 +596,15 @@
   transform: scale(1.04);
 }
 
-/* Same declaration in both states so the animation carries over without
-   restarting when waking hands off to naming. */
+/* Same declaration in all three states so the animation carries over without
+   restarting as waking hands off to naming and then to the blackout. It has
+   to survive the blackout in particular: its `both` fill is what holds the
+   core at its swollen resting scale, and dropping it there would shrink the
+   core by 4% in a single frame just as the veil starts to close. The script
+   handoff picks the swell up from here and carries it on. */
 .intro-screen[data-state="waking"] .intro-core-trigger,
-.intro-screen[data-state="naming"] .intro-core-trigger {
+.intro-screen[data-state="naming"] .intro-core-trigger,
+.intro-screen[data-state="blackout"] .intro-core-trigger {
   animation: intro-core-wake 1400ms cubic-bezier(0.16, 0.82, 0.2, 1) both;
 }
 
@@ -691,15 +696,19 @@
   transition: none;
 }
 
+/* The reveal is a straight cross-dissolve. The blackout veil holds its black,
+   and the whole intro layer — the handed-off core included — fades away over
+   the finished menu underneath. Fading only the veil instead would leave the
+   intro core floating at full strength above a half-revealed menu, and then
+   hiding the screen at the end would swap one orb for the other in a single
+   frame: two separate elements, so the blob visibly jumped. Keep this shorter
+   than INTRO_REVEAL_DURATION_MS in js/config.js — that timer hides the screen,
+   and it has to land after the dissolve has finished, not during it. */
 .intro-screen[data-state="departing"] {
-  background-color: transparent;
-  pointer-events: none;
-  transition-duration: 1500ms;
-}
-
-.intro-screen[data-state="departing"] .intro-transition-veil {
+  background-color: #000;
   opacity: 0;
-  transition-duration: 1500ms;
+  pointer-events: none;
+  transition: opacity 1250ms cubic-bezier(0.4, 0, 0.3, 1);
 }
 
 .intro-screen[data-state="departing"]::before,
@@ -745,6 +754,13 @@ body.intro-background-ready .menu-screen {
 
 body.intro-pending .menu-title .menu-core {
   opacity: 0;
+}
+
+/* Brought up under the still-opaque veil, so the dissolve above it lands on a
+   complete menu. Waiting for intro-pending to come off at the very end would
+   pop the hero orb in on the same frame the intro core disappears. */
+body.intro-revealing .menu-title .menu-core {
+  opacity: 1;
 }
 
 @keyframes intro-cave-arrive {
@@ -800,6 +816,7 @@ body.intro-pending .menu-title .menu-core {
   }
 }
 
+.intro-screen[data-motion="off"],
 .intro-screen[data-motion="off"] *,
 .intro-screen[data-motion="off"] *::before,
 .intro-screen[data-motion="off"] *::after {

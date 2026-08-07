@@ -103,6 +103,51 @@ function spawnDisturbanceDust() {
   }, 2400);
 }
 
+// The prompt arrives on a delayed CSS animation, and a running animation
+// outranks ordinary declarations — so if the player disturbs the core before
+// the arrival has finished, the naming state's fade-out is simply ignored and
+// the prompt ends up sitting across the boss card. Replace the arrival with an
+// explicit fade from wherever it had got to.
+function dismissIntroCopy() {
+  const copy = refs.introCopy;
+  if (!copy || typeof copy.getAnimations !== "function") {
+    return;
+  }
+  const arriving = copy.getAnimations();
+  if (!arriving.length) {
+    return;
+  }
+  const { opacity, transform } = window.getComputedStyle(copy);
+  for (const animation of arriving) {
+    animation.cancel();
+  }
+  copy.style.animation = "none";
+  if (typeof copy.animate !== "function") {
+    return;
+  }
+  // Held forwards: every later intro state wants this prompt gone, so the
+  // final frame is exactly where the state rules would have left it.
+  copy.animate(
+    [
+      { opacity, transform },
+      { opacity: 0, transform: "translateX(-50%) translateY(16px)" },
+    ],
+    { duration: 520, easing: "ease", fill: "forwards" },
+  );
+}
+
+// Put the menu core at the same point in the shared idle cycles as the intro
+// core. Both orbs are on screen together through the reveal dissolve, and two
+// independently-phased cores breathe, churn and ripple out of step — which is
+// what makes the handoff read as a jump rather than as one continuous
+// creature. Safe to do here: the menu core is still hidden behind the veil.
+function syncMenuCorePhase() {
+  const phase = refs.introCore?.style.getPropertyValue("--core-phase");
+  if (phase) {
+    refs.menuCore.style.setProperty("--core-phase", phase);
+  }
+}
+
 function finishIntro() {
   if (app.intro.complete) {
     return;
@@ -162,7 +207,6 @@ function beginIntroHandoff() {
     return;
   }
 
-  refs.introCoreTrigger.style.animation = "none";
   refs.introScreen.dataset.state = "blackout";
   app.intro.blackoutTimer = window.setTimeout(
     beginIntroMenuHandoff,
@@ -177,11 +221,12 @@ function beginIntroMenuHandoff() {
 
   const motion = introMotionEnabled();
   const trigger = refs.introCoreTrigger;
-  trigger.style.animation = "none";
   refs.menuCore.classList.add("ready", "thinking");
+  syncMenuCorePhase();
   const source = trigger.getBoundingClientRect();
   const target = refs.menuCore.getBoundingClientRect();
   const sourceWidth = trigger.offsetWidth;
+  const sourceHeight = trigger.offsetHeight;
   const targetWidth = refs.menuCore.offsetWidth;
 
   refs.introScreen.dataset.state = "transferring";
@@ -197,32 +242,30 @@ function beginIntroMenuHandoff() {
     return;
   }
 
-  const sourceCenterX = source.left + source.width / 2;
-  const sourceCenterY = source.top + source.height / 2;
-  const targetCenterX = target.left + target.width / 2;
-  const targetCenterY = target.top + target.height / 2;
-  const dx = targetCenterX - sourceCenterX;
-  const dy = targetCenterY - sourceCenterY;
+  // Centres, not edges: the trigger is still carrying the wake animation's
+  // swell, and a centred scale leaves the centre where it was.
+  const dx = (target.left + target.width / 2) - (source.left + source.width / 2);
+  const dy = (target.top + target.height / 2) - (source.top + source.height / 2);
   const scale = targetWidth / sourceWidth;
 
-  Object.assign(trigger.style, {
-    position: "fixed",
-    left: `${source.left}px`,
-    top: `${source.top}px`,
-    width: `${source.width}px`,
-    height: `${source.height}px`,
-    transform: "none",
-    transformOrigin: "center",
-  });
+  // The trigger stays in flow and only its transform moves. Its resting frame
+  // is the CSS `translate(-50%, -50%)` plus whatever swell the wake animation
+  // is still holding — measured, rather than assumed, by comparing the drawn
+  // box with the laid-out one. Starting the script animation from there is
+  // what stops the core snapping back to its unswollen size as the CSS
+  // animation hands over.
+  const restScale = source.width / sourceWidth;
+  const frame = (x, y, zoom) =>
+    `translate(${(x - sourceWidth / 2).toFixed(2)}px, ${(y - sourceHeight / 2).toFixed(2)}px) scale(${zoom.toFixed(4)})`;
 
   app.intro.handoffAnimation = trigger.animate(
     [
-      { transform: "translate3d(0, 0, 0) scale(1)", offset: 0 },
+      { transform: frame(0, 0, restScale), offset: 0 },
       {
-        transform: `translate3d(${dx * 0.34}px, ${dy * 0.22 - 16}px, 0) scale(${1 + (scale - 1) * 0.28})`,
+        transform: frame(dx * 0.34, dy * 0.22 - 16, restScale + (scale - restScale) * 0.28),
         offset: 0.34,
       },
-      { transform: `translate3d(${dx}px, ${dy}px, 0) scale(${scale})`, offset: 1 },
+      { transform: frame(dx, dy, scale), offset: 1 },
     ],
     {
       duration: INTRO_HANDOFF_DURATION_MS,
@@ -268,6 +311,7 @@ function wakeSgurr() {
   refs.wakeSgurrButton.textContent = "Too late";
   unlockAudio();
   playSound("boss_rumble", { volume: 1.15 });
+  dismissIntroCopy();
 
   if (introMotionEnabled()) {
     spawnDisturbanceDust();
@@ -290,6 +334,8 @@ export {
   prepareIntroTitle,
   spawnIntroMotes,
   spawnDisturbanceDust,
+  dismissIntroCopy,
+  syncMenuCorePhase,
   finishIntro,
   beginIntroNaming,
   beginIntroHandoff,
