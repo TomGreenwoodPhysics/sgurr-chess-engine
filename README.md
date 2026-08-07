@@ -146,6 +146,7 @@ stability scaling, which measures positive at both controls.
 ```text
 sgurr_cpp/     the engine: bitboard movegen, search, NNUE inference, datagen
 nnue/          the trainer: PyTorch model, quantisation, .nnue export, verifiers
+nets/          the shipped network, with its release record and SHA-256
 pipeline.py    one resumable command from self-play data to a ledger row
 configs/       per-generation pipeline configs
 testing/       match runner, SPRT harness, SPSA tuner, opening-book generator
@@ -301,21 +302,23 @@ scale used here is single-core, so a parallel search would measure exactly zero.
 
 Expected output is given for each command so a mismatch is obvious.
 
-**Note on networks.** Trained `.nnue` files are not in the repository — they are
-build artefacts of the training pipeline, and `nets/` is gitignored. Without one
-the engine falls back to the hand-crafted evaluation and says so on stdout, so a
-fresh clone reproduces the HCE fingerprint rather than the release one. Both are
+**Note on networks.** Trained `.nnue` files are build artefacts of the training
+pipeline and are gitignored, with one exception: `nets/gen8.nnue`, the network
+shipped in v8.0, v8.1 and v8.2, is committed so that a clone can reproduce the
+release fingerprint. Its release record and SHA-256 are in
+[nets/README.md](nets/README.md). With no network at all the engine falls back
+to the hand-crafted evaluation and says so on stdout, so both fingerprints are
 given below.
 
 ```bash
 cd sgurr_cpp
 
 # Deterministic search fingerprint: 19 positions at depth 11.
-./sgr.exe bench
-#   -> nodes 4616415        (hand-crafted eval, i.e. no network present)
-
 SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe bench
 #   -> nodes 3601424        (the shipped v8.2 fingerprint)
+
+./sgr.exe bench
+#   -> nodes 4616415        (hand-crafted eval, i.e. no network present)
 
 # Move generation, unmake, and null-move hash/eval restoration.
 ./sgr.exe test
@@ -332,9 +335,10 @@ across the dev build, the PGO release build, and the AVX-512, AVX2 and scalar
 inference paths — that is what makes those a speed change rather than a
 behaviour change.
 
-With a network available, the bit-exactness gate compares engine inference
-against the trainer's own forward pass across every special move type and
-thousands of random game chains:
+The bit-exactness gate compares engine inference against the trainer's own
+forward pass across every special move type and thousands of random game
+chains. It is built by `pipeline.py` rather than `build.sh`, so compile it
+directly:
 
 ```bash
 clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \

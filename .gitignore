@@ -37,8 +37,17 @@ stockfish/
 *.nnue
 *.bin
 data/**/*.zip
-nets/
 engines/
+
+# ...with one deliberate exception: the shipped net. Without it a clone falls
+# back to the hand-crafted eval and cannot reproduce the release bench
+# fingerprint at all. 578 KB is worth that. Note this must be `nets/*` and not
+# `nets/` -- git does not descend into an excluded DIRECTORY, so a negation
+# inside one never fires. The negation also has to come after `*.nnue`, since
+# the last matching pattern wins.
+nets/*
+!nets/gen8.nnue
+!nets/README.md
 
 # Benchmark working directories: downloaded opponents, tournament binaries,
 # and the PGN/rating output of a run. benchmarks/ledger.md, pool.json and
