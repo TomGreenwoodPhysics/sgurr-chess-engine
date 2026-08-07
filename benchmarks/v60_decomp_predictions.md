@@ -4,7 +4,7 @@ Written **2026-08-02**, before a single game was played, against binaries
 built from commit `ce303c9`. Committed ahead of the result so the reasoning
 below cannot be quietly reshaped to fit whatever comes back.
 
-`METHODOLOGY.md` is largely a record of conclusions that had to be withdrawn.
+`docs/METHODOLOGY.md` is largely a record of conclusions that had to be withdrawn.
 The cheapest defence against adding another is to say in advance what is
 expected and what would count as being wrong.
 

@@ -194,11 +194,11 @@ configuration boundaries.
 The web asset set has recorded commercial-compatible terms. Preserve these
 records with every release:
 
-- [`../THIRD_PARTY_ASSETS.md`](../THIRD_PARTY_ASSETS.md): media provenance and
+- [`../docs/THIRD_PARTY_ASSETS.md`](../docs/THIRD_PARTY_ASSETS.md): media provenance and
   the explicit list of excluded legacy sounds;
-- [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md): software licences
+- [`../docs/THIRD_PARTY_NOTICES.md`](../docs/THIRD_PARTY_NOTICES.md): software licences
   and the `python-chess` distribution caveat;
-- [`../PROJECT_PROVENANCE.md`](../PROJECT_PROVENANCE.md): engine, NNUE, and
+- [`../docs/PROJECT_PROVENANCE.md`](../docs/PROJECT_PROVENANCE.md): engine, NNUE, and
   project ownership evidence plus the owner attestation;
 - [`../LICENSE`](../LICENSE): terms for original Sgurr materials.
 

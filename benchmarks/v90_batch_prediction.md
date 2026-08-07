@@ -1,7 +1,7 @@
 # v9.0 tier-1 batch — prediction, registered before the run
 
 Written **2026-08-03**, before a single game was played. Registered per
-decision rule 7 of `METHODOLOGY.md`, which was added *because* the singular
+decision rule 7 of `docs/METHODOLOGY.md`, which was added *because* the singular
 prediction two days earlier was badly wrong and would have been easy to
 retrofit afterwards.
 
@@ -64,7 +64,7 @@ precedent agrees: RFP + LMP measured +176 self-play, and the v6.0 package
 exactly the profile of the last thing this project got wrong.**
 
 Removing singular extensions shrank the tree 46% and measured **−77 Elo**.
-Tree size is not strength; `METHODOLOGY.md` §5 now says so in two places.
+Tree size is not strength; `docs/METHODOLOGY.md` §5 now says so in two places.
 
 The honest counter is that these are *pruning* features, meant to cut nodes
 that do not matter, whereas singular is an *extension* whose cost buys

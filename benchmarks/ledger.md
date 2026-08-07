@@ -40,7 +40,7 @@ scale, not official CCRL ratings.
   ~20% faster.
 - **Two instruments, no compression.** Self-play SPRT +21.2 ±8.7 (4,000 games
   @ 8+0.08) against pooled +20.9. A 0.3 Elo discrepancy between independent
-  measurements. Every prior comparison in §6 of `METHODOLOGY.md` showed
+  measurements. Every prior comparison in §6 of `docs/METHODOLOGY.md` showed
   self-play gains shrinking against the pool (RFP 0.68×, gen8 net 0.81×,
   history malus and the v3.1 soft limit to zero or worse). This one survives
   at 1.0×, which sharpens the explanation: compression applies to *behaviour*

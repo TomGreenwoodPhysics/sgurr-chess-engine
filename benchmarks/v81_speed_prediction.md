@@ -30,7 +30,7 @@ between the two binaries is speed.**
 
 ## The question
 
-`METHODOLOGY.md` §5 lists the AVX-512/int16 inference at "~+22% NPS (≈+15 Elo,
+`docs/METHODOLOGY.md` §5 lists the AVX-512/int16 inference at "~+22% NPS (≈+15 Elo,
 *inferred*)" and flags it explicitly: converted through the ~70 Elo per
 doubling rule rather than measured in games. It calls it "the most mechanically
 defensible inference in the project, and still an inference."
@@ -86,5 +86,5 @@ already caught once.
 The prediction is wrong if the measured value falls outside **[+10, +27]**.
 
 A result below +3 would be the interesting failure: it would mean several
-banked "free Elo" gains were never free, and `METHODOLOGY.md` §5 would need a
+banked "free Elo" gains were never free, and `docs/METHODOLOGY.md` §5 would need a
 correction row rather than a footnote.
