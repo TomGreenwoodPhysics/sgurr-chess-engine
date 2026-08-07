@@ -6,12 +6,16 @@ This licence applies only to the original Sgurr source code, engine code,
 trained model files, documentation, artwork, and other materials for which Tom
 Greenwood owns the copyright.
 
-No permission is granted to copy, modify, publish, distribute, sublicense,
-sell, or create derivative works from those original Sgurr materials without
-prior written permission from the copyright owner.
+You may read, build, run, and evaluate this repository for personal,
+educational, or evaluation purposes, including reviewing it as part of a
+hiring or academic assessment.
+
+Beyond that, no permission is granted to copy, modify, publish, distribute,
+sublicense, sell, or create derivative works from those original Sgurr
+materials without prior written permission from the copyright owner.
 
 Third-party software and assets are not covered by this licence. They remain
-subject to their own licence terms. See THIRD_PARTY_NOTICES.md,
-THIRD_PARTY_ASSETS.md, web/licenses/, and any licence files stored beside an
-asset.
+subject to their own licence terms. See docs/THIRD_PARTY_NOTICES.md,
+docs/THIRD_PARTY_ASSETS.md, web/licenses/, and any licence files stored beside
+an asset.
 

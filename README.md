@@ -1,23 +1,93 @@
 # Sgurr
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. Current release is **v8.2 "Thearlaich"** at **3058 ±7** on a
-CCRL-Blitz-anchored scale, measured over an 11,144-game gauntlet.
+self-play games. The current release, **v8.2 "Thearlaich"**, is internally
+calibrated at an estimated **3058** on a CCRL-Blitz-anchored scale, measured
+over an 11,144-game gauntlet.
 
-The evaluation pipeline is built end to end in this repository: the self-play
-data generator, the PyTorch trainer, the quantisation scheme, the network file
-format, and the AVX-512 inference that reads it. Each generation of the network
-is trained on positions labelled by the previous generation, so the engine is
-its own teacher. External engines appear only as rating anchors, never in the
-training loop.
+That figure is a self-calibrated estimate, not an official rating. Sgurr has
+never been submitted to CCRL and does not appear on any published list. The
+±7 quoted below is sampling error only; systematic uncertainty on the absolute
+number is nearer **±45**, for reasons set out under [Strength](#strength).
 
-There is also an earlier pure-Python engine kept as a reference implementation.
+The whole evaluation pipeline is built in this repository end to end — the
+self-play data generator, the PyTorch trainer, the quantisation scheme, the
+network file format, and the AVX-512 inference that reads it. Each generation
+of the network is trained on positions labelled by the previous generation, so
+the engine is its own teacher. External engines appear only as rating anchors,
+never in the training loop.
+
+| | |
+|---|---|
+| **Methodology and findings** | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — what was learned, including the results that had to be withdrawn |
+| **Results ledger** | [benchmarks/ledger.md](benchmarks/ledger.md) — append-only record of every rating measured |
+| **Changelog** | [docs/CHANGELOG.md](docs/CHANGELOG.md) — released versions with error bars |
+| **Engineering log** | [docs/DEVLOG.md](docs/DEVLOG.md) — dated record of findings and bugs |
+| **Roadmap** | [docs/ROADMAP.md](docs/ROADMAP.md) — what is next and why |
+| **Build notes** | [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md) — toolchain, PGO recipe, fingerprint check |
+
+---
+
+## What makes this interesting
+
+The engine is ordinary work of its kind. The measurement discipline around it
+is the part worth reading.
+
+**Every claim is decided by games, never by a proxy.** Training loss is not
+merely uninformative about strength here — it is anti-correlated. Across five
+instances trained on identical data the ranking inverted completely: the
+variant with the best loss (0.00471) measured +2 Elo, the variant with the
+worst (0.00661) measured +9. The standing rule is that no architecture,
+dataset size or hyper-parameter is ever selected on loss.
+
+**The noise floor was measured, and it invalidated earlier conclusions.** Two
+networks trained on identical data with an identical recipe, differing only in
+random seed, score **+13.7 ±10.3** against each other over 3,000 games.
+Training is not reproducible at the Elo level. That number had been assumed to
+be zero for the project's entire history, and measuring it retracted several
+published results — including a width finding that had already been
+recommended for the next generation. Anything below roughly ±25 Elo on a
+network change is now indistinguishable from seed luck without training
+several seeds per configuration.
+
+**Speed-only changes are proved, not argued.** `bench` searches a fixed
+position list to a fixed depth with no clock and no randomness, so its node
+counts are a fingerprint of *what* the engine searches. Any change claimed to
+be speed-only must leave that fingerprint byte-identical:
+
+```bash
+diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+```
+
+The AVX-512 inference, the PGO build and nine separate data-layout
+optimisations were all validated this way — no games required. If the
+fingerprint moves, the change altered behaviour and the speedup was not free.
+
+**Negative results are kept in the tree, not deleted.** v3.1 rates *below*
+v3.0 and the table below says so. Eight king buckets measured −10.7 ±16
+against the plain 768→384 control despite 12% lower loss, so the control
+shipped. A ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
+[docs/METHODOLOGY.md](docs/METHODOLOGY.md) is largely a record of conclusions
+that had to be withdrawn.
+
+**Predictions are registered before the games are played, with a falsification
+band.** [benchmarks/v81_speed_prediction.md](benchmarks/v81_speed_prediction.md)
+was written before a single v8.1 game: +18 to +19 Elo, ~55% confidence of
+landing in [+10, +27], and a table saying in advance what each outcome would
+mean. It landed inside the band, which appeared to confirm the ~70-Elo-per-
+doubling NPS conversion the project had been valuing speed work with.
+
+Then v8.2 broke it. Node-identical to v8.1 and 15.4% faster, the same rule put
+it at 3041 — +14.5. The gauntlet says **+31.5**, an implied ~131 per doubling.
+Solving each anchor independently gives +29, +21, +31 and +28, so it is not the
+rating solver. v8.1's agreement now reads as coincidence, and the conversion is
+no longer used to predict anything here.
 
 ---
 
 ## Strength
 
-| engine | rating (CCRL-Blitz-anchored, pool-2026-07-B) |
+| engine | rating (CCRL-Blitz-anchored estimate, pool-2026-07-B) |
 |---|---|
 | Sgurr v8.2 "Thearlaich" | **3058 ±7** |
 | Sgurr v8.1 "Thearlaich" | 3027 ±11 |
@@ -34,45 +104,36 @@ There is also an earlier pure-Python engine kept as a reference implementation.
 
 Every row is solved from games. None is estimated.
 
-v8.2 is worth a note. It is node-identical to v8.1 and 15.4% faster, so before
-the gauntlet ran its rating was predicted at 3041 — v8.1's measurement plus
-70 × log₂(1.154), the conversion v8.1 itself appeared to confirm. It measured
-**3058**, a gap of +31.5 where +14.5 was predicted. The prediction was
-registered in advance and it was wrong. Solving each anchor separately gives
-+29, +21, +31 and +28, so the miss is not an artefact of the rating solver, and
-that conversion is no longer used to predict anything here.
-
 Ratings come from a gauntlet against a fixed pool of open-source engines with
 published CCRL Blitz ratings (Blunder, Zahak, Weiss, Igel — four families,
 2105–3055), solved with Ordo anchored to those values. They are estimates on
-the CCRL Blitz scale, not official CCRL ratings, and the absolute scale is only
-as good as the anchors. The *gaps* between versions are anchor-independent.
+the CCRL Blitz scale produced here, not official CCRL ratings, and the
+absolute scale is only as good as the anchors.
 
-That last sentence is doing more work than it looks. v8.2's 11,144 games are
-enough to place it against each anchor separately, and the four anchors disagree
-by **90 Elo** about where it sits — Igel says 3106, Weiss-1.0 says 3016. The
-spread is not new (63, 100 and 90 for v8.0, v8.1 and v8.2) and it is not
-sampling noise: it is what happens when ratings measured under CCRL's conditions
-are transferred to a different book, time control and machine. So the ±7 above
-counts coin-flip noise only; systematic uncertainty on the *absolute* number is
-nearer ±45. Version-to-version gaps, measured inside one solve against one pool,
-do not carry it.
+**Why the systematic uncertainty is ±45 while the interval is ±7.** v8.2's
+11,144 games are enough to place it against each anchor *separately*, and the
+four anchors disagree by **90 Elo** about where it sits — Igel says 3106,
+Weiss-1.0 says 3016. The spread is not new (63, 100 and 90 for v8.0, v8.1 and
+v8.2) and it is not sampling noise. It is what happens when ratings measured
+under CCRL's conditions are transferred to a different book, time control and
+machine. So ±7 counts coin-flip noise only.
 
-One further limit, stated plainly: v8.2 scores **50.8%** against Weiss-1.2, the
-strongest engine in the pool, and 86–97% against five of the other seven. The
-pool can no longer resolve improvements at this level, and a stronger one is
-needed before v8.3 means anything.
+**Version-to-version gaps do not carry that uncertainty**, because they are
+measured inside one solve against one pool. Each generational gap
+independently reproduces the direct SPRT between those versions: v4.0's net
+change measured +54 in the pool against +55.5 ±17.0 in a 1,194-game SPRT.
+
+One further limit, stated plainly: v8.2 scores **50.8%** against Weiss-1.2,
+the strongest engine in the pool, and 86–97% against five of the other seven.
+The pool can no longer resolve improvements at this level, and a stronger one
+is needed before v8.3 means anything.
 
 Anchors were re-sourced from the live CCRL list on 2026-07-15 after an audit
 found the previous set inflated by a mean of ~31 Elo; every row above is from
-one consistent solve. v7.0 onward were measured on a Ryzen 7 7800X3D, v6.0
-and earlier on an i5-9400F. A single Ordo solve places them on one scale, but
-cross-hardware absolute gaps carry that caveat — the version-to-version SPRTs,
+one consistent solve. v7.0 onward were measured on a Ryzen 7 7800X3D, v6.0 and
+earlier on an i5-9400F — a single Ordo solve places them on one scale, but
+cross-hardware absolute gaps carry that caveat. The version-to-version SPRTs,
 run on one machine, do not.
-
-Each generational gap in the pool independently reproduces the direct SPRT
-between those versions. v4.0's net change, for instance, measured +54 in the
-pool against +55.5 ±17.0 in a 1,194-game SPRT.
 
 **v3.1 sits below v3.0** despite a positive interim SPRT at 8+0.08. Its flat
 soft time limit loses at the pool's 10+0.1. v4.0 replaced it with best-move
@@ -80,112 +141,109 @@ stability scaling, which measures positive at both controls.
 
 ---
 
-## How strength is measured, and what it costs to know
+## Architecture
 
-`METHODOLOGY.md` is the most useful file in this repository. It records what
-was learned rather than what happened, including the results that had to be
-withdrawn.
+```text
+sgurr_cpp/     the engine: bitboard movegen, search, NNUE inference, datagen
+nnue/          the trainer: PyTorch model, quantisation, .nnue export, verifiers
+pipeline.py    one resumable command from self-play data to a ledger row
+configs/       per-generation pipeline configs
+testing/       match runner, SPRT harness, SPSA tuner, opening-book generator
+benchmarks/    rating pool, CCRL anchors, results ledger, registered predictions
+data/          dataset manifests, shard checksums and training logs per version
+web/           FastAPI backend + zero-build browser frontend
+desktop/       pygame desktop GUI (the design reference for the web app)
+sgurr_python/  earlier pure-Python engine, kept as a readable reference
+tools/         calibration and datagen launchers
+docs/          methodology, dev log, changelog, roadmap, provenance, notices
+```
 
-Two things in it are worth stating here.
+### Engine
 
-**The noise floor.** Two networks trained on identical data with an identical
-recipe, differing only in random seed, score **+13.7 ±10.3** against each other
-over 3,000 games. Training is not reproducible at the Elo level. That number
-had been assumed to be zero for the project's entire history, and measuring it
-invalidated several published conclusions — including a width result that had
-already been recommended for the next generation. Anything below roughly ±25
-Elo on a network change is not distinguishable from seed luck without training
-several seeds per configuration.
+Bitboards with magic-bitboard sliders. Legality is decided without
+make/unmake — a per-node structure carries the king square, checker count, pin
+mask and check mask, so each move is answered in O(1). Incremental Zobrist
+hashing verified against full recomputation. Full static exchange evaluation
+with x-ray resolution and a king-legality rule, plus a threshold-only variant
+with early exit.
 
-Search changes reuse one fixed network and carry no training variance, so they
-are far cheaper to validate. That asymmetry drives most of the planning here.
+Search is iterative deepening with aspiration windows over negamax /
+alpha-beta / PVS, with: a runtime-sized transposition table, null-move pruning,
+late move reductions adjusted by history, reverse futility pruning, late move
+pruning, razoring, singular extensions, check extensions, an improving flag
+feeding both the RFP margin and the LMP quiet budget, quiescence search with
+delta and SEE pruning, killers, butterfly history with malus, continuation
+history, a good/bad capture split by SEE, and soft/hard time management with
+best-move-stability scaling.
 
-**Training loss does not predict strength.** Across five instances on identical
-data the ranking inverted completely: the variant with the best loss (0.00471)
-measured +2 Elo, and the variant with the worst loss (0.00661) measured +9.
-Loss is not merely uninformative, it is anti-correlated. The standing rule is
-that no architecture, dataset size, or hyper-parameter is ever selected on
-loss. Only games decide.
+Singular extensions are implemented with the excluded-move search properly
+isolated: no TT cutoff, no null move, and no TT store while a move is excluded.
 
-Related files: `CHANGELOG.md` for released versions with error bars,
-`benchmarks/ledger.md` for the append-only record of every rating measured,
-`DEVLOG.md` for the dated engineering log, and `ROADMAP.md` for what is next.
-
----
-
-## Releases
-
-Versions are named after Sgùrr peaks in ascending height. Version numbers are
-canonical; peak names are codenames.
-
-| version | codename | peak | summary |
-|---|---|---|---|
-| v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
-| v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 vs v1.0 (300 games, 8+0.08) |
-| v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 vs v2.0 (618 games, SPRT); 2616 ±37 |
-| v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only: soft/hard time management. Calibrated 2564 ±26, below v3.0 — the flat soft limit loses at 10+0.1. Superseded in v4.0 |
-| v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT), plus history malus and best-move-stability time management; 2627 ±27 |
-| v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) and LMP; 2724 ±36, +119 vs v4.0 in the same solve. The gen6 net measured flat and was not shipped |
-| v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package: improving flag, history-adjusted LMR, singular extensions. +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); **2807 ±36**, first version above the old pool's ceiling |
-| v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash — the labels really were the bottleneck. 2903 ±6 over an 8,522-game solve. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
-| v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. **3005.5 ±11** over 3,329 games. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
-| v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled** — the two agree to 0.3 Elo, so no compression. **3027 ±11**; the first version whose interval clears 3000 outright. Same net, same search, same moves |
-| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. **3058 ±7** over 11,144 games, **+31.5 vs v8.1** against +14.5 predicted. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
-
----
-
-## What is in the engine
-
-### Board and move generation
-
-* Bitboards with magic-bitboard sliders
-* Legality decided without make/unmake — a per-node structure carries the king
-  square, checker count, pin mask and check mask, so each move is answered in
-  O(1)
-* Incremental Zobrist hashing, verified against full recomputation
-* Full static exchange evaluation with x-ray resolution and a king-legality
-  rule, plus a threshold-only variant with early exit
-* `perft` against known reference counts
-
-### Search
-
-* Iterative deepening with aspiration windows
-* Negamax, alpha-beta, principal variation search
-* Transposition table, runtime-sized via the `Hash` option
-* Null-move pruning
-* Late move reductions, adjusted by history
-* Reverse futility pruning and late move pruning
-* Razoring at shallow depth
-* Singular extensions, implemented with the excluded-move search correctly
-  isolated: no TT cutoff, no null move, and no TT store while a move is excluded
-* Check extensions
-* Improving flag, feeding both the RFP margin and the LMP quiet budget
-* Quiescence search with delta pruning and SEE pruning
-* Killer moves, butterfly history with malus, continuation history
-* Good/bad capture split by SEE, ordered between killers and quiets
-* Draw detection by repetition and the fifty-move rule
-* Time management: soft and hard clock limits, a move-overhead margin, and
-  best-move-stability scaling of the soft limit
-
-The features added since v4.0 each carry a compile-time toggle — `SGR_RFP`,
+Every feature added since v4.0 carries a compile-time toggle — `SGR_RFP`,
 `SGR_LMP`, `SGR_IMPROVING`, `SGR_HISTLMR`, `SGR_SINGULAR`, `SGR_HMALUS`,
-`SGR_CONTHIST`, `SGR_BMSTAB` — so any one of them can be A/B tested from a
-single source tree without a branch.
+`SGR_CONTHIST`, `SGR_BMSTAB` — so any one can be A/B tested from a single
+source tree without a branch.
 
 ### Evaluation
 
-The shipped evaluation is the NNUE: a `768 → 384 → 1` perspective network,
+The shipped evaluation is a `768 → 384 → 1` perspective network,
 integer-quantised throughout, with accumulators updated incrementally through
 make and unmake. Inference dispatches to AVX-512, AVX2 or scalar depending on
-the build target; all three produce bit-identical output, so the vector paths
-are a speed change and never a numeric one. Every accumulator hook checks the
-position's Zobrist key before touching anything and falls back to a full
+the build target, and all three produce bit-identical output — so the vector
+paths are a speed change and never a numeric one. Every accumulator hook checks
+the position's Zobrist key before touching anything and falls back to a full
 rebuild on a mismatch, so a missed update can cost speed but not correctness.
 
-A hand-crafted evaluation is still in the tree and is used when no network
-loads — tapered material and piece-square tables, pawn structure with a cache,
+A hand-crafted evaluation remains in the tree and is used when no network
+loads: tapered material and piece-square tables, pawn structure with a cache,
 king safety, mobility, and a mop-up term for bare-king endings. It is roughly
 630 Elo weaker than the NNUE and exists as a fallback and a reference.
+
+### Training pipeline
+
+One resumable command produces a network generation:
+
+```bash
+python pipeline.py configs/pipeline_gen8.json           # run or resume
+python pipeline.py configs/pipeline_gen8.json --status  # stage progress
+```
+
+The stages are parallel self-play **datagen** with balance-filtered openings →
+**freeze** into a versioned dataset with a per-shard manifest and checksums →
+**train** → **build** → **select** the best variant by games → **SPRT** against
+the previous generation → pool **calibrate** with Ordo → append to the
+**ledger**. Every stage checkpoints, so the pipeline survives interruption.
+Datasets, weights and ledger rows are append-only.
+
+The generator writes 32-byte records, is resumable and shard-tagged so parallel
+workers never collide, and is safe to kill — loaders floor to whole records, so
+a torn tail is ignored. Labeller builds must be compiled with `-DSGR_RFP=0`:
+reverse futility pruning returns an unsearched score where a searched one is
+expected, and that mistake cost an entire generation.
+
+### Web application
+
+`web/` serves the engine in a browser. FastAPI owns one persistent UCI process,
+validates chess state with `python-chess`, serves the frontend and an allowlist
+of media, and exposes a small JSON API. The frontend is 19 plain ES modules and
+12 CSS partials with no build step and no npm runtime dependency. Every
+canonical release from the classical evaluation to v8.2 is selectable as an
+opponent, with its measured rating shown. See [web/README.md](web/README.md).
+
+---
+
+## Tech stack
+
+| layer | stack |
+|---|---|
+| engine | C++20, clang from MSYS2 `clang64`, PGO + ThinLTO release build |
+| inference | hand-written AVX-512 / AVX2 paths with a scalar fallback |
+| trainer | Python 3.12, PyTorch, NumPy |
+| tournaments and rating | fastchess, Ordo, plus an in-repo Python SPRT harness |
+| web backend | FastAPI, Uvicorn, python-chess |
+| web frontend | native ES modules and CSS, no build step |
+| browser tests | Playwright |
+| desktop GUI | pygame, python-chess |
 
 ---
 
@@ -195,6 +253,7 @@ king safety, mobility, and a mop-up term for bare-king endings. It is roughly
 resulting binary actually starts:
 
 ```bash
+cd sgurr_cpp
 ./build.sh                     # development build   -> sgr.exe
 ./build.sh -r                  # release build       -> sgr.exe  (PGO + ThinLTO)
 ./build.sh -d                  # data generator      -> datagen.exe
@@ -210,13 +269,13 @@ still produces a complete, plausible-looking result. `build.sh` relinks until
 the binary runs, and both `testing/sprt.py` and `pipeline.py` verify every
 engine before playing.
 
-Building by hand needs a C++20 compiler; see `sgurr_cpp/BUILD.md` for the
-toolchain notes, the full PGO recipe, and the data generator.
+Building by hand needs a C++20 compiler; [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md)
+has the toolchain notes, the full PGO recipe and the data generator.
 
 Run it:
 
 ```bash
-./sgr.exe                      # bare launch defaults to UCI
+SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe    # bare launch defaults to UCI
 ```
 
 ```text
@@ -226,79 +285,103 @@ position startpos moves e2e4 e7e5
 go movetime 1000
 ```
 
-The engine advertises 30 UCI options: `Hash`, `Clear Hash`, `Move Overhead`,
-`Threads`, and 26 search parameters — every margin, divisor and threshold in
+Without `SGR_EVALFILE` the engine falls back to the hand-crafted evaluation and
+says so on stdout, so a missing network is visible rather than silent.
+
+The engine advertises 48 UCI options: `Hash`, `Clear Hash`, `Move Overhead`,
+`Threads`, and 44 search parameters — every margin, divisor and threshold in
 the search, exposed so they can be tuned. None of them has been swept yet.
 
 `Threads` is pinned at 1. The engine is single-threaded on purpose: the rating
-scale used here is single-core, so a parallel search would measure exactly
-zero.
+scale used here is single-core, so a parallel search would measure exactly zero.
 
 ---
 
-## Testing and verification
+## Reproducing the benchmark and the tests
 
-**`bench`** is the main instrument.
+Expected output is given for each command so a mismatch is obvious.
 
-```bash
-./sgr.exe bench                # 19 fixed positions at depth 11
-./sgr.exe bench 13
-```
-
-It searches a fixed position list to a fixed depth. The search is deterministic
-— no clock, no randomness, heuristics cleared between positions — so the node
-counts are a fingerprint of what the engine searches. Any change that is meant
-to be speed-only must leave that fingerprint byte-identical. If it moves, the
-change altered behaviour and the speedup is not free.
-
-The fingerprint goes to stdout and everything non-deterministic to stderr, so
-comparing two builds is:
+**Note on networks.** Trained `.nnue` files are not in the repository — they are
+build artefacts of the training pipeline, and `nets/` is gitignored. Without one
+the engine falls back to the hand-crafted evaluation and says so on stdout, so a
+fresh clone reproduces the HCE fingerprint rather than the release one. Both are
+given below.
 
 ```bash
-diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+cd sgurr_cpp
+
+# Deterministic search fingerprint: 19 positions at depth 11.
+./sgr.exe bench
+#   -> nodes 4616415        (hand-crafted eval, i.e. no network present)
+
+SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe bench
+#   -> nodes 3601424        (the shipped v8.2 fingerprint)
+
+# Move generation, unmake, and null-move hash/eval restoration.
+./sgr.exe test
+#   -> perft(1..4) = 20 / 400 / 8902 / 197281
+#   -> "after unmake eval = 0", "null restored hash = yes", "... eval = yes"
+
+# Static exchange evaluation against hand-verified tactical cases.
+./sgr.exe seetest
+#   -> SEE: 9/9 passed
 ```
 
-That turned a whole category of work into something provable without playing
-games. The AVX-512 inference, the PGO build, and nine separate data-layout
-optimisations were all verified this way.
+The `nodes` total is the fingerprint. For a given evaluation it is identical
+across the dev build, the PGO release build, and the AVX-512, AVX2 and scalar
+inference paths — that is what makes those a speed change rather than a
+behaviour change.
 
-The rest:
+With a network available, the bit-exactness gate compares engine inference
+against the trainer's own forward pass across every special move type and
+thousands of random game chains:
 
-* `perft` for move generation
-* Make/unmake checked by restoring board state and hash keys
-* Incremental Zobrist checked against full recomputation
-* Null moves checked for correct restoration
-* `seetest` runs static exchange evaluation against hand-verified tactical
-  cases, including x-rays, en passant and the king-capture rule
-* `nnue_selfcheck` compares engine inference against the trainer's own forward
-  pass and produces a cross-build evaluation checksum
-* Search changes are decided by SPRT at 8+0.08; releases are calibrated against
-  the pool
-* Every rating is reported with an interval
+```bash
+clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
+  nnue_selfcheck.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
+  -o nnue_selfcheck.exe
+./nnue_selfcheck.exe ../nets/gen8.nnue
+#   -> loaded ../nets/gen8.nnue active=1 simd=avx512 buckets=1
+#   -> checks=4516 fails=0 evalsum=-142859 -> PASS
+```
+
+Web tests, from the repository root:
+
+```bash
+python -m unittest discover -s web/backend -p "test_*.py"   # -> 23 tests, OK
+
+cd web && npm ci && npx playwright install chromium
+npx playwright test                                         # -> 7 passed
+```
+
+Strength changes are decided by SPRT at 8+0.08 against the previous accepted
+version; releases are calibrated against the pool at 10+0.1. Every rating is
+reported with an interval. [testing/README.md](testing/README.md) covers the
+match runner, the SPRT harness and the opening book.
 
 ---
 
-## Training pipeline
+## Releases
 
-One resumable command produces a network generation:
+Versions are named after Sgùrr peaks in ascending height. Version numbers are
+canonical; peak names are codenames.
 
-```bash
-python pipeline.py pipeline_gen8.json           # run or resume the cycle
-python pipeline.py pipeline_gen8.json --status  # stage progress
-```
+| version | codename | peak | summary |
+|---|---|---|---|
+| v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
+| v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 vs v1.0 (300 games, 8+0.08) |
+| v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 vs v2.0 (618 games, SPRT) |
+| v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only: soft/hard time management. Calibrated **below v3.0** — the flat soft limit loses at 10+0.1. Superseded in v4.0 |
+| v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT), plus history malus and best-move-stability time management |
+| v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) and LMP. The gen6 net measured flat and was not shipped |
+| v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package: improving flag, history-adjusted LMR, singular extensions. +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); first version above the old pool's ceiling |
+| v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash — the labels really were the bottleneck. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
+| v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
+| v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled** — the two agree to 0.3 Elo. Same net, same search, same moves |
+| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. **+31.5 vs v8.1** against +14.5 predicted. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
 
-The stages are: parallel self-play **datagen** with balance-filtered openings →
-**freeze** into a versioned dataset with a per-shard manifest and checksums →
-**train** → **build** → **select** the best variant by games → **SPRT** against
-the previous generation → pool **calibrate** with Ordo → append to the
-**ledger**. Every stage checkpoints, so the pipeline can be interrupted and
-resumed. Datasets, weights and ledger rows are append-only.
-
-The generator writes 32-byte records and is resumable, shard-tagged so parallel
-workers never collide, and safe to kill — loaders floor to whole records, so a
-torn tail is ignored. Labeller builds must be compiled with `-DSGR_RFP=0`;
-reverse futility pruning returns an unsearched score where a searched one is
-expected, and that mistake cost an entire generation.
+Ratings for each row are in the [Strength](#strength) table above and in
+[benchmarks/ledger.md](benchmarks/ledger.md) with full game counts.
 
 ---
 
@@ -327,3 +410,10 @@ target.
 Sgùrr is Gaelic for a rocky mountain peak. The engine name is plain-ASCII
 `Sgurr` and the binary is `sgr`. It was called Ruk before that, and Bitfish
 before that.
+
+## Licence
+
+Original Sgurr material is proprietary — see [LICENSE](LICENSE). You are free
+to read, build, run and evaluate it. Third-party software and assets keep their
+own terms, inventoried in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)
+and [docs/THIRD_PARTY_ASSETS.md](docs/THIRD_PARTY_ASSETS.md).
