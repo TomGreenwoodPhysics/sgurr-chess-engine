@@ -1,4 +1,4 @@
-# python
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -7,7 +7,7 @@ __pycache__/
 venv/
 env/
 
-# c++ build outputs
+# C++ build outputs
 *.exe
 *.o
 *.obj
@@ -21,36 +21,37 @@ pgo2/
 *.profraw
 *.profdata
 
-# generated analysis/output files
+# Generated analysis and match output
 analysis_games/
 *.jsonl
 *.csv
 *.pgn
-
-# editor/system
-.vscode/
-.DS_Store
-Thumbs.db
-
-# stockfish binary / local engines
-stockfish/
-*.nnue
-
-# nnue training data
-*.bin
-data/**/*.zip
-
 *_file_list.txt
 
+# Stockfish binary / local engines
+stockfish/
+
+# Trained networks and NNUE training data. The manifests and training logs
+# under data/ ARE tracked -- they are the provenance record. Only the bulk
+# artefacts they describe are excluded.
+*.nnue
+*.bin
+data/**/*.zip
+nets/
+engines/
+
+# Benchmark working directories: downloaded opponents, tournament binaries,
+# and the PGN/rating output of a run. benchmarks/ledger.md, pool.json and
+# anchors.txt are tracked -- those are the record, not the scratch.
 benchmarks/engines/
 benchmarks/tools/
 benchmarks/games/
-*.jsonl
-*.csv
-*.pgn
 benchmarks/config.json
 benchmarks/ratings.csv
+
+# Per-run scratch: logs, partial gauntlets, resumable pipeline state
 runs/
+_backups/
 
 # fastchess run state: rewritten in place with live match stats on every run,
 # so it is scratch output rather than source. fastchess drops config.json in
@@ -58,5 +59,21 @@ runs/
 # paths -- naming paths is how a root-level one slipped through once.
 config.json
 
-# local web demo server logs
-web/*.log
+# Test-runner output. Playwright writes test-results/ and playwright-report/
+# next to wherever it is invoked, which is not always web/.
+test-results/
+playwright-report/
+node_modules/
+
+# Local tool configuration: machine-specific, contains absolute paths
+.claude/settings.local.json
+.vscode/
+
+# Editor and OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.tmp/
+
+# Local web demo server logs
+*.log
