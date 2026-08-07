@@ -194,7 +194,9 @@ def play_game(white, black, start_fen, opening_moves, tc):
 def load_book(path):
     lines = []
     if path and os.path.exists(path):
-        for raw in open(path):
+        with open(path, encoding="utf-8") as fh:
+            book_lines = fh.readlines()
+        for raw in book_lines:
             s = raw.strip()
             if not s or s.startswith("#"):
                 continue

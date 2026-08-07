@@ -81,7 +81,18 @@ cause spurious time forfeits below ~1s base.
 
 - `match.py`      plain two-engine match
 - `sprt.py`       SPRT runner (stops on a decision)
+- `test_sprt.py`  unit tests for the SPRT statistics and stopping rule
 - `chesslite.py`  perft-verified board/movegen used to arbitrate games
 - `book_gen.py`   balanced-book generator (uses the engine's eval)
 - `book.epd`      starter book (150 balanced positions)
 - `fastchess.md`  fastchess / cutechess-cli setup and command
+
+`sprt.py` decides whether a change ships, so its arithmetic is checked rather
+than trusted. The tests pin closed-form values (the Elo formula is analytic),
+invariants that must hold for any correct implementation (antisymmetry,
+monotonicity, the 1/sqrt(n) shrink of the interval), and the decision rule
+itself including the minimum-games guard. No engine is started, so:
+
+    python3 -m unittest discover -s testing -p "test_*.py"
+
+runs in milliseconds, and CI runs it on every push.

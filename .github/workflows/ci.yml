@@ -20,7 +20,7 @@ name: CI
 
 on:
   push:
-    branches: [main, repo-cleanup]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -156,6 +156,24 @@ jobs:
         run: |
           echo "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf  nets/gen8.nnue" \
             | sha256sum --check --strict
+
+  harness:
+    name: test harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # sprt.py decided whether every search change in this project shipped.
+      # These cover the statistics and the stopping rule against closed-form
+      # values and invariants; no engine is started, so it runs in
+      # milliseconds. -W error::ResourceWarning because a leaked file handle
+      # is how the book loader was found to be holding one open.
+      - name: SPRT statistics and decision rule
+        run: python -W error::ResourceWarning -m unittest discover -s testing -p "test_*.py" -v
 
   backend:
     name: web backend
