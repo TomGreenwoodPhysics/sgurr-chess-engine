@@ -1,10 +1,15 @@
 # Sgurr Web
 
-Sgurr Web is a browser chess experience backed by the Sgurr UCI engine
-(v6.0 by default, with earlier releases selectable). FastAPI validates chess
-state, owns the engine process, serves the
-production frontend and allowlisted media, and exposes a small JSON API. The
-same frontend can also run from VS Code Live Server during development.
+Sgurr Web is a browser chess experience backed by the Sgurr UCI engine.
+Every canonical release from the classical evaluation up to v8.2 is
+selectable as an opponent, newest first, and v8.2 is the default. FastAPI
+validates chess state, owns the engine process, serves the production
+frontend and allowlisted media, and exposes a small JSON API. The same
+frontend can also run from VS Code Live Server during development.
+
+The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`; its
+ratings are the pool-2026-07-B Ordo solve copied from
+`../benchmarks/ledger.md`, so adding a version there puts it in the picker.
 
 ## Structure
 
@@ -19,7 +24,7 @@ web/
     index.html             static browser UI (loads js/main.js + styles.css)
     styles.css             @import manifest; ordering IS the cascade
     styles/                12 CSS partials (base, intro, menu, board, core, …)
-    js/                    17 native ES modules; main.js is the entry point
+    js/                    19 native ES modules; main.js is the entry point
     assets/                web-owned images and Chessnut pieces
   licenses/                Python dependency licence texts
   tests/e2e/               deterministic Playwright smoke tests
@@ -44,19 +49,21 @@ allowlist of documented music and result sounds.
 
 ## 1. Build The Sgurr Engine
 
-Use the MSYS2 `clang64` shell on Windows:
+Use the MSYS2 `clang64` shell on Windows, from the repository root:
 
 ```bash
-cd "/c/Coding/Sgurr/sgurr_cpp"
-/c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
-  -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
-  -o sgr_v6_0.exe
+cd sgurr_cpp
+./build.sh -r -o sgr_v8_2.exe     # release build; see BUILD.md for the recipe
 ```
+
+The backend looks for the binary each `ENGINE_SPECS` entry names, so build
+whichever releases you want selectable. Only the default (`sgr_v8_2.exe`) is
+needed to play; the rest degrade to unavailable entries in the picker.
 
 Quick UCI check:
 
 ```bash
-./sgr_v6_0.exe uci
+./sgr_v8_2.exe uci
 ```
 
 Then enter `uci`, `isready`, `position startpos`, `go movetime 500`, and
@@ -68,7 +75,7 @@ Then enter `uci`, `isready`, `position startpos`, `go movetime 500`, and
 From Anaconda Prompt:
 
 ```bat
-cd /d "C:\Coding\Sgurr"
+cd /d "<repo>"
 conda create -n sgurr-web python=3.11 -y
 conda activate sgurr-web
 python -m pip install --upgrade pip
@@ -81,12 +88,12 @@ For a reproducible release build, install the audited exact versions instead:
 python -m pip install -r web\backend\requirements.lock.txt
 ```
 
-The default engine path is `sgurr_cpp\sgr_v6_0.exe`. Override it before
-starting Uvicorn when necessary:
+The default engine path is `sgurr_cpp\sgr_v8_2.exe` with `nets\gen8.nnue`.
+Override it before starting Uvicorn when necessary:
 
 ```bat
-set SGURR_ENGINE_EXE=C:\path\to\sgr_v6_0.exe
-set SGR_EVALFILE=C:\path\to\gen5.nnue
+set SGURR_ENGINE_EXE=C:\path\to\sgr_v8_2.exe
+set SGR_EVALFILE=C:\path\to\gen8.nnue
 ```
 
 ## 3. Start Sgurr Web
@@ -94,7 +101,7 @@ set SGR_EVALFILE=C:\path\to\gen5.nnue
 From the repository root, with the Conda environment active:
 
 ```bat
-cd /d "C:\Coding\Sgurr"
+cd /d "<repo>"
 conda activate sgurr-web
 python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000
 ```
@@ -108,7 +115,7 @@ recommended production shape and does not require CORS.
 VS Code Live Server is supported. Alternatively, open a second prompt:
 
 ```bat
-cd /d "C:\Coding\Sgurr\web\frontend"
+cd /d "<repo>\web\frontend"
 conda activate sgurr-web
 python -m http.server 5173
 ```
@@ -170,7 +177,7 @@ The browser suite requires Node.js 18 or newer. It intercepts backend requests,
 so it does not need a running engine:
 
 ```bat
-cd /d "C:\Coding\Sgurr\web"
+cd /d "<repo>\web"
 npm.cmd ci
 npx.cmd playwright install chromium
 npm.cmd run test:e2e
@@ -179,7 +186,7 @@ npm.cmd run test:e2e
 Run backend tests from the repository root:
 
 ```bat
-cd /d "C:\Coding\Sgurr"
+cd /d "<repo>"
 conda activate sgurr-web
 python -m unittest discover -s web\backend -p "test_*.py"
 ```
@@ -240,7 +247,7 @@ transformer work, ONNX, and quantisation remain outside this web layer.
 ## Troubleshooting
 
 If `/health` reports `"engine_exists": false`, build
-`sgurr_cpp\sgr_v6_0.exe` or set `SGURR_ENGINE_EXE`.
+`sgurr_cpp\sgr_v8_2.exe` or set `SGURR_ENGINE_EXE`.
 
 If the browser reports a backend error, keep the backend terminal visible. The
 frontend polls the backend periodically and should recover without a refresh.
