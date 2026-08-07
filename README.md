@@ -153,7 +153,6 @@ testing/       match runner, SPRT harness, SPSA tuner, opening-book generator
 benchmarks/    rating pool, CCRL anchors, results ledger, registered predictions
 data/          dataset manifests, shard checksums and training logs per version
 web/           FastAPI backend + zero-build browser frontend
-desktop/       pygame desktop GUI (the design reference for the web app)
 sgurr_python/  earlier pure-Python engine, kept as a readable reference
 tools/         calibration and datagen launchers
 docs/          methodology, dev log, changelog, roadmap, provenance, notices
