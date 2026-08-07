@@ -1047,3 +1047,69 @@ it; tune it.
   anything else currently on the list.
 * **Stop using tree size as a proxy for feature value.** It was useful for
   finding the inert one, and actively misleading about the valuable one.
+
+---
+
+## 2026-08-08, the bench fingerprint is toolchain-local: `std::sort` decides ties
+
+Added CI. Its first run failed, and it was right to.
+
+The engine builds and runs cleanly on Linux under clang/libstdc++: all four
+targets compile, the binary starts, perft, SEE and the NNUE self-check all
+pass. It benches **3,457,351** nodes where this machine benches **3,601,424**,
+from identical source. The hand-crafted eval differs too, 4,913,036 against
+4,616,415.
+
+### Cause
+
+`order_moves` sorts its buckets with `std::sort`, which is not stable. Equal
+scores are common among captures, so moves that tie come out in whatever order
+the implementation happens to produce, and libc++ (MSYS2 `clang64`, used here)
+and libstdc++ (Linux) do not produce the same one. A different move order is a
+*different search*, not a faster one.
+
+This is not news to the code. `board.cpp` and `search.cpp` both carry comments
+saying exactly this, written when `generate_noisy_moves` was added and its
+emission order had to mirror the old filter move for move. What is new is that
+the sensitivity finally crossed a toolchain boundary. Every measurement in this
+project's history came off one machine, so it could not have shown up before.
+
+Floating point was ruled out rather than assumed. The LMR table truncates
+`log(depth) * log(moves) / 2.5` to an int, so a `std::log` that differed in the
+last place could in principle move an entry. It cannot: over the whole 63×63
+table the closest approach to a truncation boundary is **4.7e-05**, roughly
+**2.6e+10 ULPs**. No plausible libm difference reaches that.
+
+### What it costs, which is less than it first looks
+
+Nothing measured in this repository is affected. Every speed-only claim here is
+a diff of two builds from the same compiler on the same machine, and within a
+toolchain the fingerprint is exactly as sharp as it always was. The AVX-512
+inference, the PGO build, the nine v8.1 data-layout changes and the v8.2 TT
+packing were all verified that way and all still stand.
+
+What was wrong was the *description*. `README.md` and `BUILD.md` presented the
+node total as an absolute constant, something a reader could clone and
+reproduce. It is a within-toolchain invariant. Both now say so and give both
+measured values.
+
+### Consequences
+
+* **Compare builds, never a build against a written-down number.** A
+  fingerprint from another machine is not a baseline.
+* **CI asserts the properties that hold everywhere**: bench is deterministic
+  across repeated runs, and the scalar and vectorised builds agree byte for
+  byte. The second is the load-bearing claim (SIMD is a speed change and never
+  a numeric one) and it survives intact, because both binaries come from one
+  toolchain so the tie order cancels. `nnue_selfcheck`'s `evalsum` is still
+  asserted as an absolute value: the forward pass is integer arithmetic and
+  genuinely is identical everywhere, and CI confirms it at −142859.
+* **A stable move order would make it portable, and would not be free.**
+  `std::stable_sort` allocates, or ties could be broken on an explicit key.
+  Either is a behaviour change to the search and would move every fingerprint
+  in the ledger, so it is a deliberate decision for a version bump, not a
+  tidy-up. Not done here.
+* This is the second instrument in three weeks that turned out to measure
+  something narrower than advertised, after the anchors on 2026-07-15. Both
+  were found by pointing the instrument at a new situation rather than by
+  reasoning about it.
