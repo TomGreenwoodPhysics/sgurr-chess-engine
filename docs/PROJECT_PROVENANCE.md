@@ -21,7 +21,7 @@ The asset and dependency records are maintained separately in
 ## Model Release Record
 
 The record for the currently shipped network is
-[`../nets/README.md`](../nets/README.md) — `gen8.nnue`, with its SHA-256,
+[`../nets/README.md`](../nets/README.md), `gen8.nnue`, with its SHA-256,
 dataset manifest, training configuration, labeller and source commit.
 
 For every shipped NNUE file:

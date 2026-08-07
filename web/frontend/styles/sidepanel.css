@@ -114,7 +114,7 @@
 }
 
 /* Each instance is a colour-tinted card: White's half pale and luminous,
-   Black's half deep ink — the duel reads as two territories. */
+   Black's half deep ink -- the duel reads as two territories. */
 .watch-instance {
   position: relative;
   min-width: 0;
@@ -195,7 +195,7 @@
 /* The two arena instances adhere to their colours: the White core pale and
    luminous, the Black core deep and shadowed. Extra specificity so the tint
    survives the shared state rules in core.css (which come later in the
-   cascade), and the filter carries the whole subtree — face, cosmos, halo. */
+   cascade), and the filter carries the whole subtree -- face, cosmos, halo. */
 .watch-duel .white-instance .watch-core {
   --core-border: color-mix(in srgb, var(--white-eval), var(--accent) 34%);
   --core-inner-glow: color-mix(in srgb, var(--white-eval), transparent 30%);
@@ -206,7 +206,7 @@
   --core-border: color-mix(in srgb, var(--black-eval), var(--accent) 40%);
   --core-inner-glow: color-mix(in srgb, var(--accent-2), transparent 26%);
   /* vibrantly black: contrast crushes the glass to obsidian while the
-     ember, sparks and glow stay saturated and bright — rich, not dim */
+     ember, sparks and glow stay saturated and bright -- rich, not dim */
   filter: saturate(1.55) brightness(0.82) contrast(1.55);
 }
 

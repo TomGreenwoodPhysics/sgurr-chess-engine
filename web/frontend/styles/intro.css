@@ -288,7 +288,7 @@
 .intro-core.dormant {
   --core-ring-opacity: 0.2;
   --core-ring-fade: 76%;
-  /* barely there: a cold, buried ember under the mountain — dark and
+  /* barely there: a cold, buried ember under the mountain -- dark and
      desaturated, but not fully dead, so something still seems to slumber. */
   filter: grayscale(0.6) saturate(0.55) brightness(0.34) contrast(1.05);
   opacity: 0.62;
@@ -697,12 +697,12 @@
 }
 
 /* The reveal is a straight cross-dissolve. The blackout veil holds its black,
-   and the whole intro layer — the handed-off core included — fades away over
+   and the whole intro layer -- the handed-off core included -- fades away over
    the finished menu underneath. Fading only the veil instead would leave the
    intro core floating at full strength above a half-revealed menu, and then
    hiding the screen at the end would swap one orb for the other in a single
    frame: two separate elements, so the blob visibly jumped. Keep this shorter
-   than INTRO_REVEAL_DURATION_MS in js/config.js — that timer hides the screen,
+   than INTRO_REVEAL_DURATION_MS in js/config.js -- that timer hides the screen,
    and it has to land after the dissolve has finished, not during it. */
 .intro-screen[data-state="departing"] {
   background-color: #000;

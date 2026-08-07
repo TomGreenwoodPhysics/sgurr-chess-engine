@@ -633,7 +633,7 @@
   --core-bright-mid: 1.06;
   --core-bright-late: 0.98;
   /* The aftermath: the rupture already happened on the board. What hangs
-     here is the husk — dark, drained of colour, listing slightly, its
+     here is the husk -- dark, drained of colour, listing slightly, its
      interior a ghost of what it was, a last ember guttering inside. */
   opacity: 0.9;
   width: 360px;
@@ -905,9 +905,9 @@
   animation: sgurr-label-resolve 1000ms steps(6, end) 650ms both;
 }
 
-/* The taken king is not destroyed — he is kept. When the screen opens he
+/* The taken king is not destroyed -- he is kept. When the screen opens he
    is already deep in the eye, dim and blurred with depth, tumbling slowly
-   in the currents: no arrival, no re-entry — he has been in there since
+   in the currents: no arrival, no re-entry -- he has been in there since
    the devour. Negative delays start both motions mid-cycle. */
 #resultModal[data-outcome="sgurr-win"] .result-king {
   position: absolute;

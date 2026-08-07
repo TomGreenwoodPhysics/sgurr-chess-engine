@@ -37,13 +37,13 @@ function cycleTime(direction) {
 // The modal layer, and its focus handling.
 //
 // The dialogs are siblings of #menuScreen and #appShell, so marking those
-// two inert lifts the whole background out of the tab order in one move —
+// two inert lifts the whole background out of the tab order in one move --
 // the same primitive the intro uses while it holds the screen. Inert is
 // what actually stops focus escaping; the Tab wrap below is polish, so the
 // last control cycles back to the first instead of out to browser chrome.
 //
-// #resultModal is deliberately not in this set. It is render-driven — ui.js
-// shows it from game state rather than from a user action — so there is no
+// #resultModal is deliberately not in this set. It is render-driven -- ui.js
+// shows it from game state rather than from a user action -- so there is no
 // trigger element to hand focus back to when it closes.
 // ---------------------------------------------------------------------
 function userModals() {
@@ -137,7 +137,7 @@ function openModal(modal) {
 // Bound directly as a click listener on [data-close-modal], so this is also
 // called with a MouseEvent. Read the flag defensively rather than
 // destructuring, so only a genuine { restoreFocus: false } suppresses the
-// hand-back — anything else, event object included, restores focus.
+// hand-back -- anything else, event object included, restores focus.
 function closeAllModals(options) {
   const restoreFocus = options?.restoreFocus !== false;
   for (const modal of userModals()) {

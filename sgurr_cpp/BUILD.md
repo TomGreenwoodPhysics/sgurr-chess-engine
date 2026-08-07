@@ -23,12 +23,12 @@ It runs the recipes documented below **and then proves the binary starts**,
 relinking automatically if it does not. That second part is not optional here:
 
 > **Smart App Control is enforced on this machine** and intermittently refuses
-> to start freshly linked unsigned binaries — roughly 2 builds in 6 during one
+> to start freshly linked unsigned binaries, roughly 2 builds in 6 during one
 > session. The block lands on the *file*, not the code: two byte-identical
 > binaries under different names, one blocked and one not. It has **no
 > exclusion mechanism**, and turning it off is a **one-way switch** (Windows
 > cannot re-enable it without an OS reset). A fresh link is normally allowed
-> through, and once a binary has started it keeps starting — so relink-and-recheck
+> through, and once a binary has started it keeps starting: so relink-and-recheck
 > is both the cheap fix and the complete one.
 
 Skipping the check is expensive. A non-spawning engine does not crash a match:
@@ -63,12 +63,12 @@ AVX2 otherwise (`(avx2)`). It is ~22% faster than and bit-identical to the
 scalar eval. Add `-DSGR_SIMD=0` only to build the scalar fallback for an A/B
 (prints `(scalar)`). A build for a pre-AVX2 CPU must pass `-DSGR_SIMD=0`
 (the SIMD path `#error`s without AVX2). The startup line always names the
-active path — check it when a build seems slow.
+active path, check it when a build seems slow.
 
 ### Release build: PGO + ThinLTO (**+11.3% NPS**, measured)
 
 Anything released, calibrated, or used as an SPRT baseline should be built
-this way. It changes no source and no search behaviour — it is purely faster.
+this way. It changes no source and no search behaviour: it is purely faster.
 
 **ThinLTO** lets the optimiser see across `.cpp` boundaries at link time,
 which plain per-file compilation cannot. **PGO** replaces the compiler's
@@ -100,7 +100,7 @@ Notes:
   degrades to a plain build for exactly the code you just edited.
 * `pgo/` is gitignored. The profile is a build artefact, not source.
 * Full LTO (`-flto=full`) and a broader profile (bench at several depths) were
-  both measured and neither beat this recipe — all three sat inside the
+  both measured and neither beat this recipe: all three sat inside the
   measurement noise. ThinLTO is chosen for the faster incremental link.
 
 **Measured on a 7800X3D against the plain `-O3 -march=native` build**, 12
@@ -111,10 +111,10 @@ interleaved runs each of `bench 13`, gen8 net:
 | `-O3 -march=native` | 2,736,898 |
 | **+ PGO + ThinLTO** | **3,045,808** |
 
-**+11.3%**, and the separation is clean — the *slowest* PGO run (2,990,742)
+**+11.3%**, and the separation is clean: the *slowest* PGO run (2,990,742)
 beat the *fastest* baseline run (2,775,630), so the two distributions do not
 overlap across 24 runs. At the project's ~70 Elo per doubling that is
-**≈ +10.8 Elo, inferred** (an inference from NPS, like the SIMD result — not
+**≈ +10.8 Elo, inferred** (an inference from NPS, like the SIMD result: not
 a number measured in games).
 
 The `bench` fingerprint is byte-identical between the two builds, which is
@@ -132,7 +132,7 @@ See the header of `datagen.cpp` for arguments (fixed depth vs `nodes:N`).
 > a raw static eval where a searched score is expected; under a fixed node
 > budget that poisons the labels. It cost gen6 an entire cycle.
 
-PGO applies here too, and matters more than it does for the engine — datagen
+PGO applies here too, and matters more than it does for the engine: datagen
 is a multi-day CPU-bound job. Generate a *datagen* profile rather than reusing
 the engine's: the engine profile has no entry for `datagen.cpp`'s `main`, so
 clang warns and discards it for that function (the shared search/board/nnue
@@ -144,7 +144,7 @@ code still benefits).
 
 `bench` searches a fixed position set to a fixed depth. The search is
 deterministic, so its node counts are a fingerprint of search behaviour. Any
-change meant to be **speed-only** — the flags above, SIMD, a refactor — must
+change meant to be **speed-only** (the flags above, SIMD, a refactor) must
 leave the fingerprint byte-identical:
 
     diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)

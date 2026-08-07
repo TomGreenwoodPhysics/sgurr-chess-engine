@@ -5,8 +5,8 @@ import { app } from "./state.js";
 //
 // This keeps its own per-ply record rather than reusing app.evalHistory,
 // which is deliberately capped at the last 36 points for the live sparkline
-// and so cannot describe a whole game. Recording is cheap — one small object
-// per ply — and the record doubles as the position source, so review can
+// and so cannot describe a whole game. Recording is cheap -- one small object
+// per ply -- and the record doubles as the position source, so review can
 // re-render the real board instead of needing a second board renderer.
 //
 // Imports are limited to state on purpose: ui.js and engine.js depend on this
@@ -60,8 +60,8 @@ function plyMoveText(entry) {
 // response with keepEval: true, so after a human move app.latestEval still
 // holds the score from the engine's *previous* search. Recording that would
 // be a lie twice over: it draws a flat segment on the graph where no
-// evaluation happened, and — because the stale point sits between the two
-// real ones — it shrinks the swing span onto the engine's reply and blames
+// evaluation happened, and -- because the stale point sits between the two
+// real ones -- it shrinks the swing span onto the engine's reply and blames
 // the wrong move. Only genuinely scored positions get a cp.
 function recordReviewPly({ freshEval = true } = {}) {
   if (app.mode !== "game") {
@@ -111,7 +111,7 @@ function reviewEvalSeries() {
 }
 
 // The sharpest turn against the human, in centipawns, together with the move
-// that spans it. Returns null when there is nothing to say — a game too short
+// that spans it. Returns null when there is nothing to say -- a game too short
 // to have two scored positions, or a self-play game with no human side.
 function reviewSwing() {
   if (app.humanSide === null) {

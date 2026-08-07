@@ -704,7 +704,7 @@ class Pipeline:
 
         section = [
             "",
-            f"### {date.today().isoformat()} — {self.version} "
+            f"### {date.today().isoformat()}, {self.version} "
             f"\"{self.cfg.get('codename', '')}\" (pipeline run)",
             "",
             f"- Dataset: `data/{self.version}` "

@@ -5,7 +5,7 @@ import { app, refs } from "./state.js";
 // cosmos, divinity, interior) injected into all of them, cursor attention
 // for the menu and post-game cores, and a rare "surfacing" idle beat on the
 // menu. Everything here is decorative and only runs while the in-app
-// Animations setting is on — so users who turn it off, and the headless
+// Animations setting is on -- so users who turn it off, and the headless
 // smoke tests (animations off), get static, undisturbed cores.
 
 function motionOn() {
@@ -65,7 +65,7 @@ function buildCosmos(core) {
 
 // The apparatus of godhead: a breathing presence behind everything, wheeling
 // shafts of corona light, a brilliant eclipse arc precessing around the rim,
-// and paired halo ripples. All peripheral — the eye itself is untouched.
+// and paired halo ripples. All peripheral -- the eye itself is untouched.
 function buildDivinity(core) {
   if (!core || core.querySelector(".core-presence")) {
     return;
@@ -117,11 +117,11 @@ function buildInterior(core) {
   core.appendChild(fragment);
 }
 
-// The pupil's attention model, shared by every gazing core — the menu hero
+// The pupil's attention model, shared by every gazing core -- the menu hero
 // core and the post-game result cores; in-game cores keep their status role
 // and do not gaze. Mostly an eye ignores the cursor and keeps to its idle
 // wander. Now and then a settled cursor happens to catch its interest, and
-// while interested it genuinely follows — a lagged, smooth pursuit — until
+// while interested it genuinely follows -- a lagged, smooth pursuit -- until
 // the interest decays and it drifts back to its own thoughts. Waving the
 // cursor over an orb, though, reliably wins its attention. Dilation stays
 // faint throughout: a flicker of engagement, not a display.
@@ -221,7 +221,7 @@ function updateGaze(gaze, now) {
     cursor.y - (rect.top + rect.height / 2),
   ) / (rect.width / 2);
 
-  // Dilation is faint — a flicker of engagement, not a display: the merest
+  // Dilation is faint -- a flicker of engagement, not a display: the merest
   // widening while it follows, the merest narrowing when the cursor is
   // right on top of it.
   const pupilScale = distance < 1.2 ? 0.97 : gaze.state === "interested" ? 1.02 : 1;
@@ -233,8 +233,8 @@ function updateGaze(gaze, now) {
   }
 
   // Waving the cursor over an orb reliably wins its attention: enough path
-  // length traced near the core within a second, with little net travel —
-  // back-and-forth, not a fly-by — reads as a wave.
+  // length traced near the core within a second, with little net travel --
+  // back-and-forth, not a fly-by -- reads as a wave.
   if (distance < 1.3) {
     const last = gaze.trail[gaze.trail.length - 1];
     gaze.trail.push({ x: cursor.x, y: cursor.y, t: now, d: last ? Math.hypot(cursor.x - last.x, cursor.y - last.y) : 0 });
@@ -345,7 +345,7 @@ export function initMenuCore() {
   cores.forEach((el) => sizer.observe(el));
 
   // Each core lives at its own random point in the shared animation cycles,
-  // so no two eyes ever pulse, churn or wander in lockstep — most visible in
+  // so no two eyes ever pulse, churn or wander in lockstep -- most visible in
   // watch mode, where several are on screen at once.
   cores.forEach((el) => {
     el.style.setProperty("--core-phase", `-${(Math.random() * 60).toFixed(1)}s`);

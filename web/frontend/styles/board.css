@@ -676,7 +676,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   animation: mate-signal-converge var(--mate-duration, 4200ms) ease-in-out forwards;
 }
 
-/* Sparks wheeling inward as the eye feeds — loose light dragged into the
+/* Sparks wheeling inward as the eye feeds -- loose light dragged into the
    pupil ahead of the king itself. */
 .mate-sparks {
   position: absolute;
@@ -815,7 +815,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   }
 }
 
-/* The eye does not summon the king to the centre — it comes for him. It
+/* The eye does not summon the king to the centre -- it comes for him. It
    materialises directly overhead, regards him for a long beat, feeds, then
    blinks shut and is gone. */
 @keyframes mate-core-arrive {
@@ -863,7 +863,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   }
 }
 
-/* The king holds his square, trembling — then is torn loose, stretched
+/* The king holds his square, trembling -- then is torn loose, stretched
    thin toward the pupil, and goes down spinning. */
 @keyframes mate-piece-taken {
   0%,
@@ -1002,9 +1002,9 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
 
 /* ------------------------------------------------------------------ */
 /* Human victory: Sgurr is slain, not fed. The board floods with light   */
-/* instead of draining; the eye arrives already beaten — guttering like  */
+/* instead of draining; the eye arrives already beaten -- guttering like  */
 /* a faulty lamp, colour draining, pupil shrunk to a terrified pinprick  */
-/* — convulses, and ruptures in a blast of white. Its king quakes        */
+/* -- convulses, and ruptures in a blast of white. Its king quakes        */
 /* through the death-throes, then topples and dissolves upward into      */
 /* light.                                                                */
 /* ------------------------------------------------------------------ */

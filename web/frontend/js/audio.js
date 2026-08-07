@@ -192,7 +192,7 @@ function syncMenuMusic({ force = false, immediate = false } = {}) {
     return;
   }
 
-  // Hold the menu music back until the intro has fully departed — the cave
+  // Hold the menu music back until the intro has fully departed -- the cave
   // belongs to the rumble and the reveal swell. finishIntro() force-syncs,
   // so the music fades in the moment the menu actually appears.
   const shouldRun = app.musicEnabled && app.mode === "menu" && app.intro.complete;

@@ -81,7 +81,7 @@ inline int feature_index(int persp, int colour, int ptype, int sq) {
 #if defined(__AVX512BW__)
 // AVX-512 path: 32 int16 lanes per instruction. On Zen 4 these are
 // double-pumped through 256-bit units, so the win over AVX2 is halved
-// instruction count (front-end pressure), not raw ALU width — measured, not
+// instruction count (front-end pressure), not raw ALU width -- measured, not
 // assumed. Arithmetic is exact at any width, so output stays bit-identical.
 static_assert(nnue::HL % 32 == 0, "AVX-512 path requires HL % 32 == 0");
 

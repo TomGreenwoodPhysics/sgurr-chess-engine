@@ -208,8 +208,8 @@ function renderPlayerCards() {
     refs.bottomPlayerCard.classList.remove("engine-side", "human-side");
     refs.topPlayerName.innerHTML = `<strong>${title(topColour)} pieces</strong><small>BOARD EDITOR</small>`;
     refs.bottomPlayerName.innerHTML = `<strong>${title(bottomColour)} pieces</strong><small>BOARD EDITOR</small>`;
-    refs.topPlayerClock.textContent = app.editor.turn === topColour ? "to move" : "--";
-    refs.bottomPlayerClock.textContent = app.editor.turn === bottomColour ? "to move" : "--";
+    refs.topPlayerClock.textContent = app.editor.turn === topColour ? "to move" : "—";
+    refs.bottomPlayerClock.textContent = app.editor.turn === bottomColour ? "to move" : "—";
     refs.topPlayerCard.classList.toggle("active", app.editor.turn === topColour);
     refs.bottomPlayerCard.classList.toggle("active", app.editor.turn === bottomColour);
     refs.topPlayerCard.classList.remove("flagged");
@@ -387,7 +387,7 @@ function renderReviewPanel() {
   refs.reviewMove.textContent = plyMoveText(current);
 
   // The engine only searches on its own turn, so many plies carry no score.
-  // Rather than a bare "no eval", fall back to the last real one and say so —
+  // Rather than a bare "no eval", fall back to the last real one and say so --
   // that is also what the eval column beside the board is showing.
   const carried = reviewEvalAt(app.review.index);
   const ownEval = current?.display || null;
@@ -684,7 +684,7 @@ function resultPresentation(outcome, message) {
 
 function renderResultModal() {
   // Reviewing keeps the game-over state, so the modal has to stand aside
-  // while it runs — and reappears when review is dismissed.
+  // while it runs -- and reappears when review is dismissed.
   refs.resultModal.hidden =
     !(app.mode === "game" && app.gameOver) || checkmateRevealPending() || app.review.active;
   if (refs.resultModal.hidden) {

@@ -8,24 +8,24 @@ scale, not official CCRL ratings.
 
 | date | engine | rating | ±95% | games | W-D-L | TC | pool | hardware | notes |
 |------|--------|--------|------|-------|-------|----|------|----------|-------|
-| 2026-08-05 | Sgurr v8.2 "Thearlaich" | 3058 | 7 | 11144 | +8332 =1204 -1608 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Speed-only release, and the one that broke the speed rule.** v8.2 is v8.1 with a 24→16-byte TT entry and a lazy move picker: same net, same search, bench-fingerprint-identical (13,614,729 nodes @ depth 13), **+15.4% NPS**. **3058.5 ±6.5**, 80.2%. **+31.5 vs v8.1 same-solve** (3027.0 ±11.2) against **+14.5 predicted** by the ~70-Elo-per-doubling rule — the prediction was registered before the run and **missed low by 17**. Implied rate ~131/doubling. Not an Ordo artefact: solving each anchor independently gives +29 (Weiss-1.2), +21 (Igel), +31 (Weiss-1.0), +28 (Zahak-5.0), mean **+27.1**, so all four agree. v8.1 having matched its own prediction to 0.3 Elo now looks like coincidence rather than confirmation; the rule is retired as a predictor (§5). ⚠️ **The absolute is softer than ±6.5 suggests:** those same anchors disagree by **90 Elo** about where v8.2 sits (3016–3106), a longstanding spread (63/100/90 for v8.0/v8.1/v8.2), so systematic uncertainty is ~±45 and only the same-solve gap is robust. ⚠️ **Pool saturated:** 50.8% vs Weiss-1.2, the top anchor, and 86–97% against five of eight — v8.3+ cannot be measured on this pool. Contention control: first 5,475 games ran with the monitor holding 5 threads ~40% of wall time, last 5,669 with it at 2 threads BelowNormal; 79.93% vs 80.24%, i.e. +0.31pp ±1.89 — no effect, halves pooled unqualified. |
-| 2026-08-03 | Sgurr v8.1 "Thearlaich" | 3027 | 11 | 3456 | +2492 =388 -576 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Speed-only release: same net, same search, same moves.** v8.1 is v8.0 compiled better — PGO + ThinLTO plus nine node-identical data-layout changes, ~20% NPS. Verified bench-fingerprint-identical (13,614,729 nodes @ depth 13) and move-identical at fixed depth to the shipped `sgr_gen8.exe`, so speed is the only variable between them. **3026.7 ±11.1**, 77.7%. **+20.9 vs v8.0 same-solve** (3005.8 ±10.6). Self-play SPRT vs v8.0 **+21.2 ±8.7** (4,000 games @ 8+0.08) — the two agree to 0.3 Elo, i.e. **no pool compression**, unlike every prior search change (§6 of METHODOLOGY: RFP 0.68×, gen8 net 0.81×). A speed change cannot overfit to self-play the way a heuristic can, which is the likely reason. **First version whose interval clears 3000 outright** — [3016, 3038] does not touch it, where v8.0's [2995, 3016] straddled it. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below — measured, not extrapolated. Also validates the ~70-Elo-per-doubling rule the project had been converting NPS through since 2026-07-22 without ever checking it in games. |
-| 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3006 | 11 | 3329 | +2345 =375 -609 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (246-game pipeline solve). Extended to 3329 gauntlet games, Ordo re-solved over all accumulated PGNs: **3005.5 ±11**, 76.1%. Unbucketed 768 net on the gen8 56M (gen7 labeller); 8-king-bucket variant measured −10.7 ±16 in a net-isolated A/B despite 12% lower loss and is NOT shipped (see DEVLOG 2026-07-29). SPRT vs v7.0 **+126.5 ±26.6 H1**; pool gap **+103 same-solve** (v7.0 2903) — mild ~0.8x compression, consistent with the large-gain pattern. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below — measured, not extrapolated. **3000 milestone: point estimate over, but 95% CI [2994, 3016] straddles it — P(>3000) ≈ 84%, i.e. most-likely-crossed, not yet proven at 95%.** lambda-sweep winner 0.9. |
-| 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3014 | 40 | 246 | +171 =38 -37 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | Pipeline run; SPRT vs v7.0: +126.5 +/-26.6 (H1); lambda sweep winner 0.9. **Superseded by the corrected row above** — rating refined from 246→3329 games (3014→3006, the small-sample high regressing to the tighter estimate). |
-| 2026-07-22 | Sgurr v7.0 "Ghreadaidh" | 2903 | 6 | 8522 | +5087 =1181 -2254 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (which mislabelled the machine as i5-9400F — a stale hardcoded string in pipeline.py, now config-driven — and reported only the pipeline's initial 240-game solve). Extended overnight to 8522 gauntlet games, Ordo re-solved over all accumulated PGNs: **2903 ±6**, 66.6%. gen7 is the first clean (RFP-free) regen: **SPRT vs v6.0 = +44.4 ±18.8** (both new-hardware SIMD builds, net the only variable), vs gen6's +6 ±20 wash — the data really was the bottleneck. ⚠️ **Absolute is cross-hardware:** v6.0's 2807 was measured on the old i5, so the +96 pool gap overstates the true +44 net gain; re-baseline v6.0/v5.0 on the 7800X3D before trusting this absolute against older rows. lambda-sweep winner 1.0. |
-| 2026-07-22 | Sgurr v7.0 "Ghreadaidh" | 2911 | 38 | 240 | +145 =34 -61 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Pipeline run; SPRT vs v6.0: +44.4 +/-18.8 (inconclusive); lambda sweep winner 1.0. **Superseded by the corrected row above** — hardware mislabelled, and rating refined from 240→8522 games. |
-| 2026-07-16 | Sgurr v6.0 "Banachdaich" | 2807 | 36 | 240 | +117 =38 -85 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. Search-only release on the unchanged gen5 net: improving flag + history-adjusted LMR + singular extensions (SPRT vs v5.0 **+57.3 ±17.3**, H1 at 1,139 games, package undecomposed). **+83 vs v5.0 same-solve** (2724) — joint error ±51, so consistent with the self-play +57; no compression evident. New project high, first version above Zahak-5.0 (2726); bracketed from above by Weiss-1.0 (2896) at 56.7%, i.e. measured, not extrapolated — pool-B's new anchors were load-bearing here. |
-| 2026-07-15 | Sgurr v5.0 "Gillean" | 2724 | 36 | 240 | +97 =34 -109 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games (~2,900). Search-only release: LMP + RFP on the unchanged gen5 net — the gen6 net was a wash (+6 ±20, 1,200-game net-isolated A/B) and is not shipped. +119 vs v4.0 **same-solve** (2604); the +176.4 ±15 self-play factorial gain expressed ~2/3 against the pool. Level with Zahak-5.0 (2726). **Scale note: pool-B re-anchor — all rows sit ~22 below their published pool-A values; compare within one solve only.** |
-| 2026-07-10 | Sgurr v4.0 "MacKenzie" | 2627 | 27 | 420 | +216 =60 -144 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all ~3,600 accumulated calibration games. gen5 net (768→384) + best-move stability + history malus/conthist. +63 vs v3.1 on the pool scale; statistically level with the pre-malus gen5-bmstab measurement (2635.5 ±25.5) — self-play search gains compress vs the pool. |
-| 2026-07-10 | Sgurr v3.1 "Blackpeak" | 2564 | 27 | 420 | +140 =150 -130 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Deferred debt from the 07-08 release, settled. **Below v3.0 (2613)**: the flat soft limit loses at 10+0.1 despite the +24.6 ±22.7 interim SPRT at 8+0.08 — TC-dependent; superseded by v4.0's stability scaling. Finding reproduced across three independent solves. |
-| 2026-07-06 | Sgurr v3.0 "Blackpeak" | 2616 | 37 | 210 | +105 =29 -76 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. +125 vs v2.0 — reproduces the direct SPRT (+119.8 ±26.3), so the self-play gain was not inflated. Above Zahak-4.0 (2601). |
-| 2026-07-04 | Sgurr v2.0 "Notches" | 2489 | 34 | 270 | +110 =33 -127 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. +82 vs v1.0, +91 vs classical — matches the direct SPRT gaps, so the self-play +77.7 was not inflated. |
+| 2026-08-05 | Sgurr v8.2 "Thearlaich" | 3058 | 7 | 11144 | +8332 =1204 -1608 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Speed-only release, and the one that broke the speed rule.** v8.2 is v8.1 with a 24→16-byte TT entry and a lazy move picker: same net, same search, bench-fingerprint-identical (13,614,729 nodes @ depth 13), **+15.4% NPS**. **3058.5 ±6.5**, 80.2%. **+31.5 vs v8.1 same-solve** (3027.0 ±11.2) against **+14.5 predicted** by the ~70-Elo-per-doubling rule: the prediction was registered before the run and **missed low by 17**. Implied rate ~131/doubling. Not an Ordo artefact: solving each anchor independently gives +29 (Weiss-1.2), +21 (Igel), +31 (Weiss-1.0), +28 (Zahak-5.0), mean **+27.1**, so all four agree. v8.1 having matched its own prediction to 0.3 Elo now looks like coincidence rather than confirmation; the rule is retired as a predictor (§5). **The absolute is softer than ±6.5 suggests:** those same anchors disagree by **90 Elo** about where v8.2 sits (3016-3106), a longstanding spread (63/100/90 for v8.0/v8.1/v8.2), so systematic uncertainty is ~±45 and only the same-solve gap is robust. **Pool saturated:** 50.8% vs Weiss-1.2, the top anchor, and 86-97% against five of eight: v8.3+ cannot be measured on this pool. Contention control: first 5,475 games ran with the monitor holding 5 threads ~40% of wall time, last 5,669 with it at 2 threads BelowNormal; 79.93% vs 80.24%, i.e. +0.31pp ±1.89: no effect, halves pooled unqualified. |
+| 2026-08-03 | Sgurr v8.1 "Thearlaich" | 3027 | 11 | 3456 | +2492 =388 -576 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Speed-only release: same net, same search, same moves.** v8.1 is v8.0 compiled better, PGO + ThinLTO plus nine node-identical data-layout changes, ~20% NPS. Verified bench-fingerprint-identical (13,614,729 nodes @ depth 13) and move-identical at fixed depth to the shipped `sgr_gen8.exe`, so speed is the only variable between them. **3026.7 ±11.1**, 77.7%. **+20.9 vs v8.0 same-solve** (3005.8 ±10.6). Self-play SPRT vs v8.0 **+21.2 ±8.7** (4,000 games @ 8+0.08): the two agree to 0.3 Elo, i.e. **no pool compression**, unlike every prior search change (§6 of METHODOLOGY: RFP 0.68×, gen8 net 0.81×). A speed change cannot overfit to self-play the way a heuristic can, which is the likely reason. **First version whose interval clears 3000 outright**: [3016, 3038] does not touch it, where v8.0's [2995, 3016] straddled it. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below: measured, not extrapolated. Also validates the ~70-Elo-per-doubling rule the project had been converting NPS through since 2026-07-22 without ever checking it in games. |
+| 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3006 | 11 | 3329 | +2345 =375 -609 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (246-game pipeline solve). Extended to 3329 gauntlet games, Ordo re-solved over all accumulated PGNs: **3005.5 ±11**, 76.1%. Unbucketed 768 net on the gen8 56M (gen7 labeller); 8-king-bucket variant measured −10.7 ±16 in a net-isolated A/B despite 12% lower loss and is NOT shipped (see DEVLOG 2026-07-29). SPRT vs v7.0 **+126.5 ±26.6 H1**; pool gap **+103 same-solve** (v7.0 2903), mild ~0.8x compression, consistent with the large-gain pattern. Bracketed by Weiss-1.2 (3055) above and Igel-2.2.2 (2982) below: measured, not extrapolated. **3000 milestone: point estimate over, but 95% CI [2994, 3016] straddles it, P(>3000) ≈ 84%, i.e. most-likely-crossed, not yet proven at 95%.** lambda-sweep winner 0.9. |
+| 2026-07-29 | Sgurr v8.0 "Thearlaich" | 3014 | 40 | 246 | +171 =38 -37 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | Pipeline run; SPRT vs v7.0: +126.5 +/-26.6 (H1); lambda sweep winner 0.9. **Superseded by the corrected row above**, rating refined from 246→3329 games (3014→3006, the small-sample high regressing to the tighter estimate). |
+| 2026-07-22 | Sgurr v7.0 "Ghreadaidh" | 2903 | 6 | 8522 | +5087 =1181 -2254 | 10+0.1 | pool-2026-07-B | Ryzen 7 7800X3D, 7 threads | **Corrects the auto-row below** (which mislabelled the machine as i5-9400F (a stale hardcoded string in pipeline.py, now config-driven) and reported only the pipeline's initial 240-game solve). Extended overnight to 8522 gauntlet games, Ordo re-solved over all accumulated PGNs: **2903 ±6**, 66.6%. gen7 is the first clean (RFP-free) regen: **SPRT vs v6.0 = +44.4 ±18.8** (both new-hardware SIMD builds, net the only variable), vs gen6's +6 ±20 wash: the data really was the bottleneck. **Absolute is cross-hardware:** v6.0's 2807 was measured on the old i5, so the +96 pool gap overstates the true +44 net gain; re-baseline v6.0/v5.0 on the 7800X3D before trusting this absolute against older rows. lambda-sweep winner 1.0. |
+| 2026-07-22 | Sgurr v7.0 "Ghreadaidh" | 2911 | 38 | 240 | +145 =34 -61 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Pipeline run; SPRT vs v6.0: +44.4 +/-18.8 (inconclusive); lambda sweep winner 1.0. **Superseded by the corrected row above**, hardware mislabelled, and rating refined from 240→8522 games. |
+| 2026-07-16 | Sgurr v6.0 "Banachdaich" | 2807 | 36 | 240 | +117 =38 -85 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. Search-only release on the unchanged gen5 net: improving flag + history-adjusted LMR + singular extensions (SPRT vs v5.0 **+57.3 ±17.3**, H1 at 1,139 games, package undecomposed). **+83 vs v5.0 same-solve** (2724), joint error ±51, so consistent with the self-play +57; no compression evident. New project high, first version above Zahak-5.0 (2726); bracketed from above by Weiss-1.0 (2896) at 56.7%, i.e. measured, not extrapolated: pool-B's new anchors were load-bearing here. |
+| 2026-07-15 | Sgurr v5.0 "Gillean" | 2724 | 36 | 240 | +97 =34 -109 | 10+0.1 | pool-2026-07-B | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games (~2,900). Search-only release: LMP + RFP on the unchanged gen5 net: the gen6 net was a wash (+6 ±20, 1,200-game net-isolated A/B) and is not shipped. +119 vs v4.0 **same-solve** (2604); the +176.4 ±15 self-play factorial gain expressed ~2/3 against the pool. Level with Zahak-5.0 (2726). **Scale note: pool-B re-anchor: all rows sit ~22 below their published pool-A values; compare within one solve only.** |
+| 2026-07-10 | Sgurr v4.0 "MacKenzie" | 2627 | 27 | 420 | +216 =60 -144 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all ~3,600 accumulated calibration games. gen5 net (768→384) + best-move stability + history malus/conthist. +63 vs v3.1 on the pool scale; statistically level with the pre-malus gen5-bmstab measurement (2635.5 ±25.5), self-play search gains compress vs the pool. |
+| 2026-07-10 | Sgurr v3.1 "Blackpeak" | 2564 | 27 | 420 | +140 =150 -130 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Deferred debt from the 07-08 release, settled. **Below v3.0 (2613)**: the flat soft limit loses at 10+0.1 despite the +24.6 ±22.7 interim SPRT at 8+0.08, TC-dependent; superseded by v4.0's stability scaling. Finding reproduced across three independent solves. |
+| 2026-07-06 | Sgurr v3.0 "Blackpeak" | 2616 | 37 | 210 | +105 =29 -76 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored, solved over all accumulated calibration games. +125 vs v2.0: reproduces the direct SPRT (+119.8 ±26.3), so the self-play gain was not inflated. Above Zahak-4.0 (2601). |
+| 2026-07-04 | Sgurr v2.0 "Notches" | 2489 | 34 | 270 | +110 =33 -127 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. +82 vs v1.0, +91 vs classical: matches the direct SPRT gaps, so the self-play +77.7 was not inflated. |
 | 2026-07-04 | Sgurr v1.0 "Fox" | 2407 | 35 | 270 | +87 =22 -161 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. +9 vs classical (parity, as SPRT found). |
 | 2026-07-04 | Sgurr classical (HCE) | 2398 | 34 | 270 | +80 =30 -160 | 10+0.1 | pool-2026-07-A | i5-9400F, 5 threads | Ordo, CCRL-Blitz-anchored. Supersedes the old ~2520 SF-limited estimate (flawed method + different scale). |
 
 ## Run log
 
-### 2026-08-03 — v8.1 "Thearlaich" release calibration (speed-only)
+### 2026-08-03, v8.1 "Thearlaich" release calibration (speed-only)
 
 - **Tool:** fastchess gauntlet, 3,456 games (8 opponents), 10+0.1,
   `testing/book.epd`, concurrency 7, idle machine. Ordo 1.0 over ALL
@@ -35,7 +35,7 @@ scale, not official CCRL ratings.
 - **Provenance:** `sgr_v8_1.exe` = the gen8 net (`nets/gen8.nnue`) with the v8.0
   search, built with PGO + ThinLTO. Verified bench-fingerprint-identical to
   the shipped `sgr_gen8.exe` (13,614,729 nodes at depth 13) and move-identical
-  at fixed depth on three positions — same nodes, same scores, same moves.
+  at fixed depth on three positions, same nodes, same scores, same moves.
   There is no behavioural change to attribute anything to; it is v8.0 running
   ~20% faster.
 - **Two instruments, no compression.** Self-play SPRT +21.2 ±8.7 (4,000 games
@@ -50,11 +50,11 @@ scale, not official CCRL ratings.
   at ~84% confidence. v8.1's [3016, 3038] does not touch it.
 - **Validates the NPS→Elo conversion.** Since 2026-07-22 every speed gain had
   been valued through the ~70-Elo-per-doubling rule of thumb and flagged
-  *inferred* — the AVX-512 row said so explicitly. Predicted +18.4 from
+  *inferred*: the AVX-512 row said so explicitly. Predicted +18.4 from
   70 × log₂(1.20); measured +21.2 self-play and +20.9 pooled. The rule holds,
   slightly conservatively, and the flag is removed.
 
-### 2026-07-16 — v6.0 "Banachdaich" release calibration (search refinement package)
+### 2026-07-16, v6.0 "Banachdaich" release calibration (search refinement package)
 
 - **Tool:** fastchess 1.8.0-alpha gauntlet, 240 games (8 opponents × 30),
   10+0.1, `testing/book.epd`, concurrency 5, idle machine. Ordo 1.0 over ALL
@@ -73,24 +73,24 @@ scale, not official CCRL ratings.
   far is that **large pruning gains and this refinement package both survive
   the pool**, unlike the small tweaks that vanished (malus +33 → ~0; v3.1
   soft limit +24.6 → negative). Magnitude, not category, looks like the
-  predictor — but two points is not a curve, and ±51 is wide.
+  predictor: but two points is not a curve, and ±51 is wide.
 - **pool-B earned its keep immediately.** v6.0 is the first Sgurr version
-  above Zahak-5.0 (2726) — pool-A's ceiling. On the old pool this number
+  above Zahak-5.0 (2726), pool-A's ceiling. On the old pool this number
   would have had no anchor above it and would have been an extrapolation;
   instead Weiss-1.0 (2896) brackets it at 56.7%. The upgrade was argued as
   insurance for gen7-8 and was needed one release later.
 - **Package NOT decomposed.** The +57 is improving + histLMR + singular
   together; leave-one-out builds (~3,600 games each) would isolate them, and
   the open question is whether `SGR_HISTLMR` is what finally makes
-  continuation history pay (it measured ~0 alone on 07-10). Deferred — a
+  continuation history pay (it measured ~0 alone on 07-10). Deferred: a
   passenger left default-on is permanent complexity.
-- **White advantage +2.5 ±4.9** — stays closed.
+- **White advantage +2.5 ±4.9**: stays closed.
 
-### 2026-07-15 — v5.0 "Gillean" release calibration on the re-anchored pool-2026-07-B
+### 2026-07-15, v5.0 "Gillean" release calibration on the re-anchored pool-2026-07-B
 
 - **Pool supersession:** an audit against the live CCRL Blitz list found every
-  pool-A anchor inflated by 12–50 (mean ≈31) — the values had come from each
-  engine's README, not the list — and Blunder-7.2.0 has no CCRL Blitz rating
+  pool-A anchor inflated by 12-50 (mean ≈31) (the values had come from each
+  engine's README, not the list) and Blunder-7.2.0 has no CCRL Blitz rating
   at any version, so one "CCRL-anchored" anchor never was. pool-2026-07-B
   re-sources every anchor from the live list (2026-07-15), drops
   Blunder-6.1.0 from the roster (93% score, no signal; still pinned in
@@ -100,7 +100,7 @@ scale, not official CCRL ratings.
 - **Tool:** fastchess 1.8.0-alpha gauntlet, 240 games (8 opponents × 30),
   10+0.1, `testing/book.epd`, concurrency 5, idle machine. Ordo 1.0 over ALL
   accumulated calibration PGNs, `-m anchors.txt`, `-W`, `-s 1500`.
-- **Result:** **Sgurr v5.0 = 2724 ±36** (+97 =34 −109, 47.5%) — level with
+- **Result:** **Sgurr v5.0 = 2724 ±36** (+97 =34 −109, 47.5%), level with
   Zahak-5.0 (2726) and bracketed from above by the three new anchors, i.e.
   measured, not extrapolated. **+119 vs v4.0 on the same solve** (2604 ±27).
 - **Provenance:** `sgr_v5_0.exe` = gen5 net (`nets/gen5.nnue`) baked into the
@@ -109,7 +109,7 @@ scale, not official CCRL ratings.
   pipeline ran (8,000,353 positions, gen5 labeller @150k nodes; probe verdict
   "saturated" at 0.441% half→full; λ∈{0.9,1.0} trained; λ=1.0 won selection),
   but a 1,200-game net-isolated A/B (identical search, only the net swapped)
-  measured the gen6 net at **+6 ±20 vs gen5 — a wash.**
+  measured the gen6 net at **+6 ±20 vs gen5: a wash.**
 - **Why the gen6 data was dead: RFP poisons fixed-node labels.** RFP returns
   the raw static eval where a search result is expected; under datagen's
   fixed nodes:150000 budget its speed benefit is worth nothing, so labels
@@ -120,20 +120,20 @@ scale, not official CCRL ratings.
   **+155.0 ±28.6** on the gen6-net build; the shipped configuration equals
   the 07-11 factorial's `both` arm, **+176.4 ±15** self-play. Pooled +119
   means the first large search gain this project has measured expressed
-  ~two-thirds against a diverse pool — unlike malus (+33 → ~0) and the v3.1
+  ~two-thirds against a diverse pool, unlike malus (+33 → ~0) and the v3.1
   soft limit (+24.6 → negative), large pruning gains survive.
 - **Re-anchor validation:** historical rows shifted uniformly (v4.0
   2627→2604, v3.0 2616→2590, v3.1 2564→2541, v2.0 2489→2467, v1.0 2407→2386,
-  classical 2398→2377 — all −21 to −26, inside error), and unanchored
+  classical 2398→2377: all −21 to −26, inside error), and unanchored
   Blunder-7.2.0 solved to 2430.6 ±31 vs its README 2425. White advantage
-  −0.3 ±5.2 — stays closed.
+  −0.3 ±5.2: stays closed.
 - **Pipeline bugs found and fixed this run:** (1) the SPRT stage named both
-  engines from the generation number ("Sgurr-v5.0" twice — gen and version
+  engines from the generation number ("Sgurr-v5.0" twice: gen and version
   numbering diverged at gen5/v4.0); baseline is now explicit in the config.
   (2) The Elo regex also matched fastchess's `nElo` and recorded the
   normalised value (190.3 for 155.0); anchored with `\bElo`, state corrected.
 
-### 2026-07-10 — v4.0 release calibration + v3.1 debt settled
+### 2026-07-10, v4.0 release calibration + v3.1 debt settled
 
 - **Tool:** fastchess 1.8.0-alpha. Three gauntlets this day, all 10+0.1,
   `testing/book.epd`, concurrency 5: v3.1 (420 games), gen5 two-seed
@@ -152,48 +152,48 @@ scale, not official CCRL ratings.
   to the pooled champion build before the gauntlet.
 - **Cross-checks:** gen5-soft − v3.1 = +54 reproduces the +55.5 ±17.0 SPRT
   at a different TC. v3.1 below v3.0 reproduced across three solves (flat
-  soft limit loses at 10+0.1 — see DEVLOG). v4.0 vs gen5-bmstab = −8.5
+  soft limit loses at 10+0.1, see DEVLOG). v4.0 vs gen5-bmstab = −8.5
   (joint error ~±37): the self-play malus gain (+33) did not express against
   the pool.
 - **Caveat resolved:** white advantage, flagged −23 ±10 (07-04) and −20 ±9
-  (07-06), has washed out to **−2.3 ±5.3** over the full combined set —
+  (07-06), has washed out to **−2.3 ±5.3** over the full combined set,
   small-sample noise, not a book bias; the side-to-move question closes.
 
-### 2026-07-08 — v3.1 shipped WITHOUT calibration (deferred)
+### 2026-07-08, v3.1 shipped WITHOUT calibration (deferred)
 
 No rating row above: **v3.1 has not been pool-calibrated.** It is a search-only
 release (soft/hard time management) on the unchanged gen3 net, shipped for
 immediate play on the strength of an interim head-to-head SPRT vs the v3.0
-engine only — same gen3 net on both sides, 8+0.08, stopped early at 706 games:
+engine only, same gen3 net on both sides, 8+0.08, stopped early at 706 games:
 **+24.6 ±22.7** (+300 =156 −250, LLR +0.84, no bound crossed). This is not a
 completed measurement. A full gauntlet (a v3.1 row here, on the same
 pool-2026-07-A scale) is planned before the next generation; until then v3.1
 has no absolute CCRL figure of its own.
 
-### 2026-07-06 — v3.0 calibration (pool-2026-07-A)
+### 2026-07-06, v3.0 calibration (pool-2026-07-A)
 
 - **Tool:** fastchess 1.8.0-alpha, gauntlet (Sgurr v3.0 vs the 7-engine pool), 210 games, 15 openings × colours-reversed pairs, `testing/book.epd`, TC 10+0.1, concurrency 5.
 - **Solver:** Ordo 1.0 over ALL accumulated calibration PGNs (930 games: the 2026-07-04 run + this gauntlet), `-m anchors.txt`, `-W`, `-s 1500` simulations. Re-solving over the combined set keeps every Sgurr version on one consistent scale; earlier versions moved by ≤2.4 points (v2.0 2489→2491, v1.0 2407→2408, classical 2398→2400), well inside error bars.
 - **Result:** Sgurr v3.0 = **2616 ±37** (+105 =29 -76, 56.9%). Version gap +125 vs v2.0 independently reproduces the direct SPRT (+119.8 ±26.3, 618 games).
 - **Provenance:** net = gen3 lambda=1.0 (search-score-only targets), picked by a 600-game round-robin over {0.6, 0.7, 0.8, 1.0}; trained on data/v3.0 (3.0M positions, gen2-labelled at nodes:150000) with cosine decay, 12 epochs; engine `sgr_gen3.exe`, selfcheck PASS.
-- **Caveat — white advantage again negative (−20 ±9),** consistent with 2026-07-04's −23 ±10; colours balanced so ratings unbiased, but the book side-to-move question remains open.
+- **Caveat, white advantage again negative (−20 ±9),** consistent with 2026-07-04's −23 ±10; colours balanced so ratings unbiased, but the book side-to-move question remains open.
 
-### 2026-07-04 — first calibration (pool-2026-07-A)
+### 2026-07-04, first calibration (pool-2026-07-A)
 
 - **Tool:** fastchess 1.8.0-alpha, gauntlet (3 Sgurr seeds vs 7-engine pool + seed-vs-seed), 720 games, 15 openings × colours-reversed pairs, `testing/book.epd`, TC 10+0.1, concurrency 5.
 - **Solver:** Ordo 1.0, `-m anchors.txt` (all 7 pool engines pinned to published CCRL Blitz), `-W` (white advantage auto), `-s 2000` simulations for error bars.
-- **Anchors:** approximate CCRL Blitz values from each engine's README/search (see `anchors.txt`); the absolute scale is only as accurate as these — internal gaps between Sgurr versions are anchor-independent and robust.
+- **Anchors:** approximate CCRL Blitz values from each engine's README/search (see `anchors.txt`); the absolute scale is only as accurate as these: internal gaps between Sgurr versions are anchor-independent and robust.
 - **Pool ordered exactly as CCRL predicts** (Zahak-5.0 top → Blunder-6.1.0 bottom), validating the anchoring.
-- **Caveat — white advantage came out −23 ±10** (black won 341 vs white 305 across the pool). Colours are balanced per opening, so this does not bias the ratings, but it hints the self-generated book may slightly favour the side to move; worth a look before the next pool run.
+- **Caveat: white advantage came out −23 ±10** (black won 341 vs white 305 across the pool). Colours are balanced per opening, so this does not bias the ratings, but it hints the self-generated book may slightly favour the side to move; worth a look before the next pool run.
 
-### 2026-07-22 — v7.0 "Ghreadaidh" (pipeline run)
+### 2026-07-22, v7.0 "Ghreadaidh" (pipeline run)
 
 - Dataset: `data/v7.0` (11,690,558 positions), labels nets/gen5.nnue @ nodes:150000, balance-filtered openings.
 - Training: lambdas [0.9, 1.0], final losses {'0.9': 0.00639, '1.0': 0.0052}; selection round-robin winner lambda=1.0.
 - SPRT vs v6.0 @ 8+0.08: +44.4 +/-18.8, verdict inconclusive.
 - Pool calibration: 2911 +/-38 (240 games, Ordo over all accumulated calibration PGNs).
 
-### 2026-07-29 — v8.0 "Thearlaich" (pipeline run)
+### 2026-07-29, v8.0 "Thearlaich" (pipeline run)
 
 - Dataset: `data/v8.0` (55,931,801 positions), labels nets/gen7.nnue @ nodes:150000, balance-filtered openings.
 - Training: lambdas [0.9, 1.0], final losses {'0.9': 0.00682, '1.0': 0.00558}; selection round-robin winner lambda=0.9.

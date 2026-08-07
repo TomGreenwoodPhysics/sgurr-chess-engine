@@ -104,7 +104,7 @@ function spawnDisturbanceDust() {
 }
 
 // The prompt arrives on a delayed CSS animation, and a running animation
-// outranks ordinary declarations — so if the player disturbs the core before
+// outranks ordinary declarations -- so if the player disturbs the core before
 // the arrival has finished, the naming state's fade-out is simply ignored and
 // the prompt ends up sitting across the boss card. Replace the arrival with an
 // explicit fade from wherever it had got to.
@@ -138,7 +138,7 @@ function dismissIntroCopy() {
 
 // Put the menu core at the same point in the shared idle cycles as the intro
 // core. Both orbs are on screen together through the reveal dissolve, and two
-// independently-phased cores breathe, churn and ripple out of step — which is
+// independently-phased cores breathe, churn and ripple out of step -- which is
 // what makes the handoff read as a jump rather than as one continuous
 // creature. Safe to do here: the menu core is still hidden behind the veil.
 function syncMenuCorePhase() {
@@ -250,7 +250,7 @@ function beginIntroMenuHandoff() {
 
   // The trigger stays in flow and only its transform moves. Its resting frame
   // is the CSS `translate(-50%, -50%)` plus whatever swell the wake animation
-  // is still holding — measured, rather than assumed, by comparing the drawn
+  // is still holding -- measured, rather than assumed, by comparing the drawn
   // box with the laid-out one. Starting the script animation from there is
   // what stops the core snapping back to its unswollen size as the CSS
   // animation hands over.

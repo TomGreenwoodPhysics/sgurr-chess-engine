@@ -390,8 +390,8 @@ function createFloatingPiece(piece, className) {
 }
 
 function captureAbsorbTarget(capturerColour) {
-  // The capturing engine's presence core on its player card — matched by
-  // colour, so in watch mode each core is fed by its own side's captures —
+  // The capturing engine's presence core on its player card -- matched by
+  // colour, so in watch mode each core is fed by its own side's captures --
   // with any visible presence or the side panel's header core as fallback.
   const cards = [
     [refs.bottomPlayerCard, refs.bottomPlayerPresence],

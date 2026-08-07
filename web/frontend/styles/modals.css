@@ -229,8 +229,8 @@
 }
 
 /* openModal() focuses the box itself so screen readers announce the dialog
-   title before its controls. That focus is always programmatic — never the
-   result of a Tab — so the ring would be noise. Individual controls inside
+   title before its controls. That focus is always programmatic -- never the
+   result of a Tab -- so the ring would be noise. Individual controls inside
    keep their own focus styling. */
 .modal-box:focus {
   outline: none;
@@ -298,7 +298,7 @@
   box-shadow: 0 0 0 2px rgba(220, 178, 91, 0.2);
 }
 
-/* Still selectable — the backend reports availability, and choosing a build
+/* Still selectable -- the backend reports availability, and choosing a build
    that has not been compiled yet gives a clear message rather than silence. */
 .engine-card.unavailable {
   opacity: 0.58;

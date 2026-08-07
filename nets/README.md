@@ -1,7 +1,7 @@
 # Networks
 
 Trained NNUE files are build artefacts of the training pipeline, so this
-directory is gitignored — with one exception.
+directory is gitignored, with one exception.
 
 **`gen8.nnue` is committed.** It is the network shipped in v8.0, v8.1 and
 v8.2, and without it a clone falls back to the hand-crafted evaluation and
@@ -31,12 +31,12 @@ Recorded per the checklist in
 | size | 592,160 bytes |
 | architecture | `768 → 384 → 1` perspective, integer-quantised (QA 255, QB 64, output scale 400) |
 | shipped in | v8.0 "Thearlaich", v8.1, v8.2 |
-| dataset | [../data/v8.0/manifest.json](../data/v8.0/manifest.json) — 55,931,801 self-play positions over 60 shards, archive SHA-256 `ec315af911878c51a40149b2610b779bf208f46ad6e28223182cbe30b3c3e220` |
+| dataset | [../data/v8.0/manifest.json](../data/v8.0/manifest.json), 55,931,801 self-play positions over 60 shards, archive SHA-256 `ec315af911878c51a40149b2610b779bf208f46ad6e28223182cbe30b3c3e220` |
 | labeller | `nets/gen7.nnue` at `nodes:150000` per move |
-| training config | [../configs/pipeline_gen8.json](../configs/pipeline_gen8.json) — 8 epochs, cosine schedule, `val_frac` 0 |
+| training config | [../configs/pipeline_gen8.json](../configs/pipeline_gen8.json), 8 epochs, cosine schedule, `val_frac` 0 |
 | λ | 0.9, selected by games in the pipeline's `select` stage (0.9 and 1.0 were both trained) |
 | loss curve | [../data/v8.0/training_log.json](../data/v8.0/training_log.json) |
-| source commit | `4a2fe06` — the gen8 cycle that froze the dataset and shipped the net |
+| source commit | `4a2fe06`: the gen8 cycle that froze the dataset and shipped the net |
 
 **Provenance.** Positions are Sgurr self-play throughout, labelled by the
 previous generation's own network. No external game database, opening

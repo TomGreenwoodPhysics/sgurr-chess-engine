@@ -1,4 +1,4 @@
-# v8.1 vs v8.0 — prediction, registered before the run
+# v8.1 vs v8.0, prediction, registered before the run
 
 Written **2026-08-02**, before any games were played.
 
@@ -53,7 +53,7 @@ Arithmetic: 70 × log₂(1.20) = **+18.4 Elo**.
 
 Measured as a fixed 4,000-game match rather than an SPRT. The question is
 "by how much?", which wants a confidence interval, not an accept/reject
-verdict — and early stopping saves nothing on an idle machine. 4,000 games
+verdict, and early stopping saves nothing on an idle machine. 4,000 games
 gives roughly **±10 Elo** at 95%.
 
 ### What each outcome means
@@ -61,17 +61,17 @@ gives roughly **±10 Elo** at 95%.
 | measured | reading |
 |---|---|
 | **+10 to +27** | rule holds. Release v8.1; future speed work stays trustworthy |
-| **+28 or more** | speed is worth MORE than assumed here. Re-rank the roadmap — the remaining NPS items get more attractive, staged movegen especially |
+| **+28 or more** | speed is worth MORE than assumed here. Re-rank the roadmap: the remaining NPS items get more attractive, staged movegen especially |
 | **+3 to +9** | rule overstates by roughly half at this depth and control. Past speed work was oversold, though still positive. Release anyway, and revalue the backlog |
 | **below +3** | the conversion rule does not hold for this engine. A significant negative result: the AVX-512 and PGO gains would need restating in the ledger as unmeasured, and the roadmap's whole speed tier drops in priority |
-| **negative** | something is wrong with the experiment, not the engine. Two node-identical binaries cannot differ in strength except through speed — suspect the net, the binaries, or the harness before believing it |
+| **negative** | something is wrong with the experiment, not the engine. Two node-identical binaries cannot differ in strength except through speed, suspect the net, the binaries, or the harness before believing it |
 
 ### Why only ~55%
 
 The 70-per-doubling figure is a community rule of thumb calibrated on engines
 and time controls that are not this one. It is known to shrink at higher depth
 and to vary with time control. At 8+0.08 this engine reaches roughly depth
-14–18, which is neither the shallow regime where extra speed pays most nor the
+14-18, which is neither the shallow regime where extra speed pays most nor the
 deep regime where it saturates.
 
 A ±10 interval also cannot separate +18 from +12 or +25. This tests whether the

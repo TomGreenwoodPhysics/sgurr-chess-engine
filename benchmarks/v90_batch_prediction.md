@@ -1,4 +1,4 @@
-# v9.0 tier-1 batch — prediction, registered before the run
+# v9.0 tier-1 batch, prediction, registered before the run
 
 Written **2026-08-03**, before a single game was played. Registered per
 decision rule 7 of `docs/METHODOLOGY.md`, which was added *because* the singular
@@ -17,7 +17,7 @@ toggle so a failure can be bisected by halves.
 | 1 | `HistLmrDiv` 400,000 → 128 | −8.9% |
 | 2 | Internal iterative reduction | **+57.9%** |
 | 3 | Eval-scaled null-move reduction | +19.1% |
-| 4 | Verified razoring at depth 3–4 | +20.2% |
+| 4 | Verified razoring at depth 3-4 | +20.2% |
 | 5 | Move-loop futility | +12.5% |
 | 6 | SEE pruning in the main search | +22.3% |
 | 7 | History pruning | +13.0% |
@@ -41,8 +41,8 @@ inside that band.**
 ### Why positive
 
 Ten standard techniques the engine simply lacked, at a rating well below where
-any of them saturate. Individually the literature puts IIR at +10…+20, SEE
-pruning +10…+20, move-loop futility +10…+20, capture history +8…+15. Local
+any of them saturate. Individually the literature puts IIR at +10 to +20, SEE
+pruning +10 to +20, move-loop futility +10 to +20, capture history +8 to +15. Local
 precedent agrees: RFP + LMP measured +176 self-play, and the v6.0 package
 +57.3.
 
@@ -68,7 +68,7 @@ Tree size is not strength; `docs/METHODOLOGY.md` §5 now says so in two places.
 
 The honest counter is that these are *pruning* features, meant to cut nodes
 that do not matter, whereas singular is an *extension* whose cost buys
-accuracy — adding pruning and removing an extension are not symmetric
+accuracy: adding pruning and removing an extension are not symmetric
 operations. But treating the 3.4× as good news would be repeating the same
 error in the same week. It is neutral evidence.
 
@@ -81,7 +81,7 @@ error in the same week. It is neutral evidence.
 | **+25 to +60** | prediction holds. Ship as v9.0 |
 | **above +60** | better than expected; sub-additivity was milder than feared. Ship, and revisit whether the remaining pruning items are undervalued |
 | **+5 to +25** | real but diluted. Ship, then bisect at leisure to find which items are passengers rather than contributors |
-| **−5 to +5** | the package cancels out. Bisect by halves — most likely the prunes are over-cutting what the extensions and ordering gain |
+| **−5 to +5** | the package cancels out. Bisect by halves: most likely the prunes are over-cutting what the extensions and ordering gain |
 | **below −5** | **over-pruning is the first hypothesis.** Split prunes from non-prunes rather than bisecting by commit order. `HistLmrDiv=128` is suspect #1 (a pure guess that *grows* the tree 14%), history pruning #2 (never behaved like a pruner at any setting) |
 
 ## Falsification
@@ -95,6 +95,6 @@ useless as a design signal in this project.
 
 ## Duration
 
-A large effect resolves fastest under SPRT. Expected **20–65 minutes**. Only a
+A large effect resolves fastest under SPRT. Expected **20-65 minutes**. Only a
 true value sitting on `elo1 = 5` is slow, in which case it runs to the 6,000-game
 cap at roughly 5 hours.

@@ -29,7 +29,7 @@
     radial-gradient(28% 10% at 60% 82%, color-mix(in srgb, var(--accent), transparent 88%) 0 55%, transparent 100%),
     /* dust motes migrating around the band */
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g fill='%23ffdf9e' opacity='.9'><circle cx='8' cy='50' r='.5' opacity='.45'/><circle cx='15' cy='25' r='.4' opacity='.4'/><circle cx='30' cy='8' r='.35' opacity='.35'/><circle cx='70' cy='7' r='.5' opacity='.45'/><circle cx='90' cy='28' r='.4' opacity='.4'/><circle cx='93' cy='60' r='.55' opacity='.5'/><circle cx='80' cy='88' r='.4' opacity='.4'/><circle cx='45' cy='94' r='.35' opacity='.35'/><circle cx='20' cy='80' r='.45' opacity='.4'/></g></svg>"),
-    /* faint warm halo just outside the inner face — soft-edged, so it reads
+    /* faint warm halo just outside the inner face -- soft-edged, so it reads
        as light bleeding from the eye rather than a drawn ring */
     radial-gradient(circle at 50% 50%, transparent 0 37%, color-mix(in srgb, var(--accent), transparent 78%) 40% 41%, transparent 45%),
     /* Fresnel: the silhouette falls away into deep dark glass */
@@ -50,7 +50,7 @@
     /* rim hairline */
     inset 0 0 0 calc(var(--core-size) * 0.004) color-mix(in srgb, var(--text), transparent 62%),
     /* iris band: one warm glow just inside the rim grading smoothly through
-       shadow to a faint cool inner edge — a continuous iris rather than
+       shadow to a faint cool inner edge -- a continuous iris rather than
        concentric stripes */
     inset 0 0 calc(var(--core-size) * 0.035) calc(var(--core-size) * 0.018) color-mix(in srgb, var(--accent), transparent 56%),
     inset 0 0 calc(var(--core-size) * 0.07) calc(var(--core-size) * 0.05) color-mix(in srgb, #000, transparent 40%),
@@ -103,7 +103,7 @@
   border-radius: 55% 45% 49% 51% / 45% 58% 42% 55%;
   background-color: color-mix(in srgb, var(--black-eval), #000 40%);
   background-image:
-    /* broad soft sheen across the upper glass — no hard catchlight, so it
+    /* broad soft sheen across the upper glass -- no hard catchlight, so it
        never resolves into a glossy eye */
     radial-gradient(56% 40% at 40% 33%, color-mix(in srgb, var(--accent), transparent 80%) 0 34%, transparent 100%),
     radial-gradient(16% 7% at 30% 37%, color-mix(in srgb, var(--text), transparent 90%) 0 60%, transparent 100%),
@@ -436,8 +436,8 @@
   }
 }
 
-/* The inner mass drifts to face a direction and holds there — a slow,
-   unsettling regard — then rarely and briefly narrows, like a lid passing
+/* The inner mass drifts to face a direction and holds there -- a slow,
+   unsettling regard -- then rarely and briefly narrows, like a lid passing
    over something that is watching. */
 @keyframes boss-pupil-drift {
   0%,
@@ -475,7 +475,7 @@
 /* and only present when motion is enabled.                             */
 /* ------------------------------------------------------------------ */
 
-/* The heart leans a touch toward the cursor, with lag — a slow regard.
+/* The heart leans a touch toward the cursor, with lag -- a slow regard.
    Declared here (after the base .sgurr-core) so this transition wins for
    the menu core; boss-core-pulse animates `scale`, not `transform`, so
    the two never fight. */
@@ -578,7 +578,7 @@
   mix-blend-mode: screen;
 }
 
-/* A slow swell that eases all the way back to nothing — fill-mode `both`
+/* A slow swell that eases all the way back to nothing -- fill-mode `both`
    holds the final transparent frame, so it subsides smoothly instead of
    cutting off when the class is removed. */
 .menu-core.surfacing .core-surge {
@@ -643,7 +643,7 @@
 }
 
 /* Mottle: soft luminous cells (a blurred SVG mask over a vibrant accent
-   wash) drifting through the glass — internal structure with no hard
+   wash) drifting through the glass -- internal structure with no hard
    edges, like light moving through something alive. */
 .sgurr-core .core-mottle {
   position: absolute;
@@ -703,7 +703,7 @@
 }
 
 /* Aurora: broad, dim ribbons of colour that wash through the interior on
-   long periods — barely-there vibrancy that never resolves into a shape. */
+   long periods -- barely-there vibrancy that never resolves into a shape. */
 .sgurr-core .core-aurora {
   position: absolute;
   inset: calc(var(--core-size) * 0.13);
@@ -744,7 +744,7 @@
   }
 }
 
-/* Finer mottle: a second, smaller field of cells turning the other way —
+/* Finer mottle: a second, smaller field of cells turning the other way --
    dimmer, cooler and slower, so it reads as depth behind the first. */
 .sgurr-core .core-mottle-fine {
   position: absolute;
@@ -878,7 +878,7 @@
 /* light wheeling almost too slowly to see, a brilliant eclipse arc     */
 /* precessing around the rim, and rare halo ripples that bloom outward  */
 /* and dissolve. Everything is dim, slow and behind or at the rim, so   */
-/* the eye itself stays untouched — the god is in the periphery.        */
+/* the eye itself stays untouched -- the god is in the periphery.        */
 /* ------------------------------------------------------------------ */
 
 /* Presence: the room is lit by it. A huge, extremely faint radiance
@@ -907,8 +907,8 @@
   }
 }
 
-/* Corona: shafts of light radiating from behind the orb — two angular
-   frequencies superimposed so the rays never read as a regular fan —
+/* Corona: shafts of light radiating from behind the orb -- two angular
+   frequencies superimposed so the rays never read as a regular fan --
    wheeling so slowly the motion is felt rather than seen. */
 .sgurr-core .core-corona {
   position: absolute;
@@ -981,7 +981,7 @@
 }
 
 /* Aureole: every so often a halo blooms off the orb, expands and
-   dissolves — a ripple through whatever the orb hangs in. Two rings on
+   dissolves -- a ripple through whatever the orb hangs in. Two rings on
    the same period, half out of phase. */
 .sgurr-core .core-aureole {
   position: absolute;

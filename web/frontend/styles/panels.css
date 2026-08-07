@@ -482,7 +482,7 @@ tr.redo-notice td {
   font-variant-numeric: tabular-nums;
 }
 
-/* Not every ply carries an eval — the engine only scores on its own turn. */
+/* Not every ply carries an eval -- the engine only scores on its own turn. */
 .review-eval.is-empty {
   color: var(--muted);
   font-size: 0.72rem;

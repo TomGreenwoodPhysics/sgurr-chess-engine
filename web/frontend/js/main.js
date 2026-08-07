@@ -301,7 +301,7 @@ window.addEventListener("keydown", (event) => {
     undoMove();
   } else if (event.key === "ArrowLeft" && app.mode === "game") {
     // While reviewing, the arrows walk the record instead of taking back
-    // plies — the game is over, there is nothing to take back.
+    // plies -- the game is over, there is nothing to take back.
     if (app.review.active) {
       stepReview(-1);
     } else {

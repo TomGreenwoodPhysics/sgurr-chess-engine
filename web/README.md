@@ -23,7 +23,7 @@ web/
   frontend/
     index.html             static browser UI (loads js/main.js + styles.css)
     styles.css             @import manifest; ordering IS the cascade
-    styles/                12 CSS partials (base, intro, menu, board, core, …)
+    styles/                12 CSS partials (base, intro, menu, board, core, ...)
     js/                    19 native ES modules; main.js is the entry point
     assets/                web-owned images and Chessnut pieces
   licenses/                Python dependency licence texts
@@ -36,8 +36,8 @@ The frontend is plain ES modules and CSS with no build step. `js/main.js`
 wires DOM events and boots the app; shared state lives in `js/state.js`
 (`app` and `refs`) and constants in `js/config.js`; feature modules
 (`board`, `game`, `engine`, `ui`, `audio`, `intro`, `personality`, `editor`,
-`clocks`, `themes`, …) import from those. `styles.css` is an `@import`
-manifest whose partial order defines the cascade — keep it stable when adding
+`clocks`, `themes`, ...) import from those. `styles.css` is an `@import`
+manifest whose partial order defines the cascade, keep it stable when adding
 sections, and note that relative `url()`s inside `styles/*.css` need a `../`
 hop to reach `assets/`.
 
