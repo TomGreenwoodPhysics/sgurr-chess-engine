@@ -1072,7 +1072,10 @@ int Engine::negamax(
             && !(tt_move_key.has_value() && move == *tt_move_key)
             && !is_killer_move(ply, move)
         ) {
-            const bool quiet = !is_noisy_move(board, move);
+            // maybe_unused: the only three readers of this are the
+            // SGR_HISTPRUNE, SGR_FUTILITY and SGR_SEEPRUNE blocks below, and
+            // all three default to 0 -- so the default build warns without it.
+            [[maybe_unused]] const bool quiet = !is_noisy_move(board, move);
 
 #if SGR_HISTPRUNE
             // A quiet that keeps failing in this exact continuation.
