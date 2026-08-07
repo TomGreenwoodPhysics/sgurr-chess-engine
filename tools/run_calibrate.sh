@@ -31,7 +31,10 @@
 
 set -u
 
-ROOT=/c/Coding/Sgurr
+# Resolve the repository root from this script's own location, so a clone
+# anywhere works. Hardcoding an absolute path meant the script only ran on the
+# machine it was written on.
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 BM="$ROOT/benchmarks"
 
 # Windows-style path for the embedded python calls. Windows Python cannot open
@@ -43,12 +46,12 @@ CPP="$ROOT/sgurr_cpp"
 FC="$BM/tools/fastchess.exe"
 ORDO="$BM/tools/ordo.exe"
 BOOK="$ROOT/testing/book.epd"
-NET="C:/Coding/Sgurr/nets/gen8.nnue"
+NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
 
 # Version and binary are arguments so this does not have to be copied per
 # release -- two near-identical runner scripts is how run_v60_decomp and
 # run_tonight started drifting apart.
-#   usage: ./run_calibrate.sh [version] [exe-name] [openings-seed]
+#   usage: tools/run_calibrate.sh [version] [exe-name] [openings-seed]
 VERSION="${1:-v8.2}"
 REL_EXE="$CPP/${2:-sgr_v8_2.exe}"
 ENGINE_NAME="Sgurr-$VERSION"

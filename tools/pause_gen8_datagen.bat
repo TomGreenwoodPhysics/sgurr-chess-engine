@@ -1,7 +1,13 @@
 @echo off
 setlocal EnableExtensions
 
-set "ROOT=C:\Coding\Sgurr"
+rem Repository root, resolved from this script's own location (tools\..) so
+rem a clone anywhere works. pushd/popd normalises the "..", which a bare
+rem %~dp0.. does not -- the unnormalised form breaks the tasklist and
+rem PowerShell -LiteralPath checks below.
+pushd "%~dp0.."
+set "ROOT=%CD%"
+popd
 set "OUT=%ROOT%\data\gen8_raw"
 
 echo ============================================================

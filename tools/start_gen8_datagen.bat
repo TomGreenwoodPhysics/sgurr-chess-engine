@@ -2,18 +2,27 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem ============================================================
-rem Sgurr gen7 clean-data generation
+rem Sgurr gen8 clean-data generation (king-bucket dataset)
 rem Safe/resumable launcher for sgurr_cpp\datagen.exe
 rem ============================================================
 
-set "ROOT=C:\Coding\Sgurr"
+rem Repository root, resolved from this script's own location (tools\..) so
+rem a clone anywhere works. pushd/popd normalises the "..", which a bare
+rem %~dp0.. does not -- the unnormalised form breaks the tasklist and
+rem PowerShell -LiteralPath checks below.
+pushd "%~dp0.."
+set "ROOT=%CD%"
+popd
 set "ENGINE=%ROOT%\sgurr_cpp\datagen.exe"
-set "OUT=%ROOT%\data\gen7_raw"
+set "OUT=%ROOT%\data\gen8_raw"
 set "BOOK=%ROOT%\testing\book.epd"
-set "NET=%ROOT%\nets\gen5.nnue"
-set "LOGDIR=%ROOT%\runs\gen7_datagen"
+set "NET=%ROOT%\nets\gen7.nnue"
+set "LOGDIR=%ROOT%\runs\gen8_datagen"
 
-set "TARGET=12000000"
+rem TARGET is a high cap, not a goal: gen8 feeds king buckets, which want volume.
+rem At ~7M positions/day (12 SIMD workers) this will not be reached inside a
+rem 6-day window, so datagen runs the whole time instead of stopping early.
+set "TARGET=150000000"
 set "LIMIT=nodes:150000"
 rem 12 workers on a 16-thread 7800X3D: datagen is NODE-limited (nodes:150000),
 rem so oversubscribing cores changes throughput but not the data. Leaves some
@@ -23,7 +32,7 @@ set "WORKERS=12"
 if /I "%~1"=="worker" goto :worker
 
 echo ============================================================
-echo Sgurr gen7 clean-data generation
+echo Sgurr gen8 clean-data generation (king-bucket dataset)
 echo ============================================================
 echo Target : %TARGET% positions
 echo Workers: %WORKERS%
@@ -105,7 +114,7 @@ if !EXISTING! GEQ %TARGET% (
 
 echo Launching %WORKERS% workers...
 for /L %%I in (1,1,%WORKERS%) do (
-    start "Sgurr gen7 worker %%I" /MIN "%ComSpec%" /D /C call "%~f0" worker %%I
+    start "Sgurr gen8 worker %%I" /MIN "%ComSpec%" /D /C call "%~f0" worker %%I
 )
 
 echo.
@@ -114,7 +123,7 @@ echo   %LOGDIR%\worker_1.log
 echo   ...
 echo   %LOGDIR%\worker_%WORKERS%.log
 echo.
-echo Run pause_gen7_datagen_SAFE.bat to stop the workers.
+echo Run pause_gen8_datagen.bat to stop the workers.
 exit /b 0
 
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Sgurr generation pipeline: one command from self-play data to a ledger row.
 
-    python pipeline.py pipeline_gen3.json            # run / resume everything
-    python pipeline.py pipeline_gen3.json --status   # show stage progress
-    python pipeline.py pipeline_gen3.json --until train
-    python pipeline.py pipeline_gen3.json --force sprt
+    python pipeline.py configs/pipeline_gen3.json            # run / resume everything
+    python pipeline.py configs/pipeline_gen3.json --status   # show stage progress
+    python pipeline.py configs/pipeline_gen3.json --until train
+    python pipeline.py configs/pipeline_gen3.json --force sprt
 
 Stages (each records completion in runs/<gen>/state.json, so the pipeline is
 resumable: Ctrl+C or reboot at any point and re-run to continue):
@@ -783,7 +783,7 @@ class Pipeline:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("config", help="pipeline config json (e.g. pipeline_gen3.json)")
+    ap.add_argument("config", help="pipeline config json (e.g. configs/pipeline_gen3.json)")
     ap.add_argument("--status", action="store_true", help="show progress and exit")
     ap.add_argument("--until", choices=Pipeline.STAGES, help="stop after this stage")
     ap.add_argument("--force", choices=Pipeline.STAGES,

@@ -545,7 +545,7 @@ label-quality jump of any generation at zero throughput cost. Volume is left
 to the pipeline's data-sufficiency probe (384 has never been probed — gen4's
 "saturated ~3–6M" was the 256 net), which auto-extends 8M→12M if
 data-limited. gen4's 6M is deliberately *not* mixed in (gen3-labelled = weaker
-targets; the lambda=1.0 lesson says don't dilute). Config `pipeline_gen6.json`,
+targets; the lambda=1.0 lesson says don't dilute). Config `configs/pipeline_gen6.json`,
 detached via `resume_gen6.bat` / paused by `stop_gen6.bat` (append-only shards,
 fully resumable). ~2.5–3 days to 8M on ~6 cores, then the pipeline runs
 probe→freeze→train→build→select→sprt→calibrate on its own. Note for the SPRT
@@ -817,7 +817,7 @@ and bucket retests gate on better labels (deeper labelling search, or the
 next flywheel turn), not on more of the same data.
 
 **Release: v8.0 candidate = unbucketed 768×384 on the gen8 56M.**
-`pipeline_gen8.json` flipped accordingly. At the historical ~2/3 pool
+`configs/pipeline_gen8.json` flipped accordingly. At the historical ~2/3 pool
 compression for large gains, +105 self-play projects ~+70–90 pooled from
 v7.0's 2903 ±6 — the 3000 target is plausibly inside this cycle.
 

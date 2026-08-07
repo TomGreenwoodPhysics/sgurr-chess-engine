@@ -19,7 +19,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 BM = ROOT / "benchmarks"
 
 
@@ -33,7 +33,7 @@ def main() -> int:
                     help="7 physical cores; leaves headroom on the 8-core CCD")
     ap.add_argument("--dry-run", action="store_true",
                     help="resolve paths and print the command without playing")
-    ap.add_argument("--config", default="pipeline_gen8.json",
+    ap.add_argument("--config", default="configs/pipeline_gen8.json",
                     help="pipeline config naming the generation/version to extend")
     args = ap.parse_args()
 

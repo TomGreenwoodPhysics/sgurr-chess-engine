@@ -67,11 +67,16 @@
 
 set -u
 
-ROOT=/c/Coding/Sgurr
+# Resolve the repository root from this script's own location, so a clone
+# anywhere works. Hardcoding an absolute path meant the script only ran on the
+# machine it was written on.
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CPP="$ROOT/sgurr_cpp"
 FC="$ROOT/benchmarks/tools/fastchess.exe"
 BOOK="$ROOT/testing/book.epd"
-NET="C:/Coding/Sgurr/nets/gen8.nnue"
+# Windows form: SGR_EVALFILE is read by the engine binary, which cannot open
+# an MSYS "/c/..." path.
+NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 OUT="$ROOT/runs/tonight/$STAMP"

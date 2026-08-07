@@ -14,7 +14,9 @@
 # Safe to stop any time (Ctrl+C the workers, or Stop-Process datagen) and safe
 # to shut the PC down: datagen counts what is already on disk and continues,
 # and the pipeline's freeze stage trims any partial trailing record.
-$root = 'C:\Coding\Sgurr'
+# Repository root, resolved from this script's own location (tools/..) so a
+# clone anywhere works.
+$root = Split-Path -Parent $PSScriptRoot
 $eng  = "$root\sgurr_cpp\datagen.exe"
 $out  = "$root\data\gen9_raw"
 $book = "$root\testing\book.epd"

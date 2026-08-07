@@ -19,7 +19,7 @@ import chess.pgn
 import pygame
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(__file__).resolve().parents[1]
 
 # The compiled C++ UCI engine executable. Needs to be an NNUE-capable build
 # (one that honours SGR_EVALFILE). Override with the SGR_ENGINE_EXE
