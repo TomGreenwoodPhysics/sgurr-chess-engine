@@ -1,5 +1,12 @@
 # Roadmap
 
+> **Status note, 2026-08-07.** This document is the 2026-08-01 snapshot and is
+> left as written. Two speed-only releases have shipped since: v8.1 (3027 ±11)
+> and v8.2 (3058 ±7). Neither changes the plan below, but v8.2's calibration
+> did establish that the pool can no longer resolve a v8.3 — see
+> `../benchmarks/ledger.md`. The rating baseline in the next line is therefore
+> the one this plan was written against, not the current release.
+
 Current: **v8.0 "Thearlaich" — 3006 ±11** (pool-2026-07-B, 3,329 games).
 Written 2026-08-01, after the architecture × data study. Supersedes the
 2026-07-21 roadmap, whose central recommendations (king buckets, width) were
