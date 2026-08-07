@@ -336,10 +336,20 @@ SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe bench
 #   -> SEE: 9/9 passed
 ```
 
-The `nodes` total is the fingerprint. For a given evaluation it is identical
+The `nodes` total is the fingerprint. Within one toolchain it is identical
 across the dev build, the PGO release build, and the AVX-512, AVX2 and scalar
-inference paths: that is what makes those a speed change rather than a
+inference paths, which is what makes those a speed change rather than a
 behaviour change.
+
+The two totals above are from clang on MSYS2 `clang64`. **They are not portable
+across standard libraries.** `order_moves` sorts with `std::sort`, which is not
+stable, so equal-scoring moves come out in whatever order the implementation
+happens to produce; libc++ and libstdc++ disagree, and a different order is a
+different search. The same source builds to 3457351 nodes under libstdc++ on
+Linux. CI therefore asserts determinism and vectorised/scalar agreement, both
+of which hold anywhere, rather than a constant copied off one machine. This
+costs the instrument nothing in practice, because speed-only work is verified
+by diffing two builds from the same toolchain.
 
 The bit-exactness gate compares engine inference against the trainer's own
 forward pass across every special move type and thousands of random game

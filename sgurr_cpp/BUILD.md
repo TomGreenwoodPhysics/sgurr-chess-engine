@@ -153,3 +153,24 @@ The fingerprint is on stdout; wall time, NPS and the loaded net go to stderr,
 so the diff compares only the deterministic part. If the fingerprint moves,
 the change altered *what* is searched rather than only how fast, and the
 speedup is not free.
+
+### The fingerprint is toolchain-local
+
+**Compare builds from the same toolchain, never a build against a number
+written down elsewhere.** The node totals are not portable across standard
+library implementations. `order_moves` sorts with `std::sort`, which is not
+stable, so moves with equal scores emerge in whatever order the implementation
+produces, and equal scores are common among captures. libc++ (MSYS2 `clang64`,
+used here) and libstdc++ (Linux) choose differently, which is a *different
+search* rather than a faster one. `board.cpp` and `search.cpp` both already
+flag that sensitivity where the move ordering is built.
+
+Measured on identical source: **3,601,424 nodes** under clang64/libc++ against
+**3,457,351** under clang/libstdc++ on Linux. It is not floating point. The
+LMR table's closest approach to a truncation boundary is 4.7e-05, roughly
+2.6e+10 ULPs, so a `std::log` difference cannot move it.
+
+This is why CI asserts determinism and vectorised-versus-scalar agreement,
+which hold on any toolchain, rather than a constant lifted from one machine.
+The instrument is unaffected for the job it does: every speed-only claim in
+this project is a diff of two builds produced by the same compiler.
