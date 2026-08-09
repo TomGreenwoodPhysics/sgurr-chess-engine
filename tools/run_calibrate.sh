@@ -45,7 +45,23 @@ WIN_BM=$(cygpath -m "$BM")
 CPP="$ROOT/sgurr_cpp"
 FC="$BM/tools/fastchess.exe"
 ORDO="$BM/tools/ordo.exe"
-BOOK="$ROOT/testing/book.epd"
+# Calibration uses its OWN, much larger book. testing/book.epd holds 150
+# positions and is wired into datagen, SPRT, SPSA and every dataset manifest,
+# so it must not be swapped out; this is a separate file used only here.
+#
+# Why a bigger book matters for a rating, measured on the 2026-08-09 run:
+# Sgurr's score varies by opening from 9% to 80%, and the between-opening
+# variance is 2.96x what chance alone predicts. That is a real effect, so the
+# 150 openings are a SAMPLE of opening space whose uncertainty does not shrink
+# by playing more games at the same positions. It contributed
+# sqrt(0.01724/150) = 1.07 percentage points, about +/-15 Elo at 95%, while
+# the run was quoting +/-5.4. The quoted interval was counting coin-flip noise
+# and ignoring the opening draw.
+#
+# Uncertainty falls as sqrt(openings): 150 -> +/-15, 600 -> +/-7.5,
+# 1350 -> +/-5, 3750 -> +/-3. 1500 positions puts the opening term near +/-5,
+# below the sampling term, which is where it stops dominating the answer.
+BOOK="${BOOK_FILE:-$ROOT/testing/book_calib.epd}"
 NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
 
 # Version and binary are arguments so this does not have to be copied per
