@@ -7,3 +7,9 @@
 "Weiss-1.0",2896
 "Igel-2.2.2",2982
 "Weiss-1.2",3055
+"4ku-5.1",3056
+"Bit-Genie-9",3086
+"Jet-1.2",3193
+"Simbelmyne-1.10.0",3238
+"Monolith-3",3260
+"Mantissa-3.7.2",3312
