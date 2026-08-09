@@ -86,6 +86,27 @@ PGN="$BM/games/calib-$VERSION-$(date +%Y-%m-%d).pgn"
 # ---- knobs -----------------------------------------------------------------
 TC=10+0.1              # the pool's control, unchanged since pool-2026-07-A
 CONCURRENCY=7
+
+# Hash, set EQUALLY for every engine including the one under test.
+#
+# CCRL's published testing conditions say so explicitly: "Hash size: should be
+# set to the same value of either 128 or 256 MB for all engines in a match or
+# tourney". The anchors earned their ratings under that rule, so replicating it
+# is part of transferring those ratings honestly.
+#
+# Leaving it unset is not neutral, it hands each engine its own default, and
+# those defaults are not comparable: in pool-2026-08-C they ranged from 8 MB
+# (Bit-Genie, Jet) to 128 MB (Monolith), against Sgurr's 48. An engine running
+# on a fraction of the memory CCRL rated it with underperforms its anchor,
+# which inflates the engine under test. The 2026-08-09 default-hash run showed
+# exactly that signature: the solve climbing monotonically to +24 Elo and the
+# anchors disagreeing by 171 Elo. Those games are quarantined under
+# benchmarks/games/_superseded/ and are NOT part of any solve.
+#
+# 256 rather than 128: both are permitted, 256 is the modern convention, and
+# every engine in the pool accepts it (checked against each engine's advertised
+# min/max before adopting). 14 concurrent processes x 256 MB is ~3.6 GB.
+HASH=256
 ROUNDS="${4:-500}"     # 8 opponents x2 games x ROUNDS; 500 -> 8,000 games (~9 h)
                        # TARGET_ERR is set from $5 above, next to the maths
 CHECK_EVERY=1800       # seconds between Ordo checks (solve time adds to this)
@@ -107,7 +128,15 @@ export SGR_EVALFILE="$NET"
 # of the engine under test -- the one process guaranteed to be in every game.
 # The PID capture in stop_gauntlet happened to catch them, so the gap was
 # invisible: a safety net with a hole exactly where the load would be.
-ENGINE_PROCS="$(basename "$REL_EXE" .exe) blunder-7.4.0 blunder-7.6.0 blunder-8.0.0 zahak-4.0 zahak-5.0 weiss-1.0 weiss-1.2 igel-2.2.2"
+# Derived from pool.json, never hardcoded. It listed the pool-B engines while
+# pool-2026-08-C was running, so the sweep named eight processes none of which
+# were in the match -- the same hole this comment already warned about, in the
+# other direction. Deriving it means the list cannot drift from the roster.
+ENGINE_PROCS="$(basename "$REL_EXE" .exe) $(python -c "
+import json, os
+p = json.load(open(r'$WIN_BM/pool.json'))
+print(' '.join(os.path.splitext(os.path.basename(e['cmd']))[0] for e in p['engines']))
+")"
 
 # Ctrl+C must clean up too, or an interrupted run leaves the machine loaded and
 # the next timed measurement is quietly invalid.
@@ -145,7 +174,7 @@ if ! printf 'uci\nquit\n' | "$REL_EXE" 2>&1 >/dev/null | grep -q "nnue: loaded";
     echo "ABORT: $REL_EXE is NOT loading the net -- it would play as HCE." >&2
     exit 1
 fi
-echo "preflight: $ENGINE_NAME and all 8 pool engines start; $ENGINE_NAME loads the net"
+echo "preflight: $ENGINE_NAME and all $(python -c "import json;print(len(json.load(open(r'$WIN_BM/pool.json'))['engines']))") pool engines start; $ENGINE_NAME loads the net"
 echo
 
 {
@@ -231,12 +260,13 @@ games_so_far() {
 # with the relative paths pool.json already stores; this does the same.
 CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds 1 -srand "$SEED"
      -engine "cmd=$(cygpath -m "$REL_EXE")" "name=$ENGINE_NAME")
+N_OPP=0
 while read -r name cmd; do
     # Absolute Windows path per engine. The relative form pool.json stores works
     # for pipeline.py because Python launches fastchess with cwd=benchmarks; it
     # does NOT resolve when fastchess is started from an MSYS shell, and the
     # symptom is "process creation failed" on the first engine tried.
-    [ -n "$name" ] && CMD+=(-engine "cmd=$(cygpath -m "$BM/$cmd")" "name=$name")
+    [ -n "$name" ] && { CMD+=(-engine "cmd=$(cygpath -m "$BM/$cmd")" "name=$name"); N_OPP=$((N_OPP + 1)); }
 done < <(python -c "
 import json
 p=json.load(open(r'$WIN_BM/pool.json'))
@@ -246,12 +276,15 @@ for e in p['engines']: print(e['name'], e['cmd'])
 # engine path ends in a carriage return and fastchess reports
 # "Engine binary does not exist: ...blunder-7.4.0.exe?" -- the '?' being the CR
 # rendered back at you.
-CMD+=(-each "tc=$TC" -rounds "$ROUNDS" -repeat
+CMD+=(-each "tc=$TC" "option.Hash=$HASH" -rounds "$ROUNDS" -repeat
       -concurrency "$CONCURRENCY" -recover
       -openings "file=$(cygpath -m "$BOOK")" format=epd order=random
       -pgnout "file=$(cygpath -m "$PGN")" -ratinginterval 60)
 
-echo "=== gauntlet: $ENGINE_NAME vs 8 pool engines, up to $((ROUNDS*16)) games ==="
+# Opponent count is read from pool.json rather than hardcoded: it was fixed at
+# 8 while pool-2026-08-C has 6, so the header claimed 80,000 games when the real
+# cap was 60,000.
+echo "=== gauntlet: $ENGINE_NAME vs $N_OPP pool engines, Hash=$HASH, up to $((ROUNDS*N_OPP*2)) games ==="
 date
 ( cd "$BM" && "${CMD[@]}" ) > "$OUT/gauntlet.log" 2>&1 &
 FC_PID=$!
@@ -266,11 +299,11 @@ echo
 # not complain, the log read normally, and the only tell was a scheduled total
 # nobody had reason to check. Verify it in the first minutes instead.
 for _ in $(seq 60); do
-    [ "$(grep -c '^\[Event' "$PGN" 2>/dev/null || echo 0)" -ge 20 ] && break
+    [ "$(grep -c '^\[Event' "$PGN" 2>/dev/null | head -1 || echo 0)" -ge 20 ] && break
     sleep 5
 done
-ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null || echo 0)
-mine=$(grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null || echo 0)
+ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null | head -1 || echo 0)
+mine=$(grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null | head -1 || echo 0)
 if [ "$ev" -gt 0 ] && [ "$ev" -ne "$mine" ]; then
     echo "ABORT: $((ev - mine)) of the first $ev games do not involve $ENGINE_NAME." >&2
     echo "       That is not a gauntlet. Check -tournament and -seeds." >&2
