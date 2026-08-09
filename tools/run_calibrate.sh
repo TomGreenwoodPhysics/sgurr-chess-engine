@@ -203,6 +203,21 @@ if ! "$PY" "$ROOT/testing/engine_check.py" "$REL_EXE" $POOL_EXES; then
     exit 1
 fi
 
+# Rules compliance, which a UCI handshake does not prove. An engine that
+# emits "a7a8Q" instead of "a7a8q" forfeits every game in which it promotes:
+# Jet 1.2 and Simbelmyne 1.10.0 lost 23.9% and 17.6% of their games that way
+# on 2026-08-09, which inflated Sgurr against them and made the anchors look
+# like they disagreed by 171 Elo. The whole run had to be discarded. The gate
+# also catches an engine that ignores `position fen` entirely (StockNemo
+# 5.7.0.0 answered "e1g1" to three endgames with no king on e1).
+# shellcheck disable=SC2086
+if ! "$PY" "$ROOT/testing/engine_gate.py" "$REL_EXE" $POOL_EXES; then
+    echo "ABORT: an engine is not UCI rules-compliant (see above)." >&2
+    echo "       A forfeiting engine does not fail loudly, it produces a" >&2
+    echo "       complete result with a wrong number. Remove it from the pool." >&2
+    exit 1
+fi
+
 if ! printf 'uci\nquit\n' | "$REL_EXE" 2>&1 >/dev/null | grep -q "nnue: loaded"; then
     echo "ABORT: $REL_EXE is NOT loading the net -- it would play as HCE." >&2
     exit 1

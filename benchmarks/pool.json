@@ -1,5 +1,5 @@
 {
-  "pool_id": "pool-2026-08-C",
+  "pool_id": "pool-2026-08-D",
   "description": "CCRL-Blitz-anchored opponent pool for absolute Sgurr calibration. Names must match fastchess PGN tags and anchors.txt exactly.",
   "time_control": "10+0.1",
   "hash_mb": 256,
@@ -15,14 +15,44 @@
     "not_committed": "Excluded by the *.pgn rule, like the pool engines themselves. Reproduce from the source URL and check the sha256 above."
   },
   "engines": [
-    {"name": "4ku-5.1",           "cmd": "engines/4ku-5.1.exe",           "ccrl_blitz": 3056, "source": "https://github.com/kz04px/4ku/releases/tag/v5.1",            "build": "4ku-5.1-avx2.exe"},
-    {"name": "Bit-Genie-9",       "cmd": "engines/bit-genie-9.exe",       "ccrl_blitz": 3086, "source": "https://github.com/Aryan1508/Bit-Genie/releases/tag/v9",      "build": "Bit-Genie-9-bmi2.exe"},
-    {"name": "Jet-1.2",           "cmd": "engines/jet-1.2.exe",           "ccrl_blitz": 3193, "source": "https://github.com/rafid-dev/jet/releases/tag/1.2",           "build": "jet-1.2-avx2-bmi2-windows.exe"},
-    {"name": "Simbelmyne-1.10.0", "cmd": "engines/simbelmyne-1.10.0.exe", "ccrl_blitz": 3238, "source": "https://github.com/sroelants/simbelmyne/releases/tag/v1.10.0", "build": "simbelmyne-v1.10.0-x86_64-v3.exe"},
-    {"name": "Monolith-3",        "cmd": "engines/monolith-3.exe",        "ccrl_blitz": 3260, "source": "https://github.com/cimarronOST/Monolith/releases/tag/v3",     "build": "Monolith-windows-x86-64-pext.exe"},
-    {"name": "Mantissa-3.7.2",    "cmd": "engines/mantissa-3.7.2.exe",    "ccrl_blitz": 3312, "source": "https://github.com/jtheardw/mantissa/releases/tag/v3.7.2",    "build": "mantissa-3.7.2-windows-avx2.exe"}
+    {
+      "name": "4ku-5.1",
+      "cmd": "engines/4ku-5.1.exe",
+      "ccrl_blitz": 3056,
+      "source": "https://github.com/kz04px/4ku/releases/tag/v5.1",
+      "build": "4ku-5.1-avx2.exe"
+    },
+    {
+      "name": "Bit-Genie-9",
+      "cmd": "engines/bit-genie-9.exe",
+      "ccrl_blitz": 3086,
+      "source": "https://github.com/Aryan1508/Bit-Genie/releases/tag/v9",
+      "build": "Bit-Genie-9-bmi2.exe"
+    },
+    {
+      "name": "Monolith-3",
+      "cmd": "engines/monolith-3.exe",
+      "ccrl_blitz": 3260,
+      "source": "https://github.com/cimarronOST/Monolith/releases/tag/v3",
+      "build": "Monolith-windows-x86-64-pext.exe"
+    },
+    {
+      "name": "Drofa-4.1.0",
+      "cmd": "engines/drofa-4.1.0.exe",
+      "ccrl_blitz": 3286,
+      "source": "https://github.com/justNo4b/Drofa/releases/tag/4.1.0_fix",
+      "build": "Drofa_pext.exe from Drofa_fixed.zip"
+    },
+    {
+      "name": "Mantissa-3.7.2",
+      "cmd": "engines/mantissa-3.7.2.exe",
+      "ccrl_blitz": 3312,
+      "source": "https://github.com/jtheardw/mantissa/releases/tag/v3.7.2",
+      "build": "mantissa-3.7.2-windows-avx2.exe"
+    }
   ],
   "notes": [
+    "SUPERSEDES pool-2026-08-C, which contained two engines that could not play legal UCI. Jet 1.2 and Simbelmyne 1.10.0 emit an uppercase promotion piece ('a7a8Q'); fastchess rejects it, so they forfeited 23.9% and 17.6% of their games. That inflated Sgurr against them and produced an apparent 171 Elo disagreement between anchors which was an artefact, not a transfer effect. All pool-C games are discarded. StockNemo 5.7.0.0 was also rejected before admission: it answered 'e1g1' to three separate endgames, none with a king on e1, i.e. it ignores `position fen`. Drofa 4.1.0 (3286) replaces them. Every engine must now pass testing/engine_gate.py, which run_calibrate.sh enforces at preflight.",
     "Ratings are single-CPU CCRL Blitz, re-sourced from the live complete list on 2026-08-09. Every engine here is the best-rated version of its family on that list, and each downloaded binary self-reports the exact version the rating belongs to (verified via `id name`).",
     "EXTENDS pool-2026-07-B; it does not replace it. The previous roster is archived verbatim at pool-2026-07-B.json and all nine of its anchors are RETAINED in anchors.txt. Ordo re-solves over ALL accumulated calib-*.pgn, so the historical games against Blunder/Zahak/Weiss/Igel still pin the lower half of the ladder and every older Sgurr version keeps its place on one scale.",
     "Scale consistency was checked before adopting these values rather than assumed: the same live list rates Blunder 8.5.5 at 2663 against pool-B's Blunder-8.0.0 at 2651, i.e. the 2026-08 list sits on the same scale as the 2026-07-15 re-source. No repeat of the pool-A README-sourced inflation (mean ~31 Elo).",
