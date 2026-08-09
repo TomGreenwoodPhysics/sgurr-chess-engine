@@ -59,9 +59,26 @@ ORDO="$BM/tools/ordo.exe"
 # and ignoring the opening draw.
 #
 # Uncertainty falls as sqrt(openings): 150 -> +/-15, 600 -> +/-7.5,
-# 1350 -> +/-5, 3750 -> +/-3. 1500 positions puts the opening term near +/-5,
-# below the sampling term, which is where it stops dominating the answer.
-BOOK="${BOOK_FILE:-$ROOT/testing/book_calib.epd}"
+# 1350 -> +/-5, 3750 -> +/-3, 34700 -> ~+/-0.5, i.e. gone.
+#
+# And it must not be OUR book. book_gen.py filters to +/-70cp using SGURR'S
+# OWN evaluation, so it selects positions Sgurr thinks are equal. Against
+# external anchors that is a selection bias pointing exactly the wrong way:
+# any position type Sgurr misjudges as balanced enters the book labelled
+# balanced. Colour-reversed pairs cancel an opening's imbalance but cannot
+# cancel a biased CHOICE of openings.
+#
+# 8moves_v3.pgn is the field-standard generic book: 34,700 real ECO-classified
+# opening lines, 8 moves per side, derived from games rather than from any
+# engine's eval. It is also what CCRL's conditions ask for ("any generic",
+# limited to 12 moves per side), so it removes a transfer difference at the
+# same time as the bias. Not committed, for the same reason the pool engines
+# are not: provenance lives in benchmarks/pool.json.
+BOOK="${BOOK_FILE:-$ROOT/testing/8moves_v3.pgn}"
+case "$BOOK" in
+    *.pgn) BOOK_FORMAT=pgn ;;
+    *)     BOOK_FORMAT=epd ;;
+esac
 NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
 
 # Version and binary are arguments so this does not have to be copied per
@@ -294,7 +311,7 @@ for e in p['engines']: print(e['name'], e['cmd'])
 # rendered back at you.
 CMD+=(-each "tc=$TC" "option.Hash=$HASH" -rounds "$ROUNDS" -repeat
       -concurrency "$CONCURRENCY" -recover
-      -openings "file=$(cygpath -m "$BOOK")" format=epd order=random
+      -openings "file=$(cygpath -m "$BOOK")" "format=$BOOK_FORMAT" order=random
       -pgnout "file=$(cygpath -m "$PGN")" -ratinginterval 60)
 
 # Opponent count is read from pool.json rather than hardcoded: it was fixed at

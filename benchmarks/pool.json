@@ -2,7 +2,18 @@
   "pool_id": "pool-2026-08-C",
   "description": "CCRL-Blitz-anchored opponent pool for absolute Sgurr calibration. Names must match fastchess PGN tags and anchors.txt exactly.",
   "time_control": "10+0.1",
-  "book": "../testing/book.epd (150 balanced lines, colour-reversed pairs)",
+  "hash_mb": 256,
+  "book": {
+    "file": "../testing/8moves_v3.pgn",
+    "format": "pgn",
+    "lines": 34700,
+    "plies": 16,
+    "sha256": "5835239f88cc2c7511b177c32392a69f3ede21819cf0616f80a7f907cd21d17e",
+    "source": "https://github.com/official-stockfish/books/blob/master/8moves_v3.pgn.zip",
+    "why": "Engine-neutral and generic, which the project's own book is not. testing/book.epd is filtered to +/-70cp by SGURR'S OWN evaluation, so it selects positions Sgurr believes are balanced; any position type Sgurr misjudges enters the book mislabelled, and colour-reversed pairs cancel an opening's imbalance but not a biased CHOICE of openings. This book is built from real ECO-classified games instead. It also satisfies CCRL's stated book condition ('any generic', limited to 12 moves per side) at 8 moves per side, removing a transfer difference at the same time.",
+    "size_note": "34,700 lines drives the opening-sampling term to ~+/-0.5 Elo. The 150-line book contributed ~+/-15 Elo that no number of games could reduce, because between-opening variance measured 2.96x chance on the 2026-08-09 games (Sgurr scoring 9% to 80% depending on the opening).",
+    "not_committed": "Excluded by the *.pgn rule, like the pool engines themselves. Reproduce from the source URL and check the sha256 above."
+  },
   "engines": [
     {"name": "4ku-5.1",           "cmd": "engines/4ku-5.1.exe",           "ccrl_blitz": 3056, "source": "https://github.com/kz04px/4ku/releases/tag/v5.1",            "build": "4ku-5.1-avx2.exe"},
     {"name": "Bit-Genie-9",       "cmd": "engines/bit-genie-9.exe",       "ccrl_blitz": 3086, "source": "https://github.com/Aryan1508/Bit-Genie/releases/tag/v9",      "build": "Bit-Genie-9-bmi2.exe"},
