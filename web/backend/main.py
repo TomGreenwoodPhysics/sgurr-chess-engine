@@ -69,12 +69,25 @@ ENGINE_SPECS: list[dict[str, object]] = [
         # 70*log2(1.1543) = +14.5 for a +15.43% NPS gain. The games say +31.5.
         # The rule under-predicted by 17 Elo, and the label is the only reason
         # that is a footnote rather than a wrong number shipped as a fact.
+        #
+        # Corrected 2026-08-10: 3058 -> 3012. The engine did not change, the
+        # measurement did. The old calibration left Hash unset (engines ran at
+        # 8-128 MB where CCRL requires one shared value), used a book filtered
+        # by Sgurr's own eval, and included two engines forfeiting ~20% of
+        # their games on an illegal uppercase promotion. Re-measured against
+        # five families under controlled conditions: 3012.1 +/-5.8 over 9,890
+        # games, systematic ~+/-25. See METHODOLOGY 9.
+        #
+        # Every rating below is still the pool-2026-07-B solve and therefore
+        # sits ~45 Elo high in absolute terms. The ladder's ORDER and its
+        # version-to-version gaps are unaffected, which is what this list uses
+        # them for; re-measuring the older versions is owed.
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.2 "Thearlaich"',
         "tech": "GEN8 NNUE + PACKED TT",
-        "rating": 3058,
+        "rating": 3012,
     },
     {
         # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,

@@ -18,11 +18,15 @@ improvement?"* with a bounded error rate.
 
 **Pool calibration**: a gauntlet against fixed open-source engines with
 published CCRL Blitz ratings, at 10+0.1, solved with Ordo anchored to those
-published values. The pool is four families (Blunder, Zahak, Weiss, Igel)
-spanning 2105 to 3055.
-Answers *"how strong is it on an absolute scale?"* Ordo re-solves over **all**
-accumulated PGNs, so every Sgurr version sits on one internally consistent
-scale.
+published values. The current pool (pool-2026-08-D) is five families (4ku,
+Bit-Genie, Monolith, Drofa, Mantissa) spanning 3056 to 3312, all at or above
+the engine's own level. Answers *"how strong is it on an absolute scale?"*
+
+**Conditions are part of the instrument, not a detail.** Hash is pinned at 256
+for every engine, the book is generic and external, pondering is off and
+threads are 1, because that is what CCRL specifies and the anchors earned
+their ratings under it. Leaving any of these to each engine's default silently
+biases the result: see §9, where it cost 45 Elo.
 
 Both are needed. Self-play measures the delta precisely but drifts from
 absolute reality; the pool grounds it but with wider bars. Where they have
@@ -279,6 +283,12 @@ produced plausible output instead of an error.**
   engine while labelling the row with the new version's name.
 * **Antivirus blocking freshly linked binaries** killed a multi-hour gauntlet
   32 seconds in, and later skipped a validation gate without failing.
+* **Opponents forfeiting on an illegal move (2026-08-09).** Two engines added
+  to a new calibration pool emit uppercase promotions (`a7a8Q`, where UCI
+  requires `a7a8q`). fastchess rules that illegal, so they lost every game in
+  which they promoted: 23.9% and 17.6% of their games, 14% of the whole run.
+  Nothing errored. The gauntlet produced a complete result whose only tell was
+  a number that had moved. See §9.
 
 Practices adopted in response: binaries self-report their configuration at
 startup (`nnue: loaded <net> (avx512, k=8)`); a bit-exactness selfcheck gates
@@ -311,3 +321,115 @@ precondition fails.
    quietly reshaped into a right one afterwards. The 2026-08-03 singular result
    is the case in point: the reasoning was wrong in a way that would have been
    easy to forget having believed.
+
+---
+
+## 9. Measuring the measurement: v8.2 at 3012, not 3058
+
+On 2026-08-10 v8.2 was re-measured at **3012.1 ±5.8** over 9,890 games, about
+**45 Elo below** the 3058 ±7 published on 2026-08-05. The engine is
+byte-identical between the two runs. Only the measurement changed.
+
+The exercise began as a pool replacement: the old pool had saturated (50.8%
+against its strongest member, 86-97% against five of eight) and could not
+resolve a v8.3. Building a new one surfaced three faults in how strength had
+been measured all along.
+
+### Three uncontrolled variables
+
+**Hash was never pinned.** The gauntlet passed only the time control, so every
+engine ran at its own default: 8 MB for two of them, 64 for three, 128 for
+one, 48 for Sgurr. CCRL's published conditions require *the same* value, 128
+or 256, for every engine in a match, and the anchors earned their ratings
+under that rule. An engine running on a fraction of the memory it was rated
+with underperforms its anchor, and an underperforming anchor inflates the
+engine under test. The signature was visible before the cause was: the solve
+climbed monotonically for 4,182 games and never converged.
+
+**The opening book was chosen by the engine under test.** `book_gen.py` keeps
+positions whose score falls within ±70cp *according to Sgurr's own
+evaluation*. Strength was therefore being measured on openings Sgurr believes
+are balanced, and any position type it systematically misjudges entered the
+book mislabelled. Colour-reversed pairs cancel an individual opening's
+imbalance; nothing cancels a biased choice of which openings appear.
+
+The same book was also too small to support the error bar being quoted. At 150
+positions, measured between-opening variance was **2.96× what chance predicts**
+(Sgurr scored between 9% and 80% depending on the opening), which makes the
+openings a *sample*, contributing
+
+    sqrt(0.01724 / 150) = 1.07 percentage points ~= +/-15 Elo
+
+that **no number of games can reduce**, while the run quoted ±5.4. Uncertainty
+here falls as sqrt(openings), not sqrt(games). Replaced with a generic
+external book (34,700 ECO lines, 8 moves per side), which removes the
+self-reference, drops the opening term to ~±0.5, and satisfies CCRL's book
+condition at the same time.
+
+**Two opponents could not play legal UCI.** Covered in §7. 580 of 4,182 games,
+14%, ended in a forfeit that inflated Sgurr.
+
+### The conclusion that had to be withdrawn
+
+From the contaminated run, six anchors appeared to disagree by **171 Elo**
+about where v8.2 sat. That was reported as strong evidence that CCRL transfer
+bias exceeded the ±45 then in use. It was an artefact: the extreme outlier was
+the engine forfeiting a quarter of its games.
+
+The methodological error is worth stating plainly, because it is not the same
+as the engine bug. The binaries were verified to start and to return a legal
+move, which is what §7's existing practices call for. The aggregate ratings
+were then read **without checking how the games ended**. The forfeits were
+recorded in the PGN throughout.
+
+**Rule added: check terminations before reading ratings.** A results table is
+not evidence until the games behind it have been checked for forfeits,
+timeouts and adjudications.
+
+### What the controlled measurement shows
+
+Five families, 3056 to 3312, all bracketing v8.2 from above. Hash 256 for
+every engine, generic book, pondering off, one CPU, 10+0.1, idle machine, zero
+forfeits.
+
+| anchor | published | implies v8.2 | ±95% |
+|---|---|---|---|
+| 4ku 5.1 | 3056 | 3004 | ±8 |
+| Bit-Genie 9 | 3086 | 3036 | ±8 |
+| Monolith 3 | 3260 | 3001 | ±10 |
+| Drofa 4.1.0 | 3286 | 2986 | ±11 |
+| Mantissa 3.7.2 | 3312 | 3034 | ±10 |
+
+**Anchor spread 50 Elo, against 90 on the old pool.** A wider and more diverse
+pool under controlled conditions does agree better, which is what the exercise
+set out to test. But the residual is real, not sampling noise: Bit-Genie's ±8
+and Drofa's ±11 do not overlap. Systematic uncertainty on the absolute number
+is therefore **~±25**, improved from ~±45 and still four times the sampling
+error.
+
+**Why the residual exists is unknown.** Draw rate does not predict it (−0.01),
+opponent strength does not (−0.35), mean game length is suggestive (+0.84) but
+rests on five points and does not reach significance. Style is a live
+hypothesis and untested.
+
+**The 45 Elo drop is likewise unattributed.** Pool, hash and book all changed
+at once, and the book change alone did two things: it removed the
+self-selection bias *and* changed position character from 8-ply filtered
+fragments to 16-ply real openings, which is itself a style effect. Attributing
+the drop to any one of them would repeat the mistake above. Decomposing it
+needs runs that vary one variable at a time.
+
+### Consequences
+
+* **The absolute scale of every pre-2026-08-10 row is ~45 Elo high.** Their
+  version-to-version gaps stand, being measured inside one solve; the level
+  does not. Re-measuring the ladder under pool-D conditions is owed.
+* **`testing/engine_gate.py` gates the pool**, enforced at preflight. It
+  checks UCI-legal promotions, that the returned move is legal *in the
+  position* (a format-only check passed an engine that ignored `position fen`
+  entirely), and that a move comes back under clock-based `go`.
+* **Conditions are now recorded in `pool.json`**: hash, book file with its
+  sha256, and each engine's exact build.
+* **An error bar is only as good as its widest ignored term.** ±5.4 was quoted
+  while the opening draw alone contributed ±15. Before quoting an interval,
+  ask what it is not counting.

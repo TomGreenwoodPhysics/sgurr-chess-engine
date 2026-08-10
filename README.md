@@ -4,13 +4,20 @@
 
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
 self-play games. The current release, **v8.2 "Thearlaich"**, is internally
-calibrated at an estimated **3058** on a CCRL-Blitz-anchored scale, measured
-over an 11,144-game gauntlet.
+calibrated at an estimated **3012** on a CCRL-Blitz-anchored scale, measured
+over a 9,890-game gauntlet against five engine families.
 
 That figure is a self-calibrated estimate, not an official rating. Sgurr has
 never been submitted to CCRL and does not appear on any published list. The
-±7 quoted below is sampling error only; systematic uncertainty on the absolute
-number is nearer **±45**, for reasons set out under [Strength](#strength).
+±6 is sampling error only; the five anchors disagree by 50 Elo about the
+absolute number, so systematic uncertainty is nearer **±25**. Both are set out
+under [Strength](#strength).
+
+This number replaces an earlier 3058. The engine did not change; the
+measurement did. Three faults in the old setup were found and fixed, one of
+which was two pool engines forfeiting a fifth of their games on an illegal
+move. [docs/METHODOLOGY.md §9](docs/METHODOLOGY.md) has the full account,
+including a conclusion that had to be withdrawn.
 
 The whole evaluation pipeline is built in this repository end to end: the
 self-play data generator, the PyTorch trainer, the quantisation scheme, the
@@ -94,9 +101,31 @@ coincidence, and the conversion is no longer used to predict anything here.
 
 ## Strength
 
-| engine | rating (CCRL-Blitz-anchored estimate, pool-2026-07-B) |
+The current release, measured under controlled conditions matching CCRL's
+published requirements on hash, book, pondering and thread count:
+
+| engine | rating | pool | games |
+|---|---|---|---|
+| **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **~±25** systematic | pool-2026-08-D | 9,890 |
+
+Solved against five engine families spanning 3056 to 3312, all of which
+bracket v8.2 from above. Each anchor solved separately gives 4ku 3004 ±8,
+Bit-Genie 3036 ±8, Monolith 3001 ±10, Drofa 2986 ±11, Mantissa 3034 ±10: a
+**50 Elo spread**, which is where the ±25 comes from. That spread is real
+rather than sampling noise, since the intervals do not overlap.
+
+### The earlier ladder
+
+Every version below was measured on the previous pool, before the conditions
+above were controlled. Those rows are internally consistent with each other
+and the version-to-version *gaps* remain valid, being measured inside one
+solve. **The absolute level is not.** v8.2 appears in both, at 3058 on this
+scale and 3012 under control, so the whole ladder sits roughly 45 Elo high.
+Re-measuring the older versions is owed and has not been done.
+
+| engine | rating (pool-2026-07-B, uncontrolled conditions) |
 |---|---|
-| Sgurr v8.2 "Thearlaich" | **3058 ±7** |
+| Sgurr v8.2 "Thearlaich" | 3058 ±7 *(superseded by 3012 above)* |
 | Sgurr v8.1 "Thearlaich" | 3027 ±11 |
 | Sgurr v8.0 "Thearlaich" | 3006 ±11 |
 | Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
@@ -112,28 +141,31 @@ coincidence, and the conversion is no longer used to predict anything here.
 Every row is solved from games. None is estimated.
 
 Ratings come from a gauntlet against a fixed pool of open-source engines with
-published CCRL Blitz ratings: four families (Blunder, Zahak, Weiss, Igel)
-spanning 2105 to 3055, solved with Ordo anchored to those values. They are estimates on
-the CCRL Blitz scale produced here, not official CCRL ratings, and the
-absolute scale is only as good as the anchors.
+published CCRL Blitz ratings, solved with Ordo anchored to those values. They
+are estimates on the CCRL Blitz scale produced here, not official CCRL
+ratings, and the absolute scale is only as good as the anchors.
 
-**Why the systematic uncertainty is ±45 while the interval is ±7.** v8.2's
-11,144 games are enough to place it against each anchor *separately*, and the
-four anchors disagree by **90 Elo** about where it sits: Igel says 3106,
-Weiss-1.0 says 3016. The spread is not new (63, 100 and 90 for v8.0, v8.1 and
-v8.2) and it is not sampling noise. It is what happens when ratings measured
-under CCRL's conditions are transferred to a different book, time control and
-machine. So ±7 counts coin-flip noise only.
+**Why sampling error and systematic uncertainty differ by 4×.** Enough games
+accumulate to place v8.2 against each anchor *separately*, and the anchors do
+not agree with each other. On the old pool they disagreed by 90 Elo; on the
+new one, by 50. Neither spread is sampling noise, and no number of games
+reduces it. It is what happens when ratings measured under CCRL's conditions
+are transferred to a different machine and time control. So the ±6 counts
+coin-flip noise only, and the honest figure for the absolute number is ±25.
+
+The cause of the residual 50 Elo is **not established**. Draw rate does not
+predict it (−0.01), nor does opponent strength (−0.35); mean game length is
+suggestive (+0.84) but rests on five opponents and is not significant.
 
 **Version-to-version gaps do not carry that uncertainty**, because they are
 measured inside one solve against one pool. Each generational gap
 independently reproduces the direct SPRT between those versions: v4.0's net
 change measured +54 in the pool against +55.5 ±17.0 in a 1,194-game SPRT.
 
-One further limit, stated plainly: v8.2 scores **50.8%** against Weiss-1.2,
-the strongest engine in the pool, and 86-97% against five of the other seven.
-The pool can no longer resolve improvements at this level, and a stronger one
-is needed before v8.3 means anything.
+The old pool had also saturated: v8.2 scored **50.8%** against its strongest
+member and 86-97% against five of eight, so it could not resolve a v8.3. Every
+engine in pool-2026-08-D sits at or above v8.2's level, which is what the
+replacement was for.
 
 Anchors were re-sourced from the live CCRL list on 2026-07-15 after an audit
 found the previous set inflated by a mean of ~31 Elo; every row above is from

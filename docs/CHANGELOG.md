@@ -6,6 +6,15 @@ results with 95% error bars, never estimates.
 
 ## v8.2 "Thearlaich" (Sgùrr Thearlaich), 2026-08-04
 
+> **Rating corrected 2026-08-10: 3012 ±6, not 3058 ±7.** The engine is
+> unchanged; the measurement was wrong. The old calibration left Hash unset
+> (engines ran at 8 to 128 MB against CCRL's requirement of one shared value),
+> used an opening book filtered by Sgurr's *own* evaluation, and included two
+> engines that forfeited 24% and 18% of their games on an illegal uppercase
+> promotion. Re-measured under controlled conditions against five families:
+> **3012.1 ±5.8** over 9,890 games, systematic ~±25. The rest of this entry is
+> left as written. See METHODOLOGY §9 and the 2026-08-10 ledger row.
+
 A second speed-only release. Node-identical to v8.1: same net, same search,
 same moves, ~15% faster.
 

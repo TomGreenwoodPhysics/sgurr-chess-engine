@@ -1,11 +1,21 @@
 # Roadmap
 
-> **Status note, 2026-08-07.** This document is the 2026-08-01 snapshot and is
-> left as written. Two speed-only releases have shipped since: v8.1 (3027 ±11)
-> and v8.2 (3058 ±7). Neither changes the plan below, but v8.2's calibration
-> did establish that the pool can no longer resolve a v8.3, see
-> `../benchmarks/ledger.md`. The rating baseline in the next line is therefore
-> the one this plan was written against, not the current release.
+> **Status note, 2026-08-10.** This document is the 2026-08-01 snapshot and is
+> left as written. Two speed-only releases shipped since (v8.1, v8.2), and the
+> "rebuild the pool" item below has now been done: pool-2026-08-D, five
+> families at 3056-3312.
+>
+> It found more than saturation. Hash had never been pinned, the opening book
+> was filtered by Sgurr's own evaluation, and two candidate engines forfeited
+> ~20% of their games on an illegal promotion. Re-measured under controlled
+> conditions, **v8.2 is 3012 ±6, not 3058 ±7**, with systematic uncertainty
+> ~±25 rather than ~±45. The engine did not change.
+>
+> **Every rating quoted below is therefore ~45 Elo high in absolute terms.**
+> Version-to-version gaps are unaffected, so the plan's reasoning stands. See
+> METHODOLOGY §9 and the 2026-08-10 ledger row. Note the book concern flagged
+> under "Rebuild the pool" was correct and understated: the openings turned out
+> to contribute ~±15 Elo irreducibly, three times the interval being quoted.
 
 Current: **v8.0 "Thearlaich", 3006 ±11** (pool-2026-07-B, 3,329 games).
 Written 2026-08-01, after the architecture × data study. Supersedes the
@@ -85,8 +95,14 @@ happened the last time that was tried.
   README and the website carry the measured figure. Two limits surfaced, both
   now blocking below: **anchor disagreement** and **pool saturation**.
 
-* **Rebuild the pool before v8.3.** Now the binding constraint on everything
-  else here, and it is measurement work rather than engine work.
+* ~~**Rebuild the pool before v8.3.**~~ **Done 2026-08-10: pool-2026-08-D**,
+  five families at 3056-3312, all at or above v8.2. Every concern listed below
+  was real; two more were found that are not listed, because nobody had thought
+  to look for them (unpinned Hash, and opponents forfeiting on illegal
+  promotions). v8.2 re-measures at **3012 ±6**, anchor spread down from 90 to
+  50 Elo, systematic from ~±45 to ~±25. Still owed: re-measure v8.1 and earlier
+  under these conditions, and decompose the 45 Elo drop, which is confounded
+  across the pool, Hash and book changes. Original text follows.
   * **Saturation.** v8.2 scores **50.8%** against Weiss-1.2, the strongest
     engine in the pool, and 86-97% against five of the other seven. Those five
     contribute almost no information. The pool cannot resolve the next

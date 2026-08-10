@@ -1113,3 +1113,120 @@ measured values.
   something narrower than advertised, after the anchors on 2026-07-15. Both
   were found by pointing the instrument at a new situation rather than by
   reasoning about it.
+
+---
+
+## 2026-08-10, v8.2 re-measured at 3012: the pool was fine, the conditions were not
+
+Set out to replace a saturated calibration pool. Found three faults in how
+strength had been measured all along, and one conclusion of my own that had to
+be withdrawn. v8.2 is **3012.1 ±5.8** over 9,890 games, ~45 Elo below the 3058
+published five days earlier. Same binary, same net, same bench fingerprint.
+
+### Why replace the pool
+
+v8.2 scored 50.8% against Weiss-1.2 and 86-97% against five of eight. The pool
+could not resolve a v8.3, and with v8.2 at the ceiling the absolute number was
+unconstrained from above. New pool: five families rated 3056-3312 on the live
+CCRL Blitz list, every one at or above v8.2.
+
+### Fault 1: hash was never pinned
+
+`run_calibrate.sh` passed only `tc` to fastchess, so each engine used its own
+default: 8 MB (Bit-Genie, Jet), 64 (4ku, Simbelmyne, Mantissa), 128 (Monolith),
+48 (Sgurr). CCRL's conditions require the same value for all engines. An engine
+short of the memory it was rated with underperforms its anchor, which inflates
+the engine under test.
+
+The tell arrived before the diagnosis: the solve climbed monotonically over
+4,182 games, 3058.9 → 3082.7, and never converged.
+
+Worth noting the fix is *not* "give Sgurr more hash". DEVLOG 2026-07-15 already
+measured a 4x larger TT at −12.0 ±15.7, i.e. neutral-to-negative at this TC.
+Pinning 256 matters for the two opponents on 8 MB, not for Sgurr.
+
+### Fault 2: the book was chosen by the engine being measured
+
+`book_gen.py` keeps positions Sgurr's own eval scores within ±70cp. So strength
+was measured on openings Sgurr believes are balanced, and any position type it
+misjudges entered the book mislabelled. Colour-reversed pairs cancel an
+opening's imbalance, not a biased choice of openings.
+
+The same book also could not support the error bar being quoted. 150 positions,
+and between-opening variance measured **2.96x chance** (9% to 80% by opening),
+so the openings were a *sample* contributing ~±15 Elo irreducibly while the run
+printed ±5.4. My first fix was to generate 1,500 positions with the same tool,
+which addressed the sampling term and left the bias completely intact. Replaced
+properly with `8moves_v3.pgn`: 34,700 real ECO lines, engine-neutral, 8 moves
+per side, which also satisfies CCRL's book condition.
+
+### Fault 3: two opponents could not play legal UCI
+
+Jet 1.2 and Simbelmyne 1.10.0 emit uppercase promotions (`a7a8Q`). fastchess
+rules that illegal, so both forfeit every game in which they promote:
+**167/698 (23.9%)** and **123/697 (17.6%)**. 580 of 4,182 games ended that way.
+
+Simbelmyne is asymmetric, correct for black promotions and wrong for white,
+which is the kind of detail that makes a bug survive casual testing. StockNemo
+5.7.0.0 was also rejected before admission: it answered `e1g1` to three
+endgames, none with a king on e1, i.e. it ignores `position fen`.
+
+### The conclusion I withdrew
+
+From the contaminated run I reported that six anchors disagreed by **171 Elo**,
+called it statistically overwhelming, and concluded transfer bias was worse
+than the ±45 in use. Artefact. Jet was the extreme outlier precisely because it
+was gifting a win in a quarter of its games.
+
+The process error is separate from the engine bug and more important. Binaries
+were verified to start and return a legal move, which is what §7 of METHODOLOGY
+already demanded. Then the ratings were read **without checking how the games
+ended**. The forfeits were in the PGN the whole time.
+
+Rule added: **check terminations before reading ratings.**
+
+### What the controlled run shows
+
+Hash 256 for all, generic book, pondering off, 1 CPU, 10+0.1, idle machine,
+zero forfeits, 9,890 games.
+
+| anchor | published | implies v8.2 | ±95% |
+|---|---|---|---|
+| 4ku 5.1 | 3056 | 3004 | ±8 |
+| Bit-Genie 9 | 3086 | 3036 | ±8 |
+| Monolith 3 | 3260 | 3001 | ±10 |
+| Drofa 4.1.0 | 3286 | 2986 | ±11 |
+| Mantissa 3.7.2 | 3312 | 3034 | ±10 |
+
+**Spread 50 Elo against pool-B's 90.** More families under control do agree
+better, which was the hypothesis. But the residual is real: Bit-Genie's ±8 and
+Drofa's ±11 do not overlap. Systematic uncertainty ~±25, not eliminated.
+
+Converged: 3012.6 at 7,256 games, 3012.1 at 9,890.
+
+### What is not established
+
+**The 45 Elo drop is unattributed.** Pool, hash and book changed together, and
+the book change alone did two things: removed the self-selection bias *and*
+shifted position character from 8-ply filtered fragments to 16-ply real
+openings, which is a style effect in its own right. Picking one explanation
+would repeat the mistake above.
+
+**The residual 50 Elo is unattributed.** Draw rate does not predict it (−0.01),
+opponent strength does not (−0.35), mean game length is suggestive (+0.84) but
+n=5 and not significant.
+
+### Consequences
+
+* **Every pre-2026-08-10 absolute rating is ~45 Elo high.** Version-to-version
+  gaps stand, being measured inside one solve. The ladder's level does not.
+  Re-measuring older versions under pool-D conditions is owed.
+* **`testing/engine_gate.py`** gates pool admission at preflight: UCI-legal
+  promotions, move legal *in the position* (a format-only check passed
+  StockNemo), and a reply under clock-based `go`.
+* **Time control still does not match CCRL** (10+0.1 vs 2'+1"). It is the last
+  controllable difference and matching it costs ~11x throughput while orphaning
+  every historical row. A one-off offset measurement would convert the caveat
+  into a number.
+* **An error bar is only as good as its widest ignored term.** ±5.4 was printed
+  while the opening draw alone contributed ±15.
