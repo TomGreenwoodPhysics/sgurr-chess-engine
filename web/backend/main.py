@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
+import queue
 import re
+import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -11,7 +15,7 @@ import chess
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -44,6 +48,15 @@ ROOT_ASSETS_DIR = REPO_ROOT / "assets"
 # still overrides the default's binary, preserving the old single-engine setup.
 CPP_DIR = REPO_ROOT / "sgurr_cpp"
 NETS_DIR = REPO_ROOT / "nets"
+_trace_engine_override = os.environ.get("SGURR_TRACE_ENGINE_EXE")
+TRACE_ENGINE_PATH = (
+    Path(_trace_engine_override)
+    if _trace_engine_override
+    else CPP_DIR / "sgr_trace.exe"
+)
+if not TRACE_ENGINE_PATH.is_absolute():
+    TRACE_ENGINE_PATH = REPO_ROOT / TRACE_ENGINE_PATH
+TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # Every canonical release, newest first (index 0 is the default, and what
 # SGURR_ENGINE_EXE overrides). Ratings are the pool-2026-07-B Ordo solve from
 # benchmarks/ledger.md -- CCRL-Blitz-ANCHORED ESTIMATES on one consistent
@@ -206,6 +219,8 @@ ENGINE_SUBTITLE = str(ENGINE_SPECS[0]["subtitle"])
 DEFAULT_MOVETIME_MS = int(os.environ.get("SGURR_MOVETIME_MS", "700"))
 ENGINE_STARTUP_TIMEOUT = float(os.environ.get("SGURR_STARTUP_TIMEOUT", "5.0"))
 ENGINE_TIMEOUT_PADDING = float(os.environ.get("SGURR_TIMEOUT_PADDING", "5.0"))
+TRACE_MAX_CONCURRENT = max(1, int(os.environ.get("SGURR_TRACE_MAX_CONCURRENT", "2")))
+TRACE_SLOTS = threading.BoundedSemaphore(TRACE_MAX_CONCURRENT)
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
     "true",
@@ -350,6 +365,7 @@ ENGINES: dict[str, dict[str, object]] = {
             net_path=spec.get("net"),
         ),
         "exe": spec["exe"],
+        "net": spec.get("net"),
         "label": spec["label"],
         "subtitle": spec["subtitle"],
         "tech": spec["tech"],
@@ -363,6 +379,11 @@ engine = ENGINES[DEFAULT_ENGINE_ID]["engine"]
 def engine_for(engine_id: str | None):
     entry = ENGINES.get(engine_id or DEFAULT_ENGINE_ID) or ENGINES[DEFAULT_ENGINE_ID]
     return entry["engine"]
+
+
+def engine_entry_for(engine_id: str | None) -> tuple[str, dict[str, object]]:
+    resolved_id = engine_id if engine_id in ENGINES else DEFAULT_ENGINE_ID
+    return resolved_id, ENGINES[resolved_id]
 
 
 @asynccontextmanager
@@ -430,6 +451,17 @@ class EngineMoveRequest(GameRequest):
     winc_ms: int = Field(default=0, ge=0)
     binc_ms: int = Field(default=0, ge=0)
     movestogo: int = Field(default=120, ge=1, le=240)
+
+
+class SearchTraceRequest(BaseModel):
+    fen: str
+    engine: str | None = Field(default=None, max_length=32)
+    movetime_ms: int = Field(default=1_500, ge=100, le=5_000)
+
+
+class SearchNetworkRequest(BaseModel):
+    fen: str
+    depth: int = Field(default=6, ge=4, le=20)
 
 
 def board_from_fen(fen: str, *, require_valid: bool = True) -> chess.Board:
@@ -640,6 +672,8 @@ def eval_payload(info: UciInfo | None, search_turn: chess.Color) -> dict[str, ob
         "display": display,
         "depth": info.depth,
         "nodes": info.nodes,
+        "nps": info.nps,
+        "hashfull": info.hashfull,
         "time_ms": info.time_ms,
         "pv": info.pv or [],
         "raw": info.raw,
@@ -851,6 +885,244 @@ def engine_move(request: EngineMoveRequest) -> dict[str, object]:
         start_fen=request.start_fen,
         last_move={"uci": move.uci(), "san": san, "by": "engine"},
         latest_eval=eval_payload(result.info, search_turn),
+    )
+
+
+@app.post("/api/search-trace")
+def search_trace(request: SearchTraceRequest) -> StreamingResponse:
+    """Stream completed iterative-deepening passes from an isolated engine.
+
+    The normal game process is deliberately not reused: a visitor leaving the
+    microscope open must never delay a move in the playable site. The stream
+    contains one small NDJSON object per completed depth, not per search node.
+    """
+    board = board_from_fen(request.fen.strip())
+    search_turn = board.turn
+    engine_id, entry = engine_entry_for(request.engine)
+    engine_path = Path(entry["exe"])
+
+    if not engine_path.is_file():
+        raise HTTPException(status_code=503, detail=f"Engine unavailable: {entry['label']}")
+    if not TRACE_SLOTS.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Search microscope is busy; try again shortly")
+
+    event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+    trace_engine = SgurrUciEngine(
+        engine_path,
+        startup_timeout=ENGINE_STARTUP_TIMEOUT,
+        net_path=entry.get("net"),
+    )
+
+    def on_info(info: UciInfo) -> None:
+        event_queue.put(("iteration", info))
+
+    def run_search() -> None:
+        try:
+            result = trace_engine.search(
+                board.fen(),
+                f"movetime {request.movetime_ms}",
+                max(
+                    ENGINE_STARTUP_TIMEOUT,
+                    request.movetime_ms / 1000.0 + ENGINE_TIMEOUT_PADDING,
+                ),
+                on_info=on_info,
+            )
+            event_queue.put(("complete", result))
+        except (EngineStartupError, EngineTimeoutError, EngineCrashedError) as exc:
+            event_queue.put(("error", str(exc)))
+        except Exception:
+            event_queue.put(("error", "Search trace failed unexpectedly"))
+        finally:
+            try:
+                trace_engine.close()
+            finally:
+                TRACE_SLOTS.release()
+
+    worker = threading.Thread(
+        target=run_search,
+        name="sgurr-search-trace",
+        daemon=True,
+    )
+    worker.start()
+
+    def encode(payload: dict[str, object]) -> bytes:
+        return (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
+
+    def stream():
+        yield encode(
+            {
+                "type": "started",
+                "engine": engine_id,
+                "label": entry["label"],
+                "fen": board.fen(),
+                "perspective": "white",
+            }
+        )
+
+        while True:
+            event_type, value = event_queue.get()
+
+            if event_type == "iteration":
+                payload = eval_payload(value, search_turn)
+                if payload is not None:
+                    yield encode({"type": "iteration", **payload})
+                continue
+
+            if event_type == "complete":
+                yield encode(
+                    {
+                        "type": "complete",
+                        "bestmove": value.bestmove,
+                        "final": eval_payload(value.info, search_turn),
+                    }
+                )
+            else:
+                yield encode({"type": "error", "detail": str(value)})
+            break
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/search-network")
+def search_network(request: SearchNetworkRequest) -> StreamingResponse:
+    """Stream bounded samples from every iteration through the target depth."""
+    board = board_from_fen(request.fen.strip())
+    if not TRACE_ENGINE_PATH.is_file():
+        raise HTTPException(
+            status_code=503,
+            detail="Trace engine unavailable; build it with sgurr_cpp/build.sh -t",
+        )
+    if not TRACE_SLOTS.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Search microscope is busy; try again shortly")
+
+    event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+    trace_engine = SgurrUciEngine(
+        TRACE_ENGINE_PATH,
+        startup_timeout=ENGINE_STARTUP_TIMEOUT,
+        net_path=ENGINE_SPECS[0].get("net"),
+    )
+    prefix = "info string trace "
+
+    def on_line(line: str) -> None:
+        if not line.startswith(prefix):
+            return
+        try:
+            event_queue.put(("trace", json.loads(line[len(prefix):])))
+        except json.JSONDecodeError:
+            event_queue.put(("error", "Trace engine returned malformed data"))
+
+    def on_info(info: UciInfo) -> None:
+        if info.depth is None:
+            return
+        event_queue.put(
+            (
+                "progress",
+                {
+                    "depth": info.depth,
+                    "nodes": info.nodes,
+                    "time_ms": info.time_ms,
+                },
+            )
+        )
+
+    def run_search() -> None:
+        try:
+            # Strict deep searches grow exponentially and intentionally have no
+            # movetime cap. Give the advanced presets room to finish while
+            # retaining a hard ceiling for a stalled diagnostic process.
+            timeout_seconds = min(
+                300.0,
+                max(15.0, 15.0 * (2.0 ** (max(0, request.depth - 12) / 2.0))),
+            )
+            result = trace_engine.search(
+                board.fen(),
+                f"depth {request.depth}",
+                max(ENGINE_STARTUP_TIMEOUT, timeout_seconds),
+                on_info=on_info,
+                on_line=on_line,
+            )
+            event_queue.put(("complete", result))
+        except (EngineStartupError, EngineTimeoutError, EngineCrashedError) as exc:
+            event_queue.put(("error", str(exc)))
+        except Exception:
+            event_queue.put(("error", "Search network trace failed unexpectedly"))
+        finally:
+            try:
+                trace_engine.close()
+            finally:
+                TRACE_SLOTS.release()
+
+    threading.Thread(
+        target=run_search,
+        name="sgurr-search-network",
+        daemon=True,
+    ).start()
+
+    def encode(payload: dict[str, object]) -> bytes:
+        return (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
+
+    def stream():
+        yield encode({"type": "started", "depth": request.depth, "fen": board.fen()})
+        batch: list[bytes] = []
+        batch_started = 0.0
+        completed = False
+        try:
+            while True:
+                timeout = max(0.0, 0.016 - (time.monotonic() - batch_started)) if batch else None
+                try:
+                    event_type, value = event_queue.get(timeout=timeout)
+                except queue.Empty:
+                    yield b"".join(batch)
+                    batch.clear()
+                    batch_started = 0.0
+                    continue
+                if event_type == "trace":
+                    if not batch:
+                        batch_started = time.monotonic()
+                    batch.append(encode({"type": "trace", "event": value}))
+                    if len(batch) >= 24:
+                        yield b"".join(batch)
+                        batch.clear()
+                        batch_started = 0.0
+                    continue
+                if event_type == "progress":
+                    if batch:
+                        yield b"".join(batch)
+                        batch.clear()
+                        batch_started = 0.0
+                    yield encode({"type": "progress", **value})
+                    continue
+                if batch:
+                    yield b"".join(batch)
+                    batch.clear()
+                    batch_started = 0.0
+                if event_type == "complete":
+                    yield encode(
+                        {
+                            "type": "complete",
+                            "bestmove": value.bestmove,
+                            "events": "bounded",
+                        }
+                    )
+                else:
+                    yield encode({"type": "error", "detail": str(value)})
+                completed = True
+                break
+        finally:
+            if not completed:
+                trace_engine.cancel()
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )
 
 

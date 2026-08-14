@@ -22,6 +22,7 @@ web/
     requirements.lock.txt  audited release dependency pins
   frontend/
     index.html             static browser UI (loads js/main.js + styles.css)
+    search-lab/            guided search walkthrough + live depth stream
     styles.css             @import manifest; ordering IS the cascade
     styles/                12 CSS partials (base, intro, menu, board, core, ...)
     js/                    19 native ES modules; main.js is the entry point
@@ -222,11 +223,30 @@ POST /api/load-fen
 POST /api/player-move
 POST /api/premove-sequence
 POST /api/engine-move
+POST /api/search-trace
+POST /api/search-network
 ```
 
 `/api/engine-move` sends UCI clock arguments when clock state is supplied and
 falls back to `go movetime <milliseconds>` for fixed-search callers. It parses
 `bestmove` plus the latest centipawn or mate score.
+
+`/api/search-trace` accepts a legal FEN, an engine ID, and a bounded move time.
+It starts an isolated engine process and streams one NDJSON object per completed
+iterative-deepening pass, followed by the final move. It deliberately does not
+reuse the persistent game process, so an open microscope cannot delay a game.
+
+`/api/search-network` uses the separate `sgr_trace.exe` diagnostic build to
+record bounded samples of real node activity across every iterative-deepening
+pass up to a requested depth from 4 to
+20. Build it with
+`sgurr_cpp/build.sh -t`. The normal release binary contains no trace output or
+trace overhead. The browser records at engine speed and then replays the node,
+best-child, cutoff, pruning, quiescence, and transposition events at a chosen
+cinematic speed or against the trace's real microsecond timestamps. In live
+mode, small low-latency batches reach the radial viewer continuously from depth
+1 to the selected horizon; sparse activity samples keep very deep iterations
+visibly alive after each bounded structural-node sample is full.
 
 ## Included Experience
 
@@ -239,6 +259,10 @@ falls back to `go movetime <milliseconds>` for fixed-search callers. It parses
   procedural interaction sounds;
 - eval rail/trend, move list, material, captures, draw rules, and themed result
   sequences;
+- a standalone Search Microscope with a real v8.2 walkthrough, an optional live
+  completed-depth stream, and a glowing radial search web whose depth-from-root
+  rings, timestamped traveling light, cutoffs, and transposition chords come
+  from real engine events;
 - responsive backend recovery without refreshing the browser.
 
 Accounts, online multiplayer, cloud infrastructure, training dashboards,

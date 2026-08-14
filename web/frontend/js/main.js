@@ -5,7 +5,7 @@ import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
 import { clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, loadEditorStartPosition } from "./editor.js";
 import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
 import { cancelPremoves, copyFen, exportPgn, loadFenFromModal, openFenModal, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
-import { initIntro, wakeSgurr } from "./intro.js";
+import { finishIntro, initIntro, wakeSgurr } from "./intro.js";
 import { initMenuCore } from "./menu-core.js";
 import { defaultBlobMemory } from "./memory.js";
 import { enterReview, exitReview, reviewEntries, reviewGoto, reviewIndexForPly, reviewStep, reviewSwing } from "./review.js";
@@ -349,6 +349,9 @@ initAudio();
 applyTheme();
 applyAnimationMode();
 initIntro();
+if (new URLSearchParams(window.location.search).get("view") === "menu") {
+  finishIntro();
+}
 initMenuCore();
 refs.movetimeSelect.value = currentTimeControl().key;
 render();

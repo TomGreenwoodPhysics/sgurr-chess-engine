@@ -254,6 +254,363 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator("#playWhiteButton")).toBeEnabled();
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
+  await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
+});
+
+test("steps through the search microscope and accepts a live trace", async ({ page }) => {
+  test.setTimeout(25_000);
+  const principalVariation = [
+    "a7a6", "b1c3", "g8f6", "d2d4", "e7e5", "c1g5",
+    "f8e7", "d1d2", "e8g8", "e1c1", "c8e6", "f2f4",
+    "a8c8", "g2g3", "h7h6", "g5h4", "b7b5", "f1h3",
+  ];
+  await page.route(`${API_BASE}/api/search-trace`, async (route) => {
+    const events = [
+      { type: "started", engine: "v8.2", label: 'Sgurr v8.2 "Thearlaich"', perspective: "white" },
+      { type: "iteration", kind: "cp", value: -26, display: "-0.3", depth: 1, nodes: 60, nps: 60000, time_ms: 1, pv: ["a7a6"] },
+      { type: "iteration", kind: "cp", value: 40, display: "+0.4", depth: 12, nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["a7a6"] },
+      { type: "complete", bestmove: "a7a6" },
+    ];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+    });
+  });
+  await page.route(`${API_BASE}/api/search-network`, async (route) => {
+    const request = route.request().postDataJSON();
+    const depth = request.depth;
+    const events = [{ type: "started", depth }];
+    let elapsed = 0;
+    for (let iteration = 1; iteration <= depth; iteration += 1) {
+      elapsed += 10_000;
+      events.push(
+        { type: "trace", event: { e: "start", pass: iteration, depth: iteration, limit: 1200, t_us: elapsed } },
+        { type: "trace", event: { e: "node", id: 0, parent: -1, ply: 0, depth: iteration, move: "", kind: "root", hash: "root", t_us: elapsed + 100 } },
+        { type: "trace", event: { e: "node", id: 1, parent: 0, ply: 1, depth: iteration - 1, move: "a7a6", kind: "search", hash: `child-${iteration}`, t_us: elapsed + 500 } },
+        { type: "trace", event: { e: "node", id: 2, parent: 1, ply: 2, depth: Math.max(0, iteration - 2), move: "b1c3", kind: "search", hash: `leaf-${iteration}`, t_us: elapsed + 900 } },
+        { type: "trace", event: { e: "end", id: 2, reason: "quiescence", score: 26, t_us: elapsed + 1400 } },
+        { type: "trace", event: { e: "best", id: 1, child: 2, move: "b1c3", score: 26, t_us: elapsed + 1800 } },
+        ...(iteration === depth
+          ? [{ type: "trace", event: { e: "best", id: 0, child: 2, move: "b1c3", score: -30, t_us: elapsed + 2000 } }]
+          : []),
+        { type: "trace", event: { e: "best", id: 0, child: 1, move: "a7a6", score: -26, t_us: elapsed + 2200 } },
+      );
+      for (let nodeId = 3; nodeId <= 160; nodeId += 1) {
+        const ply = 1 + Math.floor(Math.log2(nodeId));
+        events.push({
+          type: "trace",
+          event: {
+            e: "node",
+            id: nodeId,
+            parent: Math.floor(nodeId / 2),
+            ply,
+            depth: Math.max(0, iteration - ply),
+            move: "b1c3",
+            kind: "search",
+            hash: nodeId === 4 ? `branch-${iteration}-3` : `branch-${iteration}-${nodeId}`,
+            t_us: elapsed + 2300 + nodeId * 10,
+          },
+        });
+        if (nodeId === 4) {
+          events.push({
+            type: "trace",
+            event: { e: "end", id: 4, reason: "tt-hit", score: 18, t_us: elapsed + 2345 },
+          });
+        }
+      }
+      if (iteration === depth) {
+        events.push(
+          { type: "trace", event: { e: "cutoff", id: 0, child: 1, move: "a7a6", score: -26, t_us: elapsed + 2600 } },
+          { type: "trace", event: { e: "activity", ply: iteration, depth: 0, hash: "later", t_us: elapsed + 3000 } },
+        );
+      }
+      events.push(
+        { type: "trace", event: { e: "pv", pass: iteration, depth: iteration, score: -26, moves: principalVariation.slice(0, iteration), t_us: elapsed + 3400 } },
+        { type: "trace", event: { e: "finish", pass: iteration, depth: iteration, score: -26, best: "a7a6", t_us: elapsed + 4000 } },
+        { type: "progress", depth: iteration, nodes: iteration * 1000 },
+      );
+    }
+    events.push({ type: "complete", bestmove: "a7a6", events: "bounded" });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+    });
+  });
+
+  await page.goto("/search-lab/");
+  await expect(page.locator("h1")).toContainText("A move is not found");
+  await expect(page.locator("#labThemeSelect option")).toHaveCount(7);
+  await page.locator("#labThemeSelect").selectOption("galaxy");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "galaxy");
+  expect(await page.evaluate(() => localStorage.getItem("sgurrTheme"))).toBe("galaxy");
+  await expect(page.locator("#labMusicToggle")).toHaveCount(0);
+  await expect(page.locator("#labMusicVolume")).toHaveCount(0);
+  await expect(page.locator("#networkSpeed option")).toHaveCount(6);
+  await expect(page.locator('#networkSpeed option[value="ultra"]')).toHaveText("Ultra slow · inspect each step");
+  await expect(page.locator('#networkSpeed option[value="fast"]')).toHaveText("Fast · rapid scan");
+  await expect(page.locator('#networkSpeed option[value="very-fast"]')).toHaveText("Very fast · whole search");
+  await expect(page.locator("#chessboard .board-square")).toHaveCount(64);
+  await expect(page.locator("#positionSelect optgroup")).toHaveCount(4);
+  await expect(page.locator("#positionSelect option")).toHaveCount(61);
+  await expect(page.locator("#leaderValue")).toHaveText("a6");
+
+  await page.locator("#nextStep").click();
+  await expect(page.locator("#depthValue")).toHaveText("2");
+  await expect(page.locator("#leaderValue")).toHaveText("Ne7");
+
+  await page.locator("#liveTab").click();
+  await page.locator("#runSearchButton").click();
+  await expect(page.locator("#searchSignal")).toHaveClass(/complete/);
+  await expect(page.locator("#depthValue")).toHaveText("12");
+  await expect(page.locator("#searchSignal")).toContainText("Committed to a6");
+
+  await page.locator("#networkTab").click();
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  await expect(page.locator("#networkEngineTime")).toHaveText("0 µs");
+  await expect(page.locator("#networkSearchedNodeCount")).toHaveText("0");
+  await page.locator("#customFenPanel summary").click();
+  await page.locator("#customFenInput").fill("not a fen");
+  await page.locator("#customFenApply").click();
+  await expect(page.locator("#customFenStatus")).toHaveAttribute("data-state", "error");
+  const customFen = "4k3/8/8/8/8/8/8/4K2R b K - 0 1";
+  await page.locator("#customFenInput").fill(customFen);
+  await page.locator("#customFenInput").press("Enter");
+  await expect(page.locator("#customFenStatus")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#positionName")).toHaveText("Custom position");
+  await expect(page.locator("#sideBadge")).toHaveText("Black to move");
+  await expect(page.locator("#chessboard .board-piece")).toHaveCount(3);
+  await expect(page.locator("#positionSelect")).toHaveValue("custom");
+  await expect(page.locator("#positionSelect option")).toHaveCount(62);
+  await page.locator("#positionSelect").selectOption("lucena");
+  const rookBoardGeometry = await page.locator("#chessboard .board-square").evaluateAll((squares) => squares.map((square) => {
+    const bounds = square.getBoundingClientRect();
+    return { width: bounds.width, height: bounds.height };
+  }));
+  const rookWidths = rookBoardGeometry.map(({ width }) => width);
+  const rookHeights = rookBoardGeometry.map(({ height }) => height);
+  expect(Math.max(...rookWidths) - Math.min(...rookWidths)).toBeLessThan(0.5);
+  expect(Math.max(...rookHeights) - Math.min(...rookHeights)).toBeLessThan(0.5);
+  expect(Math.abs(rookWidths[0] - rookHeights[0])).toBeLessThan(0.5);
+  await page.locator("#positionSelect").selectOption("najdorf");
+  await expect(page.locator("#networkRunMode")).toHaveValue("live");
+  await page.locator("#networkDepth").selectOption("18");
+  await expect(page.locator("#runSearchButton")).toContainText("depth-18");
+  await page.locator("#networkSpeed").selectOption("realtime");
+  await page.locator("#runSearchButton").click();
+  await expect(page.locator("#networkNodeCount")).toHaveText("2143");
+  await expect(page.locator("#networkSearchedNodeCount")).toHaveText("18,000");
+  await expect(page.locator("#networkEventTag")).toHaveText("SEARCH COMPLETE");
+  await expect(page.locator("#networkCanvas")).toHaveAttribute("data-state", "complete");
+  await expect(page.locator("#networkCanvas")).toHaveAttribute("data-completion-emanation", "active");
+  await expect(page.locator("#networkCanvas")).toHaveAttribute("data-completion-emanation-duration-ms", "3850");
+  await expect(page.locator("#networkStreamState")).toHaveAttribute("data-state", "complete");
+  await expect(page.locator("#networkBestMove")).toHaveText("a7 → a6");
+  await expect(page.locator("#networkPly")).toHaveText("18");
+  const canvas = page.locator("#networkCanvas");
+  await expect(page.locator("#networkEngineTime")).toHaveText("184 ms");
+  await expect(page.locator("#networkEngineTimeMode")).toHaveText("final engine time");
+  await expect(canvas).toHaveAttribute("data-engine-time-us", "184000");
+  await expect(canvas).toHaveAttribute("data-engine-time-unit", "milliseconds");
+  await expect(canvas).toHaveAttribute("data-engine-time-mode", "complete");
+  await expect(canvas).toHaveAttribute("data-engine-nodes", "18000");
+  await expect(canvas).toHaveAttribute("data-engine-nodes-mode", "complete");
+  await expect(canvas).toHaveAttribute("data-render-strategy", "world-with-detail");
+  await expect(canvas).toHaveAttribute("data-node-design", "synapse-shells");
+  await expect(canvas).toHaveAttribute("data-network-luminosity", "1.08");
+  await expect(canvas).toHaveAttribute("data-completion-dimming", "disabled");
+  await expect(canvas).toHaveAttribute("data-cutoff-effect", "implosion");
+  await expect(canvas).toHaveAttribute("data-cutoff-implosions", /^[1-9]\d*$/);
+  await expect(canvas).toHaveAttribute("data-transposition-effect", "wormhole-flash");
+  await expect(canvas).toHaveAttribute("data-wormhole-flashes", /^[1-9]\d*$/);
+  await expect(canvas).toHaveAttribute("data-depth-echo-design", "orbital-memory");
+  await expect(canvas).toHaveAttribute("data-depth-echoes", "18");
+  await expect(canvas).toHaveAttribute("data-leader-effect", "instability-ghosts");
+  await expect(canvas).toHaveAttribute("data-leader-changes", /^[1-9]\d*$/);
+  await expect(canvas).toHaveAttribute("data-leader-stability", "locked");
+  await expect(canvas).toHaveAttribute("data-cached-nodes", "2143");
+  expect(Number(await canvas.getAttribute("data-evaluated-nodes"))).toBeGreaterThan(0);
+  await expect(canvas).toHaveAttribute("data-selection-strategy", "consequential");
+  await expect(canvas).toHaveAttribute("data-curated-nodes", "120");
+  await expect(canvas).toHaveAttribute("data-curated-promoted", /^[1-9]\d*$/);
+  await expect(canvas).toHaveAttribute("data-pv-depth", "18");
+  await expect(canvas).toHaveAttribute("data-pv-plies", "18");
+  await expect(canvas).toHaveAttribute("data-pv-moves", principalVariation.join(" "));
+  await expect(canvas).toHaveAttribute("data-pv-reveal", "1.000");
+  await expect(canvas).toHaveAttribute("data-survivor-glow", "persistent");
+  await expect(canvas).toHaveAttribute("data-principal-hit-radius", "26");
+  await expect(canvas).toHaveAttribute("data-standard-hit-radius", "10");
+  await expect(canvas).toHaveAttribute("data-principal-hit-targets", "18");
+  await expect(canvas).toHaveAttribute("data-pan-constraint", "bounded-overscroll");
+  await expect(canvas).toHaveAttribute("data-bloom-layer", "half-resolution");
+  await expect(canvas).toHaveAttribute("data-bloom-alignment", "world-space");
+  expect(Number(await canvas.getAttribute("data-bloom-builds"))).toBeGreaterThan(0);
+  await expect(canvas).toHaveAttribute("data-background-design", "deep-neural-space");
+  await expect(canvas).toHaveAttribute("data-background-mood", "galactic-ominous");
+  expect(Number(await canvas.getAttribute("data-background-builds"))).toBeGreaterThan(0);
+  await expect(canvas).toHaveAttribute("data-depth-atmosphere", "volumetric-shells");
+  await expect(canvas).toHaveAttribute("data-depth-atmosphere-shells", /^[4-9]$/);
+  expect(Number(await canvas.getAttribute("data-depth-atmosphere-builds"))).toBeGreaterThan(0);
+  await expect(canvas).toHaveAttribute("data-center-exposure", "filmic-radial-compression");
+  await expect(canvas).toHaveAttribute("data-center-exposure-floor", "0.48");
+  await expect(canvas).toHaveAttribute("data-event-ingestion", "frame-sliced-queue");
+  await expect(canvas).toHaveAttribute("data-live-event-slice-ms", "3");
+  await expect(canvas).toHaveAttribute("data-live-event-queue", "0");
+  await expect(canvas).toHaveAttribute("data-live-event-queue-peak", /^[1-9]\d*$/);
+  await expect(canvas).toHaveAttribute("data-live-cache", "incremental-depth-layer");
+  expect(Number(await canvas.getAttribute("data-live-structure-builds"))).toBeGreaterThan(0);
+  await expect(canvas).toHaveAttribute("data-static-cache", "completed-depths");
+  await expect(canvas).toHaveAttribute("data-live-bloom", "cached-sprites");
+  await expect(canvas).toHaveAttribute("data-glow-renderer", "cached-sprites");
+  await expect(canvas).toHaveAttribute("data-evaluation-profile", "linear-cached");
+  await expect(canvas).toHaveAttribute("data-effect-budget", /^(full|balanced|protected)$/);
+  await expect(canvas).toHaveAttribute("data-effect-budget-policy", "adaptive-transients-only");
+  await expect(canvas).toHaveAttribute("data-live-animation-policy", "continuous-60fps-overlay");
+  await expect(canvas).toHaveAttribute("data-structural-rate", /^(10fps|15fps)$/);
+  await expect(canvas).toHaveAttribute("data-survivor-design", "celestial-filament");
+  await expect(canvas).toHaveAttribute("data-survivor-envelope", "amber-white-core");
+  await expect(canvas).toHaveAttribute("data-survivor-particles", "2");
+  await expect(canvas).toHaveAttribute("data-terminal-star", "stable");
+  await expect(canvas).toHaveAttribute("data-depth-waves", "18");
+  await expect(page.locator(".network-legend")).toContainText("brighter = stronger move");
+  await expect(page.locator(".network-legend")).toContainText("completed-depth PV");
+  await expect(canvas).toHaveAttribute("data-structure-state", "settled");
+  await expect(canvas).toHaveAttribute("data-completion-transition", "settled", { timeout: 4000 });
+  await expect(canvas).toHaveAttribute("data-completion-choreography", "settled", { timeout: 5000 });
+  await expect(canvas).toHaveAttribute("data-completion-emanation", "settled", { timeout: 6000 });
+  await expect(canvas).toHaveAttribute("data-frozen-depths", "18", { timeout: 4000 });
+  await expect(canvas).toHaveAttribute("data-animation-rate", "24fps-ambient", { timeout: 4000 });
+  const settledBuilds = Number(await canvas.getAttribute("data-static-builds"));
+  const settledBloomBuilds = Number(await canvas.getAttribute("data-bloom-builds"));
+  const settledBackgroundBuilds = Number(await canvas.getAttribute("data-background-builds"));
+  const settledAtmosphereBuilds = Number(await canvas.getAttribute("data-depth-atmosphere-builds"));
+  const settledLiveStructureBuilds = Number(await canvas.getAttribute("data-live-structure-builds"));
+  expect(settledBuilds).toBeLessThan(30);
+  await page.waitForTimeout(120);
+  expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(settledBuilds);
+  expect(Number(await canvas.getAttribute("data-bloom-builds"))).toBe(settledBloomBuilds);
+  expect(Number(await canvas.getAttribute("data-background-builds"))).toBe(settledBackgroundBuilds);
+  expect(Number(await canvas.getAttribute("data-depth-atmosphere-builds"))).toBe(settledAtmosphereBuilds);
+  expect(Number(await canvas.getAttribute("data-live-structure-builds"))).toBe(settledLiveStructureBuilds);
+  await page.locator("#networkZoomIn").click();
+  await expect(page.locator("#networkZoomLevel")).toHaveText("128%");
+  const navigationBuilds = Number(await canvas.getAttribute("data-static-builds"));
+  await page.waitForTimeout(8);
+  expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
+  await expect(canvas).toHaveAttribute("data-quality", "full");
+  await expect(canvas).toHaveAttribute("data-render-layer", "native-detail");
+  const firstDetailBuilds = Number(await canvas.getAttribute("data-detail-builds"));
+  expect(firstDetailBuilds).toBeGreaterThan(0);
+  expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
+  await expect(canvas).toHaveAttribute("data-navigation-tile-strategy", "multires-world-tiles");
+  await expect(canvas).toHaveAttribute("data-navigation-tile-lod", "1.5");
+  await expect(canvas).toHaveAttribute("data-navigation-tile-coverage", "1.000", { timeout: 10000 });
+  const navigationTileBuilds = Number(await canvas.getAttribute("data-navigation-tile-builds"));
+  expect(navigationTileBuilds).toBeGreaterThan(0);
+  expect(Number(await canvas.getAttribute("data-navigation-tile-count"))).toBeLessThanOrEqual(48);
+  await expect(canvas).toHaveAttribute("data-navigation-tile-scheduler", "idle-between-frames");
+  const canvasBounds = await canvas.boundingBox();
+  expect(canvasBounds).not.toBeNull();
+  await page.mouse.move(canvasBounds.x + canvasBounds.width / 2, canvasBounds.y + canvasBounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(canvasBounds.x + canvasBounds.width / 2 + 180, canvasBounds.y + canvasBounds.height / 2 + 90, { steps: 8 });
+  await expect(canvas).toHaveAttribute("data-quality", "navigation");
+  const buildsDuringNavigation = Number(await canvas.getAttribute("data-navigation-tile-builds"));
+  await expect(canvas).toHaveAttribute("data-render-layer", "multires-tiles");
+  await expect(canvas).toHaveAttribute("data-detail-during-navigation", "preserved");
+  await expect(canvas).toHaveAttribute("data-navigation-tile-coverage", "1.000");
+  await expect(canvas).toHaveAttribute("data-bloom-state", "cached-navigation");
+  await expect(canvas).toHaveAttribute("data-bloom-alignment", "world-space");
+  await expect(canvas).toHaveAttribute("data-background-effects", "preserved-navigation");
+  expect(Number(await canvas.getAttribute("data-depth-atmosphere-builds"))).toBe(settledAtmosphereBuilds);
+  expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
+  await page.waitForTimeout(80);
+  expect(Number(await canvas.getAttribute("data-navigation-tile-builds"))).toBe(buildsDuringNavigation);
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute("data-quality", "full");
+  await expect(canvas).toHaveAttribute("data-render-layer", "native-detail");
+  await expect(canvas).toHaveAttribute("data-navigation-release", "native-ready");
+  await expect(canvas).toHaveAttribute("data-navigation-release-strategy", "staged-pass-slices");
+  await expect(canvas).toHaveAttribute("data-navigation-release-fallback", "multires-tiles-until-ready");
+  await expect(canvas).toHaveAttribute("data-navigation-release-swap", "atomic");
+  await expect(canvas).toHaveAttribute("data-navigation-release-slice-ms", "4");
+  await expect(canvas).toHaveAttribute("data-navigation-release-progress", "1.000");
+  await expect(canvas).toHaveAttribute("data-navigation-release-passes", "18");
+  expect(Number(await canvas.getAttribute("data-navigation-release-builds"))).toBeGreaterThan(0);
+  expect(Number(await canvas.getAttribute("data-navigation-release-max-slice-ms"))).toBeGreaterThan(0);
+  expect(Number(await canvas.getAttribute("data-navigation-release-passes-per-slice"))).toBeLessThanOrEqual(2);
+  expect(Number(await canvas.getAttribute("data-detail-builds"))).toBeGreaterThan(firstDetailBuilds);
+  await expect(canvas).toHaveAttribute("data-cached-nodes", "2143");
+  expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
+  for (let zoomStep = 0; zoomStep < 6; zoomStep += 1) {
+    await page.locator("#networkZoomIn").click();
+  }
+  await expect(page.locator("#networkZoomLevel")).toHaveText("450%");
+  await expect(canvas).toHaveAttribute("data-quality", "full");
+  await expect(canvas).toHaveAttribute("data-render-layer", "native-detail");
+  const maximumZoomDetailBuilds = Number(await canvas.getAttribute("data-detail-builds"));
+  await page.locator("#networkZoomIn").click();
+  await page.mouse.wheel(0, -120);
+  await page.waitForTimeout(30);
+  await expect(page.locator("#networkZoomLevel")).toHaveText("450%");
+  await expect(canvas).toHaveAttribute("data-quality", "full");
+  await expect(canvas).toHaveAttribute("data-render-layer", "native-detail");
+  expect(Number(await canvas.getAttribute("data-detail-builds"))).toBe(maximumZoomDetailBuilds);
+  await page.locator("#networkFitView").click();
+  await expect(page.locator("#networkZoomLevel")).toHaveText("100%");
+  await page.waitForTimeout(250);
+  await expect(page.locator("#networkNodeCount")).toHaveText("2143");
+  await canvas.focus();
+  for (let panStep = 0; panStep < 40; panStep += 1) await page.keyboard.press("ArrowRight");
+  const boundedPanX = Math.abs(Number(await canvas.getAttribute("data-pan-x")));
+  expect(boundedPanX).toBeGreaterThan(0);
+  expect(boundedPanX).toBeLessThan(600);
+  await page.keyboard.press("Home");
+  expect(Number(await canvas.getAttribute("data-pan-x"))).toBe(0);
+
+  await page.locator("#networkRunMode").selectOption("replay");
+  await expect(page.locator("#runSearchButton")).toContainText("Record depth-18");
+  await page.locator("#runSearchButton").click();
+  await expect(page.locator("#networkEventTag")).toHaveText("SEARCH COMPLETE");
+  await expect(page.locator("#networkNodeCount")).toHaveText("2143");
+  await page.locator("#networkScrubber").evaluate((scrubber) => {
+    const target = Math.floor(Number(scrubber.max) * 0.62);
+    scrubber.value = String(target);
+    scrubber.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(canvas).toHaveAttribute("data-state", "paused");
+  await expect(canvas).toHaveAttribute("data-replay-scrub-state", "settled");
+  await expect(canvas).toHaveAttribute("data-seek-hot-nodes", "0");
+  const scrubbedEngineNodes = Number((await page.locator("#networkSearchedNodeCount").textContent()).replaceAll(",", ""));
+  expect(scrubbedEngineNodes).toBeGreaterThan(0);
+  expect(scrubbedEngineNodes).toBeLessThan(18000);
+  await page.locator("#networkSpeed").selectOption("very-fast");
+  await page.locator("#networkRestart").click();
+  await expect(canvas).toHaveAttribute("data-replay-scrub-state", "playing");
+  await expect(page.locator("#networkEventTag")).toHaveText("SEARCH COMPLETE", { timeout: 4000 });
+  await expect(page.locator("#networkNodeCount")).toHaveText("2143");
+  await expect(page.locator("#networkEngineTime")).toHaveText("184 ms");
+  await expect(page.locator("#networkEngineTimeMode")).toHaveText("recorded engine clock");
+  await expect(page.locator("#networkSearchedNodeCount")).toHaveText("18,000");
+  await expect(canvas).toHaveAttribute("data-engine-time-us", "184000");
+  await expect(canvas).toHaveAttribute("data-engine-time-mode", "replay");
+  await expect(canvas).toHaveAttribute("data-engine-nodes", "18000");
+  await expect(canvas).toHaveAttribute("data-engine-nodes-mode", "replay");
+});
+
+test("returns from the microscope directly to the main menu", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator(".search-lab-link").click();
+  await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
+  await expect(page.locator("#networkTab")).toHaveClass(/active/);
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  await page.locator(".back-link").click();
+  await expect(page).toHaveURL(/\?view=menu$/);
+  await expect(page.locator("#introScreen")).toBeHidden();
+  await expect(page.locator("#menuScreen")).toBeVisible();
+  await expect(page.locator("#menuStatus")).toHaveText("Ready");
 });
 
 test("plays e4 as White and renders Sgurr's e5 reply", async ({ page }) => {

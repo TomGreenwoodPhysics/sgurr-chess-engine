@@ -36,7 +36,7 @@ async function handleRequest(request, response) {
     return;
   }
 
-  const filePath = resolveRequestPath(request.url || "/");
+  let filePath = resolveRequestPath(request.url || "/");
   if (!filePath) {
     response.writeHead(403);
     response.end("Forbidden");
@@ -44,7 +44,11 @@ async function handleRequest(request, response) {
   }
 
   try {
-    const details = await stat(filePath);
+    let details = await stat(filePath);
+    if (details.isDirectory()) {
+      filePath = path.join(filePath, "index.html");
+      details = await stat(filePath);
+    }
     if (!details.isFile()) {
       throw new Error("Not a file");
     }

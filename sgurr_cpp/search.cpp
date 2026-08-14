@@ -7,6 +7,15 @@
 #include <iostream>
 #include <new>
 #include <string>
+#include <vector>
+
+#ifndef SGR_TRACE_SEARCH
+#define SGR_TRACE_SEARCH 0
+#endif
+
+#ifndef SGR_TRACE_NODE_LIMIT
+#define SGR_TRACE_NODE_LIMIT 1200
+#endif
 
 namespace {
 
@@ -33,6 +42,298 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
     using namespace std::chrono;
     return duration<double>(steady_clock::now() - start).count();
 }
+
+#if SGR_TRACE_SEARCH
+// Optional visualisation trace. It is compiled completely out of release
+// builds; use -DSGR_TRACE_SEARCH=1 for the separate trace recorder binary.
+// The engine still searches normally. We only emit a bounded sample of its
+// actual node entries, best-child changes, pruning decisions and cutoffs.
+struct SearchTraceState {
+    bool active = false;
+    int pass = 0;
+    int current_depth = 0;
+    int next_id = 1;       // root is always node 0
+    bool limit_reported = false;
+    Move pending_move = NO_MOVE;
+    bool pending_is_null = false;
+    std::vector<int> stack;
+    std::chrono::steady_clock::time_point started_at;
+    std::chrono::steady_clock::time_point last_flush_at;
+    long long last_activity_us = 0;
+    unsigned int activity_probe = 0;
+    int events_since_flush = 0;
+    std::array<std::array<Move, MAX_PLY>, MAX_PLY> pv_table{};
+    std::array<int, MAX_PLY> pv_length{};
+};
+
+SearchTraceState search_trace;
+
+long long trace_elapsed_us() {
+    using namespace std::chrono;
+    return duration_cast<microseconds>(steady_clock::now() - search_trace.started_at).count();
+}
+
+void trace_maybe_flush(bool force = false) {
+    search_trace.events_since_flush += 1;
+    auto now = std::chrono::steady_clock::now();
+    bool interval_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - search_trace.last_flush_at).count() >= 8;
+    if (force || search_trace.events_since_flush >= 16 || interval_elapsed) {
+        std::cout.flush();
+        search_trace.events_since_flush = 0;
+        search_trace.last_flush_at = now;
+    }
+}
+
+void trace_activity(int ply, int depth, U64 hash) {
+    if (!search_trace.active || search_trace.next_id < SGR_TRACE_NODE_LIMIT) return;
+    search_trace.activity_probe += 1;
+    if ((search_trace.activity_probe & 2047U) != 0U) return;
+    long long now_us = trace_elapsed_us();
+    if (now_us - search_trace.last_activity_us < 8000) return;
+    search_trace.last_activity_us = now_us;
+    std::cout << "info string trace {\"e\":\"activity\",\"ply\":" << ply
+              << ",\"depth\":" << depth << ",\"hash\":\""
+              << std::hex << hash << std::dec << "\",\"t_us\":"
+              << now_us << "}\n";
+    trace_maybe_flush();
+}
+
+void trace_json_move(const Move& move, bool is_null) {
+    if (is_null) {
+        std::cout << "null";
+    } else if (move != NO_MOVE) {
+        std::cout << move_to_string(move);
+    }
+}
+
+void trace_begin_pass(int depth, U64 hash) {
+    search_trace.active = true;
+    search_trace.pass += 1;
+    search_trace.current_depth = depth;
+    search_trace.next_id = 1;
+    search_trace.limit_reported = false;
+    search_trace.pending_move = NO_MOVE;
+    search_trace.pending_is_null = false;
+    search_trace.stack.clear();
+    search_trace.stack.push_back(0);
+    search_trace.last_flush_at = std::chrono::steady_clock::now();
+    search_trace.last_activity_us = 0;
+    search_trace.activity_probe = 0;
+    search_trace.events_since_flush = 0;
+    search_trace.pv_length.fill(0);
+    std::cout << "info string trace {\"e\":\"start\",\"pass\":"
+              << search_trace.pass << ",\"depth\":" << depth
+              << ",\"limit\":" << SGR_TRACE_NODE_LIMIT << ",\"t_us\":"
+              << trace_elapsed_us() << "}\n";
+    std::cout << "info string trace {\"e\":\"node\",\"id\":0,"
+              << "\"parent\":-1,\"ply\":0,\"depth\":" << depth
+              << ",\"move\":\"\",\"kind\":\"root\",\"hash\":\""
+              << std::hex << hash << std::dec << "\",\"t_us\":"
+              << trace_elapsed_us() << "}\n";
+    trace_maybe_flush(true);
+}
+
+void trace_finish_pass(int score, const std::optional<Move>& best_move) {
+    if (!search_trace.active) return;
+    std::cout << "info string trace {\"e\":\"finish\",\"pass\":"
+              << search_trace.pass << ",\"depth\":" << search_trace.current_depth
+              << ",\"score\":" << score
+              << ",\"best\":\"";
+    if (best_move.has_value()) std::cout << move_to_string(*best_move);
+    std::cout << "\",\"t_us\":" << trace_elapsed_us() << "}\n";
+    trace_maybe_flush(true);
+    search_trace.active = false;
+    search_trace.stack.clear();
+}
+
+std::vector<Move> trace_extract_pv(
+    Engine& engine,
+    Board& board,
+    const Move& root_move,
+    int depth
+) {
+    std::vector<Move> pv;
+    std::vector<UndoInfo> undos;
+    std::vector<U64> seen{board.hash_key};
+    bool repeated = false;
+    const int recorded_length = std::clamp(search_trace.pv_length[0], 0, depth);
+    if (recorded_length > 0 && search_trace.pv_table[0][0] == root_move) {
+        for (int index = 0; index < recorded_length; ++index) {
+            Move move = search_trace.pv_table[0][index];
+            MoveList legal_moves = board.generate_legal_moves();
+            if (std::find(legal_moves.begin(), legal_moves.end(), move) == legal_moves.end()) {
+                break;
+            }
+            pv.push_back(move);
+            undos.push_back(board.make_move(move));
+            if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) {
+                repeated = true;
+                break;
+            }
+            seen.push_back(board.hash_key);
+        }
+    }
+
+    if (pv.empty()) {
+        MoveList legal_moves = board.generate_legal_moves();
+        if (std::find(legal_moves.begin(), legal_moves.end(), root_move) != legal_moves.end()) {
+            pv.push_back(root_move);
+            undos.push_back(board.make_move(root_move));
+            if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) {
+                repeated = true;
+            } else {
+                seen.push_back(board.hash_key);
+            }
+        }
+    }
+
+    while (!repeated && !pv.empty() && static_cast<int>(pv.size()) < depth) {
+        const TTEntry& slot = engine.transposition_table[board.hash_key & engine.tt_mask];
+        if (slot.key != board.hash_key || slot.best_move == NO_MOVE) {
+            break;
+        }
+        MoveList legal_moves = board.generate_legal_moves();
+        if (std::find(legal_moves.begin(), legal_moves.end(), slot.best_move) == legal_moves.end()) {
+            break;
+        }
+        pv.push_back(slot.best_move);
+        undos.push_back(board.make_move(slot.best_move));
+        if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) break;
+        seen.push_back(board.hash_key);
+    }
+
+    for (auto undo = undos.rbegin(); undo != undos.rend(); ++undo) {
+        board.unmake_move(*undo);
+    }
+    return pv;
+}
+
+void trace_principal_variation(int depth, int score, const std::vector<Move>& pv) {
+    std::cout << "info string trace {\"e\":\"pv\",\"pass\":"
+              << search_trace.pass << ",\"depth\":" << depth
+              << ",\"score\":" << score << ",\"moves\":[";
+    for (std::size_t index = 0; index < pv.size(); ++index) {
+        if (index > 0) std::cout << ',';
+        std::cout << '\"' << move_to_string(pv[index]) << '\"';
+    }
+    std::cout << "],\"t_us\":" << trace_elapsed_us() << "}\n";
+    trace_maybe_flush(true);
+}
+
+void trace_prepare_move(const Move& move, bool is_null = false) {
+    if (!search_trace.active) return;
+    search_trace.pending_move = move;
+    search_trace.pending_is_null = is_null;
+}
+
+int trace_expected_child() {
+    if (!search_trace.active || search_trace.stack.empty()
+            || search_trace.stack.back() < 0
+            || search_trace.next_id >= SGR_TRACE_NODE_LIMIT) {
+        return -1;
+    }
+    return search_trace.next_id;
+}
+
+int trace_enter_node(int ply, int depth, int alpha, int beta, const char* kind, U64 hash) {
+    if (!search_trace.active) return -1;
+
+    int parent = search_trace.stack.empty() ? -1 : search_trace.stack.back();
+    int id = -1;
+    if (parent >= 0 && search_trace.next_id < SGR_TRACE_NODE_LIMIT) {
+        id = search_trace.next_id++;
+        std::cout << "info string trace {\"e\":\"node\",\"id\":" << id
+                  << ",\"parent\":" << parent << ",\"ply\":" << ply
+                  << ",\"depth\":" << depth << ",\"alpha\":" << alpha
+                  << ",\"beta\":" << beta << ",\"move\":\"";
+        trace_json_move(search_trace.pending_move, search_trace.pending_is_null);
+        // Hashes are strings so JavaScript never rounds a 64-bit Zobrist key.
+        std::cout << "\",\"kind\":\"" << kind << "\",\"hash\":\""
+                  << std::hex << hash << std::dec << "\",\"t_us\":"
+                  << trace_elapsed_us() << "}\n";
+        trace_maybe_flush();
+    } else if (!search_trace.limit_reported) {
+        std::cout << "info string trace {\"e\":\"limit\",\"count\":"
+                  << SGR_TRACE_NODE_LIMIT << ",\"t_us\":"
+                  << trace_elapsed_us() << "}\n";
+        search_trace.limit_reported = true;
+        trace_maybe_flush(true);
+    }
+
+    if (id < 0) trace_activity(ply, depth, hash);
+
+    search_trace.pending_move = NO_MOVE;
+    search_trace.pending_is_null = false;
+    search_trace.stack.push_back(id);
+    return id;
+}
+
+void trace_leave_node() {
+    if (search_trace.active && search_trace.stack.size() > 1) {
+        search_trace.stack.pop_back();
+    }
+}
+
+struct TraceNodeScope {
+    bool active;
+    int id;
+
+    TraceNodeScope(int ply, int depth, int alpha, int beta, const char* kind, U64 hash)
+        : active(search_trace.active),
+          id(trace_enter_node(ply, depth, alpha, beta, kind, hash)) {}
+
+    ~TraceNodeScope() {
+        if (active) trace_leave_node();
+    }
+};
+
+void trace_end(int id, const char* reason, int score) {
+    if (!search_trace.active || id < 0) return;
+    std::cout << "info string trace {\"e\":\"end\",\"id\":" << id
+              << ",\"reason\":\"" << reason << "\",\"score\":"
+              << score << ",\"t_us\":" << trace_elapsed_us() << "}\n";
+    trace_maybe_flush();
+}
+
+void trace_best(int id, int child, const Move& move, int score) {
+    if (!search_trace.active || id < 0 || child < 0) return;
+    std::cout << "info string trace {\"e\":\"best\",\"id\":" << id
+              << ",\"child\":" << child << ",\"move\":\""
+              << move_to_string(move) << "\",\"score\":" << score
+              << ",\"t_us\":" << trace_elapsed_us() << "}\n";
+    trace_maybe_flush();
+}
+
+void trace_cutoff(int id, int child, const Move& move, int score) {
+    if (!search_trace.active || id < 0) return;
+    std::cout << "info string trace {\"e\":\"cutoff\",\"id\":" << id
+              << ",\"child\":" << child << ",\"move\":\""
+              << move_to_string(move) << "\",\"score\":" << score
+              << ",\"t_us\":" << trace_elapsed_us() << "}\n";
+    trace_maybe_flush();
+}
+
+void trace_pruned(const Move& move, int ply, int depth, const char* reason) {
+    if (!search_trace.active || search_trace.stack.empty()
+            || search_trace.stack.back() < 0
+            || search_trace.next_id >= SGR_TRACE_NODE_LIMIT) {
+        return;
+    }
+    int id = search_trace.next_id++;
+    std::cout << "info string trace {\"e\":\"node\",\"id\":" << id
+              << ",\"parent\":" << search_trace.stack.back()
+              << ",\"ply\":" << ply << ",\"depth\":" << depth
+              << ",\"move\":\"" << move_to_string(move)
+              << "\",\"kind\":\"pruned\",\"t_us\":"
+              << trace_elapsed_us() << "}\n";
+    trace_maybe_flush();
+    std::cout << "info string trace {\"e\":\"end\",\"id\":" << id
+              << ",\"reason\":\"" << reason << "\",\"score\":0,\"t_us\":"
+              << trace_elapsed_us() << "}\n";
+    trace_maybe_flush();
+}
+#endif
 
 } // namespace
 
@@ -244,6 +545,16 @@ SearchResult Engine::search_best_move(
     node_limit = nodes_arg;
     stop_search = false;
 
+#if SGR_TRACE_SEARCH
+    // The diagnostic binary visualises the entire iterative-deepening search.
+    // Its timestamps share one clock so a browser can replay depths 1..N as a
+    // single continuous run. Release builds compile all of this away.
+    search_trace.pass = 0;
+    search_trace.current_depth = 0;
+    search_trace.started_at = std::chrono::steady_clock::now();
+    search_trace.last_flush_at = search_trace.started_at;
+#endif
+
     // Build the accumulators for the root position; make/unmake keep them in
     // sync through the tree.
     if (nnue::active()) nnue::refresh(board);
@@ -295,6 +606,10 @@ SearchResult Engine::search_best_move(
         int score;
         std::optional<Move> move;
 
+#if SGR_TRACE_SEARCH
+        trace_begin_pass(depth, board.hash_key);
+#endif
+
         bool mate_range = std::abs(best_score) > MATE - 1000;
 
         if (depth == 1 || completed_depth == 0 || mate_range) {
@@ -327,8 +642,15 @@ SearchResult Engine::search_best_move(
         }
 
         if (stop_search) {
+#if SGR_TRACE_SEARCH
+            trace_finish_pass(0, std::nullopt);
+#endif
             break;
         }
+
+#if SGR_TRACE_SEARCH
+        trace_finish_pass(score, move);
+#endif
 
         if (move.has_value()) {
 #if SGR_BMSTAB
@@ -474,6 +796,10 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     int best_score = -INF;
     std::optional<Move> best_move = std::nullopt;
 
+#if SGR_TRACE_SEARCH
+    search_trace.pv_length[0] = 0;
+#endif
+
     U64 board_hash = board.hash_key;
 
     MoveList moves = generate_moves(board);
@@ -506,6 +832,10 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         }
 
         legal_found = true;
+#if SGR_TRACE_SEARCH
+        int trace_child = trace_expected_child();
+        trace_prepare_move(move);
+#endif
         UndoInfo undo = board.make_move(move);
 
         // The child node's first act is to probe this slot. Start the fetch
@@ -550,11 +880,28 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         if (score > best_score) {
             best_score = score;
             best_move = move;
+#if SGR_TRACE_SEARCH
+            search_trace.pv_table[0][0] = move;
+            int child_length = std::clamp(search_trace.pv_length[1], 1, MAX_PLY);
+            for (int index = 1; index < child_length; ++index) {
+                search_trace.pv_table[0][index] = search_trace.pv_table[1][index];
+            }
+            search_trace.pv_length[0] = child_length;
+            trace_best(0, trace_child, move, score);
+            trace_principal_variation(
+                depth,
+                score,
+                trace_extract_pv(*this, board, move, depth)
+            );
+#endif
         }
 
         alpha = std::max(alpha, score);
 
         if (alpha >= beta) {
+#if SGR_TRACE_SEARCH
+            trace_cutoff(0, trace_child, move, score);
+#endif
             break;
         }
     }
@@ -712,8 +1059,16 @@ int Engine::negamax(
     int ply,
     std::optional<Move> excluded
 ) {
+#if SGR_TRACE_SEARCH
+    TraceNodeScope trace_scope(ply, depth, alpha, beta, "search", board.hash_key);
+    if (!excluded.has_value()) search_trace.pv_length[ply] = ply;
+#endif
     if (ply >= MAX_PLY - 1) {
-        return evaluate_quiet_position(board);
+        int score = evaluate_quiet_position(board);
+#if SGR_TRACE_SEARCH
+        trace_end(trace_scope.id, "max-ply", score);
+#endif
+        return score;
     }
 
     nodes += 1;
@@ -732,6 +1087,9 @@ int Engine::negamax(
     // the path taken, and a stored score for this position must not mask a
     // draw on this particular path.
     if (ply > 0 && (board.halfmove_clock >= 100 || board.is_repetition())) {
+#if SGR_TRACE_SEARCH
+        trace_end(trace_scope.id, "draw", 0);
+#endif
         return 0;
     }
 
@@ -750,6 +1108,9 @@ int Engine::negamax(
         int tt_score = score_from_tt(entry.score, ply);
 
         if (entry.flag == TT_EXACT) {
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "tt-hit", tt_score);
+#endif
             return tt_score;
         }
 
@@ -760,6 +1121,9 @@ int Engine::negamax(
         }
 
         if (alpha >= beta) {
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "tt-cutoff", tt_score);
+#endif
             return tt_score;
         }
     }
@@ -771,7 +1135,14 @@ int Engine::negamax(
         if (in_check_node && ply < MAX_PLY - 1) {
             depth = 1;
         } else {
-            return quiescence(board, alpha, beta, ply);
+#if SGR_TRACE_SEARCH
+            trace_prepare_move(NO_MOVE);
+#endif
+            int score = quiescence(board, alpha, beta, ply);
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "quiescence", score);
+#endif
+            return score;
         }
     }
 
@@ -814,6 +1185,9 @@ int Engine::negamax(
         int rfp_eval = evaluate_position(board);
 
         if (rfp_eval - params.rfp_margin * depth >= beta) {
+#endif
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "reverse-futility", rfp_eval);
 #endif
             return rfp_eval;
         }
@@ -901,6 +1275,9 @@ int Engine::negamax(
         int R = params.null_move_reduction + (depth >= 6 ? 1 : 0);
 #endif
 
+#if SGR_TRACE_SEARCH
+        trace_prepare_move(NO_MOVE, true);
+#endif
         int score = -negamax(
             board,
             depth - 1 - R,
@@ -924,6 +1301,9 @@ int Engine::negamax(
                 NO_MOVE
             );
 
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "null-move", beta);
+#endif
             return beta;
         }
     }
@@ -1051,6 +1431,9 @@ int Engine::negamax(
             && !is_noisy_move(board, move)
             && !is_killer_move(ply, move)
         ) {
+#if SGR_TRACE_SEARCH
+            trace_pruned(move, ply + 1, depth - 1, "late-move");
+#endif
             continue;
         }
 #endif
@@ -1152,6 +1535,10 @@ int Engine::negamax(
         legal_found = true;
         legal_moves_searched += 1;
 
+#if SGR_TRACE_SEARCH
+        int trace_child = trace_expected_child();
+#endif
+
         // Answered from the node's check geometry before the move is made.
         // This used to be in_check() on the position AFTER make_move, which
         // is a full attack scan -- knights, pawns, king, then both slider
@@ -1186,6 +1573,9 @@ int Engine::negamax(
 
         if (legal_moves_searched == 1) {
             // First move: full window (the presumed PV).
+#if SGR_TRACE_SEARCH
+            trace_prepare_move(move);
+#endif
             score = -negamax(board, next_depth, -beta, -alpha, ply + 1);
         } else {
             // PVS: prove later moves are worse with a null window, possibly
@@ -1215,13 +1605,22 @@ int Engine::negamax(
 #endif
             int reduced_depth = std::max(0, next_depth - reduction);
 
+#if SGR_TRACE_SEARCH
+            trace_prepare_move(move);
+#endif
             score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1);
 
             if (score > alpha && reduction > 0 && !stop_search) {
+#if SGR_TRACE_SEARCH
+                trace_prepare_move(move);
+#endif
                 score = -negamax(board, next_depth, -alpha - 1, -alpha, ply + 1);
             }
 
             if (score > alpha && score < beta && !stop_search) {
+#if SGR_TRACE_SEARCH
+                trace_prepare_move(move);
+#endif
                 score = -negamax(board, next_depth, -beta, -alpha, ply + 1);
             }
         }
@@ -1235,11 +1634,25 @@ int Engine::negamax(
         if (score > best_score) {
             best_score = score;
             best_move_key = move;
+#if SGR_TRACE_SEARCH
+            if (!excluded.has_value()) {
+                search_trace.pv_table[ply][ply] = move;
+                int child_length = std::clamp(search_trace.pv_length[ply + 1], ply + 1, MAX_PLY);
+                for (int index = ply + 1; index < child_length; ++index) {
+                    search_trace.pv_table[ply][index] = search_trace.pv_table[ply + 1][index];
+                }
+                search_trace.pv_length[ply] = child_length;
+            }
+            trace_best(trace_scope.id, trace_child, move, score);
+#endif
         }
 
         alpha = std::max(alpha, score);
 
         if (alpha >= beta) {
+#if SGR_TRACE_SEARCH
+            trace_cutoff(trace_scope.id, trace_child, move, score);
+#endif
             if (!is_noisy_move(board, move)) {
                 store_killer(ply, move);
 
@@ -1317,9 +1730,15 @@ int Engine::negamax(
 
     if (!legal_found) {
         if (in_check_node) {
+#if SGR_TRACE_SEARCH
+            trace_end(trace_scope.id, "mate", -MATE + ply);
+#endif
             return -MATE + ply;
         }
 
+#if SGR_TRACE_SEARCH
+        trace_end(trace_scope.id, "stalemate", 0);
+#endif
         return 0;
     }
 
@@ -1337,6 +1756,9 @@ int Engine::negamax(
         store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
     }
 
+#if SGR_TRACE_SEARCH
+    trace_end(trace_scope.id, "complete", best_score);
+#endif
     return best_score;
 }
 

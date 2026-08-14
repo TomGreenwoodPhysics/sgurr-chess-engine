@@ -17,6 +17,7 @@ Use **clang** from the MSYS2 `clang64` environment:
     ./build.sh                    # dev build      -> sgr.exe
     ./build.sh -r                 # release build  -> sgr.exe   (PGO + ThinLTO)
     ./build.sh -d                 # datagen build  -> datagen.exe (RFP disabled)
+    ./build.sh -t                 # visual trace   -> sgr_trace.exe
     ./build.sh -r -o sgr_v8_1.exe # choose the output name
 
 It runs the recipes documented below **and then proves the binary starts**,
@@ -39,6 +40,19 @@ catching it at build time is cheaper still.
 
 The sections below document what the script does, and remain the reference for
 building by hand.
+
+The trace build is only for the web Search Network. It emits a bounded stream
+of real node, best-line, cutoff, pruning, and transposition events from the
+full iterative-deepening run requested by `go depth N`, including an unbounded
+principal-variation update whenever the root leader changes, plus monotonic
+microsecond timestamps shared across every depth for live delivery and
+real-time replay. Each iteration receives a wider 1,200-node structural sample;
+the browser settles that pool into a connected 120-node consequential tree. Keep it
+separate from release and tournament binaries: diagnostic output adds
+substantial overhead even though it does not change the search decisions.
+Once an iteration's structural-node bound is full, the trace emits rate-limited
+activity samples so a live high-depth view continues to reflect the running search
+without attempting to transmit the full exponential tree.
 
 ## Engine
 

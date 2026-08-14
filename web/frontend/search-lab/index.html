@@ -1,0 +1,259 @@
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="sgurr-api-base" content="">
+    <title>Search Microscope — Sgurr</title>
+    <meta name="description" content="Watch Sgurr build, challenge, and revise a chess move through iterative deepening, or stream a live search from the engine.">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#251a16">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Sgurr">
+    <meta property="og:title" content="Sgurr Search Microscope">
+    <meta property="og:description" content="Step through a real Sgurr search, then watch the engine think live.">
+    <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23251a16'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e2b147' stroke-width='3' opacity='.7'/><circle cx='32' cy='32' r='11' fill='%23c96f3a'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="lab-header">
+      <a class="brand" href="../" aria-label="Back to Sgurr">
+        <span class="brand-core" aria-hidden="true"></span>
+        <span><strong>SGURR</strong><small>SEARCH MICROSCOPE</small></span>
+      </a>
+      <div class="lab-header-actions">
+        <label class="lab-theme-control" for="labThemeSelect">
+          <span>Theme</span>
+          <select id="labThemeSelect" aria-label="Choose site theme"></select>
+        </label>
+        <a class="back-link" href="../?view=menu">Play Sgurr <span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="lab-intro" aria-labelledby="labTitle">
+        <div>
+          <p class="eyebrow">Inside the engine</p>
+          <h1 id="labTitle">A move is not found.<br>It survives.</h1>
+        </div>
+        <p class="intro-copy">Sgurr repeatedly searches the same position more deeply. The apparent best move can change as replies emerge, shortcuts reject whole branches, and quiet tactical continuations settle the final score.</p>
+      </section>
+
+      <section class="microscope" aria-label="Sgurr search explorer">
+        <div class="mode-bar">
+          <div class="mode-tabs" aria-label="Microscope mode">
+            <button type="button" class="mode-tab active" id="walkthroughTab" aria-pressed="true">Guided walkthrough</button>
+            <button type="button" class="mode-tab" id="liveTab" aria-pressed="false">Live engine</button>
+            <button type="button" class="mode-tab" id="networkTab" aria-pressed="false">Search network</button>
+          </div>
+          <p class="mode-note" id="modeNote">Recorded from Sgurr v8.2 · exact completed-depth output</p>
+        </div>
+
+        <div class="explorer-layout">
+          <aside class="position-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-label">Position</p>
+                <h2 id="positionName">Ruy Lopez</h2>
+              </div>
+              <span class="side-badge" id="sideBadge">Black to move</span>
+            </div>
+            <div class="chessboard" id="chessboard" role="img" aria-label="Ruy Lopez position after 3.Bb5"></div>
+            <p class="position-line" id="positionLine">1. e4 e5 2. Nf3 Nc6 3. Bb5</p>
+
+            <div class="live-position-controls" id="livePositionControls" hidden>
+              <label for="positionSelect">Choose a position</label>
+              <select id="positionSelect" aria-label="Choose one of 61 chess positions"></select>
+              <details class="custom-fen" id="customFenPanel">
+                <summary>Use a FEN position</summary>
+                <form id="customFenForm" novalidate>
+                  <label class="sr-only" for="customFenInput">Forsyth-Edwards Notation</label>
+                  <div class="custom-fen-row">
+                    <input
+                      id="customFenInput"
+                      name="fen"
+                      type="text"
+                      autocomplete="off"
+                      spellcheck="false"
+                      placeholder="Paste a full six-field FEN"
+                      aria-describedby="customFenStatus"
+                    >
+                    <button type="submit" id="customFenApply">Apply</button>
+                  </div>
+                  <small id="customFenStatus">The board and side to move will update before you search.</small>
+                </form>
+              </details>
+              <div class="network-depth-field" id="networkDepthField" hidden>
+                <label for="networkRunMode">Experience</label>
+                <select id="networkRunMode">
+                  <option value="live" selected>Watch the search live</option>
+                  <option value="replay">Record, then replay</option>
+                </select>
+                <label for="networkDepth">Target search depth</label>
+                <select id="networkDepth">
+                  <option value="6">6 · instant</option>
+                  <option value="10">10 · quick</option>
+                  <option value="14" selected>14 · deep</option>
+                  <option value="16">16 · very deep</option>
+                  <option value="18">18 · extreme</option>
+                  <option value="20">20 · experimental</option>
+                </select>
+                <small id="networkDepthHint">Higher depths can take much longer depending on the position.</small>
+              </div>
+              <button type="button" class="run-search" id="runSearchButton">Run a 1.5 second search</button>
+            </div>
+          </aside>
+
+          <div class="search-panel">
+            <div class="metrics" aria-live="polite">
+              <div><span>Depth</span><strong id="depthValue">1</strong><small>plies</small></div>
+              <div><span>Nodes</span><strong id="nodesValue">60</strong><small id="npsValue">60k nps</small></div>
+              <div><span>White eval</span><strong id="scoreValue">−0.26</strong><small id="scoreKind">pawns</small></div>
+              <div><span>Leader</span><strong id="leaderValue">a6</strong><small id="leaderUci">a7a6</small></div>
+            </div>
+
+            <div class="search-phases" aria-label="Search mechanisms">
+              <span class="active" data-phase="deepen">Iterative deepening</span>
+              <i aria-hidden="true">→</i>
+              <span data-phase="window">Aspiration window</span>
+              <i aria-hidden="true">→</i>
+              <span data-phase="pvs">PVS probes</span>
+              <i aria-hidden="true">→</i>
+              <span data-phase="quiet">Quiescence</span>
+            </div>
+
+            <div class="tree" aria-label="Root move candidates">
+              <div class="root-node"><span>Root position</span><strong id="rootLabel">Black chooses</strong></div>
+              <div class="tree-trunk" aria-hidden="true"></div>
+              <div class="candidate-grid" id="candidateGrid"></div>
+            </div>
+
+            <div class="explanation" id="explanation" aria-live="polite">
+              <span class="event-tag" id="eventTag">FIRST PASS</span>
+              <p id="explanationText">Depth 1 is only a first draft. A full-window search puts 1…a6 in front after 60 nodes.</p>
+            </div>
+
+            <div class="walkthrough-controls" id="walkthroughControls">
+              <button type="button" id="previousStep" aria-label="Previous step">←</button>
+              <button type="button" class="play-button" id="playWalkthrough">Play</button>
+              <button type="button" id="nextStep" aria-label="Next step">→</button>
+              <label class="scrubber" for="stepScrubber">
+                <span class="sr-only">Walkthrough step</span>
+                <input id="stepScrubber" type="range" min="0" max="7" value="0" step="1">
+              </label>
+              <span class="step-count" id="stepCount">1 / 8</span>
+            </div>
+
+            <div class="live-status" id="livePanel" hidden>
+              <div class="search-signal" id="searchSignal"><span aria-hidden="true"></span><strong>Ready for a live search</strong></div>
+              <p id="liveDetail">This starts a separate Sgurr process, so it cannot interrupt anyone playing a game.</p>
+            </div>
+          </div>
+
+          <div class="network-panel" id="networkPanel" hidden>
+            <div class="network-head">
+              <div>
+                <p class="panel-label">Rings are search depth</p>
+                <h2>A real search, unfolding outward</h2>
+              </div>
+              <div class="network-stats" aria-live="polite">
+                <span class="network-time-stat">
+                  <small>Engine time</small>
+                  <strong id="networkEngineTime">0 &micro;s</strong>
+                  <em id="networkEngineTimeMode">awaiting trace</em>
+                </span>
+                <span><small>Visible nodes</small><strong id="networkNodeCount">0</strong></span>
+                <span class="network-node-stat"><small>Nodes searched</small><strong id="networkSearchedNodeCount">0</strong></span>
+                <span><small>Cutoffs</small><strong id="networkCutoffCount">0</strong></span>
+                <span><small>Search horizon</small><strong id="networkPly">0</strong></span>
+              </div>
+            </div>
+
+            <div class="network-canvas-wrap" id="networkCanvasWrap">
+              <canvas id="networkCanvas" tabindex="0" aria-label="Interactive radial search network. The root is search depth zero in the centre, and each ring is one depth farther from the root. Drag to pan, and use the mouse wheel or plus and minus keys to zoom."></canvas>
+              <div class="network-stream-state" id="networkStreamState" data-state="ready">
+                <i aria-hidden="true"></i><span>Ready</span>
+              </div>
+              <div class="network-viewport-controls" aria-label="Network view controls">
+                <button type="button" id="networkZoomOut" aria-label="Zoom out">−</button>
+                <output id="networkZoomLevel" aria-live="polite">100%</output>
+                <button type="button" id="networkZoomIn" aria-label="Zoom in">+</button>
+                <button type="button" class="network-fit" id="networkFitView">Fit</button>
+              </div>
+              <p class="network-nav-hint">Scroll or pinch to zoom · drag to navigate</p>
+              <div class="network-best" id="networkBest" data-state="waiting" aria-live="polite">
+                <span>Current best</span>
+                <strong id="networkBestMove">—</strong>
+                <small id="networkBestScore">Waiting for a root move</small>
+              </div>
+              <div class="network-empty" id="networkEmpty">
+                <strong>Load a trace to reveal the search</strong>
+                <span>Watch discoveries appear live, then settle around the positions that shaped Sgurr's decision.</span>
+              </div>
+              <div class="network-tooltip" id="networkTooltip" hidden></div>
+            </div>
+
+            <div class="network-legend" aria-label="Network legend">
+              <span><i class="legend-ring"></i> depth · echoes when complete</span>
+              <span><i class="legend-dot active"></i> consequential node</span>
+              <span><i class="legend-dot evaluation"></i> brighter = stronger move</span>
+              <span><i class="legend-line principal"></i> completed-depth PV</span>
+              <span><i class="legend-dot cutoff"></i> cutoff implosion</span>
+              <span><i class="legend-dot transposition"></i> transposition wormhole</span>
+              <span><i class="legend-dot quiet"></i> quiescence</span>
+            </div>
+
+            <div class="network-event">
+              <span id="networkEventTag">READY</span>
+              <p id="networkEventText">Choose a position, target depth, and how you want to watch it.</p>
+            </div>
+
+            <div class="network-controls">
+              <button type="button" id="networkRestart" aria-label="Restart network replay">↺</button>
+              <button type="button" class="play-button" id="networkPlay">Play</button>
+              <label for="networkSpeed">Replay speed</label>
+              <select id="networkSpeed">
+                <option value="realtime">Real time · recorded timing</option>
+                <option value="ultra">Ultra slow · inspect each step</option>
+                <option value="slow">Slow · cinematic</option>
+                <option value="normal" selected>Normal · balanced</option>
+                <option value="fast">Fast · rapid scan</option>
+                <option value="very-fast">Very fast · whole search</option>
+              </select>
+              <label class="network-progress" for="networkScrubber">
+                <span class="sr-only">Network replay progress</span>
+                <input id="networkScrubber" type="range" min="0" max="0" value="0" step="1">
+              </label>
+              <span id="networkProgressText">0 / 0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="iteration-strip">
+          <div class="iteration-heading">
+            <div><p class="panel-label">Completed iterations</p><h2 id="iterationTitle">The verdict keeps moving</h2></div>
+            <p id="iterationCopy">Each dot is a fully completed depth. Unfinished work is discarded when the clock expires.</p>
+          </div>
+          <div class="iteration-chart" id="iterationChart" aria-label="Best move and white evaluation at each completed depth"></div>
+        </div>
+      </section>
+
+      <section class="mechanics" aria-labelledby="mechanicsTitle">
+        <div class="mechanics-heading">
+          <p class="eyebrow">What collapses the tree</p>
+          <h2 id="mechanicsTitle">Sgurr spends depth where doubt remains.</h2>
+        </div>
+        <div class="mechanics-grid">
+          <article><span>01</span><h3>Order the promising moves</h3><p>Transposition-table moves, good captures, killers, and learned history are tried early so a strong reply can set a useful bound.</p></article>
+          <article><span>02</span><h3>Prove most moves cheaply</h3><p>Principal variation search gives the first move a full window. Later moves get a narrow test and earn a full re-search only when they surprise it.</p></article>
+          <article><span>03</span><h3>Stop hopeless branches</h3><p>Alpha-beta cutoffs, null move, futility, late-move pruning, and static exchange tests reject lines that cannot change the root decision.</p></article>
+          <article><span>04</span><h3>Settle noisy leaves</h3><p>At nominal depth zero, quiescence continues forcing captures and checks so Sgurr does not judge a position in the middle of a tactical sequence.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="lab-footer"><span>SGURR v8.2 “Thearlaich”</span><span>Single-core C++20 · NNUE evaluation</span></footer>
+    <script type="module" src="search-lab.js"></script>
+  </body>
+</html>

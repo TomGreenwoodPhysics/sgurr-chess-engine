@@ -164,7 +164,8 @@
 }
 
 .ghost-button,
-.menu-tools-grid button {
+.menu-tools-grid button,
+.menu-tools-grid a {
   background: rgba(45, 39, 51, 0.62);
 }
 
@@ -356,9 +357,26 @@
   min-height: 46px;
 }
 
-.menu-tools-grid button {
+.menu-tools-grid button,
+.menu-tools-grid a {
   min-height: 40px;
   font-size: 1.08rem;
+}
+
+.menu-tools-grid .search-lab-link {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 62%);
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.menu-tools-grid .search-lab-link:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
 }
 
 .play-white {

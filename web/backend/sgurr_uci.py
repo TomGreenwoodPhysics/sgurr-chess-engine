@@ -34,6 +34,8 @@ class UciInfo:
     score: int
     depth: int | None = None
     nodes: int | None = None
+    nps: int | None = None
+    hashfull: int | None = None
     time_ms: int | None = None
     pv: list[str] | None = None
     raw: str = ""
@@ -49,6 +51,8 @@ class UciSearchResult:
 _SCORE_RE = re.compile(r"\bscore\s+(cp|mate)\s+(-?\d+)")
 _DEPTH_RE = re.compile(r"\bdepth\s+(\d+)")
 _NODES_RE = re.compile(r"\bnodes\s+(\d+)")
+_NPS_RE = re.compile(r"\bnps\s+(\d+)")
+_HASHFULL_RE = re.compile(r"\bhashfull\s+(\d+)")
 _TIME_RE = re.compile(r"\btime\s+(\d+)")
 
 
@@ -73,6 +77,8 @@ def parse_uci_info(line: str) -> UciInfo | None:
         score=int(score_match.group(2)),
         depth=_parse_int(_DEPTH_RE, line),
         nodes=_parse_int(_NODES_RE, line),
+        nps=_parse_int(_NPS_RE, line),
+        hashfull=_parse_int(_HASHFULL_RE, line),
         time_ms=_parse_int(_TIME_RE, line),
         pv=pv,
         raw=line,
@@ -117,7 +123,15 @@ class SgurrUciEngine:
                 )
                 self._new_game_pending = False
 
-    def search(self, fen: str, go_args: str, timeout_seconds: float) -> UciSearchResult:
+    def search(
+        self,
+        fen: str,
+        go_args: str,
+        timeout_seconds: float,
+        *,
+        on_info: Callable[[UciInfo], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
+    ) -> UciSearchResult:
         with self._lock:
             self._start_locked()
             self._send_new_game_if_needed_locked()
@@ -139,10 +153,14 @@ class SgurrUciEngine:
 
                 line = self._read_line_locked(remaining)
                 raw_lines.append(line)
+                if on_line is not None:
+                    on_line(line)
 
                 parsed = parse_uci_info(line)
                 if parsed is not None:
                     latest_info = parsed
+                    if on_info is not None:
+                        on_info(parsed)
 
                 if line.startswith("bestmove"):
                     parts = line.split()
@@ -164,6 +182,16 @@ class SgurrUciEngine:
                     self._kill_locked()
 
             self._process = None
+
+    def cancel(self) -> None:
+        """Interrupt an active search without waiting for the search lock."""
+        process = self._process
+        if process is None or process.poll() is not None:
+            return
+        try:
+            process.terminate()
+        except OSError:
+            pass
 
     def _start_locked(self) -> None:
         if self.is_running:

@@ -23,6 +23,7 @@
 #   ./build.sh -o sgr_test.exe        # choose the output name
 #   ./build.sh -r -o sgr_v8_1.exe
 #   ./build.sh -d                     # datagen build  -> datagen.exe (RFP off)
+#   ./build.sh -t                     # visual trace   -> sgr_trace.exe
 #
 set -u
 
@@ -41,6 +42,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -r|--release) mode=release ;;
         -d|--datagen) mode=datagen ;;
+        -t|--trace)   mode=trace ;;
         -o|--out)     out="$2"; shift ;;
         -D*)          extra="$extra $1" ;;
         -h|--help)    sed -n '2,30p' "$0"; exit 0 ;;
@@ -54,6 +56,13 @@ case "$mode" in
              # Labeller builds MUST disable RFP: it returns a raw static eval
              # where a searched score is expected, which poisoned gen6 entirely.
              extra="$extra -DSGR_RFP=0" ;;
+    trace)   src="$ENGINE_SRC"; [ -n "$out" ] || out=sgr_trace.exe
+             # Bounded diagnostic stream for the web Search Network. This is
+             # intentionally a separate binary: stdout tracing is not free
+             # and must never change the release engine's playing conditions.
+             # Capture a wider diagnostic pool; the browser distils this to a
+             # connected 120-node consequential subtree after each iteration.
+             extra="$extra -DSGR_TRACE_SEARCH=1 -DSGR_TRACE_NODE_LIMIT=1200" ;;
     *)       src="$ENGINE_SRC";  [ -n "$out" ] || out=sgr.exe ;;
 esac
 
