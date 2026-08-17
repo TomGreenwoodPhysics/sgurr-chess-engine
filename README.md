@@ -14,10 +14,12 @@ of the network is trained on positions labelled by the previous generation, so
 the engine is its own teacher. External engines appear only as rating anchors,
 never in the training loop.
 
-![A depth-14 search drawn as a radial web, with the surviving principal variation picked out in gold against several thousand blue and red search nodes](docs/assets/search-network.jpg)
+![A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold](docs/assets/search-network.gif)
 
-The engine also draws its own search. That is a real depth-14 trace, not an
-illustration of one: [See it work](#see-it-work).
+The engine also draws its own search. That is a real depth-14 trace at the
+speed it happened, not an illustration of one: the search itself takes about
+two seconds and the rest is the network settling.
+[See it work](#see-it-work).
 
 ---
 
@@ -205,14 +207,18 @@ opponent, with its measured rating shown. See [web/README.md](web/README.md).
 
 ## See it work
 
-`web/frontend/search-lab/` draws a real search as a radial web, the image at
-the top of this page. The centre is the root position and each ring outward is
-one ply deeper. What it renders is the engine's own diagnostic trace, not an
+`web/frontend/search-lab/` draws a real search as a radial web, the animation
+at the top of this page. The centre is the root position and each ring outward
+is one ply deeper. What it renders is the engine's own diagnostic trace, not an
 animation built to resemble one.
 
-That trace is a depth-14 search of the Ruy Lopez after 3.Bb5. Sgurr settled on
-1...a6 at −0.32, searching 5,248,685 nodes in a little over two seconds.
-Only 1,578 of them are drawn.
+![The same search once it has finished: the completed network with its
+principal variation running from the centre out to the fourteenth
+ring](docs/assets/search-network.jpg)
+
+That is the same trace once it settles, a depth-14 search of the Ruy Lopez
+after 3.Bb5. Sgurr chose 1...a6 at −0.32, searching 5,248,685 nodes in a little
+over two seconds. Only 1,578 of them are drawn.
 
 The interface shows both numbers because the gap between them is the point.
 Five million nodes could not be drawn and would not be worth looking at if they
