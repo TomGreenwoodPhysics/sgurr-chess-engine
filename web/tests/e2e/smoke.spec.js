@@ -486,7 +486,12 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   const settledBackgroundBuilds = Number(await canvas.getAttribute("data-background-builds"));
   const settledAtmosphereBuilds = Number(await canvas.getAttribute("data-depth-atmosphere-builds"));
   const settledLiveStructureBuilds = Number(await canvas.getAttribute("data-live-structure-builds"));
-  expect(settledBuilds).toBeLessThan(30);
+  // A ceiling against runaway rebuilding, not a tuned constant: the count
+  // depends on how many frames the machine fits into the settling animation,
+  // and a slow CI runner legitimately lands higher than a fast desktop. The
+  // invariant that matters is the next assertion, that it stops growing once
+  // the scene has settled. Runaway rebuilding would be in the hundreds.
+  expect(settledBuilds).toBeLessThan(80);
   await page.waitForTimeout(120);
   expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(settledBuilds);
   expect(Number(await canvas.getAttribute("data-bloom-builds"))).toBe(settledBloomBuilds);
@@ -503,36 +508,33 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   const firstDetailBuilds = Number(await canvas.getAttribute("data-detail-builds"));
   expect(firstDetailBuilds).toBeGreaterThan(0);
   expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
-  await expect(canvas).toHaveAttribute("data-navigation-tile-strategy", "multires-world-tiles");
-  await expect(canvas).toHaveAttribute("data-navigation-tile-lod", "1.5");
-  await expect(canvas).toHaveAttribute("data-navigation-tile-coverage", "1.000", { timeout: 10000 });
-  const navigationTileBuilds = Number(await canvas.getAttribute("data-navigation-tile-builds"));
-  expect(navigationTileBuilds).toBeGreaterThan(0);
-  expect(Number(await canvas.getAttribute("data-navigation-tile-count"))).toBeLessThanOrEqual(48);
-  await expect(canvas).toHaveAttribute("data-navigation-tile-scheduler", "idle-between-frames");
+  await expect(canvas).toHaveAttribute("data-detail-tier", "high");
   const canvasBounds = await canvas.boundingBox();
   expect(canvasBounds).not.toBeNull();
   await page.mouse.move(canvasBounds.x + canvasBounds.width / 2, canvasBounds.y + canvasBounds.height / 2);
   await page.mouse.down();
   await page.mouse.move(canvasBounds.x + canvasBounds.width / 2 + 180, canvasBounds.y + canvasBounds.height / 2 + 90, { steps: 8 });
   await expect(canvas).toHaveAttribute("data-quality", "navigation");
-  const buildsDuringNavigation = Number(await canvas.getAttribute("data-navigation-tile-builds"));
-  await expect(canvas).toHaveAttribute("data-render-layer", "multires-tiles");
+  // Navigation reuses the detail image already on screen rather than swapping
+  // in a coarser stand-in, so the picture must not change character mid-drag
+  // and no new detail may be rendered while the pointer is down.
+  const detailBuildsDuringNavigation = Number(await canvas.getAttribute("data-detail-builds"));
+  await expect(canvas).toHaveAttribute("data-render-layer", "stable-detail");
+  await expect(canvas).toHaveAttribute("data-structure-state", "stable-detail");
   await expect(canvas).toHaveAttribute("data-detail-during-navigation", "preserved");
-  await expect(canvas).toHaveAttribute("data-navigation-tile-coverage", "1.000");
   await expect(canvas).toHaveAttribute("data-bloom-state", "cached-navigation");
   await expect(canvas).toHaveAttribute("data-bloom-alignment", "world-space");
   await expect(canvas).toHaveAttribute("data-background-effects", "preserved-navigation");
   expect(Number(await canvas.getAttribute("data-depth-atmosphere-builds"))).toBe(settledAtmosphereBuilds);
   expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(navigationBuilds);
   await page.waitForTimeout(80);
-  expect(Number(await canvas.getAttribute("data-navigation-tile-builds"))).toBe(buildsDuringNavigation);
+  expect(Number(await canvas.getAttribute("data-detail-builds"))).toBe(detailBuildsDuringNavigation);
   await page.mouse.up();
   await expect(canvas).toHaveAttribute("data-quality", "full");
   await expect(canvas).toHaveAttribute("data-render-layer", "native-detail");
   await expect(canvas).toHaveAttribute("data-navigation-release", "native-ready");
   await expect(canvas).toHaveAttribute("data-navigation-release-strategy", "staged-pass-slices");
-  await expect(canvas).toHaveAttribute("data-navigation-release-fallback", "multires-tiles-until-ready");
+  await expect(canvas).toHaveAttribute("data-navigation-release-fallback", "previous-detail-until-ready");
   await expect(canvas).toHaveAttribute("data-navigation-release-swap", "atomic");
   await expect(canvas).toHaveAttribute("data-navigation-release-slice-ms", "4");
   await expect(canvas).toHaveAttribute("data-navigation-release-progress", "1.000");

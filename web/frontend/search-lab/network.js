@@ -641,7 +641,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.quality = "full";
     refs.canvas.dataset.navigationRelease = "native-ready";
     refs.canvas.dataset.navigationReleaseStrategy = "staged-pass-slices";
-    refs.canvas.dataset.navigationReleaseFallback = "multires-tiles-until-ready";
+    refs.canvas.dataset.navigationReleaseFallback = "previous-detail-until-ready";
     refs.canvas.dataset.navigationReleaseSwap = "atomic";
     if (PROFILE) recordPhase("release-finish (off-frame)", performance.now() - finishStartedAt);
     requestDraw();
@@ -756,7 +756,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.quality = "refining";
     refs.canvas.dataset.navigationRelease = "refining";
     refs.canvas.dataset.navigationReleaseStrategy = "staged-pass-slices";
-    refs.canvas.dataset.navigationReleaseFallback = "multires-tiles-until-ready";
+    refs.canvas.dataset.navigationReleaseFallback = "previous-detail-until-ready";
     refs.canvas.dataset.navigationReleaseSwap = "atomic";
     refs.canvas.dataset.navigationReleaseSliceMs = String(NAVIGATION_RELEASE_SLICE_MS);
     refs.canvas.dataset.navigationReleasePasses = String(job.passes.length);
@@ -3596,6 +3596,7 @@ export function initSearchNetwork() {
       context.restore();
       refs.canvas.dataset.structureState = "stable-detail";
       refs.canvas.dataset.renderLayer = "stable-detail";
+      refs.canvas.dataset.detailDuringNavigation = "preserved";
       return;
     }
 
