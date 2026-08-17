@@ -267,7 +267,82 @@ validates chess state with `python-chess`, serves the frontend and an allowlist
 of media, and exposes a small JSON API. The frontend is 19 plain ES modules and
 12 CSS partials with no build step and no npm runtime dependency. Every
 canonical release from the classical evaluation to v8.2 is selectable as an
-opponent, with its measured rating shown. See [web/README.md](web/README.md).
+opponent, with its measured rating shown. It also draws a live search, which is
+described under [The search network](#the-search-network). See
+[web/README.md](web/README.md).
+
+---
+
+## The search network
+
+`web/frontend/search-lab/` draws a real search as a radial web. The centre is
+the root position and each ring outward is one ply deeper. What it renders is
+the engine's own diagnostic trace, not an animation built to resemble one.
+
+![A depth-14 search drawn as a radial web, with the surviving principal variation picked out in gold against several thousand blue and red search nodes](docs/assets/search-network.jpg)
+
+That is a depth-14 search of the Ruy Lopez after 3.Bb5. Sgurr settled on
+1...a6 at −0.32, searching 5,248,685 nodes in a little over two seconds.
+Only 1,578 of them are drawn.
+
+The interface shows both numbers because the gap between them is the point.
+Five million nodes could not be drawn and would not be worth looking at if they
+could, so the trace keeps a bounded sample at each depth, weighted towards the
+nodes that changed the search: the ones that raised alpha, caused a cutoff, or
+ended up on the principal variation. Red marks a cutoff, violet a
+transposition-table hit, and brightness follows how close a node's score came
+to the best in its group. The gold path is the principal variation from the
+last completed iteration, which is not the same as saying the engine knew those
+moves from the start.
+
+### Making it smooth
+
+The first version stuttered whenever the view moved. I spent a while optimising
+things that turned out not to matter — culling off-screen nodes, replacing
+repeated scans over the node set with a single pass — and it barely helped.
+
+Profiling the running page instead of reading it showed why. Drawing cost under
+2 ms a frame and the browser reported no long tasks at all, so JavaScript was
+never the constraint. The stalls were in how the renderer handled its canvas
+surfaces:
+
+* A cache of pre-rendered tiles was evicting the tiles it was drawing, so they
+  were rebuilt on the next frame, indefinitely. The tile count sat at its cap
+  while the build counter climbed without bound, and every rebuild re-uploaded
+  a multi-megabyte bitmap.
+* The pass that sharpens the picture when a gesture ends cleared the sharp
+  image before rebuilding it, so every mouse-up fell back to a blurred
+  stand-in and snapped back. The code described that swap as atomic.
+* The renderer had no frame rate of its own. It drew whenever
+  `requestAnimationFrame` fired, which is 60 fps only when the browser is
+  vsync-locked. Where it is not, it was drawing several hundred times a second
+  for a display that could not show it.
+
+Deleting the tile cache was the fix rather than tuning it. Navigation reuses
+the detail image already on screen instead of substituting a coarser one, which
+is both steadier to look at and cheaper to draw. Frames longer than 32 ms
+during a zoom fell from 12 to 7 at full detail, and the worst frame after
+releasing a drag went from 268 ms to 4 ms.
+
+The cost here is rasterising large canvas surfaces rather than running
+JavaScript, and not every machine has the same budget for that, so a Detail
+setting in the header trades render resolution, bloom, effects and node count
+for speed. `?profile=1` turns on a frame profiler that reports the browser's
+real frame cadence, any long tasks, and the cost of each drawing phase.
+
+### Running it
+
+The network reads from a diagnostic engine build, which is separate from the
+one that plays games:
+
+```bash
+cd sgurr_cpp && ./build.sh -t     # -> sgr_trace.exe
+python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Then open <http://127.0.0.1:8000/search-lab/>. The trace runs in its own
+process, so opening it cannot stall a game already in progress. Engine paths,
+the split-frontend setup and the API are in [web/README.md](web/README.md).
 
 ---
 
@@ -400,10 +475,10 @@ clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
 Web tests, from the repository root:
 
 ```bash
-python -m unittest discover -s web/backend -p "test_*.py"   # -> 23 tests, OK
+python -m unittest discover -s web/backend -p "test_*.py"   # -> 27 tests, OK
 
 cd web && npm ci && npx playwright install chromium
-npx playwright test                                         # -> 7 passed
+npx playwright test                                         # -> 9 passed
 ```
 
 Strength changes are decided by SPRT at 8+0.08 against the previous accepted
