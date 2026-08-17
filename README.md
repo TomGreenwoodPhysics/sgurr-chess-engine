@@ -7,18 +7,6 @@ self-play games. The current release, **v8.2 "Thearlaich"**, is internally
 calibrated at an estimated **3012** on a CCRL-Blitz-anchored scale, measured
 over a 9,890-game gauntlet against five engine families.
 
-That figure is a self-calibrated estimate, not an official rating. Sgurr has
-never been submitted to CCRL and does not appear on any published list. The
-±6 is sampling error only; the five anchors disagree by 50 Elo about the
-absolute number, so systematic uncertainty is nearer **±25**. Both are set out
-under [Strength](#strength).
-
-This number replaces an earlier 3058. The engine did not change; the
-measurement did. Three faults in the old setup were found and fixed, one of
-which was two pool engines forfeiting a fifth of their games on an illegal
-move. [docs/METHODOLOGY.md §9](docs/METHODOLOGY.md) has the full account,
-including a conclusion that had to be withdrawn.
-
 The whole evaluation pipeline is built in this repository end to end: the
 self-play data generator, the PyTorch trainer, the quantisation scheme, the
 network file format, and the AVX-512 inference that reads it. Each generation
@@ -26,87 +14,27 @@ of the network is trained on positions labelled by the previous generation, so
 the engine is its own teacher. External engines appear only as rating anchors,
 never in the training loop.
 
-Where to read further:
+![A depth-14 search drawn as a radial web, with the surviving principal variation picked out in gold against several thousand blue and red search nodes](docs/assets/search-network.jpg)
 
-* [docs/METHODOLOGY.md](docs/METHODOLOGY.md) records what was learned rather
-  than what happened, including the results that had to be withdrawn. It is the
-  most useful file here.
-* [benchmarks/ledger.md](benchmarks/ledger.md) is the append-only record of
-  every rating ever measured, with game counts and caveats.
-* [docs/CHANGELOG.md](docs/CHANGELOG.md) covers the released versions with
-  error bars, and [docs/DEVLOG.md](docs/DEVLOG.md) is the dated engineering log.
-* [docs/ROADMAP.md](docs/ROADMAP.md) sets out what is next and why.
-* [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md) has the toolchain notes, the PGO
-  recipe and the fingerprint check.
-
----
-
-## What makes this interesting
-
-The engine is ordinary work of its kind. The measurement discipline around it
-is the part worth reading.
-
-Nothing here is selected on training loss, because on this data loss is worse
-than uninformative about strength. Across five instances trained on identical
-data the ranking inverted completely: the variant with the best loss (0.00471)
-measured +2 Elo, and the variant with the worst (0.00661) measured +9. Only
-games decide, and that rule exists because the alternative was tried.
-
-The noise floor is measured rather than assumed. Two networks trained on
-identical data with an identical recipe, differing only in random seed, score
-+13.7 ±10.3 against each other over 3,000 games, so training is not
-reproducible at the Elo level. That figure had been taken for zero over the
-project's whole history. Measuring it retracted several published results,
-including a width finding that had already been recommended for the next
-generation. Anything below roughly ±25 Elo on a network change is now
-indistinguishable from seed luck unless several seeds are trained per
-configuration.
-
-Speed-only work is proved rather than argued. `bench` searches a fixed position
-list to a fixed depth with no clock and no randomness, so its node counts are a
-fingerprint of *what* the engine searches. A change claimed to be speed-only
-has to leave that fingerprint byte-identical:
-
-```bash
-diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
-```
-
-The AVX-512 inference, the PGO build and nine separate data-layout
-optimisations were all validated that way, without playing a game. If the
-fingerprint moves, the change altered behaviour and the speedup was not free.
-CI now asserts it on every push.
-
-Results that went the wrong way stay in the tree. v3.1 rates below v3.0 and the
-table further down says so. Eight king buckets measured −10.7 ±16 against the
-plain 768→384 control despite 12% lower loss, so the control shipped. A
-ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
-[docs/METHODOLOGY.md](docs/METHODOLOGY.md) is largely a record of conclusions
-that had to be withdrawn.
-
-Predictions are registered before the games are played, with a stated
-falsification band.
-[benchmarks/v81_speed_prediction.md](benchmarks/v81_speed_prediction.md) was
-written before a single v8.1 game: +18 to +19 Elo, roughly 55% confidence of
-landing in [+10, +27], and a table saying in advance what each outcome would
-mean. It landed inside the band, which appeared to confirm the ~70-Elo-per-
-doubling NPS conversion this project had been valuing speed work with.
-
-Then v8.2 broke it. Node-identical to v8.1 and 15.4% faster, the same rule put
-it at 3041, a gain of +14.5. The gauntlet says +31.5, an implied ~131 per
-doubling. Solving each anchor independently gives +29, +21, +31 and +28, so the
-rating solver is not the explanation. v8.1's agreement now reads as
-coincidence, and the conversion is no longer used to predict anything here.
+The engine also draws its own search. That is a real depth-14 trace, not an
+illustration of one: [See it work](#see-it-work).
 
 ---
 
 ## Strength
 
-The current release, measured under controlled conditions matching CCRL's
-published requirements on hash, book, pondering and thread count:
+Measured under controlled conditions matching CCRL's published requirements on
+hash, book, pondering and thread count:
 
 | engine | rating | pool | games |
 |---|---|---|---|
 | **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **~±25** systematic | pool-2026-08-D | 9,890 |
+
+That figure is a self-calibrated estimate, not an official rating. Sgurr has
+never been submitted to CCRL and does not appear on any published list. Ratings
+come from a gauntlet against a fixed pool of open-source engines with published
+CCRL Blitz ratings, solved with Ordo anchored to those values, so the absolute
+scale is only as good as the anchors.
 
 Solved against five engine families spanning 3056 to 3312, all of which
 bracket v8.2 from above. Each anchor solved separately gives 4ku 3004 ±8,
@@ -114,7 +42,31 @@ Bit-Genie 3036 ±8, Monolith 3001 ±10, Drofa 2986 ±11, Mantissa 3034 ±10: a
 **50 Elo spread**, which is where the ±25 comes from. That spread is real
 rather than sampling noise, since the intervals do not overlap.
 
-### The earlier ladder
+**Why sampling error and systematic uncertainty differ by 4x.** Enough games
+accumulate to place v8.2 against each anchor *separately*, and the anchors do
+not agree with each other. On the old pool they disagreed by 90 Elo; on the
+new one, by 50. Neither spread is sampling noise, and no number of games
+reduces it. It is what happens when ratings measured under CCRL's conditions
+are transferred to a different machine and time control. So the ±6 counts
+coin-flip noise only, and the honest figure for the absolute number is ±25.
+
+The cause of the residual 50 Elo is **not established**. Draw rate does not
+predict it (−0.01), nor does opponent strength (−0.35); mean game length is
+suggestive (+0.84) but rests on five opponents and is not significant.
+
+**Version-to-version gaps do not carry that uncertainty**, because they are
+measured inside one solve against one pool. Each generational gap
+independently reproduces the direct SPRT between those versions: v4.0's net
+change measured +54 in the pool against +55.5 ±17.0 in a 1,194-game SPRT.
+
+This number replaces an earlier 3058. The engine did not change; the
+measurement did. Three faults in the old setup were found and fixed, one of
+which was two pool engines forfeiting a fifth of their games on an illegal
+move. [docs/METHODOLOGY.md §9](docs/METHODOLOGY.md) has the full account,
+including a conclusion that had to be withdrawn.
+
+<details>
+<summary><strong>The earlier ladder</strong>, every released version on the previous pool</summary>
 
 Every version below was measured on the previous pool, before the conditions
 above were controlled. Those rows are internally consistent with each other
@@ -140,28 +92,6 @@ Re-measuring the older versions is owed and has not been done.
 
 Every row is solved from games. None is estimated.
 
-Ratings come from a gauntlet against a fixed pool of open-source engines with
-published CCRL Blitz ratings, solved with Ordo anchored to those values. They
-are estimates on the CCRL Blitz scale produced here, not official CCRL
-ratings, and the absolute scale is only as good as the anchors.
-
-**Why sampling error and systematic uncertainty differ by 4×.** Enough games
-accumulate to place v8.2 against each anchor *separately*, and the anchors do
-not agree with each other. On the old pool they disagreed by 90 Elo; on the
-new one, by 50. Neither spread is sampling noise, and no number of games
-reduces it. It is what happens when ratings measured under CCRL's conditions
-are transferred to a different machine and time control. So the ±6 counts
-coin-flip noise only, and the honest figure for the absolute number is ±25.
-
-The cause of the residual 50 Elo is **not established**. Draw rate does not
-predict it (−0.01), nor does opponent strength (−0.35); mean game length is
-suggestive (+0.84) but rests on five opponents and is not significant.
-
-**Version-to-version gaps do not carry that uncertainty**, because they are
-measured inside one solve against one pool. Each generational gap
-independently reproduces the direct SPRT between those versions: v4.0's net
-change measured +54 in the pool against +55.5 ±17.0 in a 1,194-game SPRT.
-
 The old pool had also saturated: v8.2 scored **50.8%** against its strongest
 member and 86-97% against five of eight, so it could not resolve a v8.3. Every
 engine in pool-2026-08-D sits at or above v8.2's level, which is what the
@@ -178,9 +108,11 @@ run on one machine, do not.
 soft time limit loses at the pool's 10+0.1. v4.0 replaced it with best-move
 stability scaling, which measures positive at both controls.
 
+</details>
+
 ---
 
-## Architecture
+## What's in it
 
 ```text
 sgurr_cpp/     the engine: bitboard movegen, search, NNUE inference, datagen
@@ -267,21 +199,18 @@ validates chess state with `python-chess`, serves the frontend and an allowlist
 of media, and exposes a small JSON API. The frontend is 19 plain ES modules and
 12 CSS partials with no build step and no npm runtime dependency. Every
 canonical release from the classical evaluation to v8.2 is selectable as an
-opponent, with its measured rating shown. It also draws a live search, which is
-described under [The search network](#the-search-network). See
-[web/README.md](web/README.md).
+opponent, with its measured rating shown. See [web/README.md](web/README.md).
 
 ---
 
-## The search network
+## See it work
 
-`web/frontend/search-lab/` draws a real search as a radial web. The centre is
-the root position and each ring outward is one ply deeper. What it renders is
-the engine's own diagnostic trace, not an animation built to resemble one.
+`web/frontend/search-lab/` draws a real search as a radial web, the image at
+the top of this page. The centre is the root position and each ring outward is
+one ply deeper. What it renders is the engine's own diagnostic trace, not an
+animation built to resemble one.
 
-![A depth-14 search drawn as a radial web, with the surviving principal variation picked out in gold against several thousand blue and red search nodes](docs/assets/search-network.jpg)
-
-That is a depth-14 search of the Ruy Lopez after 3.Bb5. Sgurr settled on
+That trace is a depth-14 search of the Ruy Lopez after 3.Bb5. Sgurr settled on
 1...a6 at −0.32, searching 5,248,685 nodes in a little over two seconds.
 Only 1,578 of them are drawn.
 
@@ -298,8 +227,8 @@ moves from the start.
 ### Making it smooth
 
 The first version stuttered whenever the view moved. I spent a while optimising
-things that turned out not to matter — culling off-screen nodes, replacing
-repeated scans over the node set with a single pass — and it barely helped.
+things that turned out not to matter (culling off-screen nodes, replacing
+repeated scans over the node set with a single pass) and it barely helped.
 
 Profiling the running page instead of reading it showed why. Drawing cost under
 2 ms a frame and the browser reported no long tasks at all, so JavaScript was
@@ -343,6 +272,78 @@ python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000
 Then open <http://127.0.0.1:8000/search-lab/>. The trace runs in its own
 process, so opening it cannot stall a game already in progress. Engine paths,
 the split-frontend setup and the API are in [web/README.md](web/README.md).
+
+---
+
+## How it's measured
+
+A chess engine is a good way to be wrong in public. Sgurr plays at roughly
+3012, but the more useful claim is that the number is defensible: everything
+here is measured, including the parts that did not work.
+
+Nothing here is selected on training loss, because on this data loss is worse
+than uninformative about strength. Across five instances trained on identical
+data the ranking inverted completely: the variant with the best loss (0.00471)
+measured +2 Elo, and the variant with the worst (0.00661) measured +9. Only
+games decide, and that rule exists because the alternative was tried.
+
+The noise floor is measured rather than assumed. Two networks trained on
+identical data with an identical recipe, differing only in random seed, score
++13.7 ±10.3 against each other over 3,000 games, so training is not
+reproducible at the Elo level. That figure had been taken for zero over the
+project's whole history. Measuring it retracted several published results,
+including a width finding that had already been recommended for the next
+generation. Anything below roughly ±25 Elo on a network change is now
+indistinguishable from seed luck unless several seeds are trained per
+configuration.
+
+Speed-only work is proved rather than argued. `bench` searches a fixed position
+list to a fixed depth with no clock and no randomness, so its node counts are a
+fingerprint of *what* the engine searches. A change claimed to be speed-only
+has to leave that fingerprint byte-identical:
+
+```bash
+diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
+```
+
+The AVX-512 inference, the PGO build and nine separate data-layout
+optimisations were all validated that way, without playing a game. If the
+fingerprint moves, the change altered behaviour and the speedup was not free.
+CI now asserts it on every push.
+
+Results that went the wrong way stay in the tree. v3.1 rates below v3.0 and the
+ladder above says so. Eight king buckets measured −10.7 ±16 against the
+plain 768→384 control despite 12% lower loss, so the control shipped. A
+ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
+[docs/METHODOLOGY.md](docs/METHODOLOGY.md) is largely a record of conclusions
+that had to be withdrawn.
+
+Predictions are registered before the games are played, with a stated
+falsification band.
+[benchmarks/v81_speed_prediction.md](benchmarks/v81_speed_prediction.md) was
+written before a single v8.1 game: +18 to +19 Elo, roughly 55% confidence of
+landing in [+10, +27], and a table saying in advance what each outcome would
+mean. It landed inside the band, which appeared to confirm the ~70-Elo-per-
+doubling NPS conversion this project had been valuing speed work with.
+
+Then v8.2 broke it. Node-identical to v8.1 and 15.4% faster, the same rule put
+it at 3041, a gain of +14.5. The gauntlet says +31.5, an implied ~131 per
+doubling. Solving each anchor independently gives +29, +21, +31 and +28, so the
+rating solver is not the explanation. v8.1's agreement now reads as
+coincidence, and the conversion is no longer used to predict anything here.
+
+Where to read further:
+
+* [docs/METHODOLOGY.md](docs/METHODOLOGY.md) records what was learned rather
+  than what happened, including the results that had to be withdrawn. It is the
+  most useful file here.
+* [benchmarks/ledger.md](benchmarks/ledger.md) is the append-only record of
+  every rating ever measured, with game counts and caveats.
+* [docs/CHANGELOG.md](docs/CHANGELOG.md) covers the released versions with
+  error bars, and [docs/DEVLOG.md](docs/DEVLOG.md) is the dated engineering log.
+* [docs/ROADMAP.md](docs/ROADMAP.md) sets out what is next and why.
+* [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md) has the toolchain notes, the PGO
+  recipe and the fingerprint check.
 
 ---
 
@@ -507,7 +508,7 @@ canonical; peak names are codenames.
 | v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled**: the two agree to 0.3 Elo. Same net, same search, same moves |
 | v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. **+31.5 vs v8.1** against +14.5 predicted. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
 
-Ratings for each row are in the [Strength](#strength) table above and in
+Ratings for each row are in the [Strength](#strength) section above and in
 [benchmarks/ledger.md](benchmarks/ledger.md) with full game counts.
 
 ---
