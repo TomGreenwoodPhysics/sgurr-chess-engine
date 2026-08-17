@@ -25,12 +25,88 @@ const LEADER_GHOST_MS = 2400;
 const PRINCIPAL_HIT_RADIUS_PX = 26;
 const STANDARD_HIT_RADIUS_PX = 10;
 const RECONSTRUCTED_TRANSIENT_AGE_MS = 1200;
-const NAVIGATION_TILE_SCREEN_SIZE = 420;
-const NAVIGATION_TILE_BLEED_PX = 18;
-const NAVIGATION_TILE_LEVELS = Object.freeze([1, 1.5, 2.25, 3.25, 4.5]);
-const MAX_NAVIGATION_TILES = 48;
 const LIVE_EVENT_SLICE_MS = 3;
 const NAVIGATION_RELEASE_SLICE_MS = 4;
+// Cull margins in world units, sized to the largest halo a node can throw and
+// the widest glow an edge can carry, so nothing pops in at the frame edge.
+const NODE_CULL_PADDING = 48;
+const EDGE_CULL_PADDING = 26;
+// Just under a 60Hz frame, so an ordinary vsync-locked display still draws on
+// every refresh while a browser calling back faster is held to the same work.
+const MIN_FRAME_INTERVAL_MS = 14;
+
+// Detail tiers. The cost of this view is dominated by rasterising large canvas
+// surfaces, not by the JavaScript that issues the drawing, so the levers that
+// matter are the ones that shrink or remove surfaces: the render resolution
+// first, then the bloom pass and the effect layers. Node count applies to the
+// next search rather than the current tree.
+//
+// Every tier keeps its detail stable while the view moves: navigation reuses
+// the detail image already on screen rather than substituting a coarser stand
+// -in for it. An earlier design kept a cache of pre-rendered navigation tiles
+// for this, but they were rendered at a capped pixel ratio, so switching to
+// them mid-gesture was itself a drop in detail that no tuning could remove.
+// Reusing the existing image is both steadier and cheaper -- two blits instead
+// of compositing dozens of tile surfaces.
+const QUALITY_TIERS = Object.freeze({
+  high: Object.freeze({
+    label: "High detail",
+    maxPixelRatio: 2,
+    bloom: true,
+    effects: true,
+    stableDetail: true,
+    nodesPerIteration: 120,
+  }),
+  balanced: Object.freeze({
+    label: "Balanced",
+    maxPixelRatio: 1.25,
+    bloom: true,
+    effects: true,
+    stableDetail: true,
+    nodesPerIteration: 90,
+  }),
+  low: Object.freeze({
+    label: "Smooth (low detail)",
+    maxPixelRatio: 1,
+    bloom: false,
+    effects: false,
+    stableDetail: true,
+    nodesPerIteration: 55,
+  }),
+});
+const QUALITY_ORDER = Object.freeze(["high", "balanced", "low"]);
+
+// Storage access throws outright when a browser blocks it, and this runs at
+// module load, so an unguarded read would take the whole view down.
+function readStored(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch { /* preference simply will not persist */ }
+}
+
+function storedQualityTier() {
+  const stored = readStored("sgurrLabDetail");
+  return QUALITY_ORDER.includes(stored) ? stored : "high";
+}
+
+let qualityTier = storedQualityTier();
+function quality() {
+  return QUALITY_TIERS[qualityTier] || QUALITY_TIERS.high;
+}
+// Turn on with ?profile=1 on the URL, or localStorage.sgurrProfile = "1".
+// Off by default and costs nothing when off: it reports the browser's real
+// frame cadence, any long main-thread block, and where the time goes --
+// including work that never runs inside draw().
+const PROFILE = new URLSearchParams(window.location.search).get("profile") === "1"
+  || readStored("sgurrProfile") === "1";
 const LIVE_STRUCTURE_REFRESH_MS = Object.freeze({ sparse: 66, dense: 100, detail: 150 });
 const EFFECT_BUDGETS = Object.freeze({
   full: Object.freeze({ pulses: 90, bursts: 50, cutoffs: 32, wormholes: 18, leaders: 4, activity: 120 }),
@@ -43,20 +119,53 @@ function cssColour(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function withAlpha(colour, alpha) {
-  const value = colour.trim();
+// Profiling a live search showed this among the hottest functions in the file:
+// it ran up to three regexes and built a fresh string on every call, and it is
+// called several times per node and per edge. The palette holds a handful of
+// colours, so parse each one once and memoise the finished rgba string.
+const colourChannels = new Map();
+const alphaStrings = new Map();
+
+function parseColourChannels(value) {
   const shortHex = /^#([\da-f])([\da-f])([\da-f])$/i.exec(value);
-  const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(value);
   if (shortHex) {
     const [, r, g, b] = shortHex;
-    return `rgba(${parseInt(r + r, 16)}, ${parseInt(g + g, 16)}, ${parseInt(b + b, 16)}, ${alpha})`;
+    return `${parseInt(r + r, 16)}, ${parseInt(g + g, 16)}, ${parseInt(b + b, 16)}`;
   }
+  const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(value);
   if (hex) {
-    return `rgba(${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)}, ${alpha})`;
+    return `${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)}`;
   }
   const rgb = /^rgba?\((\d+)[, ]+(\d+)[, ]+(\d+)/i.exec(value);
-  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})`;
-  return value;
+  if (rgb) return `${rgb[1]}, ${rgb[2]}, ${rgb[3]}`;
+  return null;
+}
+
+function withAlpha(colour, alpha) {
+  let channels = colourChannels.get(colour);
+  if (channels === undefined) {
+    channels = parseColourChannels(colour.trim());
+    colourChannels.set(colour, channels);
+  }
+  // An unparseable colour is returned untouched, exactly as before.
+  if (channels === null) return colour.trim();
+  // A non-finite alpha would poison the cache key, so it skips the cache and
+  // produces the same (invalid) string the original would have produced.
+  if (!Number.isFinite(alpha)) return `rgba(${channels}, ${alpha})`;
+  // Quantised to 1/1000 -- four times finer than 8-bit compositing can show,
+  // so the output is visually identical while the cache stays bounded.
+  const step = Math.round(alpha * 1000);
+  let byAlpha = alphaStrings.get(colour);
+  if (byAlpha === undefined) {
+    byAlpha = new Map();
+    alphaStrings.set(colour, byAlpha);
+  }
+  let text = byAlpha.get(step);
+  if (text === undefined) {
+    text = `rgba(${channels}, ${step / 1000})`;
+    byAlpha.set(step, text);
+  }
+  return text;
 }
 
 function clamp(value, minimum = 0, maximum = 1) {
@@ -123,8 +232,13 @@ export function initSearchNetwork() {
   const depthAtmosphereContext = depthAtmosphereCanvas.getContext("2d");
   const staticCanvas = document.createElement("canvas");
   const staticContext = staticCanvas.getContext("2d");
-  const detailCanvas = document.createElement("canvas");
-  const detailContext = detailCanvas.getContext("2d");
+  // Two buffers, so a refinement pass can be built without destroying the
+  // sharp image the view is still showing. These are swapped on completion,
+  // which is what makes the release genuinely atomic.
+  let detailCanvas = document.createElement("canvas");
+  let detailContext = detailCanvas.getContext("2d");
+  let detailBackCanvas = document.createElement("canvas");
+  let detailBackContext = detailBackCanvas.getContext("2d");
   const settledCanvas = document.createElement("canvas");
   const settledContext = settledCanvas.getContext("2d");
   const settledDetailCanvas = document.createElement("canvas");
@@ -170,17 +284,6 @@ export function initSearchNetwork() {
   let detailSceneHeight = 0;
   let detailSceneBuildCount = 0;
   let detailSceneViewport = { scale: 1, x: 0, y: 0 };
-  let navigationTiles = new Map();
-  let navigationTileQueue = [];
-  let navigationTileQueuedKeys = new Set();
-  let navigationTileTask = null;
-  let navigationTileTaskKind = null;
-  let navigationTileGeneration = 0;
-  let navigationTileBuildCount = 0;
-  let navigationTileWidth = 0;
-  let navigationTileHeight = 0;
-  let navigationTileRatio = 0;
-  let navigationTileSnapshot = { completedDepths: new Set(), pv: null };
   let staticSceneAnimateUntil = 0;
   let settledCachePendingUntil = 0;
   let settledSceneWidth = 0;
@@ -250,10 +353,14 @@ export function initSearchNetwork() {
   let liveEventHighWater = 0;
   let evaluationRevision = 0;
   let evaluationProfileCache = new Map();
+  let pvPointsCache = new Map();
+  let pvPointsRevision = -1;
+  let pvNodeIndex = null;
   const glowSpriteCache = new Map();
   let effectBudgetLevel = "full";
   let framePressure = 0.72;
   let lastFrameTimestamp = null;
+  let lastDrawnAt = null;
   let countersDirty = true;
   let countersUpdatedAt = -Infinity;
 
@@ -452,43 +559,6 @@ export function initSearchNetwork() {
     detailSceneDirty = true;
   }
 
-  function cancelNavigationTileTask() {
-    if (navigationTileTask !== null) {
-      if (navigationTileTaskKind === "idle" && window.cancelIdleCallback) {
-        window.cancelIdleCallback(navigationTileTask);
-      } else window.clearTimeout(navigationTileTask);
-    }
-    navigationTileTask = null;
-    navigationTileTaskKind = null;
-  }
-
-  function invalidateNavigationTiles() {
-    cancelNavigationTileTask();
-    navigationTileQueue = [];
-    navigationTileQueuedKeys = new Set();
-    navigationTiles.forEach((tile) => {
-      tile.canvas.width = 0;
-      tile.canvas.height = 0;
-    });
-    navigationTiles = new Map();
-    navigationTileGeneration += 1;
-    navigationTileBuildCount = 0;
-    navigationTileSnapshot = {
-      completedDepths: new Set(completedDepths),
-      pv: authoritativePv
-        ? { ...authoritativePv, moves: [...authoritativePv.moves] }
-        : null,
-    };
-    refs.canvas.dataset.navigationTileGeneration = String(navigationTileGeneration);
-    refs.canvas.dataset.navigationTileBuilds = "0";
-    refs.canvas.dataset.navigationTileCount = "0";
-    refs.canvas.dataset.navigationTileCoverage = "0.000";
-    refs.canvas.dataset.navigationTileStrategy = "multires-world-tiles";
-    refs.canvas.dataset.navigationTileLevels = NAVIGATION_TILE_LEVELS.join(",");
-    refs.canvas.dataset.navigationTileLimit = String(MAX_NAVIGATION_TILES);
-    refs.canvas.dataset.navigationTileScheduler = "idle-between-frames";
-  }
-
   function invalidateBackgroundScene() {
     backgroundDirty = true;
   }
@@ -507,7 +577,6 @@ export function initSearchNetwork() {
     settledDetailHeight = 0;
     settledDetailRatio = 0;
     settledDetailViewportKey = "";
-    invalidateNavigationTiles();
     invalidateStaticScene();
   }
 
@@ -523,14 +592,14 @@ export function initSearchNetwork() {
     interactionMode = false;
     refs.canvas.dataset.quality = "full";
     refs.canvas.dataset.navigationRelease = "native-ready";
-    scheduleNavigationTileBuild();
     requestDraw();
   }
 
   function finishProgressiveDetailRelease(job) {
     if (navigationReleaseJob !== job || job.generation !== navigationReleaseGeneration) return;
+    const finishStartedAt = PROFILE ? performance.now() : 0;
     const previousContext = context;
-    context = detailContext;
+    context = detailBackContext;
     try {
       context.save();
       applyViewportTransform(job.width, job.height);
@@ -545,6 +614,15 @@ export function initSearchNetwork() {
     } finally {
       context = previousContext;
     }
+
+    // The finished image becomes the front buffer in a single step, so the
+    // view never shows a partially built frame or a blurred stand-in.
+    const swappedCanvas = detailCanvas;
+    const swappedContext = detailContext;
+    detailCanvas = detailBackCanvas;
+    detailContext = detailBackContext;
+    detailBackCanvas = swappedCanvas;
+    detailBackContext = swappedContext;
 
     detailSceneReady = true;
     detailSceneWidth = job.width;
@@ -565,7 +643,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.navigationReleaseStrategy = "staged-pass-slices";
     refs.canvas.dataset.navigationReleaseFallback = "multires-tiles-until-ready";
     refs.canvas.dataset.navigationReleaseSwap = "atomic";
-    scheduleNavigationTileBuild();
+    if (PROFILE) recordPhase("release-finish (off-frame)", performance.now() - finishStartedAt);
     requestDraw();
   }
 
@@ -592,9 +670,10 @@ export function initSearchNetwork() {
     ) {
       const pass = job.passes[job.passIndex];
       const includePass = (node) => node.id !== 0 && Number(node.pass) === Number(pass);
-      const evaluations = evaluationProfile(includePass, `release-pass:${pass}`);
+      const passNodes = job.index.get(Number(pass));
+      const evaluations = evaluationProfile(includePass, `release-pass:${pass}`, passNodes);
       renderPassToContext(
-        detailContext,
+        detailBackContext,
         pass,
         job.now,
         job.width,
@@ -603,12 +682,14 @@ export function initSearchNetwork() {
         job.principal,
         evaluations,
         true,
+        passNodes,
       );
       job.settledPasses.add(Number(pass));
       job.passIndex += 1;
       rendered += 1;
     }
     const sliceDuration = performance.now() - sliceStartedAt;
+    if (PROFILE) recordPhase("release-slice (off-frame)", sliceDuration);
     job.maxSliceDuration = Math.max(job.maxSliceDuration, sliceDuration);
     refs.canvas.dataset.navigationReleaseMaxSliceMs = job.maxSliceDuration.toFixed(2);
     refs.canvas.dataset.navigationReleaseProgress = (
@@ -631,13 +712,18 @@ export function initSearchNetwork() {
       return;
     }
 
+    const beginStartedAt = PROFILE ? performance.now() : 0;
     cancelNavigationReleaseRefinement();
     const generation = navigationReleaseGeneration;
     const { width, height, ratio } = canvasSize();
-    resetLayer(detailCanvas, detailContext, width, height, ratio);
+    // Build into the back buffer. The front buffer keeps the last sharp image,
+    // which the tile layer goes on using as its fallback (positioned by
+    // detailSceneViewport) for the whole settle. Clearing it here was what made
+    // the picture drop to the upscaled world bitmap and then snap back.
+    resetLayer(detailBackCanvas, detailBackContext, width, height, ratio);
     const now = performance.now();
     const previousContext = context;
-    context = detailContext;
+    context = detailBackContext;
     try {
       context.save();
       applyViewportTransform(width, height);
@@ -647,6 +733,7 @@ export function initSearchNetwork() {
       context = previousContext;
     }
 
+    const index = passIndex();
     const job = {
       generation,
       width,
@@ -656,13 +743,16 @@ export function initSearchNetwork() {
       now,
       palette: palette(),
       principal: principalIds(),
-      passes: eligibleSettledPasses(now),
+      index,
+      passes: eligibleSettledPasses(now, index),
       settledPasses: new Set(),
       passIndex: 0,
       maxSliceDuration: 0,
     };
     navigationReleaseJob = job;
-    detailSceneReady = false;
+    // detailSceneReady deliberately stays true: the front buffer is still a
+    // valid image for the viewport it was built at, and the tile layer offsets
+    // it correctly via detailSceneViewport. It is replaced only on swap.
     refs.canvas.dataset.quality = "refining";
     refs.canvas.dataset.navigationRelease = "refining";
     refs.canvas.dataset.navigationReleaseStrategy = "staged-pass-slices";
@@ -671,6 +761,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.navigationReleaseSliceMs = String(NAVIGATION_RELEASE_SLICE_MS);
     refs.canvas.dataset.navigationReleasePasses = String(job.passes.length);
     refs.canvas.dataset.navigationReleaseProgress = "0.000";
+    if (PROFILE) recordPhase("release-begin (off-frame)", performance.now() - beginStartedAt);
     navigationReleaseFrame = window.requestAnimationFrame(() => runNavigationReleaseSlice(job));
     requestDraw();
   }
@@ -678,16 +769,28 @@ export function initSearchNetwork() {
   function setInteractionMode(active) {
     if (interactionTimer !== null) window.clearTimeout(interactionTimer);
     interactionTimer = null;
+    // A drag re-asserts navigation on every pointer sample. Once it is already
+    // established, and no refinement pass is in flight to tear down, there is
+    // nothing left to change: skip the teardown and the diagnostic attribute
+    // writes, which the wrap's :has() selector would otherwise recheck ~120
+    // times a second.
+    if (active && interactionMode && navigationReleaseJob === null) {
+      requestDraw();
+      return;
+    }
     cancelNavigationReleaseRefinement();
     interactionMode = active;
-    if (active) cancelNavigationTileTask();
-    else scheduleNavigationTileBuild();
     refs.canvas.dataset.quality = active ? "navigation" : "full";
     refs.canvas.dataset.navigationRelease = active ? "navigating" : "native-ready";
     requestDraw();
   }
 
-  function settleInteraction(delay = 20) {
+  // Wheel and keyboard navigation arrive as a stream of discrete events. At a
+  // 20ms debounce the gaps between trackpad samples were long enough to start
+  // a full refinement pass mid-gesture -- reallocating the detail canvas and
+  // kicking off a slice chain -- only for the next event to throw it away.
+  // Pointer release stays at 0 because it is a definitive end of gesture.
+  function settleInteraction(delay = 140) {
     if (interactionTimer !== null) window.clearTimeout(interactionTimer);
     interactionTimer = window.setTimeout(beginNavigationRelease, delay);
   }
@@ -750,6 +853,9 @@ export function initSearchNetwork() {
     liveStructureBuildCount = 0;
     evaluationRevision = 0;
     evaluationProfileCache = new Map();
+    pvPointsCache = new Map();
+    pvPointsRevision = -1;
+    pvNodeIndex = null;
     glowSpriteCache.clear();
     effectBudgetLevel = "full";
     framePressure = 0.72;
@@ -1077,7 +1183,9 @@ export function initSearchNetwork() {
     const frontier = [...(children.get(0) || [])];
     const branchCounts = new Map();
     const ringCounts = new Map();
-    const target = Math.min(MAX_VISIBLE_NODES_PER_ITERATION - 1, pool.length);
+    // Fewer nodes per depth is the one lever that reduces every downstream
+    // cost at once -- edges, glows, tile builds and hit testing alike.
+    const target = Math.min(quality().nodesPerIteration - 1, pool.length);
     while (selected.size < target && frontier.length) {
       let bestIndex = 0;
       let bestValue = -Infinity;
@@ -1493,8 +1601,7 @@ export function initSearchNetwork() {
       // The final tree is baked once and crossfaded from the last live frame.
       // Intermediate depths retain the individual node settle animation.
       settleConsequentialNodes(completedPass, now, animate && !finalIteration);
-      invalidateNavigationTiles();
-      passFinishedAt.set(
+        passFinishedAt.set(
         completedPass,
         animate && !finalIteration ? now : now - SETTLE_FADE_MS,
       );
@@ -1569,10 +1676,20 @@ export function initSearchNetwork() {
   }
 
   function canvasSize() {
-    const rect = refs.canvasWrap.getBoundingClientRect();
-    const width = Math.max(320, Math.round(rect.width));
-    const height = Math.max(430, Math.round(rect.height));
-    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    // getBoundingClientRect forces a layout flush, and this runs every frame
+    // and on every pointer sample -- it showed up in the profile. The box only
+    // changes when the wrap resizes, which the ResizeObserver below already
+    // observes, so measure there and reuse the result in between.
+    if (canvasBoxDirty || canvasBox === null) {
+      const rect = refs.canvasWrap.getBoundingClientRect();
+      canvasBox = { width: rect.width, height: rect.height };
+      canvasBoxDirty = false;
+    }
+    const width = Math.max(320, Math.round(canvasBox.width));
+    const height = Math.max(430, Math.round(canvasBox.height));
+    // Every offscreen layer is sized from this, so it is the single biggest
+    // lever on raster cost: halving it quarters the pixels drawn per layer.
+    const ratio = Math.min(quality().maxPixelRatio, window.devicePixelRatio || 1);
     if (refs.canvas.width !== Math.round(width * ratio) || refs.canvas.height !== Math.round(height * ratio)) {
       refs.canvas.width = Math.round(width * ratio);
       refs.canvas.height = Math.round(height * ratio);
@@ -1678,21 +1795,183 @@ export function initSearchNetwork() {
     context.translate(-width / 2, -height / 2);
   }
 
-  function geometry(width, height) {
-    return {
-      center: { x: width / 2, y: height / 2 },
-      radius: Math.max(110, Math.min(width, height) * 0.435),
+  // Geometry only depends on the canvas box, but point() is called once per
+  // node and twice per edge, so building a fresh object each time was the
+  // largest source of per-frame garbage. Callers only ever read these, so a
+  // single shared instance per size is safe.
+  let geometryCache = { width: -1, height: -1, value: null };
+  let canvasBox = null;
+  let canvasBoxDirty = true;
+
+  const phaseTotals = new Map();
+  const frameGaps = [];
+  const longTasks = [];
+  let profileDraws = 0;
+  let profileReportedAt = 0;
+
+  function recordPhase(name, ms) {
+    const entry = phaseTotals.get(name);
+    if (entry) {
+      entry.ms += ms;
+      entry.calls += 1;
+      if (ms > entry.worst) entry.worst = ms;
+    } else {
+      phaseTotals.set(name, { ms, worst: ms, calls: 1 });
+    }
+  }
+
+  // Counting how often the app chose to draw says nothing about what the
+  // browser actually presented: when the scene settles the renderer throttles
+  // itself on purpose, so a low draw count there is correct, not a fault. The
+  // cadence below is therefore sampled from an independent ticker, and long
+  // main-thread blocks are caught wherever they happen -- including in work
+  // that never runs inside draw(), like building navigation tiles.
+  function recordFrame() {
+    profileDraws += 1;
+  }
+
+  function percentile(sorted, fraction) {
+    if (!sorted.length) return 0;
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
+  }
+
+  function reportProfile() {
+    const now = performance.now();
+    const span = now - profileReportedAt;
+    if (span < 500) return;
+    const gaps = frameGaps.slice().sort((a, b) => a - b);
+    const rows = [...phaseTotals.entries()]
+      .map(([name, entry]) => ({
+        phase: name,
+        "total ms": Number(entry.ms.toFixed(1)),
+        "worst ms": Number(entry.worst.toFixed(1)),
+        calls: entry.calls,
+        "% of wall": Number((100 * entry.ms / span).toFixed(1)),
+      }))
+      .filter((row) => row["total ms"] > 0)
+      .sort((a, b) => b["total ms"] - a["total ms"]);
+    const janky = gaps.filter((gap) => gap > 32).length;
+    const worstTasks = longTasks.slice().sort((a, b) => b - a).slice(0, 5);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[sgurr] ${span.toFixed(0)}ms | browser ${(1000 * gaps.length / span).toFixed(0)} fps `
+      + `(p50 ${percentile(gaps, 0.5).toFixed(1)}ms, p95 ${percentile(gaps, 0.95).toFixed(1)}ms, `
+      + `worst ${(gaps.at(-1) || 0).toFixed(0)}ms, ${janky} frames >32ms) `
+      + `| app drew ${profileDraws}x `
+      + `| long tasks: ${longTasks.length}${worstTasks.length ? ` [${worstTasks.join(", ")}ms]` : ""} `
+      + `| ${visibleNodes.size} nodes, zoom ${Math.round(viewport.scale * 100)}%, `
+      + `${interactionMode ? "navigating" : "settled"}`,
+    );
+    if (rows.length) console.table(rows); // eslint-disable-line no-console
+    phaseTotals.clear();
+    frameGaps.length = 0;
+    longTasks.length = 0;
+    profileDraws = 0;
+    profileReportedAt = now;
+  }
+
+  function startProfiling() {
+    profileReportedAt = performance.now();
+    let previousTick = profileReportedAt;
+    const tick = (stamp) => {
+      frameGaps.push(stamp - previousTick);
+      previousTick = stamp;
+      window.requestAnimationFrame(tick);
     };
+    window.requestAnimationFrame(tick);
+    try {
+      new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => longTasks.push(Math.round(entry.duration)));
+      }).observe({ entryTypes: ["longtask"] });
+    } catch { /* longtask timing is not available in every browser */ }
+    window.setInterval(reportProfile, 2000);
+  }
+
+  function geometry(width, height) {
+    if (geometryCache.width !== width || geometryCache.height !== height) {
+      geometryCache = {
+        width,
+        height,
+        value: {
+          center: { x: width / 2, y: height / 2 },
+          radius: Math.max(110, Math.min(width, height) * 0.435),
+        },
+      };
+    }
+    return geometryCache.value;
   }
 
   function point(node, width, height) {
     const { center, radius } = geometry(width, height);
-    if (!node || node.id === 0) return center;
+    // The root gets a copy rather than the shared centre, so a caller that
+    // stores the result can never write through to the cached geometry.
+    if (!node || node.id === 0) return { x: center.x, y: center.y };
+    // A node's angle is fixed once laid out, so the trig is cached on the node
+    // and only recomputed if the layout actually reassigns the angle.
+    if (node.angleTrigFor !== node.angle || node.angleCos === undefined) {
+      node.angleTrigFor = node.angle;
+      node.angleCos = Math.cos(node.angle);
+      node.angleSin = Math.sin(node.angle);
+    }
     const orbit = radius * (Number(node.ringIndex || 0) / maxDepthRing);
     return {
-      x: center.x + Math.cos(node.angle) * orbit,
-      y: center.y + Math.sin(node.angle) * orbit,
+      x: center.x + node.angleCos * orbit,
+      y: center.y + node.angleSin * orbit,
     };
+  }
+
+  // Culling is derived from the live context transform rather than from the
+  // viewport, because these passes also render into world-space cache layers
+  // and into navigation tiles, each under a different transform. Inverting
+  // whatever transform is current gives one rule that is correct for all of
+  // them: a full-canvas world layer culls nothing, a zoomed screen pass culls
+  // everything off-screen, and a tile culls to the tile.
+  function visibleWorldBounds(padding) {
+    const target = context.canvas;
+    if (!target || !context.getTransform) return null;
+    const matrix = context.getTransform();
+    const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+    if (!determinant || !Number.isFinite(determinant)) return null;
+    const inverse = matrix.inverse();
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (let corner = 0; corner < 4; corner += 1) {
+      const x = corner & 1 ? target.width : 0;
+      const y = corner & 2 ? target.height : 0;
+      const worldX = inverse.a * x + inverse.c * y + inverse.e;
+      const worldY = inverse.b * x + inverse.d * y + inverse.f;
+      if (worldX < left) left = worldX;
+      if (worldX > right) right = worldX;
+      if (worldY < top) top = worldY;
+      if (worldY > bottom) bottom = worldY;
+    }
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+    return {
+      left: left - padding,
+      right: right + padding,
+      top: top - padding,
+      bottom: bottom + padding,
+    };
+  }
+
+  function pointOutsideBounds(position, bounds) {
+    return position.x < bounds.left
+      || position.x > bounds.right
+      || position.y < bounds.top
+      || position.y > bounds.bottom;
+  }
+
+  // A quadratic curve is contained by the convex hull of its three control
+  // points, so testing their bounding box never discards a visible edge.
+  function edgeOutsideBounds(edge, bounds) {
+    const { from, to, control } = edge;
+    if (Math.min(from.x, to.x, control.x) > bounds.right) return true;
+    if (Math.max(from.x, to.x, control.x) < bounds.left) return true;
+    if (Math.min(from.y, to.y, control.y) > bounds.bottom) return true;
+    if (Math.max(from.y, to.y, control.y) < bounds.top) return true;
+    return false;
   }
 
   function edgeGeometry(parent, node, width, height) {
@@ -1713,8 +1992,33 @@ export function initSearchNetwork() {
     };
   }
 
+  // Resolving the principal variation used to scan every node once per move in
+  // the line, and the whole thing reran for each of its eight call sites --
+  // several of them per frame, plus once per hover sample. Index the nodes by
+  // the tuple the scan was matching on, and memoise the finished line until
+  // the tree changes.
+  function pvNodeLookup() {
+    if (pvNodeIndex) return pvNodeIndex;
+    pvNodeIndex = new Map();
+    visibleNodes.forEach((node) => {
+      const key = `${Number(node.pass)}:${node.parent}:${node.move}:${Number(node.ringIndex)}`;
+      // First writer wins, matching the original scan: it kept the first match
+      // it met in insertion order and ignored any later duplicates.
+      if (!pvNodeIndex.has(key)) pvNodeIndex.set(key, node);
+    });
+    return pvNodeIndex;
+  }
+
   function authoritativePvPoints(width, height, pv = authoritativePv) {
     if (!pv?.moves.length) return [];
+    if (pvPointsRevision !== evaluationRevision) {
+      pvPointsRevision = evaluationRevision;
+      pvPointsCache = new Map();
+      pvNodeIndex = null;
+    }
+    const cacheKey = `${width}x${height}:${maxDepthRing}:${pv.pass}:${pv.depth}:${pv.moves.join(",")}`;
+    const memoised = pvPointsCache.get(cacheKey);
+    if (memoised) return memoised;
     const { center, radius } = geometry(width, height);
     const points = [{ ...center, move: "root", traced: true, ringIndex: 0, pvIndex: 0 }];
     const targetRing = Math.min(maxDepthRing, Math.max(1, pv.depth));
@@ -1732,17 +2036,20 @@ export function initSearchNetwork() {
       const ringIndex = Math.max(1, Math.round(((index + 1) / moves.length) * targetRing));
       let tracedNode = null;
       if (parentId !== null) {
-        visibleNodes.forEach((node) => {
-          if (
-            !tracedNode
-            && Number(node.pass) === pv.pass
-            && node.parent === parentId
-            && node.move === move
-            && Number(node.ringIndex) === ringIndex
-          ) {
-            tracedNode = node;
-          }
-        });
+        const candidate = pvNodeLookup()
+          .get(`${Number(pv.pass)}:${parentId}:${move}:${ringIndex}`);
+        // The index keys on Number(pass), so re-apply the original strict
+        // comparison: a non-numeric pv.pass matched nothing before and must
+        // still match nothing now.
+        if (
+          candidate
+          && Number(candidate.pass) === pv.pass
+          && candidate.parent === parentId
+          && candidate.move === move
+          && Number(candidate.ringIndex) === ringIndex
+        ) {
+          tracedNode = candidate;
+        }
       }
 
       if (tracedNode) {
@@ -1772,6 +2079,7 @@ export function initSearchNetwork() {
         pvIndex: index + 1,
       });
     });
+    pvPointsCache.set(cacheKey, points);
     return points;
   }
 
@@ -1902,7 +2210,7 @@ export function initSearchNetwork() {
     context.strokeStyle = withAlpha(palette.gold, 0.11 + breath * 0.13);
     context.lineWidth = 0.7;
     context.shadowColor = palette.gold;
-    context.shadowBlur = interactionMode ? 8 : 15;
+    context.shadowBlur = navigationReduced() ? 8 : 15;
     context.stroke();
     context.restore();
   }
@@ -2283,7 +2591,7 @@ export function initSearchNetwork() {
         frontier ? 0.52 : reached ? (ringIndex === maxDepthRing ? 0.28 : 0.16) : 0.065,
       );
       context.lineWidth = frontier ? 1.25 : ringIndex === maxDepthRing ? 0.9 : 0.65;
-      if (frontier && !interactionMode) {
+      if (frontier && !navigationReduced()) {
         context.shadowColor = palette.gold;
         context.shadowBlur = 9;
       }
@@ -2337,16 +2645,21 @@ export function initSearchNetwork() {
     return node.parent < 0 ? localScore : -localScore;
   }
 
-  function evaluationProfile(includeNode = () => true, cacheKey = null) {
+  // `nodes` may be narrowed to a single pass's bucket. That is only sound when
+  // the bucket already contains exactly the nodes includeNode would accept,
+  // which is why callers pass the matching predicate alongside it: the grouping
+  // below then sees the same members it would have seen from a full sweep.
+  function evaluationProfile(includeNode = () => true, cacheKey = null, nodes = null) {
     if (cacheKey) {
       const cached = evaluationProfileCache.get(cacheKey);
       if (cached?.revision === evaluationRevision) return cached.profile;
     }
+    const source = nodes || visibleNodes;
     const bestByGroup = new Map();
     const profile = new Map();
     let evaluatedCount = 0;
 
-    visibleNodes.forEach((node) => {
+    source.forEach((node) => {
       if (!includeNode(node)) return;
       const score = scoreForParent(node);
       if (node.parent < 0 || score === null) return;
@@ -2354,7 +2667,7 @@ export function initSearchNetwork() {
       bestByGroup.set(groupKey, Math.max(bestByGroup.get(groupKey) ?? -Infinity, score));
     });
 
-    visibleNodes.forEach((node) => {
+    source.forEach((node) => {
       if (!includeNode(node)) return;
       const score = scoreForParent(node);
       if (score === null) {
@@ -2386,7 +2699,8 @@ export function initSearchNetwork() {
     return profile;
   }
 
-  function drawConnections(now, width, height, palette, principal, evaluations, includeNode = () => true) {
+  function drawConnections(now, width, height, palette, principal, evaluations, includeNode = () => true, nodes = null) {
+    const source = nodes || visibleNodes;
     const dense = visibleNodes.size >= DENSE_NODE_THRESHOLD;
     const { center, radius: networkRadius } = geometry(width, height);
     const exposureAt = (position) => {
@@ -2394,12 +2708,14 @@ export function initSearchNetwork() {
       const radialDistance = Math.hypot(position.x - center.x, position.y - center.y);
       return 0.48 + smoothstep(radialDistance / (networkRadius * 0.62)) * 0.52;
     };
-    visibleNodes.forEach((node) => {
+    const bounds = visibleWorldBounds(EDGE_CULL_PADDING);
+    source.forEach((node) => {
       if (!includeNode(node)) return;
       if (node.parent < 0) return;
       const parent = visibleNodes.get(node.parent);
       if (!parent) return;
       const edge = edgeGeometry(parent, node, width, height);
+      if (bounds && edgeOutsideBounds(edge, bounds)) return;
       const isPrincipal = principal.has(node.id) && principal.has(parent.id) && parent.bestChild === node.id;
       const reveal = easeOutCubic((now - node.revealedAt) / 620)
         * Math.min(nodeSettleOpacity(node, now), nodeSettleOpacity(parent, now));
@@ -2416,7 +2732,7 @@ export function initSearchNetwork() {
       traceEdge(edge);
       context.strokeStyle = withAlpha(colour, reveal * opacity * exposure);
       context.lineWidth = isPrincipal ? 1.95 : 0.66 + energy * 0.31 + (node.wasLeader ? 0.08 : 0);
-      if (isPrincipal || (!interactionMode && !cut && energy > 0.9)) {
+      if (isPrincipal || (!navigationReduced() && !cut && energy > 0.9)) {
         context.shadowColor = isPrincipal ? palette.gold : colour;
         context.shadowBlur = isPrincipal ? 10 : 4;
       }
@@ -2424,7 +2740,7 @@ export function initSearchNetwork() {
       context.shadowBlur = 0;
     });
 
-    visibleNodes.forEach((node) => {
+    source.forEach((node) => {
       if (!includeNode(node)) return;
       if (node.transpositionSource == null) return;
       const source = visibleNodes.get(node.transpositionSource);
@@ -2434,6 +2750,7 @@ export function initSearchNetwork() {
       const from = point(source, width, height);
       const to = point(node, width, height);
       const edge = { from, to, control: center };
+      if (bounds && edgeOutsideBounds(edge, bounds)) return;
       context.beginPath();
       context.moveTo(from.x, from.y);
       context.quadraticCurveTo(center.x, center.y, to.x, to.y);
@@ -2441,7 +2758,7 @@ export function initSearchNetwork() {
       const exposure = exposureAt(quadraticPoint(edge, 0.5));
       context.strokeStyle = withAlpha(palette.violet, 0.42 * settleOpacity * exposure);
       context.lineWidth = 0.9;
-      if (!interactionMode) {
+      if (!navigationReduced()) {
         context.shadowColor = palette.violet;
         context.shadowBlur = 7;
       }
@@ -2455,13 +2772,13 @@ export function initSearchNetwork() {
     const dense = visibleNodes.size >= DENSE_NODE_THRESHOLD;
     const tailLength = effectBudgetLevel === "protected"
       ? 1
-      : effectBudgetLevel === "balanced" || interactionMode || dense ? 3 : 6;
+      : effectBudgetLevel === "balanced" || navigationReduced() || dense ? 3 : 6;
     for (let tail = tailLength; tail >= 0; tail -= 1) {
       const tailProgress = clamp(progress - tail * 0.026);
       if (tailProgress <= 0) continue;
       const position = quadraticPoint(edge, tailProgress);
       const alpha = strength * (1 - tail / 7) * (0.16 + progress * 0.72);
-      if (tail === 0) drawCachedGlow(position.x, position.y, colour, interactionMode ? 6 : 9, alpha * 0.62);
+      if (tail === 0) drawCachedGlow(position.x, position.y, colour, navigationReduced() ? 6 : 9, alpha * 0.62);
       context.beginPath();
       context.arc(position.x, position.y, tail === 0 ? 2.5 : 1.5, 0, TAU);
       context.fillStyle = withAlpha(colour, alpha);
@@ -2480,7 +2797,7 @@ export function initSearchNetwork() {
     });
 
     drawAuthoritativePvLight(now, width, height, palette);
-    if (interactionMode || !finished || reducedMotion.matches) return;
+    if (navigationReduced() || !finished || reducedMotion.matches) return;
     const ambientEdges = [];
     visibleNodes.forEach((node) => {
       if (ambientEdges.length >= 18) return;
@@ -2525,7 +2842,7 @@ export function initSearchNetwork() {
       context.arc(position.x, position.y, 4 + easeOutCubic(expansionProgress) * burst.size, 0, TAU);
       context.strokeStyle = withAlpha(burst.colour, opacity * 0.62);
       context.lineWidth = 0.7 + opacity * 0.7;
-      if (!interactionMode) {
+      if (!navigationReduced()) {
         context.shadowColor = burst.colour;
         context.shadowBlur = 14 * opacity;
       }
@@ -2549,7 +2866,7 @@ export function initSearchNetwork() {
       context.strokeStyle = withAlpha(palette.red, alpha * 0.74);
       context.lineWidth = 0.75 + alpha * 0.85;
       context.shadowColor = palette.red;
-      context.shadowBlur = interactionMode ? 6 : 13;
+      context.shadowBlur = navigationReduced() ? 6 : 13;
       context.stroke();
       context.shadowBlur = 0;
       for (let ray = 0; ray < 6; ray += 1) {
@@ -2594,7 +2911,7 @@ export function initSearchNetwork() {
       context.strokeStyle = withAlpha(palette.violet, alpha * 0.72);
       context.lineWidth = 1.2;
       context.shadowColor = palette.violet;
-      context.shadowBlur = interactionMode ? 7 : 16;
+      context.shadowBlur = navigationReduced() ? 7 : 16;
       context.stroke();
       context.setLineDash([]);
       drawPulse(edge, easeOutCubic(progress), palette.violet, alpha * 0.92);
@@ -2625,7 +2942,7 @@ export function initSearchNetwork() {
       context.strokeStyle = withAlpha(palette.gold, alpha * 0.62);
       context.lineWidth = 1.35;
       context.shadowColor = palette.gold;
-      context.shadowBlur = interactionMode ? 6 : 14;
+      context.shadowBlur = navigationReduced() ? 6 : 14;
       context.stroke();
       context.setLineDash([]);
       context.restore();
@@ -2654,7 +2971,7 @@ export function initSearchNetwork() {
       context.lineTo(x, y);
       context.strokeStyle = withAlpha(activity.colour, alpha * 0.48);
       context.lineWidth = 1;
-      if (!interactionMode && !dense) {
+      if (!navigationReduced() && !dense) {
         context.shadowColor = activity.colour;
         context.shadowBlur = 10;
       }
@@ -2662,7 +2979,7 @@ export function initSearchNetwork() {
       context.beginPath();
       context.arc(x, y, 1.8 + (1 - age) * 1.2, 0, TAU);
       context.fillStyle = withAlpha(palette.gold, alpha);
-      if (!interactionMode) {
+      if (!navigationReduced()) {
         context.shadowColor = palette.blue;
         context.shadowBlur = dense ? 7 : 15;
       }
@@ -2671,12 +2988,15 @@ export function initSearchNetwork() {
     });
   }
 
-  function drawNodes(now, width, height, palette, principal, evaluations, includeNode = () => true) {
+  function drawNodes(now, width, height, palette, principal, evaluations, includeNode = () => true, nodes = null) {
+    const source = nodes || visibleNodes;
     const densityRadius = visibleNodes.size > 260 ? 1.15 : visibleNodes.size > 120 ? 1.55 : 2.05;
     const dense = visibleNodes.size >= DENSE_NODE_THRESHOLD;
-    visibleNodes.forEach((node) => {
+    const bounds = visibleWorldBounds(NODE_CULL_PADDING);
+    source.forEach((node) => {
       if (!includeNode(node)) return;
       const position = point(node, width, height);
+      if (bounds && pointOutsideBounds(position, bounds)) return;
       const colour = nodeColour(node, principal, palette);
       const evaluation = evaluations.get(node.id) || { known: false, energy: 0.42 };
       const reveal = easeOutCubic((now - node.revealedAt) / 520) * nodeSettleOpacity(node, now);
@@ -2699,7 +3019,7 @@ export function initSearchNetwork() {
       if (node.kind === "pruned") baseOpacity = 0.42;
       else if (node.reason === "quiescence") baseOpacity = Math.min(baseOpacity, 0.62);
 
-      if ((!interactionMode || isPrincipal) && (activeEnergy > 0.01 || isRoot || isPrincipal || energy > 0.84)) {
+      if ((!navigationReduced() || isPrincipal) && (activeEnergy > 0.01 || isRoot || isPrincipal || energy > 0.84)) {
         const settledEnergy = evaluation.known ? Math.max(0, energy - 0.78) : 0;
         const haloRadius = radius + 4 + activeEnergy * 7 + settledEnergy * 5;
         drawCachedGlow(
@@ -2812,7 +3132,7 @@ export function initSearchNetwork() {
     context.arc(center.x, center.y, orbit, active.angle - sweep, active.angle + sweep);
     context.strokeStyle = withAlpha(colour, 0.34 + breath * 0.2);
     context.lineWidth = 1.2;
-    if (!interactionMode) {
+    if (!navigationReduced()) {
       context.shadowColor = colour;
       context.shadowBlur = 11 + breath * 8;
     }
@@ -2840,7 +3160,7 @@ export function initSearchNetwork() {
     context.save();
     context.strokeStyle = withAlpha(palette.gold, 0.82);
     context.lineWidth = 1.15;
-    if (!interactionMode) {
+    if (!navigationReduced()) {
       context.shadowColor = palette.gold;
       context.shadowBlur = 13;
     }
@@ -2882,18 +3202,35 @@ export function initSearchNetwork() {
     context.restore();
   }
 
-  function eligibleSettledPasses(now) {
+  // Group the nodes by pass in a single sweep. Several callers need to work
+  // pass by pass, and doing that by re-scanning every node once per pass made
+  // them O(passes x nodes) -- the dominant cost while the tree was growing and
+  // on the refinement pass that runs when a gesture ends.
+  function passIndex() {
+    const index = new Map();
+    visibleNodes.forEach((node, id) => {
+      if (id === 0) return;
+      const pass = Number(node.pass);
+      let bucket = index.get(pass);
+      if (!bucket) {
+        bucket = new Map();
+        index.set(pass, bucket);
+      }
+      bucket.set(id, node);
+    });
+    return index;
+  }
+
+  function eligibleSettledPasses(now, index = null) {
+    const tally = index || passIndex();
     const eligible = [];
     passFinishedAt.forEach((finishedAt, pass) => {
       if (now - finishedAt < SETTLE_FADE_MS) return;
-      let hasNodes = false;
-      let hasRetiringNodes = false;
-      visibleNodes.forEach((node) => {
-        if (node.id === 0 || Number(node.pass) !== Number(pass)) return;
-        hasNodes = true;
-        if (node.retiringAt) hasRetiringNodes = true;
-      });
-      if (hasNodes && !hasRetiringNodes) eligible.push(Number(pass));
+      const bucket = tally.get(Number(pass));
+      if (!bucket || !bucket.size) return;
+      let retiring = false;
+      bucket.forEach((node) => { if (node.retiringAt) retiring = true; });
+      if (!retiring) eligible.push(Number(pass));
     });
     return eligible.sort((a, b) => a - b);
   }
@@ -2923,6 +3260,7 @@ export function initSearchNetwork() {
     principal,
     evaluations,
     transformed = false,
+    passNodes = null,
   ) {
     const previousContext = context;
     const previousInteractionMode = interactionMode;
@@ -2933,8 +3271,8 @@ export function initSearchNetwork() {
       if (transformed) applyViewportTransform(width, height);
       const includePass = (node) => node.id !== 0 && Number(node.pass) === Number(pass);
       const settledNow = now + 1200;
-      drawConnections(settledNow, width, height, palette, principal, evaluations, includePass);
-      drawNodes(settledNow, width, height, palette, principal, evaluations, includePass);
+      drawConnections(settledNow, width, height, palette, principal, evaluations, includePass, passNodes);
+      drawNodes(settledNow, width, height, palette, principal, evaluations, includePass, passNodes);
     } finally {
       context.restore();
       interactionMode = previousInteractionMode;
@@ -2956,11 +3294,15 @@ export function initSearchNetwork() {
       settledSceneRatio = ratio;
     }
 
-    eligibleSettledPasses(now).forEach((pass) => {
+    const index = passIndex();
+    eligibleSettledPasses(now, index).forEach((pass) => {
       if (settledPasses.has(pass)) return;
       const includePass = (node) => node.id !== 0 && Number(node.pass) === Number(pass);
-      const passEvaluations = evaluationProfile(includePass, `settled-world:${pass}`);
-      renderPassToContext(settledContext, pass, now, width, height, palette, principal, passEvaluations);
+      const passNodes = index.get(Number(pass));
+      const passEvaluations = evaluationProfile(includePass, `settled-world:${pass}`, passNodes);
+      renderPassToContext(
+        settledContext, pass, now, width, height, palette, principal, passEvaluations, false, passNodes,
+      );
       settledPasses.add(pass);
       liveStructureDirty = true;
     });
@@ -2994,10 +3336,13 @@ export function initSearchNetwork() {
       settledDetailViewportKey = viewportKey;
     }
 
-    eligibleSettledPasses(now).forEach((pass) => {
+    const settledDetailStartedAt = PROFILE ? performance.now() : 0;
+    const index = passIndex();
+    eligibleSettledPasses(now, index).forEach((pass) => {
       if (settledDetailPasses.has(pass)) return;
       const includePass = (node) => node.id !== 0 && Number(node.pass) === Number(pass);
-      const passEvaluations = evaluationProfile(includePass, `settled-detail:${pass}`);
+      const passNodes = index.get(Number(pass));
+      const passEvaluations = evaluationProfile(includePass, `settled-detail:${pass}`, passNodes);
       renderPassToContext(
         settledDetailContext,
         pass,
@@ -3008,378 +3353,27 @@ export function initSearchNetwork() {
         principal,
         passEvaluations,
         true,
+        passNodes,
       );
       settledDetailPasses.add(pass);
     });
+    if (PROFILE) recordPhase("settled-detail (in structure)", performance.now() - settledDetailStartedAt);
   }
 
-  function navigationLodForScale(scale) {
-    return NAVIGATION_TILE_LEVELS.find((level) => level >= scale - 0.001)
-      || NAVIGATION_TILE_LEVELS[NAVIGATION_TILE_LEVELS.length - 1];
-  }
-
-  function navigationWorldBounds(width, height, overscan = 0) {
-    const center = { x: width / 2, y: height / 2 };
-    const halfWorldWidth = width / (2 * viewport.scale);
-    const halfWorldHeight = height / (2 * viewport.scale);
-    const worldCenter = {
-      x: center.x - viewport.x / viewport.scale,
-      y: center.y - viewport.y / viewport.scale,
-    };
-    return {
-      left: worldCenter.x - halfWorldWidth * (1 + overscan * 2),
-      right: worldCenter.x + halfWorldWidth * (1 + overscan * 2),
-      top: worldCenter.y - halfWorldHeight * (1 + overscan * 2),
-      bottom: worldCenter.y + halfWorldHeight * (1 + overscan * 2),
-    };
-  }
-
-  function navigationTileKey(lod, column, row) {
-    return `${navigationTileGeneration}:${navigationTileWidth}x${navigationTileHeight}@${navigationTileRatio}:${lod}:${column}:${row}`;
-  }
-
-  function navigationTileDescriptors(width, height, lod, overscan = 0) {
-    const span = NAVIGATION_TILE_SCREEN_SIZE / lod;
-    const bounds = navigationWorldBounds(width, height, overscan);
-    const worldPadding = 72;
-    const firstColumn = Math.max(
-      Math.floor(-worldPadding / span),
-      Math.floor(bounds.left / span),
-    );
-    const lastColumn = Math.min(
-      Math.floor((width + worldPadding) / span),
-      Math.floor(bounds.right / span),
-    );
-    const firstRow = Math.max(
-      Math.floor(-worldPadding / span),
-      Math.floor(bounds.top / span),
-    );
-    const lastRow = Math.min(
-      Math.floor((height + worldPadding) / span),
-      Math.floor(bounds.bottom / span),
-    );
-    const center = {
-      x: (bounds.left + bounds.right) / 2,
-      y: (bounds.top + bounds.bottom) / 2,
-    };
-    const descriptors = [];
-    for (let row = firstRow; row <= lastRow; row += 1) {
-      for (let column = firstColumn; column <= lastColumn; column += 1) {
-        const worldX = column * span;
-        const worldY = row * span;
-        descriptors.push({
-          key: navigationTileKey(lod, column, row),
-          lod,
-          column,
-          row,
-          span,
-          worldX,
-          worldY,
-          distance: Math.hypot(worldX + span / 2 - center.x, worldY + span / 2 - center.y),
-        });
-      }
-    }
-    return descriptors.sort((a, b) => a.distance - b.distance);
-  }
-
-  function ensureNavigationTileDimensions(width, height, ratio) {
-    if (
-      navigationTileWidth === width
-      && navigationTileHeight === height
-      && navigationTileRatio === ratio
-    ) return;
-    navigationTileWidth = width;
-    navigationTileHeight = height;
-    navigationTileRatio = ratio;
-    invalidateNavigationTiles();
-  }
-
-  function enqueueNavigationTiles(descriptors, priority) {
-    descriptors.forEach((descriptor) => {
-      if (navigationTiles.has(descriptor.key) || navigationTileQueuedKeys.has(descriptor.key)) return;
-      navigationTileQueuedKeys.add(descriptor.key);
-      navigationTileQueue.push({ ...descriptor, priority, generation: navigationTileGeneration });
-    });
-    navigationTileQueue.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
-    scheduleNavigationTileBuild();
-  }
-
-  function scheduleNavigationTileBuild(delay = 0) {
-    if (navigationTileTask !== null || !navigationTileQueue.length) return;
-    if (delay <= 0 && window.requestIdleCallback) {
-      navigationTileTaskKind = "idle";
-      navigationTileTask = window.requestIdleCallback(buildNextNavigationTile, { timeout: 500 });
-    } else {
-      navigationTileTaskKind = "timeout";
-      navigationTileTask = window.setTimeout(buildNextNavigationTile, delay);
-    }
-  }
-
-  function tileBoundsIntersect(bounds, points, padding = 0) {
-    const minimumX = Math.min(...points.map((entry) => entry.x));
-    const maximumX = Math.max(...points.map((entry) => entry.x));
-    const minimumY = Math.min(...points.map((entry) => entry.y));
-    const maximumY = Math.max(...points.map((entry) => entry.y));
-    return maximumX >= bounds.left - padding
-      && minimumX <= bounds.right + padding
-      && maximumY >= bounds.top - padding
-      && minimumY <= bounds.bottom + padding;
-  }
-
-  function renderNavigationTile(job) {
-    const lod = job.lod;
-    const ratio = navigationTileRatio;
-    const bleedWorld = NAVIGATION_TILE_BLEED_PX / lod;
-    const pixelScale = lod * ratio;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil((job.span + bleedWorld * 2) * pixelScale);
-    canvas.height = Math.ceil((job.span + bleedWorld * 2) * pixelScale);
-    const tileContext = canvas.getContext("2d");
-    tileContext.setTransform(
-      pixelScale,
-      0,
-      0,
-      pixelScale,
-      -(job.worldX - bleedWorld) * pixelScale,
-      -(job.worldY - bleedWorld) * pixelScale,
-    );
-    const bounds = {
-      left: job.worldX - bleedWorld,
-      right: job.worldX + job.span + bleedWorld,
-      top: job.worldY - bleedWorld,
-      bottom: job.worldY + job.span + bleedWorld,
-    };
-    const snapshot = navigationTileSnapshot;
-    const completedNode = (node) => node.id === 0 || (
-      !node.retiringAt
-      && snapshot.completedDepths.has(Number(node.iterationDepth || node.pass))
-    );
-    const includeNode = (node) => completedNode(node)
-      && tileBoundsIntersect(bounds, [point(node, navigationTileWidth, navigationTileHeight)], 9 / lod);
-    const includeConnection = (node) => {
-      if (!completedNode(node) || node.parent < 0) return false;
-      const parent = visibleNodes.get(node.parent) || layoutNodes.get(node.parent);
-      if (!parent) return false;
-      const edge = edgeGeometry(parent, node, navigationTileWidth, navigationTileHeight);
-      const points = [edge.from, edge.control, edge.to];
-      if (node.transpositionSource != null) {
-        const source = visibleNodes.get(node.transpositionSource) || layoutNodes.get(node.transpositionSource);
-        if (source) points.push(point(source, navigationTileWidth, navigationTileHeight));
-      }
-      return tileBoundsIntersect(bounds, points, 12 / lod);
-    };
-    if (!snapshot.evaluations) snapshot.evaluations = evaluationProfile(completedNode, "navigation-snapshot");
-    const previousContext = context;
-    const previousInteractionMode = interactionMode;
-    context = tileContext;
-    interactionMode = false;
-    try {
-      const settledNow = performance.now() + RECONSTRUCTED_TRANSIENT_AGE_MS;
-      const principal = snapshot.pv?.moves.length ? new Set([0]) : principalIds();
-      drawConnections(
-        settledNow,
-        navigationTileWidth,
-        navigationTileHeight,
-        palette(),
-        principal,
-        snapshot.evaluations,
-        includeConnection,
-      );
-      drawNodes(
-        settledNow,
-        navigationTileWidth,
-        navigationTileHeight,
-        palette(),
-        principal,
-        snapshot.evaluations,
-        includeNode,
-      );
-      if (snapshot.pv) {
-        drawAuthoritativePv(
-          settledNow,
-          navigationTileWidth,
-          navigationTileHeight,
-          palette(),
-          snapshot.pv,
-        );
-      }
-    } finally {
-      interactionMode = previousInteractionMode;
-      context = previousContext;
-    }
-    return {
-      ...job,
-      canvas,
-      sourceInset: Math.round(NAVIGATION_TILE_BLEED_PX * ratio),
-      sourceSize: Math.round(NAVIGATION_TILE_SCREEN_SIZE * ratio),
-      lastUsed: performance.now(),
-    };
-  }
-
-  function trimNavigationTiles() {
-    if (navigationTiles.size <= MAX_NAVIGATION_TILES) return;
-    const oldest = [...navigationTiles.values()].sort((a, b) => a.lastUsed - b.lastUsed);
-    oldest.slice(0, navigationTiles.size - MAX_NAVIGATION_TILES).forEach((tile) => {
-      navigationTiles.delete(tile.key);
-      tile.canvas.width = 0;
-      tile.canvas.height = 0;
-    });
-  }
-
-  function buildNextNavigationTile(deadline = null) {
-    navigationTileTask = null;
-    navigationTileTaskKind = null;
-    if (interactionMode) return;
-    if (liveStreaming && deadline && !deadline.didTimeout && deadline.timeRemaining() < 5) {
-      scheduleNavigationTileBuild();
-      return;
-    }
-    let job = navigationTileQueue.shift();
-    while (job && job.generation !== navigationTileGeneration) {
-      navigationTileQueuedKeys.delete(job.key);
-      job = navigationTileQueue.shift();
-    }
-    if (!job) return;
-    navigationTileQueuedKeys.delete(job.key);
-    if (!navigationTiles.has(job.key)) {
-      const tile = renderNavigationTile(job);
-      navigationTiles.set(job.key, tile);
-      navigationTileBuildCount += 1;
-      refs.canvas.dataset.navigationTileBuilds = String(navigationTileBuildCount);
-      trimNavigationTiles();
-      refs.canvas.dataset.navigationTileCount = String(navigationTiles.size);
-      requestDraw();
-    }
-    scheduleNavigationTileBuild();
-  }
-
-  function prepareNavigationTiles(width, height, ratio) {
-    if (!visibleNodes.size || !completedDepths.size) return;
-    ensureNavigationTileDimensions(width, height, ratio);
-    if (liveStreaming || timer !== null) {
-      cancelNavigationTileTask();
-      refs.canvas.dataset.navigationTileScheduler = "deferred-during-search";
-      return;
-    }
-    refs.canvas.dataset.navigationTileScheduler = "idle-between-frames";
-    const desiredLod = navigationLodForScale(viewport.scale);
-    enqueueNavigationTiles(
-      navigationTileDescriptors(width, height, desiredLod, 0.35),
-      0,
-    );
-    if (!interactionMode) {
-      const currentIndex = NAVIGATION_TILE_LEVELS.indexOf(desiredLod);
-      const nextLod = NAVIGATION_TILE_LEVELS[Math.min(
-        NAVIGATION_TILE_LEVELS.length - 1,
-        currentIndex + 1,
-      )];
-      if (nextLod !== desiredLod) {
-        enqueueNavigationTiles(navigationTileDescriptors(width, height, nextLod, 0), 1);
-      }
-    }
-    const prepared = navigationTileCoverage(width, height, desiredLod);
-    refs.canvas.dataset.navigationTileLod = String(desiredLod);
-    refs.canvas.dataset.navigationTileCoverage = prepared.coverage.toFixed(3);
-    refs.canvas.dataset.navigationTileStrategy = "multires-world-tiles";
-  }
-
-  function navigationTileCoverage(width, height, lod) {
-    const descriptors = navigationTileDescriptors(width, height, lod, 0);
-    const ready = descriptors.filter((descriptor) => navigationTiles.has(descriptor.key)).length;
-    return { descriptors, coverage: descriptors.length ? ready / descriptors.length : 0 };
-  }
-
-  function bestReadyNavigationLod(width, height, desiredLod) {
-    const candidates = NAVIGATION_TILE_LEVELS
-      .filter((lod) => lod <= desiredLod)
-      .sort((a, b) => b - a);
-    for (const lod of candidates) {
-      const state = navigationTileCoverage(width, height, lod);
-      if (state.coverage >= 0.999) return { lod, ...state };
-    }
-    const desiredState = navigationTileCoverage(width, height, desiredLod);
-    return { lod: desiredLod, ...desiredState };
-  }
-
-  function drawNavigationTileLayer(now, width, height, paletteValue) {
-    const desiredLod = navigationLodForScale(viewport.scale);
-    const selected = bestReadyNavigationLod(width, height, desiredLod);
-    const detailCenter = { x: width / 2, y: height / 2 };
-    const detailFallbackBounds = detailSceneReady
-      && detailSceneWidth === width
-      && detailSceneHeight === height
-      ? {
-        left: detailCenter.x + (-detailCenter.x - detailSceneViewport.x) / detailSceneViewport.scale,
-        top: detailCenter.y + (-detailCenter.y - detailSceneViewport.y) / detailSceneViewport.scale,
-        right: detailCenter.x + (detailCenter.x - detailSceneViewport.x) / detailSceneViewport.scale,
-        bottom: detailCenter.y + (detailCenter.y - detailSceneViewport.y) / detailSceneViewport.scale,
-      }
-      : null;
-    context.save();
-    applyViewportTransform(width, height);
-    selected.descriptors.forEach((descriptor) => {
-      const tile = navigationTiles.get(descriptor.key);
-      context.save();
-      context.beginPath();
-      context.rect(descriptor.worldX, descriptor.worldY, descriptor.span + 0.15, descriptor.span + 0.15);
-      context.clip();
-      if (tile) {
-        tile.lastUsed = now;
-        context.drawImage(
-          tile.canvas,
-          tile.sourceInset,
-          tile.sourceInset,
-          tile.sourceSize,
-          tile.sourceSize,
-          descriptor.worldX,
-          descriptor.worldY,
-          descriptor.span,
-          descriptor.span,
-        );
-      } else if (
-        detailFallbackBounds
-        && descriptor.worldX >= detailFallbackBounds.left
-        && descriptor.worldY >= detailFallbackBounds.top
-        && descriptor.worldX + descriptor.span <= detailFallbackBounds.right
-        && descriptor.worldY + descriptor.span <= detailFallbackBounds.bottom
-      ) {
-        context.drawImage(
-          detailCanvas,
-          detailFallbackBounds.left,
-          detailFallbackBounds.top,
-          width / detailSceneViewport.scale,
-          height / detailSceneViewport.scale,
-        );
-      } else {
-        context.drawImage(staticCanvas, 0, 0, width, height);
-      }
-      context.restore();
-    });
-
-    // Rings are cheap vector geometry, so redraw them exactly at the current
-    // transform instead of storing a blurred copy in every structural tile.
-    drawRings(width, height, paletteValue);
-    const snapshotDepths = navigationTileSnapshot.completedDepths;
-    const includeLiveStructure = (node) => node.id === 0
-      ? snapshotDepths.size === 0
-      : !snapshotDepths.has(Number(node.iterationDepth || node.pass));
-    if ([...visibleNodes.values()].some(includeLiveStructure)) {
-      const principal = principalIds();
-      const evaluations = evaluationProfile(includeLiveStructure, `navigation-live:${tracePass}`);
-      drawConnections(now, width, height, paletteValue, principal, evaluations, includeLiveStructure);
-      drawNodes(now, width, height, paletteValue, principal, evaluations, includeLiveStructure);
-    }
-    if (
-      authoritativePv
-      && Number(authoritativePv.pass) !== Number(navigationTileSnapshot.pv?.pass)
-    ) drawAuthoritativePv(now, width, height, paletteValue);
-    context.restore();
-    refs.canvas.dataset.navigationTileStrategy = "multires-world-tiles";
-    refs.canvas.dataset.navigationTileLod = String(selected.lod);
-    refs.canvas.dataset.navigationTileCoverage = selected.coverage.toFixed(3);
-    refs.canvas.dataset.detailDuringNavigation = "preserved";
-    refs.canvas.dataset.navigationFallback = detailFallbackBounds ? "native-detail-snapshot" : "complete-world";
-    refs.canvas.dataset.renderLayer = "multires-tiles";
+  // The level of detail is part of every tile key, so letting it change during
+  // a zoom gesture threw away the whole tile set each time the scale crossed a
+  // level -- and tiles cannot be rebuilt mid-gesture, so coverage fell to zero
+  // and the view dropped to the upscaled world bitmap. Hold the level steady
+  // for the duration of a gesture instead: the existing tiles simply scale,
+  // which is slightly soft while moving and is replaced by the native-detail
+  // refinement the moment the gesture settles. Panning never hit this because
+  // it does not change scale.
+  // Several layers deliberately dim or drop parts of themselves while the view
+  // moves, to buy back frame time. On a tier whose whole point is that the
+  // picture never changes character mid-gesture, that trade is wrong: the
+  // saving is invisible but the change is not.
+  function navigationReduced() {
+    return interactionMode && !quality().stableDetail;
   }
 
   function rebuildStaticScene(now, width, height, ratio, palette) {
@@ -3546,12 +3540,6 @@ export function initSearchNetwork() {
       rebuildLiveStructureScene(now, width, height, ratio, palette);
     }
 
-    prepareNavigationTiles(width, height, ratio);
-    if (interactionMode && completedDepths.size) {
-      drawNavigationTileLayer(now, width, height, palette);
-      return;
-    }
-
     if (needsNativeDetail) {
       const detailDimensionsChanged = detailSceneWidth !== width || detailSceneHeight !== height;
       const detailResolutionChanged = detailCanvas.width !== Math.round(width * ratio)
@@ -3569,6 +3557,46 @@ export function initSearchNetwork() {
         refs.canvas.dataset.renderLayer = "native-detail";
         return;
       }
+    }
+
+    // Without tiles, navigation would swap the sharp detail layer for the
+    // upscaled world bitmap and swap back on release -- the picture visibly
+    // coarsening the instant the view moves. Keep showing the detail image
+    // instead, repositioned for where it was rendered, and fill only the strip
+    // it does not cover from the world bitmap. The detail is resampled while
+    // moving but never replaced, so nothing changes character mid-gesture.
+    const stableDetail = quality().stableDetail
+      && interactionMode
+      && detailSceneReady
+      && detailSceneWidth === width
+      && detailSceneHeight === height;
+    if (stableDetail) {
+      const centre = { x: width / 2, y: height / 2 };
+      const view = detailSceneViewport;
+      const bounds = {
+        left: centre.x + (-centre.x - view.x) / view.scale,
+        top: centre.y + (-centre.y - view.y) / view.scale,
+        width: width / view.scale,
+        height: height / view.scale,
+      };
+      context.save();
+      applyViewportTransform(width, height);
+      // World bitmap everywhere the detail image does not reach. The even-odd
+      // rule punches the detail region out, so the two never overlap and the
+      // translucent structure is not drawn twice.
+      context.save();
+      context.beginPath();
+      context.rect(-width, -height, width * 3, height * 3);
+      context.rect(bounds.left, bounds.top, bounds.width, bounds.height);
+      context.clip("evenodd");
+      context.drawImage(staticCanvas, 0, 0, width, height);
+      if (liveStructureReady) context.drawImage(liveStructureCanvas, 0, 0, width, height);
+      context.restore();
+      context.drawImage(detailCanvas, bounds.left, bounds.top, bounds.width, bounds.height);
+      context.restore();
+      refs.canvas.dataset.structureState = "stable-detail";
+      refs.canvas.dataset.renderLayer = "stable-detail";
+      return;
     }
 
     context.save();
@@ -3698,6 +3726,10 @@ export function initSearchNetwork() {
   }
 
   function drawBloomLayer(now, width, height, ratio, palette) {
+    if (!quality().bloom) {
+      refs.canvas.dataset.bloomState = "disabled";
+      return;
+    }
     refs.canvas.dataset.bloomState = interactionMode ? "cached-navigation" : "active";
     const bloomRatio = Math.max(0.5, ratio * BLOOM_RESOLUTION_SCALE);
     const pixelWidth = Math.round(width * bloomRatio);
@@ -3774,37 +3806,56 @@ export function initSearchNetwork() {
     const { width, height, ratio } = canvasSize();
     context.clearRect(0, 0, width, height);
     const colours = palette();
-    refs.canvas.dataset.networkLuminosity = "1.08";
-    refs.canvas.dataset.completionDimming = "disabled";
-    refs.canvas.dataset.centerExposure = "filmic-radial-compression";
-    refs.canvas.dataset.centerExposureFloor = "0.48";
+    let phaseAt = PROFILE ? performance.now() : 0;
+    const lap = (name) => {
+      if (!PROFILE) return;
+      const next = performance.now();
+      recordPhase(name, next - phaseAt);
+      phaseAt = next;
+    };
     drawBackground(now, width, height, ratio, colours);
+    lap("background");
     drawDepthAtmosphere(width, height, ratio, colours);
+    lap("atmosphere");
     drawStaticScene(now, width, height, ratio, colours);
+    lap("structure");
     drawCompletionTransition(now, width, height);
+    lap("completion");
     drawBloomLayer(now, width, height, ratio, colours);
+    lap("bloom");
     context.save();
     applyViewportTransform(width, height);
     refs.ply.textContent = String(searchHorizon);
     if (!visibleNodes.size) {
       context.restore();
+      if (PROFILE) recordPhase("__frame", performance.now() - phaseAt);
       return;
     }
 
     const principal = principalIds();
-    drawEventLight(now, width, height, colours, principal);
-    drawLeaderGhosts(now, width, height, colours);
-    drawWormholeFlashes(now, width, height, colours);
-    drawCutoffImplosions(now, width, height, colours);
-    drawBursts(now, width, height);
-    drawLiveActivity(now, width, height, colours);
+    lap("principal");
+    // These layers carry nearly every shadowBlur in the renderer, and a
+    // shadowed draw costs a separate blur pass. Dropping them is the largest
+    // saving available short of drawing fewer nodes.
+    if (quality().effects) {
+      drawEventLight(now, width, height, colours, principal);
+      drawLeaderGhosts(now, width, height, colours);
+      drawWormholeFlashes(now, width, height, colours);
+      drawCutoffImplosions(now, width, height, colours);
+      drawBursts(now, width, height);
+      lap("effects");
+      drawLiveActivity(now, width, height, colours);
+      lap("activity");
+    }
     drawActiveDepth(now, width, height, colours, principal);
     drawBestTarget(now, width, height, colours);
     drawHoveredTarget(width, height, colours);
     drawDepthShockwaves(now, width, height, colours);
     drawCompletionSurvivor(now, width, height, colours);
+    lap("overlays");
     context.restore();
     updateNetworkCounters(now, finished);
+    if (PROFILE) recordFrame();
   }
 
   function updateAdaptiveEffectBudget(frameTimestamp, drawDuration) {
@@ -3894,6 +3945,18 @@ export function initSearchNetwork() {
 
   function drawFrame(now) {
     animationFrame = null;
+    // requestAnimationFrame fires at whatever rate the browser presents at,
+    // which is not always the display refresh: software compositing can run it
+    // several hundred times a second, and the renderer would then do several
+    // hundred frames of canvas work for a screen that cannot show them. Cap
+    // the rate here so cost tracks what is needed rather than how often the
+    // browser happens to call back. The interval sits just under a 60Hz frame
+    // so every vsync still draws on an ordinary display.
+    if (lastDrawnAt !== null && now - lastDrawnAt < MIN_FRAME_INTERVAL_MS) {
+      scheduleNextDraw(MIN_FRAME_INTERVAL_MS - (now - lastDrawnAt));
+      return;
+    }
+    lastDrawnAt = now;
     pulses = pulses.filter((pulse) => now - pulse.startedAt <= pulse.duration);
     const hadCompletionEmanation = bursts.some((burst) => burst.completionEmanation);
     bursts = bursts.filter((burst) => now - burst.startedAt <= burst.duration);
@@ -4219,6 +4282,7 @@ export function initSearchNetwork() {
         pendingLiveEventCursor += 1;
         applied += 1;
       }
+      if (PROFILE) recordPhase("live-events (off-frame)", performance.now() - sliceStartedAt);
       refs.canvas.dataset.liveEventsPerSlice = String(applied);
       refs.canvas.dataset.liveEventQueue = String(pendingLiveEventCount());
       if (pendingLiveEventCount()) scheduleLiveEventDrain();
@@ -4518,6 +4582,42 @@ export function initSearchNetwork() {
     }
   }
 
+  // These describe the renderer's fixed grading choices. They never vary, so
+  // they are stamped once here rather than rewritten on every frame.
+  refs.canvas.dataset.networkLuminosity = "1.08";
+  refs.canvas.dataset.completionDimming = "disabled";
+  refs.canvas.dataset.centerExposure = "filmic-radial-compression";
+  refs.canvas.dataset.centerExposureFloor = "0.48";
+
+  // Detail control. Changing tiers resizes every cached layer, so all of them
+  // are invalidated and the scene is rebuilt at the new resolution.
+  const detailSelect = document.querySelector("#labDetailSelect");
+  if (detailSelect) {
+    QUALITY_ORDER.forEach((key) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = QUALITY_TIERS[key].label;
+      detailSelect.appendChild(option);
+    });
+    detailSelect.value = qualityTier;
+    detailSelect.addEventListener("change", () => {
+      qualityTier = QUALITY_ORDER.includes(detailSelect.value) ? detailSelect.value : "high";
+      writeStored("sgurrLabDetail", qualityTier);
+      refs.canvas.dataset.detailTier = qualityTier;
+        invalidateSettledScenes();
+      invalidateStaticScene();
+      invalidateBloomScene();
+      invalidateBackgroundScene();
+      invalidateDepthAtmosphereScene();
+      invalidateDetailScene();
+      detailSceneReady = false;
+      requestDraw();
+    });
+    refs.canvas.dataset.detailTier = qualityTier;
+  }
+
+  if (PROFILE) startProfiling();
+
   refs.play.addEventListener("click", play);
   refs.restart.addEventListener("click", () => {
     clearState();
@@ -4625,6 +4725,7 @@ export function initSearchNetwork() {
     }
   });
   new ResizeObserver(() => {
+    canvasBoxDirty = true;
     const { width, height } = canvasSize();
     const bounded = boundedViewportOffset(viewport.x, viewport.y, viewport.scale, width, height);
     const changed = Math.abs(bounded.x - viewport.x) > 0.01 || Math.abs(bounded.y - viewport.y) > 0.01;
@@ -4638,7 +4739,9 @@ export function initSearchNetwork() {
     }
     requestDraw();
   }).observe(refs.canvasWrap);
+  window.addEventListener("resize", () => { canvasBoxDirty = true; });
   document.addEventListener("visibilitychange", () => {
+    canvasBoxDirty = true;
     if (!document.hidden) requestDraw();
   });
   document.addEventListener("sgurrthemechange", () => {
