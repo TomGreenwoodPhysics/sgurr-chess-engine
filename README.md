@@ -14,7 +14,10 @@ of the network is trained on positions labelled by the previous generation, so
 the engine is its own teacher. External engines appear only as rating anchors,
 never in the training loop.
 
-![A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold](docs/assets/search-network.gif)
+<p align="center">
+  <img src="docs/assets/search-network.gif" width="620"
+       alt="A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold">
+</p>
 
 The engine also draws its own search. That is a real depth-14 trace at the
 speed it happened, not an illustration of one: the search itself takes about
