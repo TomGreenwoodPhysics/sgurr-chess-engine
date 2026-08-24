@@ -3,6 +3,7 @@
 #include "search.hpp"
 #include "nnue.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
