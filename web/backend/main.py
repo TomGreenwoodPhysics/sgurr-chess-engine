@@ -89,12 +89,9 @@ if not TRACE_ENGINE_PATH.is_absolute():
     TRACE_ENGINE_PATH = REPO_ROOT / TRACE_ENGINE_PATH
 TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # Every canonical release, newest first (index 0 is the default, and what
-# SGURR_ENGINE_EXE overrides). Ratings are the pool-2026-07-B Ordo solve from
-# benchmarks/ledger.md -- CCRL-Blitz-ANCHORED ESTIMATES on one consistent
-# scale, not official CCRL ratings, hence the tilde.
-#
-# Every number here was solved from games -- as of 2026-08-05 there is no
-# longer an inferred figure on this ladder.
+# SGURR_ENGINE_EXE overrides). v8.2 is measured on the current scale. Older
+# releases use the v8.2 bridge: old rating + (3012.1 - 3058.5), rounded to the
+# nearest Elo. These are estimates rather than official CCRL ratings.
 # Note v3.1 rates BELOW v3.0: it was a search-only release whose flat soft
 # time limit lost at the pool TC. That is real, measured, and left visible.
 # `rating` is the structured form of the number the subtitle carries; the
@@ -122,10 +119,6 @@ ENGINE_SPECS: list[dict[str, object]] = [
         # five families under controlled conditions: 3012.1 +/-5.8 over 9,890
         # games, systematic ~+/-25. See METHODOLOGY 9.
         #
-        # Every rating below is still the pool-2026-07-B solve and therefore
-        # sits ~45 Elo high in absolute terms. The ladder's ORDER and its
-        # version-to-version gaps are unaffected, which is what this list uses
-        # them for; re-measuring the older versions is owed.
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
@@ -144,7 +137,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.1 "Thearlaich"',
         "tech": "GEN8 NNUE + PGO SPEED",
-        "rating": 3027,
+        "rating": 2981,
     },
     {
         "id": "v8.0",
@@ -152,7 +145,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.0 "Thearlaich"',
         "tech": "GEN8 NNUE",
-        "rating": 3006,
+        "rating": 2960,
     },
     {
         "id": "v7.0",
@@ -160,7 +153,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen7.nnue",
         "label": 'Sgurr v7.0 "Ghreadaidh"',
         "tech": "GEN7 NNUE (CLEAN REGEN)",
-        "rating": 2903,
+        "rating": 2857,
     },
     {
         "id": "v6.0",
@@ -168,7 +161,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v6.0 "Banachdaich"',
         "tech": "GEN5 NNUE + REFINED SEARCH",
-        "rating": 2807,
+        "rating": 2761,
     },
     {
         "id": "v5.0",
@@ -176,7 +169,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v5.0 "Gillean"',
         "tech": "GEN5 NNUE + RFP SEARCH",
-        "rating": 2724,
+        "rating": 2677,
     },
     {
         "id": "v4.0",
@@ -184,7 +177,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v4.0 "MacKenzie"',
         "tech": "GEN5 NNUE",
-        "rating": 2604,
+        "rating": 2559,
     },
     {
         "id": "v3.1",
@@ -192,7 +185,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.1 "Blackpeak"',
         "tech": "GEN3 NNUE + SOFT TIME",
-        "rating": 2540,
+        "rating": 2497,
     },
     {
         "id": "v3.0",
@@ -200,7 +193,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.0 "Blackpeak"',
         "tech": "GEN3 NNUE",
-        "rating": 2589,
+        "rating": 2545,
     },
     {
         "id": "v2.0",
@@ -208,7 +201,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen2.nnue",
         "label": 'Sgurr v2.0 "Notches"',
         "tech": "GEN2 NNUE",
-        "rating": 2468,
+        "rating": 2423,
     },
     {
         "id": "v1.0",
@@ -216,7 +209,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen1.nnue",
         "label": 'Sgurr v1.0 "Fox"',
         "tech": "GEN1 NNUE",
-        "rating": 2385,
+        "rating": 2341,
     },
     {
         # No net by design: this IS the hand-crafted eval.
@@ -225,7 +218,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": None,
         "label": "Sgurr classical",
         "tech": "HAND-CRAFTED EVAL",
-        "rating": 2376,
+        "rating": 2332,
     },
 ]
 _engine_override = os.environ.get("SGURR_ENGINE_EXE") or os.environ.get("SGR_ENGINE_EXE")

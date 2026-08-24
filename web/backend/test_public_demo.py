@@ -16,6 +16,27 @@ from web.backend.sgurr_uci import EngineCrashedError, SgurrUciEngine
 
 
 class PublicDemoTest(unittest.TestCase):
+    def test_historical_ratings_use_v82_bridge(self) -> None:
+        ratings = {str(entry["id"]): entry["rating"] for entry in main.ENGINE_SPECS}
+
+        self.assertEqual(
+            ratings,
+            {
+                "v8.2": 3012,
+                "v8.1": 2981,
+                "v8.0": 2960,
+                "v7.0": 2857,
+                "v6.0": 2761,
+                "v5.0": 2677,
+                "v4.0": 2559,
+                "v3.1": 2497,
+                "v3.0": 2545,
+                "v2.0": 2423,
+                "v1.0": 2341,
+                "classical": 2332,
+            },
+        )
+
     def test_clock_search_is_capped(self) -> None:
         request = main.EngineMoveRequest(
             fen=chess.STARTING_FEN,

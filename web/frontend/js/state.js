@@ -221,7 +221,7 @@ const app = {
   themeKey: initialTheme,
   timeIndex: Number(localStorage.getItem("sgurrTimeIndex") || "2"),
   engines: [],
-  selectedEngineIndex: Number(localStorage.getItem("sgurrEngineIndex") || "0"),
+  selectedEngineIndex: 0,
   engineLabel: 'Sgurr v8.2 "Thearlaich"',
   engineSubtitle: "GEN8 NNUE + PACKED TT · ~3012",
   autoFlipAsBlack: localStorage.getItem("sgurrAutoFlip") !== "false",
@@ -281,6 +281,7 @@ const app = {
   editor: {
     previousMode: "menu",
     pieces: {},
+    initialised: false,
     turn: "white",
     returnSide: "white",
     oddsRecipient: "you",
@@ -290,6 +291,7 @@ const app = {
     status: "Board editor",
     error: "",
   },
+  gameOrigin: "standard",
 };
 
 if (!Number.isFinite(app.soundVolume)) {

@@ -2,6 +2,7 @@ import { playResultSound, syncGameMusic, syncMenuMusic } from "./audio.js";
 import { boardOrientation, checkmateRevealPending, engineTurnAvailable, hasPremoves, humanCanMove, materialFromPieces, renderBoard, renderCheckmateEffect } from "./board.js";
 import { activeClockColour, colourIsEngine, currentTimeControl, playerCardMarkup, syncClock, visibleClock } from "./clocks.js";
 import { CAPTURED_PIECE_CODES, CHECKMATE_DRILLS, EDIT_PALETTE, ODDS_PRESETS, PIECES, THEMES, apiBaseLabel } from "./config.js";
+import { setDemoReason } from "./demo-tooltip.js";
 import { editorOddsLabel, editorReturnLabel, loadCheckmateDrill, loadOddsPreset, toggleEditorBrush } from "./editor.js";
 import { favoriteMemoryOpening } from "./memory.js";
 import { applyCoreMood, coreLineText } from "./personality.js";
@@ -683,6 +684,7 @@ function resultPresentation(outcome, message) {
 }
 
 function renderResultModal() {
+  refs.rematchButton.textContent = app.gameOrigin === "editor" ? "Replay position" : "Rematch";
   // Reviewing keeps the game-over state, so the modal has to stand aside
   // while it runs -- and reappears when review is dismissed.
   refs.resultModal.hidden =
@@ -733,9 +735,11 @@ function renderEditor() {
   }
 
   refs.editorPlayerButton.textContent = editorReturnLabel();
-  refs.editorPlayerButton.title = app.publicDemo
+  const editorSelfPlayReason = app.publicDemo
     ? "Self-play is available locally; the free demo supports White or Black."
     : "";
+  refs.editorPlayerButton.title = editorSelfPlayReason;
+  setDemoReason(refs.editorPlayerButton, editorSelfPlayReason);
   refs.editorTurnButton.textContent = `First move: ${title(app.editor.turn)}`;
   refs.editorOddsRecipientButton.textContent = editorOddsLabel();
   refs.editorPlayButton.disabled = app.busy || app.thinking || !app.backendOk || !app.engineExists;
@@ -838,22 +842,30 @@ function renderMenu() {
 
   const canStart = app.backendOk && app.engineExists && !app.busy && !app.thinking;
   const availableEngines = app.engines.filter((entry) => entry.available !== false).length;
+  const selfPlayReason = app.publicDemo
+    ? "Self-play runs continuously and is available when running Sgurr locally."
+    : "";
+  const historicalReason = app.publicDemo
+    ? "Historical Sgurr builds are available locally; the free demo runs v8.2 only."
+    : "";
   refs.playWhiteButton.disabled = !canStart;
   refs.playBlackButton.disabled = !canStart;
   refs.watchButton.disabled = !canStart;
   refs.watchButton.classList.toggle("demo-disabled", app.publicDemo);
   if (app.publicDemo) {
-    const reason = "Self-play runs continuously and is available when running Sgurr locally.";
     refs.watchButton.setAttribute("aria-disabled", "true");
-    refs.watchButton.setAttribute("aria-label", `Watch Sgurr vs itself. ${reason}`);
-    refs.watchButton.title = reason;
+    refs.watchButton.setAttribute("aria-label", `Watch Sgurr vs itself. ${selfPlayReason}`);
+    refs.watchButton.title = selfPlayReason;
   } else {
     refs.watchButton.removeAttribute("aria-disabled");
     refs.watchButton.removeAttribute("aria-label");
     refs.watchButton.title = "";
   }
+  setDemoReason(refs.watchButton, selfPlayReason);
   refs.engineDownButton.disabled = availableEngines <= 1;
   refs.engineUpButton.disabled = availableEngines <= 1;
+  setDemoReason(refs.engineDownButton, historicalReason);
+  setDemoReason(refs.engineUpButton, historicalReason);
   refs.loadFenButton.disabled = !canStart;
   refs.boardEditorButton.disabled = app.busy || app.thinking;
 
@@ -867,6 +879,10 @@ function renderMenu() {
       ? "Continuous self-play is disabled on the free demo."
       : "";
   }
+  setDemoReason(
+    refs.fenSideSelect,
+    app.publicDemo ? "The self-play option is available when running Sgurr locally." : "",
+  );
 
   if (app.menuMessage) {
     refs.menuStatus.textContent = app.menuMessage;

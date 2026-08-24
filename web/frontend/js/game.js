@@ -83,6 +83,7 @@ function resetLocalGame(side) {
   app.pendingAnimation = null;
   app.activeAnimation = null;
   app.resultSoundPlayed = false;
+  app.gameOrigin = "standard";
   cleanupDrag();
 }
 
@@ -114,13 +115,14 @@ async function startGame(side) {
   }
 }
 
-async function startFromFen(fen, side, statusMessage = "Loaded FEN") {
+async function startFromFen(fen, side, statusMessage = "Loaded FEN", origin = "fen") {
   clearTimeout(app.watchTimer);
   setBusy(true, false);
 
   try {
     const data = await apiPost("/api/load-fen", { fen });
     resetLocalGame(side);
+    app.gameOrigin = origin;
     app.mode = "game";
     applyServerState(data);
     recordSnapshot();
@@ -140,13 +142,14 @@ async function startFromFen(fen, side, statusMessage = "Loaded FEN") {
 async function rematchGame() {
   const side = app.humanSide;
   const startFen = app.startFen || START_FEN;
-  if (startFen === START_FEN) {
+  const origin = app.gameOrigin;
+  if (startFen === START_FEN && origin !== "editor") {
     await startGame(side);
     return;
   }
 
   try {
-    await startFromFen(startFen, side, "Rematch from custom position");
+    await startFromFen(startFen, side, "Rematch from custom position", origin);
   } catch (error) {
     setError(error);
   }

@@ -1,0 +1,19 @@
+.demo-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 45%);
+  border-radius: 7px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface), black 18%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.demo-tooltip[hidden] {
+  display: none;
+}

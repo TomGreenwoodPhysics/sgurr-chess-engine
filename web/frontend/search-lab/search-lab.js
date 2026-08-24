@@ -1,4 +1,5 @@
 import { apiUrl } from "../js/config.js";
+import { initDemoTooltips, setDemoReason } from "../js/demo-tooltip.js";
 import { initSearchNetwork } from "./network.js";
 import { initLabPreferences } from "./preferences.js";
 
@@ -359,6 +360,7 @@ async function loadCapabilities() {
     }
 
     refs.networkDepth.title = publicDemo ? demoDepthReason() : "";
+    setDemoReason(refs.networkDepth, publicDemo ? demoDepthReason() : "");
     if (selectedNetworkDepth() > networkDepthLimit) {
       const enabled = [...refs.networkDepth.options]
         .filter((option) => !option.disabled)
@@ -940,6 +942,7 @@ refs.runSearchButton.addEventListener("click", () => {
 });
 
 populatePositionSelect();
+initDemoTooltips();
 initLabPreferences();
 setPosition(POSITIONS.ruy);
 if (new URLSearchParams(window.location.search).get("mode") === "network") {

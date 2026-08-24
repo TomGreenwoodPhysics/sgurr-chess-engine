@@ -2,6 +2,7 @@ import { initAudio, playSound, syncGameMusic, syncMenuMusic } from "./audio.js";
 import { cancelDrag, cancelPromotion, handleBoardPointerMove, handleBoardPointerUp, hasPremoves, positionPromotionDialog } from "./board.js";
 import { currentTimeControl, syncClock } from "./clocks.js";
 import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
+import { initDemoTooltips } from "./demo-tooltip.js";
 import { clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, loadEditorStartPosition } from "./editor.js";
 import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
 import { cancelPremoves, copyFen, exportPgn, loadFenFromModal, openFenModal, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
@@ -354,6 +355,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 initAudio();
+initDemoTooltips();
 applyTheme();
 applyAnimationMode();
 initIntro();

@@ -24,6 +24,7 @@ const FULL_MATERIAL = {
 
 function gameState({
   fen = START_FEN,
+  startFen = START_FEN,
   turn = "white",
   legalMoves = WHITE_START_MOVES,
   premoveMoves = BLACK_START_MOVES,
@@ -38,7 +39,7 @@ function gameState({
 } = {}) {
   return {
     fen,
-    start_fen: START_FEN,
+    start_fen: startFen,
     turn,
     legal_moves: legalMoves,
     premove_moves: premoveMoves,
@@ -195,9 +196,9 @@ async function installMockBackend(page, {
           {
             id: "v8.1",
             label: 'Sgurr v8.1 "Thearlaich"',
-            subtitle: "GEN8 NNUE + PGO SPEED · ~3027",
+            subtitle: "GEN8 NNUE + PGO SPEED · ~2981",
             tech: "GEN8 NNUE + PGO SPEED",
-            rating: 3027,
+            rating: 2981,
             available: !publicDemo && engineExists,
             unavailable_reason: "Available locally; the free demo includes Sgurr v8.2 only.",
             unavailable_badge: "LOCAL ONLY",
@@ -219,6 +220,18 @@ async function installMockBackend(page, {
     calls.push({ path, body });
     if (path === "/api/new") {
       await json(route, INITIAL_STATE);
+      return;
+    }
+    if (path === "/api/load-fen") {
+      await json(route, gameState({
+        fen: body.fen,
+        startFen: body.fen,
+        legalMoves: [],
+        premoveMoves: [],
+        gameOver: true,
+        result: "1/2-1/2",
+        reason: "insufficient_material",
+      }));
       return;
     }
     if (path === "/api/player-move" && body?.move === "e2e4") {
@@ -305,6 +318,10 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#watchButton")).toHaveAttribute("title", /available.*locally/i);
   await expect(page.locator("#engineDownButton")).toBeDisabled();
   await expect(page.locator("#engineUpButton")).toBeDisabled();
+  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v8\.2 only/i);
+  await page.locator("#engineDownButton").hover({ force: true });
+  await expect(page.locator("#demoTooltip")).toBeVisible();
+  await expect(page.locator("#demoTooltip")).toContainText("v8.2 only");
 
   await page.locator("#menuEngineButton").click();
   const localOnly = page.locator('.engine-card[aria-disabled="true"]');
@@ -313,6 +330,25 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(localOnly).toBeDisabled();
   await localOnly.evaluate((button) => button.click());
   await expect(page.locator("#engineModal")).toBeVisible();
+  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+
+  await page.locator("#engineModal [data-close-modal]").click();
+  await page.locator("#boardEditorButton").click();
+  await expect(page.locator("#editorPlayerButton")).toHaveAttribute("data-demo-reason", /self-play/i);
+  await page.locator("#editorMainMenuButton").click();
+  await page.locator("#loadFenButton").click();
+  await expect(page.locator("#fenSideSelect")).toHaveAttribute("data-demo-reason", /self-play/i);
+});
+
+test("starts at v8.2 and cycles left through weaker engines", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+
+  await expect(page.locator("#engineDownButton")).toBeEnabled();
+  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+  await page.locator("#engineDownButton").click();
+  await expect(page.locator("#menuEngineButton")).toContainText("v8.1");
+  await page.locator("#engineDownButton").click();
   await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
 });
 
@@ -338,6 +374,9 @@ test("limits Search Network depth on the free demo", async ({ page }) => {
   await expect(page.locator('#networkDepth option[value="14"]')).toBeDisabled();
   await expect(page.locator('#networkDepth option[value="20"]')).toBeDisabled();
   await expect(page.locator("#networkDepthHint")).toContainText("disabled on the free demo");
+  await expect(page.locator("#networkDepth")).toHaveAttribute("data-demo-reason", /available locally/i);
+  await page.locator("#networkDepth").hover();
+  await expect(page.locator("#demoTooltip")).toContainText("above 12");
 });
 
 test("finishes a Search Network replay cleanly at the demo node limit", async ({ page }) => {
@@ -469,6 +508,11 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
 
   await page.goto("/search-lab/");
   await expect(page.locator("h1")).toContainText("A move is not found");
+  expect(await page.locator(".mode-tab").evaluateAll((tabs) => tabs.map((tab) => tab.id))).toEqual([
+    "networkTab",
+    "liveTab",
+    "walkthroughTab",
+  ]);
   await expect(page.locator("#labThemeSelect option")).toHaveCount(7);
   await page.locator("#labThemeSelect").selectOption("galaxy");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "galaxy");
@@ -736,7 +780,7 @@ test("returns from the microscope directly to the main menu", async ({ page }) =
   await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
   await expect(page.locator("#networkTab")).toHaveClass(/active/);
   await expect(page.locator("#networkPanel")).toBeVisible();
-  await page.locator(".back-link").click();
+  await page.locator(".brand").click();
   await expect(page).toHaveURL(/\?view=menu$/);
   await expect(page.locator("#introScreen")).toBeHidden();
   await expect(page.locator("#menuScreen")).toBeVisible();
@@ -799,6 +843,29 @@ test("opens the board editor with a full editable board", async ({ page }) => {
   await expect(page.locator("#editorPanel h2")).toHaveText("Board editor");
   await expect(page.locator("#board .square")).toHaveCount(64);
   await expect(page.locator("#editorPlayButton")).toBeEnabled();
+});
+
+test("keeps an edited position and offers to replay it", async ({ page }) => {
+  const calls = await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#boardEditorButton").click();
+  await page.locator("#editorClearButton").click();
+  await page.locator('.palette-button[title="White king"]').click();
+  await page.locator('[data-square="e1"]').click();
+  await page.locator('.palette-button[title="Black king"]').click();
+  await page.locator('[data-square="e8"]').click();
+  await expect(page.locator("#board .piece-image")).toHaveCount(2);
+
+  await page.locator("#editorCancelButton").click();
+  await page.locator("#boardEditorButton").click();
+  await expect(page.locator("#board .piece-image")).toHaveCount(2);
+  await page.locator("#editorPlayButton").click();
+
+  await expect(page.locator("#resultModal")).toBeVisible();
+  await expect(page.locator("#rematchButton")).toHaveText("Replay position");
+  await page.locator("#rematchButton").click();
+  await expect.poll(() => calls.filter((call) => call.path === "/api/load-fen").length).toBe(2);
+  await expect(page.locator("#rematchButton")).toHaveText("Replay position");
 });
 
 test("keeps game-start controls disabled when the engine is missing", async ({ page }) => {

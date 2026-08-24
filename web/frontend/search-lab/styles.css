@@ -1,3 +1,5 @@
+@import "../styles/demo-tooltip.css";
+
 :root {
   --bg: #1d1411;
   --surface: #2b1e19;

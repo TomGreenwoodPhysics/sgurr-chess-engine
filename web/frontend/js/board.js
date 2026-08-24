@@ -1,6 +1,6 @@
 import { playCheckmateRevealSound, playSound } from "./audio.js";
 import { FILES, PROMOTIONS } from "./config.js";
-import { handleEditorDelete } from "./editor.js";
+import { handleEditorDelete, saveEditorDraft } from "./editor.js";
 import { cancelPremoves, handleSquare, makePlayerMove, queuePremove, tryMove } from "./game.js";
 import { reviewCurrent } from "./review.js";
 import { app, refs } from "./state.js";
@@ -658,6 +658,7 @@ function finishEditorDrag(target) {
     app.editor.status = `${pieceLabel(piece)} deleted`;
   }
   app.editor.error = "";
+  saveEditorDraft();
 }
 
 function finishGameDrag(target) {

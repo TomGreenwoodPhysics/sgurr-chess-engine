@@ -1,5 +1,6 @@
 import { clearPremoveQueueState, engineToMove, updateGameOverReveal } from "./board.js";
 import { START_FEN, apiUrl } from "./config.js";
+import { setDemoReason } from "./demo-tooltip.js";
 import { requestEngineMove, scheduleWatchMove, startGame } from "./game.js";
 import { recordCompletedEncounter } from "./memory.js";
 import { updateOpeningState } from "./openings.js";
@@ -103,7 +104,6 @@ function applyEngineSelection() {
   const sel = list[app.selectedEngineIndex];
   app.engineLabel = sel.label;
   app.engineSubtitle = sel.subtitle || "";
-  localStorage.setItem("sgurrEngineIndex", String(app.selectedEngineIndex));
 }
 
 function engineChoiceMessage(sel) {
@@ -135,6 +135,12 @@ function setEngineIndex(index) {
 // The opponent ladder. Sorted by rating so the progression from the
 // hand-crafted eval up to the current release reads at a glance, with each
 // card's bar scaled across the span of the field.
+function enginesByStrength() {
+  return app.engines
+    .map((engine, index) => ({ engine, index }))
+    .sort((a, b) => (b.engine.rating ?? 0) - (a.engine.rating ?? 0));
+}
+
 function renderEngineGallery() {
   const gallery = refs.engineGallery;
   if (!gallery) {
@@ -150,9 +156,7 @@ function renderEngineGallery() {
     return;
   }
 
-  const ordered = app.engines
-    .map((engine, index) => ({ engine, index }))
-    .sort((a, b) => (b.engine.rating ?? 0) - (a.engine.rating ?? 0));
+  const ordered = enginesByStrength();
   const ratings = ordered.map((entry) => entry.engine.rating).filter(Number.isFinite);
   const strongest = ratings.length ? Math.max(...ratings) : 0;
   const weakest = ratings.length ? Math.min(...ratings) : 0;
@@ -170,6 +174,7 @@ function renderEngineGallery() {
       button.setAttribute("aria-disabled", "true");
       button.setAttribute("aria-label", `${engine.label}. ${reason}`);
       button.title = reason;
+      setDemoReason(button, reason);
     }
 
     const head = document.createElement("div");
@@ -221,14 +226,14 @@ function renderEngineGallery() {
 }
 
 function cycleEngine(direction) {
-  const available = app.engines
-    .map((entry, index) => ({ entry, index }))
-    .filter(({ entry }) => entry.available !== false)
+  const available = enginesByStrength()
+    .filter(({ engine }) => engine.available !== false)
     .map(({ index }) => index);
   if (available.length > 1) {
     const current = Math.max(0, available.indexOf(app.selectedEngineIndex));
+    const step = direction < 0 ? 1 : -1;
     app.selectedEngineIndex = available[
-      (current + direction + available.length) % available.length
+      (current + step + available.length) % available.length
     ];
     applyEngineSelection();
     app.menuMessage = engineChoiceMessage(app.engines[app.selectedEngineIndex]);

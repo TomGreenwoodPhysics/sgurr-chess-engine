@@ -5,6 +5,39 @@ import { app } from "./state.js";
 import { render, setStatus } from "./ui.js";
 import { clonePieces, fenTurn, parseFenPieces, pieceForColour, pieceLabel, piecesToBoardFen, startingPieces, title } from "./utils.js";
 
+const EDITOR_DRAFT_KEY = "sgurrEditorDraft";
+const EDITOR_PIECES = new Set("PNBRQKpnbrqk");
+
+function readEditorDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(EDITOR_DRAFT_KEY) || "null");
+    if (!draft || typeof draft.pieces !== "object" || Array.isArray(draft.pieces)) {
+      return null;
+    }
+    const entries = Object.entries(draft?.pieces || {});
+    if (!entries.every(([square, piece]) => /^[a-h][1-8]$/.test(square) && EDITOR_PIECES.has(piece))) {
+      return null;
+    }
+    return {
+      pieces: Object.fromEntries(entries),
+      turn: draft.turn === "black" ? "black" : "white",
+      returnSide: ["white", "black", null].includes(draft.returnSide) ? draft.returnSide : "white",
+      oddsRecipient: draft.oddsRecipient === "engine" ? "engine" : "you",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveEditorDraft() {
+  localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
+    pieces: app.editor.pieces,
+    turn: app.editor.turn,
+    returnSide: app.editor.returnSide,
+    oddsRecipient: app.editor.oddsRecipient,
+  }));
+}
+
 function composeEditorFen() {
   const pieces = app.editor.pieces;
   let rights = "";
@@ -75,6 +108,7 @@ function editorPositionError() {
 function setEditorStatus(message, isError = false) {
   app.editor.status = message;
   app.editor.error = isError ? message : "";
+  saveEditorDraft();
   render();
 }
 
@@ -87,24 +121,34 @@ function enterBoardEditor() {
   syncClock();
   clearTimeout(app.watchTimer);
   const previousMode = app.mode === "editor" ? app.editor.previousMode : app.mode;
-  const sourceFen = app.mode === "game" ? app.fen : START_FEN;
 
   app.editor.previousMode = previousMode;
-  app.editor.pieces = parseFenPieces(sourceFen);
-  app.editor.turn = fenTurn(sourceFen);
-  app.editor.returnSide = app.mode === "game" ? app.humanSide : "white";
-  app.editor.oddsRecipient = "you";
-    app.editor.brush = null;
-    app.editor.heldPiece = null;
-    app.editor.heldFrom = null;
-    app.editor.status = "Board editor";
-    app.editor.error = "";
-    app.activeAnimation = null;
-    app.pendingAnimation = null;
-    app.mode = "editor";
+  if (!app.editor.initialised) {
+    const draft = readEditorDraft();
+    const sourceFen = app.mode === "game" ? app.fen : START_FEN;
+    app.editor.pieces = draft?.pieces || parseFenPieces(sourceFen);
+    app.editor.turn = draft?.turn || fenTurn(sourceFen);
+    app.editor.returnSide = draft
+      ? draft.returnSide
+      : app.mode === "game" ? app.humanSide : "white";
+    app.editor.oddsRecipient = draft?.oddsRecipient || "you";
+    app.editor.initialised = true;
+  }
+  if (app.publicDemo && app.editor.returnSide === null) {
+    app.editor.returnSide = "white";
+  }
+  app.editor.brush = null;
+  app.editor.heldPiece = null;
+  app.editor.heldFrom = null;
+  app.editor.status = "Board editor";
+  app.editor.error = "";
+  app.activeAnimation = null;
+  app.pendingAnimation = null;
+  app.mode = "editor";
   app.focusMode = false;
   app.selected = null;
   app.clockLastTick = null;
+  saveEditorDraft();
   render();
 }
 
@@ -135,7 +179,7 @@ async function finishBoardEditor() {
 
   try {
     app.editor.error = "";
-    await startFromFen(fen, side, "Loaded editor position");
+    await startFromFen(fen, side, "Loaded editor position", "editor");
   } catch (error) {
     app.busy = false;
     setEditorStatus(error.message || String(error), true);
@@ -349,4 +393,5 @@ export {
   loadOddsPreset,
   handleEditorSquare,
   handleEditorDelete,
+  saveEditorDraft,
 };
