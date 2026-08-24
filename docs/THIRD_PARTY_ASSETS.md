@@ -25,7 +25,7 @@ Status meanings:
 | --- | --- |
 | `CLEAR` | Licence is recorded and permits commercial redistribution. |
 | `UNVERIFIED` | Source or licence is missing; exclude from releases. |
-| `PROJECT-CREATED` | Created specifically for Sgurr; retain its creation record. |
+| `PROJECT-ASSET` | Produced for Sgurr; source and release hash retained. |
 
 ## Chess Pieces
 
@@ -41,16 +41,17 @@ with distributions containing the SVGs.
 
 | Sgurr file | Provenance | Status |
 | --- | --- | --- |
-| `web/frontend/assets/intro/sgurr-cave-chamber.png` | Generated specifically for Sgurr using OpenAI image generation during the 2026 web UI work. See the adjacent `README.md`. | `PROJECT-CREATED` |
+| `web/frontend/assets/intro/sgurr-cave-chamber.{png,webp}` | Sgurr intro source artwork and browser-ready background. | `PROJECT-ASSET` |
+| `web/frontend/assets/intro/sgurr-social-card.jpg` | Social preview derived from the intro artwork. | `PROJECT-ASSET` |
 
-Archive the original generation record with release paperwork and review the
-applicable service terms. No stock artwork or bundled font is used by the
-frontend; its CSS uses system font stacks.
+The PNG is retained as the high-resolution source; browsers receive the WebP
+background and JPEG social card. No bundled font is used by the frontend; its
+CSS uses system font stacks.
 
 ## Project-Created Audio
 
 The following ordinary cues are synthesized at runtime in
-`web/frontend/app.js` with oscillators and generated noise. They do not load a
+`web/frontend/js/audio.js` with oscillators and generated noise. They do not load a
 sampled media asset:
 
 - button, move, capture, castle, promotion, check, illegal-move, game-start,
@@ -100,7 +101,7 @@ included in a commercial web package or exposed by a production server:
 
 - Include this manifest, `THIRD_PARTY_NOTICES.md`, and every adjacent asset
   licence/copyright file.
-- Archive source downloads and the intro generation record.
+- Archive source downloads and the intro source artwork.
 - Verify release files against `web/ASSET_CHECKSUMS.sha256`.
 - Build the release from an explicit allowlist; do not publish the repository
   root or the excluded legacy audio directory.

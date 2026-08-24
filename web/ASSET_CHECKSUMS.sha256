@@ -1,4 +1,4 @@
-# SHA-256 release record for web-visible media and chess pieces, 2026-07-13.
+# SHA-256 release record for web-visible media and chess pieces, 2026-08-24.
 8d53270befde7be6f2e836599e8895fc22dfb76c3d851138bb17c0974794fa98  assets/music/game-pulse.mp3
 4aba1f1a01f328e0337a3764eb89d8d69e13ea2a86929840c787f4d736565b82  assets/music/game-urgent.mp3
 ad9a9f39240ef5862d3a6dc5220893926c6873aa0e08a641dadf3f1c0acc2cd4  assets/music/menu-theme.ogg
@@ -12,7 +12,7 @@ a3e04bf955878cc5316e9c480739504ee6fb2f7a3a94aba8ca4efa1c4b74fb3c  assets/sounds/
 8e417706c6ca3f7eb99d9500d17bf74ef977d16c540dfa9d695db4721cc30003  assets/sounds/result-sgurr-alien.ogg
 f4c27a1839ef9e82d29e1bb175c0ebf73c65b6839b2914108d0c219fc1f42445  assets/sounds/result-sgurr-burble.ogg
 051b0eafc479695af4ca3607d41fd4be41bae7c21f4f9508d004722b09f1bd63  assets/sounds/result-sgurr-energy.ogg
-305eca910a70fa0f37f2a6ad1eb162e3ccc74991fb78304b4cd9490868e1cd3c  web/frontend/assets/intro/sgurr-cave-chamber.png
+9121910fe4985df4566bdea310ee5f22f5b893c4a180a248cb5aeb4182da4778  web/frontend/assets/intro/sgurr-cave-chamber.png
 23ac612a8da2001c5a0476dce2c216058eb74516341849bb6ef93bc3039750d5  web/frontend/assets/intro/sgurr-cave-chamber.webp
 b36dca99ff9e2f1807a8aef9169dba33e320bf1914d0db1b9b5741553bd83d81  web/frontend/assets/intro/sgurr-social-card.jpg
 f835819861774dcacef7370ed2c23d4022ef6c2b17383a6a79c5f683d105e8b6  web/frontend/assets/pieces/chessnut/bB.svg
@@ -27,4 +27,3 @@ adc921896bb6e6547828f2a6eb3d5195dd1b7ac8e8c1d2a9085583e4d4d81b68  web/frontend/a
 0cf9dfe2f7b3ab11a7fdb13bf350f32e7a6c94e193fc023933e129ec02eeed8d  web/frontend/assets/pieces/chessnut/wP.svg
 2395664337bea8f13093858320cce6075d80f8086e6aa47e122ce556262b4d6b  web/frontend/assets/pieces/chessnut/wQ.svg
 e7fb8605a9318ef50e497a97680e4722d3eabc1e9ab6e4e9f594b8f2ca2022e5  web/frontend/assets/pieces/chessnut/wR.svg
-

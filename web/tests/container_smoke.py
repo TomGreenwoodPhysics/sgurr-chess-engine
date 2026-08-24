@@ -37,6 +37,9 @@ assert health["nnue_loaded"] is True
 assert b"Sgurr" in get_bytes("/")
 assert b"Search Microscope" in get_bytes("/search-lab/")
 assert b"--accent" in get_bytes("/styles/base.css")
+assert len(get_bytes("/assets/intro/sgurr-cave-chamber.webp")) > 100_000
+assert len(get_bytes("/assets/intro/sgurr-social-card.jpg")) > 50_000
+assert b"<svg" in get_bytes("/assets/pieces/chessnut/wK.svg")
 
 engines = get("/api/engines")
 available = [entry["id"] for entry in engines["engines"] if entry["available"]]

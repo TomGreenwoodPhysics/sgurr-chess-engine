@@ -13,7 +13,7 @@ attestation at the end must be completed before a public commercial release.
 | Desktop GUI | The pygame desktop client was the design and behaviour reference for the web application. Superseded by `web/` and archived at the `archive/desktop-gui-final` tag. | Project-created; owner confirmation required. |
 | Sgurr v4 NNUE/data | `data/v4.0/manifest.json` records 6,000,204 self-play positions, generation settings, shard hashes, and archive hash. | Self-play provenance recorded; owner confirmation required. |
 | Opening positions | `testing/book_gen.py` generates balanced random legal openings; `testing/README.md` documents the process. | Repository-generated; owner confirmation required. |
-| Intro artwork | `web/frontend/assets/intro/README.md` records an OpenAI-generated image made specifically for Sgurr. | Creation record present; archive the original generation record. |
+| Intro artwork | Source artwork and web derivatives live under `web/frontend/assets/intro/` with recorded release hashes. | Bundled project asset; release hash recorded. |
 
 The asset and dependency records are maintained separately in
 `THIRD_PARTY_ASSETS.md` and `THIRD_PARTY_NOTICES.md`.

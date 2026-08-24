@@ -186,9 +186,9 @@ search at a time, caps engine and Search Network work, and disables continuous
 self-play. Historical opponents and deeper Search Network choices remain
 visible as local-only options. Normal local development is unchanged.
 
-For Render, create a Web Service from the repository, choose Docker and the
-Free instance, and set the health check path to `/ready`. Render supplies the
-public hostname and port automatically.
+The root `render.yaml` defines a free Frankfurt Web Service using this image,
+the `/ready` health check, and deployment after CI passes. Create a Blueprint
+from the repository in Render; no environment variables are required.
 
 ## 6. Tests
 

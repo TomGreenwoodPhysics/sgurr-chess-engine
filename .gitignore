@@ -74,8 +74,7 @@ test-results/
 playwright-report/
 node_modules/
 
-# Local tool configuration: machine-specific, contains absolute paths
-.claude/settings.local.json
+# Local editor configuration
 .vscode/
 
 # Editor and OS cruft

@@ -1138,10 +1138,18 @@ def list_engines() -> dict[str, object]:
     }
 
 
-@app.get("/assets/{category}/{filename}", include_in_schema=False)
-def web_asset(category: str, filename: str) -> FileResponse:
+@app.get("/assets/music/{filename}", include_in_schema=False)
+def web_music_asset(filename: str) -> FileResponse:
     return FileResponse(
-        web_asset_path(category, filename),
+        web_asset_path("music", filename),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/assets/sounds/{filename}", include_in_schema=False)
+def web_sound_asset(filename: str) -> FileResponse:
+    return FileResponse(
+        web_asset_path("sounds", filename),
         headers={"Cache-Control": "public, max-age=86400"},
     )
 

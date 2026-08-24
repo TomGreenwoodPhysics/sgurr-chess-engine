@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sgurr-chess-engine
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /ready
