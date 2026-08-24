@@ -354,6 +354,7 @@ main { width: min(1440px, calc(100% - 48px)); margin: 0 auto; }
     linear-gradient(90deg, rgba(120, 204, 255, 0.06), transparent 55%),
     var(--surface-3);
 }
+.network-depth-field option:disabled { color: color-mix(in srgb, var(--muted), transparent 22%); }
 .network-depth-field label + select + label { margin-top: 5px; }
 .run-search { margin-top: 3px; background: var(--accent); border-color: var(--accent); color: #24150e; cursor: pointer; font-weight: 900; }
 .run-search:hover { filter: brightness(1.08); }

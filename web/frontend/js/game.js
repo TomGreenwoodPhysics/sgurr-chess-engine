@@ -168,6 +168,10 @@ async function loadFenFromModal() {
   }
 
   const sideValue = refs.fenSideSelect.value;
+  if (app.publicDemo && sideValue === "watch") {
+    refs.fenError.textContent = "Self-play is available when running Sgurr locally.";
+    return;
+  }
   const side = sideValue === "watch" ? null : sideValue;
   clearTimeout(app.watchTimer);
   setBusy(true, false);

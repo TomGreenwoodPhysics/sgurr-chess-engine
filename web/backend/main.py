@@ -1,21 +1,25 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+import math
 import os
 import queue
 import re
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import chess
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -42,6 +46,33 @@ REPO_ROOT = BACKEND_DIR.parents[1]
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 FRONTEND_ASSETS_DIR = FRONTEND_DIR / "assets"
 ROOT_ASSETS_DIR = REPO_ROOT / "assets"
+LOGGER = logging.getLogger("sgurr.web")
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be true or false")
+
+
+def bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = os.environ.get(name)
+    try:
+        value = default if raw is None else int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise RuntimeError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+PUBLIC_DEMO = env_flag("SGURR_PUBLIC_DEMO")
 # --- selectable opponents -------------------------------------------------
 # The demo offers several engines; the frontend lists them via /api/engines and
 # names one per move (falling back to the first, the default). SGURR_ENGINE_EXE
@@ -214,6 +245,7 @@ for _spec in ENGINE_SPECS:
 DEFAULT_ENGINE_ID = str(ENGINE_SPECS[0]["id"])
 # Back-compat aliases: /health and the engine-path exposure describe the default.
 ENGINE_PATH = ENGINE_SPECS[0]["exe"]
+ENGINE_NET_PATH = ENGINE_SPECS[0]["net"]
 ENGINE_LABEL = str(ENGINE_SPECS[0]["label"])
 ENGINE_SUBTITLE = str(ENGINE_SPECS[0]["subtitle"])
 DEFAULT_MOVETIME_MS = int(os.environ.get("SGURR_MOVETIME_MS", "700"))
@@ -221,6 +253,33 @@ ENGINE_STARTUP_TIMEOUT = float(os.environ.get("SGURR_STARTUP_TIMEOUT", "5.0"))
 ENGINE_TIMEOUT_PADDING = float(os.environ.get("SGURR_TIMEOUT_PADDING", "5.0"))
 TRACE_MAX_CONCURRENT = max(1, int(os.environ.get("SGURR_TRACE_MAX_CONCURRENT", "2")))
 TRACE_SLOTS = threading.BoundedSemaphore(TRACE_MAX_CONCURRENT)
+DEMO_MAX_CONCURRENT = bounded_env_int(
+    "SGURR_MAX_CONCURRENT_SEARCHES", 1, 1, 4
+)
+DEMO_COMPUTE_SLOTS = threading.BoundedSemaphore(DEMO_MAX_CONCURRENT)
+DEMO_ENGINE_MAX_MOVETIME_MS = bounded_env_int(
+    "SGURR_ENGINE_MAX_MOVETIME_MS", 2_000, 100, 10_000
+)
+DEMO_TRACE_MAX_MOVETIME_MS = bounded_env_int(
+    "SGURR_TRACE_MAX_MOVETIME_MS", 1_500, 100, 5_000
+)
+DEMO_NETWORK_MAX_DEPTH = bounded_env_int(
+    "SGURR_NETWORK_MAX_DEPTH", 12, 4, 20
+)
+DEMO_NETWORK_MAX_NODES = bounded_env_int(
+    "SGURR_NETWORK_MAX_NODES", 1_500_000, 10_000, 20_000_000
+)
+DEMO_NETWORK_TIMEOUT_SECONDS = bounded_env_int(
+    "SGURR_NETWORK_TIMEOUT_SECONDS", 15, 5, 60
+)
+DEMO_ENGINE_REQUESTS_PER_MINUTE = bounded_env_int(
+    "SGURR_ENGINE_REQUESTS_PER_MINUTE", 30, 1, 300
+)
+DEMO_TRACE_REQUESTS_PER_MINUTE = bounded_env_int(
+    "SGURR_TRACE_REQUESTS_PER_MINUTE", 6, 1, 60
+)
+MAX_REQUEST_BYTES = 65_536
+EXPECTED_NET_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
     "true",
@@ -266,6 +325,97 @@ WEB_ASSET_FILES = {
 }
 
 
+class SlidingWindowLimiter:
+    def __init__(self, window_seconds: float = 60.0, max_keys: int = 2_048) -> None:
+        self.window_seconds = window_seconds
+        self.max_keys = max_keys
+        self._events: dict[str, deque[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str, limit: int, *, now: float | None = None) -> int:
+        current = time.monotonic() if now is None else now
+        cutoff = current - self.window_seconds
+        with self._lock:
+            events = self._events.get(key)
+            if events is None:
+                self._make_room(cutoff)
+                events = deque()
+                self._events[key] = events
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if len(events) >= limit:
+                return max(1, math.ceil(events[0] + self.window_seconds - current))
+            events.append(current)
+        return 0
+
+    def _make_room(self, cutoff: float) -> None:
+        if len(self._events) < self.max_keys:
+            return
+        stale = [
+            key
+            for key, events in self._events.items()
+            if not events or events[-1] <= cutoff
+        ]
+        for key in stale:
+            self._events.pop(key, None)
+        if len(self._events) >= self.max_keys:
+            self._events.pop(next(iter(self._events)))
+
+
+REQUEST_LIMITER = SlidingWindowLimiter()
+
+
+class RequestBodyLimitMiddleware:
+    def __init__(self, app, *, max_bytes: int, enabled: bool) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+        self.enabled = enabled
+
+    async def __call__(self, scope, receive, send) -> None:
+        if not self.enabled or scope["type"] != "http" or scope.get("method") != "POST":
+            await self.app(scope, receive, send)
+            return
+
+        raw_length = dict(scope.get("headers", ())).get(b"content-length")
+        if raw_length is not None:
+            try:
+                content_length = int(raw_length)
+            except ValueError:
+                content_length = 0
+            if content_length > self.max_bytes:
+                await JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body is too large"},
+                )(scope, receive, send)
+                return
+
+        buffered = deque()
+        received = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            buffered.append(message)
+            if message["type"] != "http.request":
+                continue
+            received += len(message.get("body", b""))
+            if received > self.max_bytes:
+                await JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body is too large"},
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive():
+            if buffered:
+                return buffered.popleft()
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+
 def allowed_origins_from_env(value: str | None) -> list[str]:
     if value is None:
         return list(DEFAULT_ALLOWED_ORIGINS)
@@ -305,12 +455,14 @@ def allowed_origins_from_env(value: str | None) -> list[str]:
     return origins
 
 
-def allowed_hosts_from_env(value: str | None) -> list[str]:
-    if value is None:
-        return list(DEFAULT_ALLOWED_HOSTS)
-
+def allowed_hosts_from_env(
+    value: str | None,
+    *,
+    platform_host: str | None = None,
+) -> list[str]:
+    raw_hosts = DEFAULT_ALLOWED_HOSTS if value is None else value.split(",")
     hosts: list[str] = []
-    for raw_host in value.split(","):
+    for raw_host in raw_hosts:
         host = raw_host.strip().lower().rstrip(".")
         if host == "*":
             raise RuntimeError(
@@ -321,13 +473,23 @@ def allowed_hosts_from_env(value: str | None) -> list[str]:
         if host not in hosts:
             hosts.append(host)
 
+    if platform_host:
+        host = platform_host.strip().lower().rstrip(".")
+        if not HOSTNAME_PATTERN.fullmatch(host):
+            raise RuntimeError("RENDER_EXTERNAL_HOSTNAME is invalid")
+        if host not in hosts:
+            hosts.append(host)
+
     if not hosts:
         raise RuntimeError("SGURR_ALLOWED_HOSTS must contain at least one host")
     return hosts
 
 
 ALLOWED_ORIGINS = allowed_origins_from_env(os.environ.get("SGURR_ALLOWED_ORIGINS"))
-ALLOWED_HOSTS = allowed_hosts_from_env(os.environ.get("SGURR_ALLOWED_HOSTS"))
+ALLOWED_HOSTS = allowed_hosts_from_env(
+    os.environ.get("SGURR_ALLOWED_HOSTS"),
+    platform_host=os.environ.get("RENDER_EXTERNAL_HOSTNAME"),
+)
 
 PIECE_VALUES = {
     chess.PAWN: 1,
@@ -363,6 +525,7 @@ ENGINES: dict[str, dict[str, object]] = {
             spec["exe"],
             startup_timeout=ENGINE_STARTUP_TIMEOUT,
             net_path=spec.get("net"),
+            require_nnue=PUBLIC_DEMO and spec.get("net") is not None,
         ),
         "exe": spec["exe"],
         "net": spec.get("net"),
@@ -376,20 +539,95 @@ ENGINES: dict[str, dict[str, object]] = {
 engine = ENGINES[DEFAULT_ENGINE_ID]["engine"]
 
 
-def engine_for(engine_id: str | None):
-    entry = ENGINES.get(engine_id or DEFAULT_ENGINE_ID) or ENGINES[DEFAULT_ENGINE_ID]
-    return entry["engine"]
+def engine_availability(
+    engine_id: str,
+    entry: dict[str, object],
+) -> tuple[bool, str | None, str | None]:
+    if PUBLIC_DEMO and engine_id != DEFAULT_ENGINE_ID:
+        return (
+            False,
+            "Available locally; the free demo includes Sgurr v8.2 only.",
+            "LOCAL ONLY",
+        )
+    if not Path(entry["exe"]).is_file():
+        return False, "This engine build is not available on the server.", "NOT BUILT"
+    net_path = entry.get("net")
+    if net_path is not None and not Path(net_path).is_file():
+        return False, "This engine network is not available on the server.", "NET MISSING"
+    return True, None, None
 
 
 def engine_entry_for(engine_id: str | None) -> tuple[str, dict[str, object]]:
-    resolved_id = engine_id if engine_id in ENGINES else DEFAULT_ENGINE_ID
-    return resolved_id, ENGINES[resolved_id]
+    if engine_id is not None and engine_id not in ENGINES:
+        raise HTTPException(status_code=400, detail="Unknown engine")
+    resolved_id = engine_id or DEFAULT_ENGINE_ID
+    entry = ENGINES[resolved_id]
+    available, reason, _ = engine_availability(resolved_id, entry)
+    if not available:
+        raise HTTPException(status_code=503, detail=reason or "Engine unavailable")
+    return resolved_id, entry
+
+
+def engine_for(engine_id: str | None):
+    return engine_entry_for(engine_id)[1]["engine"]
+
+
+READINESS_OK = not PUBLIC_DEMO
+
+
+def validate_public_runtime() -> None:
+    global READINESS_OK
+
+    for path in (Path(ENGINE_PATH), TRACE_ENGINE_PATH):
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise RuntimeError(f"Executable unavailable: {path}")
+    net_path = Path(ENGINE_NET_PATH)
+    if not net_path.is_file():
+        raise RuntimeError(f"NNUE network unavailable: {net_path}")
+    if hashlib.sha256(net_path.read_bytes()).hexdigest() != EXPECTED_NET_SHA256:
+        raise RuntimeError("NNUE network checksum mismatch")
+
+    engine.ensure_ready()
+
+    trace_seen = False
+    trace_engine = SgurrUciEngine(
+        TRACE_ENGINE_PATH,
+        startup_timeout=ENGINE_STARTUP_TIMEOUT,
+        net_path=net_path,
+        require_nnue=True,
+    )
+
+    def capture_trace(line: str) -> None:
+        nonlocal trace_seen
+        if line.startswith("info string trace "):
+            trace_seen = True
+
+    try:
+        trace_engine.search(
+            chess.STARTING_FEN,
+            "depth 1 nodes 10000",
+            max(ENGINE_STARTUP_TIMEOUT, ENGINE_TIMEOUT_PADDING + 1.0),
+            on_line=capture_trace,
+        )
+    finally:
+        trace_engine.close()
+    if not trace_seen:
+        raise RuntimeError("Trace engine produced no search events")
+
+    READINESS_OK = True
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
+        if PUBLIC_DEMO:
+            validate_public_runtime()
         yield
+    except Exception as exc:
+        if PUBLIC_DEMO and not READINESS_OK:
+            LOGGER.exception("Public demo startup check failed")
+            raise RuntimeError("Public demo startup check failed") from exc
+        raise
     finally:
         for entry in ENGINES.values():
             entry["engine"].close()
@@ -404,11 +642,38 @@ if ALLOWED_ORIGINS:
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_bytes=MAX_REQUEST_BYTES,
+    enabled=PUBLIC_DEMO,
+)
 
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
+    response = None
+    if PUBLIC_DEMO and request.method == "POST":
+        limits = {
+            "/api/engine-move": ("engine", DEMO_ENGINE_REQUESTS_PER_MINUTE),
+            "/api/search-trace": ("analysis", DEMO_TRACE_REQUESTS_PER_MINUTE),
+            "/api/search-network": ("analysis", DEMO_TRACE_REQUESTS_PER_MINUTE),
+        }
+        limit_entry = limits.get(request.url.path)
+        if limit_entry is not None:
+            limit_group, limit = limit_entry
+            retry_after = REQUEST_LIMITER.check(
+                limit_group,
+                limit,
+            )
+            if retry_after:
+                response = JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit reached; try again shortly"},
+                    headers={"Retry-After": str(retry_after)},
+                )
+
+    if response is None:
+        response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -423,44 +688,47 @@ class NewGameRequest(BaseModel):
     human_side: Literal["white", "black"] = "white"
 
 
+UciMoveText = Annotated[str, Field(min_length=4, max_length=5)]
+
+
 class GameRequest(BaseModel):
-    fen: str
-    moves: list[str] = Field(default_factory=list)
-    start_fen: str | None = None
+    fen: str = Field(min_length=1, max_length=128)
+    moves: list[UciMoveText] = Field(default_factory=list, max_length=512)
+    start_fen: str | None = Field(default=None, max_length=128)
 
 
 class LoadFenRequest(BaseModel):
-    fen: str
+    fen: str = Field(min_length=1, max_length=128)
 
 
 class PlayerMoveRequest(GameRequest):
-    move: str
+    move: UciMoveText
 
 
 class PremoveSequenceRequest(BaseModel):
-    fen: str
+    fen: str = Field(min_length=1, max_length=128)
     human_side: Literal["white", "black"]
-    premoves: list[str] = Field(default_factory=list, max_length=32)
+    premoves: list[UciMoveText] = Field(default_factory=list, max_length=32)
 
 
 class EngineMoveRequest(GameRequest):
     engine: str | None = Field(default=None, max_length=32)
     movetime_ms: int | None = Field(default=None, ge=50, le=30_000)
-    wtime_ms: int | None = Field(default=None, ge=0)
-    btime_ms: int | None = Field(default=None, ge=0)
-    winc_ms: int = Field(default=0, ge=0)
-    binc_ms: int = Field(default=0, ge=0)
+    wtime_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+    btime_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+    winc_ms: int = Field(default=0, ge=0, le=3_600_000)
+    binc_ms: int = Field(default=0, ge=0, le=3_600_000)
     movestogo: int = Field(default=120, ge=1, le=240)
 
 
 class SearchTraceRequest(BaseModel):
-    fen: str
+    fen: str = Field(min_length=1, max_length=128)
     engine: str | None = Field(default=None, max_length=32)
     movetime_ms: int = Field(default=1_500, ge=100, le=5_000)
 
 
 class SearchNetworkRequest(BaseModel):
-    fen: str
+    fen: str = Field(min_length=1, max_length=128)
     depth: int = Field(default=6, ge=4, le=20)
 
 
@@ -714,7 +982,22 @@ def request_uses_clock(request: EngineMoveRequest) -> bool:
     return request.wtime_ms is not None and request.btime_ms is not None
 
 
-def go_args_for(request: EngineMoveRequest) -> str:
+def demo_movetime_for(request: EngineMoveRequest, board: chess.Board) -> int:
+    if request_uses_clock(request):
+        active_ms = request.wtime_ms if board.turn == chess.WHITE else request.btime_ms
+        inc_ms = request.winc_ms if board.turn == chess.WHITE else request.binc_ms
+        requested = max(
+            50,
+            int((active_ms or 0) / max(1, request.movestogo) + inc_ms / 2),
+        )
+    else:
+        requested = request.movetime_ms or DEFAULT_MOVETIME_MS
+    return min(requested, DEMO_ENGINE_MAX_MOVETIME_MS)
+
+
+def go_args_for(request: EngineMoveRequest, board: chess.Board) -> str:
+    if PUBLIC_DEMO:
+        return f"movetime {demo_movetime_for(request, board)}"
     if request_uses_clock(request):
         return (
             f"wtime {max(1, request.wtime_ms or 0)} "
@@ -740,6 +1023,11 @@ def web_asset_path(category: str, filename: str) -> Path:
 
 
 def engine_timeout_for(request: EngineMoveRequest, board: chess.Board) -> float:
+    if PUBLIC_DEMO:
+        return max(
+            ENGINE_STARTUP_TIMEOUT,
+            demo_movetime_for(request, board) / 1000.0 + ENGINE_TIMEOUT_PADDING,
+        )
     if request_uses_clock(request):
         active_ms = request.wtime_ms if board.turn == chess.WHITE else request.btime_ms
         inc_ms = request.winc_ms if board.turn == chess.WHITE else request.binc_ms
@@ -752,36 +1040,101 @@ def engine_timeout_for(request: EngineMoveRequest, board: chess.Board) -> float:
     return max(ENGINE_STARTUP_TIMEOUT, movetime_ms / 1000.0 + ENGINE_TIMEOUT_PADDING)
 
 
+def acquire_demo_compute_slot() -> bool:
+    if not PUBLIC_DEMO:
+        return False
+    if not DEMO_COMPUTE_SLOTS.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Engine busy; try again shortly")
+    return True
+
+
+def release_demo_compute_slot(acquired: bool) -> None:
+    if acquired:
+        DEMO_COMPUTE_SLOTS.release()
+
+
+def acquire_trace_slots() -> bool:
+    demo_acquired = acquire_demo_compute_slot()
+    if TRACE_SLOTS.acquire(blocking=False):
+        return demo_acquired
+    release_demo_compute_slot(demo_acquired)
+    raise HTTPException(status_code=429, detail="Search microscope is busy; try again shortly")
+
+
+def release_trace_slots(demo_acquired: bool) -> None:
+    TRACE_SLOTS.release()
+    release_demo_compute_slot(demo_acquired)
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
+    engine_exists, _, _ = engine_availability(
+        DEFAULT_ENGINE_ID,
+        ENGINES[DEFAULT_ENGINE_ID],
+    )
     payload: dict[str, object] = {
-        "ok": True,
-        "engine_exists": ENGINE_PATH.exists(),
+        "ok": engine_exists and (READINESS_OK or not PUBLIC_DEMO),
+        "engine_exists": engine_exists,
         "engine_running": engine.is_running,
+        "nnue_loaded": engine.nnue_loaded,
         "engine_label": ENGINE_LABEL,
         "engine_subtitle": ENGINE_SUBTITLE,
         "python_chess": getattr(chess, "__version__", "unknown"),
+        "public_demo": PUBLIC_DEMO,
     }
     if EXPOSE_ENGINE_PATH:
         payload["engine_path"] = str(ENGINE_PATH)
     return payload
 
 
+@app.get("/ready", include_in_schema=False, response_model=None)
+def ready():
+    payload = {"ok": READINESS_OK}
+    if READINESS_OK:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
+
+
+@app.get("/api/capabilities")
+def capabilities() -> dict[str, object]:
+    return {
+        "public_demo": PUBLIC_DEMO,
+        "self_play": not PUBLIC_DEMO,
+        "limits": {
+            "engine_movetime_ms": (
+                DEMO_ENGINE_MAX_MOVETIME_MS if PUBLIC_DEMO else 30_000
+            ),
+            "search_trace_movetime_ms": (
+                DEMO_TRACE_MAX_MOVETIME_MS if PUBLIC_DEMO else 5_000
+            ),
+            "search_network_depth": (
+                DEMO_NETWORK_MAX_DEPTH if PUBLIC_DEMO else 20
+            ),
+        },
+    }
+
+
 @app.get("/api/engines")
 def list_engines() -> dict[str, object]:
-    return {
-        "default": DEFAULT_ENGINE_ID,
-        "engines": [
+    engines = []
+    for engine_id, entry in ENGINES.items():
+        available, reason, badge = engine_availability(engine_id, entry)
+        engines.append(
             {
                 "id": engine_id,
                 "label": entry["label"],
                 "subtitle": entry["subtitle"],
                 "tech": entry["tech"],
                 "rating": entry["rating"],
-                "available": Path(entry["exe"]).exists(),
+                "available": available,
+                "unavailable_reason": reason,
+                "unavailable_badge": badge,
             }
-            for engine_id, entry in ENGINES.items()
-        ],
+        )
+    return {
+        "default": DEFAULT_ENGINE_ID,
+        "public_demo": PUBLIC_DEMO,
+        "engines": engines,
     }
 
 
@@ -795,7 +1148,8 @@ def web_asset(category: str, filename: str) -> FileResponse:
 
 @app.post("/api/new")
 def new_game(_: NewGameRequest) -> dict[str, object]:
-    engine.mark_new_game()
+    if not PUBLIC_DEMO:
+        engine.mark_new_game()
     board = chess.Board()
     return state_payload(board, [], start_fen=board.fen())
 
@@ -803,7 +1157,8 @@ def new_game(_: NewGameRequest) -> dict[str, object]:
 @app.post("/api/load-fen")
 def load_fen(request: LoadFenRequest) -> dict[str, object]:
     board = board_from_fen(request.fen.strip())
-    engine.mark_new_game()
+    if not PUBLIC_DEMO:
+        engine.mark_new_game()
     return state_payload(board, [], start_fen=board.fen())
 
 
@@ -847,19 +1202,29 @@ def engine_move(request: EngineMoveRequest) -> dict[str, object]:
         return state_payload(board, request.moves, start_fen=request.start_fen)
 
     search_turn = board.turn
+    selected_engine = engine_for(request.engine)
+    demo_slot = acquire_demo_compute_slot()
 
     try:
-        result = engine_for(request.engine).search(
+        result = selected_engine.search(
             board.fen(),
-            go_args_for(request),
+            go_args_for(request, board),
             engine_timeout_for(request, board),
         )
     except EngineStartupError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        LOGGER.warning("Engine startup failed: %s", exc)
+        detail = "Engine unavailable" if PUBLIC_DEMO else str(exc)
+        raise HTTPException(status_code=503, detail=detail) from exc
     except EngineTimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
+        LOGGER.warning("Engine search timed out: %s", exc)
+        detail = "Engine search timed out" if PUBLIC_DEMO else str(exc)
+        raise HTTPException(status_code=504, detail=detail) from exc
     except EngineCrashedError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        LOGGER.warning("Engine stopped unexpectedly: %s", exc)
+        detail = "Engine stopped unexpectedly" if PUBLIC_DEMO else str(exc)
+        raise HTTPException(status_code=502, detail=detail) from exc
+    finally:
+        release_demo_compute_slot(demo_slot)
 
     if result.bestmove == "0000":
         return state_payload(
@@ -903,14 +1268,19 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
 
     if not engine_path.is_file():
         raise HTTPException(status_code=503, detail=f"Engine unavailable: {entry['label']}")
-    if not TRACE_SLOTS.acquire(blocking=False):
-        raise HTTPException(status_code=429, detail="Search microscope is busy; try again shortly")
+    demo_slot = acquire_trace_slots()
 
     event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
     trace_engine = SgurrUciEngine(
         engine_path,
         startup_timeout=ENGINE_STARTUP_TIMEOUT,
         net_path=entry.get("net"),
+        require_nnue=PUBLIC_DEMO and entry.get("net") is not None,
+    )
+    movetime_ms = (
+        min(request.movetime_ms, DEMO_TRACE_MAX_MOVETIME_MS)
+        if PUBLIC_DEMO
+        else request.movetime_ms
     )
 
     def on_info(info: UciInfo) -> None:
@@ -920,65 +1290,78 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
         try:
             result = trace_engine.search(
                 board.fen(),
-                f"movetime {request.movetime_ms}",
+                f"movetime {movetime_ms}",
                 max(
                     ENGINE_STARTUP_TIMEOUT,
-                    request.movetime_ms / 1000.0 + ENGINE_TIMEOUT_PADDING,
+                    movetime_ms / 1000.0 + ENGINE_TIMEOUT_PADDING,
                 ),
                 on_info=on_info,
             )
             event_queue.put(("complete", result))
         except (EngineStartupError, EngineTimeoutError, EngineCrashedError) as exc:
-            event_queue.put(("error", str(exc)))
+            LOGGER.warning("Search trace stopped: %s", exc)
+            detail = "Search trace stopped" if PUBLIC_DEMO else str(exc)
+            event_queue.put(("error", detail))
         except Exception:
             event_queue.put(("error", "Search trace failed unexpectedly"))
         finally:
             try:
                 trace_engine.close()
             finally:
-                TRACE_SLOTS.release()
+                release_trace_slots(demo_slot)
 
     worker = threading.Thread(
         target=run_search,
         name="sgurr-search-trace",
         daemon=True,
     )
-    worker.start()
+    try:
+        worker.start()
+    except Exception:
+        trace_engine.close()
+        release_trace_slots(demo_slot)
+        raise
 
     def encode(payload: dict[str, object]) -> bytes:
         return (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
 
     def stream():
-        yield encode(
-            {
-                "type": "started",
-                "engine": engine_id,
-                "label": entry["label"],
-                "fen": board.fen(),
-                "perspective": "white",
-            }
-        )
+        completed = False
+        try:
+            yield encode(
+                {
+                    "type": "started",
+                    "engine": engine_id,
+                    "label": entry["label"],
+                    "fen": board.fen(),
+                    "perspective": "white",
+                }
+            )
 
-        while True:
-            event_type, value = event_queue.get()
+            while True:
+                event_type, value = event_queue.get()
 
-            if event_type == "iteration":
-                payload = eval_payload(value, search_turn)
-                if payload is not None:
-                    yield encode({"type": "iteration", **payload})
-                continue
+                if event_type == "iteration":
+                    payload = eval_payload(value, search_turn)
+                    if payload is not None:
+                        yield encode({"type": "iteration", **payload})
+                    continue
 
-            if event_type == "complete":
-                yield encode(
-                    {
-                        "type": "complete",
-                        "bestmove": value.bestmove,
-                        "final": eval_payload(value.info, search_turn),
-                    }
-                )
-            else:
-                yield encode({"type": "error", "detail": str(value)})
-            break
+                if event_type == "complete":
+                    yield encode(
+                        {
+                            "type": "complete",
+                            "bestmove": value.bestmove,
+                            "final": eval_payload(value.info, search_turn),
+                        }
+                    )
+                else:
+                    yield encode({"type": "error", "detail": str(value)})
+                completed = True
+                break
+        finally:
+            if not completed:
+                trace_engine.cancel()
 
     return StreamingResponse(
         stream(),
@@ -994,19 +1377,24 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
 def search_network(request: SearchNetworkRequest) -> StreamingResponse:
     """Stream bounded samples from every iteration through the target depth."""
     board = board_from_fen(request.fen.strip())
+    if PUBLIC_DEMO and request.depth > DEMO_NETWORK_MAX_DEPTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Search depth is limited to {DEMO_NETWORK_MAX_DEPTH} on the free demo",
+        )
     if not TRACE_ENGINE_PATH.is_file():
         raise HTTPException(
             status_code=503,
             detail="Trace engine unavailable; build it with sgurr_cpp/build.sh -t",
         )
-    if not TRACE_SLOTS.acquire(blocking=False):
-        raise HTTPException(status_code=429, detail="Search microscope is busy; try again shortly")
+    demo_slot = acquire_trace_slots()
 
     event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
     trace_engine = SgurrUciEngine(
         TRACE_ENGINE_PATH,
         startup_timeout=ENGINE_STARTUP_TIMEOUT,
         net_path=ENGINE_SPECS[0].get("net"),
+        require_nnue=PUBLIC_DEMO,
     )
     prefix = "info string trace "
 
@@ -1037,33 +1425,48 @@ def search_network(request: SearchNetworkRequest) -> StreamingResponse:
             # Strict deep searches grow exponentially and intentionally have no
             # movetime cap. Give the advanced presets room to finish while
             # retaining a hard ceiling for a stalled diagnostic process.
-            timeout_seconds = min(
-                300.0,
-                max(15.0, 15.0 * (2.0 ** (max(0, request.depth - 12) / 2.0))),
+            timeout_seconds = (
+                float(DEMO_NETWORK_TIMEOUT_SECONDS)
+                if PUBLIC_DEMO
+                else min(
+                    300.0,
+                    max(15.0, 15.0 * (2.0 ** (max(0, request.depth - 12) / 2.0))),
+                )
             )
+            go_args = f"depth {request.depth}"
+            if PUBLIC_DEMO:
+                go_args += f" nodes {DEMO_NETWORK_MAX_NODES}"
             result = trace_engine.search(
                 board.fen(),
-                f"depth {request.depth}",
+                go_args,
                 max(ENGINE_STARTUP_TIMEOUT, timeout_seconds),
                 on_info=on_info,
                 on_line=on_line,
             )
             event_queue.put(("complete", result))
         except (EngineStartupError, EngineTimeoutError, EngineCrashedError) as exc:
-            event_queue.put(("error", str(exc)))
+            LOGGER.warning("Search network stopped: %s", exc)
+            detail = "Search network stopped" if PUBLIC_DEMO else str(exc)
+            event_queue.put(("error", detail))
         except Exception:
             event_queue.put(("error", "Search network trace failed unexpectedly"))
         finally:
             try:
                 trace_engine.close()
             finally:
-                TRACE_SLOTS.release()
+                release_trace_slots(demo_slot)
 
-    threading.Thread(
+    worker = threading.Thread(
         target=run_search,
         name="sgurr-search-network",
         daemon=True,
-    ).start()
+    )
+    try:
+        worker.start()
+    except Exception:
+        trace_engine.close()
+        release_trace_slots(demo_slot)
+        raise
 
     def encode(payload: dict[str, object]) -> bytes:
         return (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
@@ -1104,11 +1507,20 @@ def search_network(request: SearchNetworkRequest) -> StreamingResponse:
                     batch.clear()
                     batch_started = 0.0
                 if event_type == "complete":
+                    achieved_depth = value.info.depth if value.info is not None else None
                     yield encode(
                         {
                             "type": "complete",
                             "bestmove": value.bestmove,
                             "events": "bounded",
+                            "target_depth": request.depth,
+                            "depth": achieved_depth,
+                            "nodes": value.info.nodes if value.info is not None else None,
+                            "limited": (
+                                PUBLIC_DEMO
+                                and achieved_depth is not None
+                                and achieved_depth < request.depth
+                            ),
                         }
                     )
                 else:

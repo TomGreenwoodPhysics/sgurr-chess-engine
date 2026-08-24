@@ -819,6 +819,7 @@ export function initSearchNetwork() {
     activeId = null;
     hoveredTarget = null;
     delete refs.canvas.dataset.hovered;
+    delete refs.canvas.dataset.searchLimited;
     finished = false;
     limitReached = false;
     pulses = [];
@@ -1295,6 +1296,12 @@ export function initSearchNetwork() {
       }
       return ["SEARCH COMPLETE", `${event.best || "No move"} survives at ${event.score} centipawns. Every depth now shows its consequential connected subtree.`];
     }
+    if (event.e === "search-limit") {
+      return [
+        "NODE LIMIT REACHED",
+        `The demo stopped after depth ${event.depth} completed. The final iteration may be partial.`,
+      ];
+    }
     if (event.e === "limit") return ["SAMPLE FULL", `This iteration's ${event.count}-node structural sample is full; live activity continues while Sgurr searches.`];
     return ["SEARCH", "Sgurr is building the search web."];
   }
@@ -1567,6 +1574,14 @@ export function initSearchNetwork() {
         if (child) pushCutoffImplosion(child.id, now);
         pushBurst(activeId, red, now, 42, 1050);
       }
+    } else if (event.e === "search-limit") {
+      finished = true;
+      activeId = 0;
+      refs.canvas.dataset.state = "complete";
+      refs.canvas.dataset.searchLimited = "true";
+      setStreamState("ready", `Capped · depth ${event.depth}/${event.targetDepth}`);
+      if (rootBest) rootBest.final = true;
+      updateBestMove();
     } else if (event.e === "limit") {
       limitReached = true;
     } else if (event.e === "activity") {
@@ -4092,6 +4107,7 @@ export function initSearchNetwork() {
     activeId = null;
     finished = false;
     limitReached = false;
+    delete refs.canvas.dataset.searchLimited;
     pulses = [];
     bursts = [];
     cutoffImplosions = [];
@@ -4388,6 +4404,19 @@ export function initSearchNetwork() {
       return;
     }
     if (message.type === "complete") {
+      const achievedDepth = Number(message.depth) || requestedDepth;
+      const limited = Boolean(message.limited);
+      if (limited) {
+        const terminal = {
+          e: "search-limit",
+          depth: achievedDepth,
+          targetDepth: requestedDepth,
+          nodes: Number(message.nodes) || 0,
+          best: message.bestmove,
+        };
+        if (runMode === "live") applyLiveEvent(terminal);
+        else events.push(terminal);
+      }
       if (runMode === "live") flushLiveUi();
       flushQueuedEngineTimer(runMode === "live" ? "complete" : "recording");
       updateEngineNodesSearched(engineNodesSearched, runMode === "live" ? "complete" : "recording");
@@ -4396,7 +4425,12 @@ export function initSearchNetwork() {
         refs.play.disabled = false;
         refs.speed.disabled = false;
         refs.scrubber.disabled = false;
-        setStreamState("complete", "Complete · replay ready");
+        setStreamState(
+          limited ? "ready" : "complete",
+          limited
+            ? `Capped · depth ${achievedDepth}/${requestedDepth}`
+            : "Complete · replay ready",
+        );
         refs.play.textContent = "Replay";
         requestDraw();
       }
@@ -4410,6 +4444,7 @@ export function initSearchNetwork() {
     if (!reader) throw new Error("This browser cannot read the trace stream");
     const decoder = new TextDecoder();
     let buffer = "";
+    let completion = null;
     let processingSliceStartedAt = performance.now();
 
     while (true) {
@@ -4420,6 +4455,7 @@ export function initSearchNetwork() {
       for (const line of lines) {
         if (!line.trim()) continue;
         const message = JSON.parse(line);
+        if (message.type === "complete") completion = message;
         if (runMode === "live" && message.type === "complete") await flushPendingLiveEvents();
         captureMessage(message, requestedDepth, runMode);
         if (runMode === "live" && !document.hidden && performance.now() - processingSliceStartedAt >= LIVE_EVENT_SLICE_MS) {
@@ -4431,10 +4467,12 @@ export function initSearchNetwork() {
     }
     if (buffer.trim()) {
       const message = JSON.parse(buffer);
+      if (message.type === "complete") completion = message;
       if (runMode === "live" && message.type === "complete") await flushPendingLiveEvents();
       captureMessage(message, requestedDepth, runMode);
     }
     if (runMode === "live") await flushPendingLiveEvents();
+    return completion;
   }
 
   async function load(fen, depth = 6, runMode = "live") {
@@ -4466,7 +4504,9 @@ export function initSearchNetwork() {
         try { detail = (await response.json()).detail || detail; } catch { /* keep status */ }
         throw new Error(detail);
       }
-      await readStream(response, depth, runMode);
+      const completion = await readStream(response, depth, runMode);
+      const achievedDepth = Number(completion?.depth) || depth;
+      const limited = Boolean(completion?.limited);
       const finishEvent = [...events].reverse().find((event) => event.e === "finish");
       const elapsedMs = Number(finishEvent?.t_us) / 1000;
       const timing = Number.isFinite(elapsedMs) ? ` The complete search took ${elapsedMs < 100 ? elapsedMs.toFixed(1) : Math.round(elapsedMs)} ms.` : "";
@@ -4475,13 +4515,20 @@ export function initSearchNetwork() {
         refs.scrubber.max = String(events.length);
         refs.empty.hidden = true;
         clearState();
-        setStreamState("complete", "Recorded · replay ready");
-        refs.eventTag.textContent = "TRACE READY";
-        refs.eventText.textContent = `${layoutNodes.size} real positions across depths 1–${depth} are ready. Depth 0 begins at the root and each orbit moves outward.${timing}`;
+        setStreamState(
+          limited ? "ready" : "complete",
+          limited ? `Capped · depth ${achievedDepth}/${depth}` : "Recorded · replay ready",
+        );
+        refs.eventTag.textContent = limited ? "NODE LIMIT REACHED" : "TRACE READY";
+        refs.eventText.textContent = limited
+          ? `${layoutNodes.size} real positions were recorded before the demo limit. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
+          : `${layoutNodes.size} real positions across depths 1–${depth} are ready. Depth 0 begins at the root and each orbit moves outward.${timing}`;
         if (!reducedMotion.matches) play();
       } else {
-        refs.eventTag.textContent = "SEARCH COMPLETE";
-        refs.eventText.textContent = `${layoutNodes.size} positions appeared live.${timing} The same trace is now available to replay slowly.`;
+        refs.eventTag.textContent = limited ? "NODE LIMIT REACHED" : "SEARCH COMPLETE";
+        refs.eventText.textContent = limited
+          ? `${layoutNodes.size} positions appeared before the demo limit. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
+          : `${layoutNodes.size} positions appeared live.${timing} The same trace is now available to replay slowly.`;
       }
       return true;
     } catch (error) {

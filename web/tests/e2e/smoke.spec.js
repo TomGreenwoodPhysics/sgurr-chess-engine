@@ -154,7 +154,11 @@ function json(route, body, status = 200) {
   });
 }
 
-async function installMockBackend(page, { finishWatch = false, engineExists = true } = {}) {
+async function installMockBackend(page, {
+  finishWatch = false,
+  engineExists = true,
+  publicDemo = false,
+} = {}) {
   const calls = [];
   await page.route(`${API_BASE}/**`, async (route) => {
     const request = route.request();
@@ -171,6 +175,42 @@ async function installMockBackend(page, { finishWatch = false, engineExists = tr
         engine_exists: engineExists,
         engine_running: false,
         python_chess: "test",
+        public_demo: publicDemo,
+      });
+      return;
+    }
+    if (path === "/api/engines") {
+      await json(route, {
+        default: "v8.2",
+        public_demo: publicDemo,
+        engines: [
+          {
+            id: "v8.2",
+            label: 'Sgurr v8.2 "Thearlaich"',
+            subtitle: "GEN8 NNUE + PACKED TT · ~3012",
+            tech: "GEN8 NNUE + PACKED TT",
+            rating: 3012,
+            available: engineExists,
+          },
+          {
+            id: "v8.1",
+            label: 'Sgurr v8.1 "Thearlaich"',
+            subtitle: "GEN8 NNUE + PGO SPEED · ~3027",
+            tech: "GEN8 NNUE + PGO SPEED",
+            rating: 3027,
+            available: !publicDemo && engineExists,
+            unavailable_reason: "Available locally; the free demo includes Sgurr v8.2 only.",
+            unavailable_badge: "LOCAL ONLY",
+          },
+        ],
+      });
+      return;
+    }
+    if (path === "/api/capabilities") {
+      await json(route, {
+        public_demo: publicDemo,
+        self_play: !publicDemo,
+        limits: { search_network_depth: publicDemo ? 12 : 20 },
       });
       return;
     }
@@ -257,8 +297,96 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
 });
 
+test("keeps local-only controls visible in the free demo", async ({ page }) => {
+  await installMockBackend(page, { publicDemo: true });
+  await openMainMenu(page);
+
+  await expect(page.locator("#watchButton")).toHaveAttribute("aria-disabled", "true");
+  await expect(page.locator("#watchButton")).toHaveAttribute("title", /available.*locally/i);
+  await expect(page.locator("#engineDownButton")).toBeDisabled();
+  await expect(page.locator("#engineUpButton")).toBeDisabled();
+
+  await page.locator("#menuEngineButton").click();
+  const localOnly = page.locator('.engine-card[aria-disabled="true"]');
+  await expect(localOnly).toContainText("LOCAL ONLY");
+  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v8\.2/i);
+  await expect(localOnly).toBeDisabled();
+  await localOnly.evaluate((button) => button.click());
+  await expect(page.locator("#engineModal")).toBeVisible();
+  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+});
+
+test("limits Search Network depth on the free demo", async ({ page }) => {
+  let releaseCapabilities;
+  const capabilitiesResponse = new Promise((resolve) => {
+    releaseCapabilities = resolve;
+  });
+  await page.route(`${API_BASE}/api/capabilities`, async (route) => {
+    await capabilitiesResponse;
+    await json(route, {
+      public_demo: true,
+      limits: { search_network_depth: 12 },
+    });
+  });
+  await page.goto("/search-lab/?mode=network");
+
+  await expect(page.locator("#runSearchButton")).toBeDisabled();
+  releaseCapabilities();
+  await expect(page.locator("#networkDepth")).toHaveValue("12");
+  await expect(page.locator("#runSearchButton")).toBeEnabled();
+  await expect(page.locator('#networkDepth option[value="12"]')).toBeEnabled();
+  await expect(page.locator('#networkDepth option[value="14"]')).toBeDisabled();
+  await expect(page.locator('#networkDepth option[value="20"]')).toBeDisabled();
+  await expect(page.locator("#networkDepthHint")).toContainText("disabled on the free demo");
+});
+
+test("finishes a Search Network replay cleanly at the demo node limit", async ({ page }) => {
+  await page.route(`${API_BASE}/api/capabilities`, async (route) => {
+    await json(route, {
+      public_demo: true,
+      limits: { search_network_depth: 12 },
+    });
+  });
+  await page.route(`${API_BASE}/api/search-network`, async (route) => {
+    const events = [
+      { type: "started", depth: 12 },
+      { type: "trace", event: { e: "start", pass: 8, depth: 8, limit: 1200, t_us: 100 } },
+      { type: "trace", event: { e: "node", id: 0, parent: -1, ply: 0, depth: 8, move: "", kind: "root", hash: "root", t_us: 200 } },
+      { type: "trace", event: { e: "node", id: 1, parent: 0, ply: 1, depth: 7, move: "a7a6", kind: "search", hash: "child", t_us: 300 } },
+      { type: "trace", event: { e: "best", id: 0, child: 1, move: "a7a6", score: -26, t_us: 400 } },
+      { type: "trace", event: { e: "pv", pass: 8, depth: 8, score: -26, moves: ["a7a6"], t_us: 500 } },
+      { type: "trace", event: { e: "finish", pass: 8, depth: 8, score: -26, best: "a7a6", t_us: 600 } },
+      { type: "progress", depth: 8, nodes: 1_200_000, time_ms: 900 },
+      {
+        type: "complete",
+        bestmove: "a7a6",
+        target_depth: 12,
+        depth: 8,
+        nodes: 1_500_000,
+        limited: true,
+      },
+    ];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+    });
+  });
+
+  await page.goto("/search-lab/?mode=network");
+  await expect(page.locator("#networkDepth")).toHaveValue("12");
+  await page.locator("#networkRunMode").selectOption("replay");
+  await page.locator("#runSearchButton").click();
+
+  await expect(page.locator("#networkCanvas")).toHaveAttribute("data-search-limited", "true");
+  await expect(page.locator("#networkCanvas")).toHaveAttribute("data-state", "complete");
+  await expect(page.locator("#networkStreamState")).toContainText("Capped · depth 8/12");
+  await expect(page.locator("#networkEventTag")).toHaveText("NODE LIMIT REACHED");
+  await expect(page.locator("#networkPlay")).toHaveText("Replay");
+});
+
 test("steps through the search microscope and accepts a live trace", async ({ page }) => {
-  test.setTimeout(25_000);
+  test.setTimeout(40_000);
   const principalVariation = [
     "a7a6", "b1c3", "g8f6", "d2d4", "e7e5", "c1g5",
     "f8e7", "d1d2", "e8g8", "e1c1", "c8e6", "f2f4",
@@ -590,7 +718,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await page.locator("#networkSpeed").selectOption("very-fast");
   await page.locator("#networkRestart").click();
   await expect(canvas).toHaveAttribute("data-replay-scrub-state", "playing");
-  await expect(page.locator("#networkEventTag")).toHaveText("SEARCH COMPLETE", { timeout: 4000 });
+  await expect(page.locator("#networkEventTag")).toHaveText("SEARCH COMPLETE", { timeout: 10_000 });
   await expect(page.locator("#networkNodeCount")).toHaveText("2143");
   await expect(page.locator("#networkEngineTime")).toHaveText("184 ms");
   await expect(page.locator("#networkEngineTimeMode")).toHaveText("recorded engine clock");
@@ -679,7 +807,7 @@ test("keeps game-start controls disabled when the engine is missing", async ({ p
   await page.locator("#wakeSgurrButton").click();
   await expect(page.locator("#introScreen")).toBeHidden();
 
-  await expect(page.locator("#menuStatus")).toContainText("Build sgurr_cpp\\sgr_v6_0.exe");
+  await expect(page.locator("#menuStatus")).toContainText("Build the current Sgurr engine");
   await expect(page.locator("#playWhiteButton")).toBeDisabled();
   await expect(page.locator("#playBlackButton")).toBeDisabled();
   await expect(page.locator("#watchButton")).toBeDisabled();

@@ -298,10 +298,16 @@
   box-shadow: 0 0 0 2px rgba(220, 178, 91, 0.2);
 }
 
-/* Still selectable -- the backend reports availability, and choosing a build
-   that has not been compiled yet gives a clear message rather than silence. */
 .engine-card.unavailable {
   opacity: 0.58;
+  cursor: not-allowed;
+  filter: saturate(0.35);
+}
+
+.engine-card.unavailable:hover,
+.engine-card.unavailable:focus-visible {
+  border-color: var(--edge);
+  box-shadow: none;
 }
 
 .engine-card-head {

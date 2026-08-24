@@ -295,6 +295,18 @@ let liveIterations = [];
 let liveCandidates = [];
 let customPosition = null;
 const searchNetwork = initSearchNetwork();
+let networkDepthLimit = 20;
+let publicDemo = false;
+let capabilitiesReady = false;
+let searchRunning = false;
+
+function syncRunSearchButton() {
+  refs.runSearchButton.disabled = !capabilitiesReady || searchRunning;
+}
+
+function demoDepthReason() {
+  return `Depths above ${networkDepthLimit} are available locally and disabled on the free demo.`;
+}
 
 function selectedPosition() {
   if (refs.positionSelect.value === "custom" && customPosition) return customPosition;
@@ -311,7 +323,7 @@ function updateNetworkDepthControl() {
   refs.runSearchButton.textContent = live
     ? `Watch depth-${depth} live`
     : `Record depth-${depth} search`;
-  refs.networkDepthHint.textContent = depth >= 18
+  const hint = depth >= 18
     ? live
       ? "Extreme depth: watch every iteration live as the horizon expands from 1 to the target."
       : "Extreme depth: this can take a while, especially in tactical positions."
@@ -320,9 +332,46 @@ function updateNetworkDepthControl() {
         ? "Every completed iteration stays in the web while the next depth unfolds."
         : "The full iterative search is recorded; real-time replay preserves its timing."
       : "The web streams continuously from depth 1 to the selected horizon.";
+  refs.networkDepthHint.textContent = publicDemo ? `${hint} ${demoDepthReason()}` : hint;
   if (mode === "network") refs.modeNote.textContent = live
     ? `Live engine trace · depths 1–${depth} · no prerecorded motion`
     : `Recorded node trace · depths 1–${depth} · replayable`;
+}
+
+async function loadCapabilities() {
+  capabilitiesReady = false;
+  syncRunSearchButton();
+  try {
+    const response = await fetch(apiUrl("/api/capabilities"));
+    if (!response.ok) return;
+    const data = await response.json();
+    publicDemo = Boolean(data.public_demo);
+    networkDepthLimit = Number(data.limits?.search_network_depth) || 20;
+
+    for (const option of refs.networkDepth.options) {
+      option.dataset.label ||= option.textContent;
+      const unavailable = publicDemo && Number(option.value) > networkDepthLimit;
+      option.disabled = unavailable;
+      option.textContent = unavailable
+        ? `${option.dataset.label} · local only`
+        : option.dataset.label;
+      option.title = unavailable ? demoDepthReason() : "";
+    }
+
+    refs.networkDepth.title = publicDemo ? demoDepthReason() : "";
+    if (selectedNetworkDepth() > networkDepthLimit) {
+      const enabled = [...refs.networkDepth.options]
+        .filter((option) => !option.disabled)
+        .map((option) => Number(option.value));
+      if (enabled.length) refs.networkDepth.value = String(Math.max(...enabled));
+    }
+    updateNetworkDepthControl();
+  } catch {
+    // Local static previews can run without a backend.
+  } finally {
+    capabilitiesReady = true;
+    syncRunSearchButton();
+  }
 }
 
 function positionSide(fen) {
@@ -690,12 +739,12 @@ function setMode(nextMode) {
     liveController = null;
     setPosition(selectedPosition());
     updateNetworkDepthControl();
-    refs.runSearchButton.disabled = false;
+    syncRunSearchButton();
     searchNetwork.reset();
   } else if (live) {
     searchNetwork.reset();
     refs.runSearchButton.textContent = "Run a 1.5 second search";
-    refs.runSearchButton.disabled = false;
+    syncRunSearchButton();
     resetLive();
   } else {
     searchNetwork.reset();
@@ -707,19 +756,29 @@ function setMode(nextMode) {
 }
 
 async function runNetworkSearch() {
+  if (!capabilitiesReady || searchRunning) return;
   const position = selectedPosition();
   const depth = selectedNetworkDepth();
+  if (depth > networkDepthLimit) {
+    refs.networkDepthHint.textContent = demoDepthReason();
+    return;
+  }
   const runMode = refs.networkRunMode.value;
-  refs.runSearchButton.disabled = true;
+  searchRunning = true;
+  syncRunSearchButton();
   refs.networkRunMode.disabled = true;
   refs.networkDepth.disabled = true;
   refs.runSearchButton.textContent = runMode === "live"
     ? `Watching depth ${depth}…`
     : `Searching to depth ${depth}…`;
-  await searchNetwork.load(position.fen, depth, runMode);
-  refs.networkRunMode.disabled = false;
-  refs.networkDepth.disabled = false;
-  refs.runSearchButton.disabled = false;
+  try {
+    await searchNetwork.load(position.fen, depth, runMode);
+  } finally {
+    searchRunning = false;
+    refs.networkRunMode.disabled = false;
+    refs.networkDepth.disabled = false;
+    syncRunSearchButton();
+  }
   if (mode !== "network") {
     refs.runSearchButton.textContent = mode === "live" ? "Run a 1.5 second search" : "Run search";
     return;
@@ -739,7 +798,7 @@ function handleLiveEvent(event) {
     refs.searchSignal.className = "search-signal complete";
     refs.searchSignal.querySelector("strong").textContent = `Committed to ${moveLabel(event.bestmove)}`;
     refs.liveDetail.textContent = `${liveIterations.length} completed depths streamed. Any unfinished next pass was discarded.`;
-    refs.runSearchButton.disabled = false;
+    syncRunSearchButton();
     refs.runSearchButton.textContent = "Run again";
     return;
   }
@@ -788,11 +847,13 @@ async function readNdjson(response) {
 }
 
 async function runLiveSearch() {
+  if (!capabilitiesReady || searchRunning) return;
   if (liveController) liveController.abort();
   liveController = new AbortController();
   const position = selectedPosition();
   resetLive();
-  refs.runSearchButton.disabled = true;
+  searchRunning = true;
+  syncRunSearchButton();
   refs.runSearchButton.textContent = "Searching…";
   refs.searchSignal.className = "search-signal searching";
   refs.searchSignal.querySelector("strong").textContent = "Starting Sgurr";
@@ -818,10 +879,12 @@ async function runLiveSearch() {
     refs.liveDetail.textContent = error.message || String(error);
     refs.eventTag.textContent = "CONNECTION LOST";
     refs.explanationText.textContent = "The guided walkthrough remains available even when the engine backend is offline.";
-    refs.runSearchButton.disabled = false;
+    syncRunSearchButton();
     refs.runSearchButton.textContent = "Try again";
   } finally {
     liveController = null;
+    searchRunning = false;
+    syncRunSearchButton();
   }
 }
 
@@ -884,3 +947,4 @@ if (new URLSearchParams(window.location.search).get("mode") === "network") {
 } else {
   renderWalkthrough();
 }
+loadCapabilities();

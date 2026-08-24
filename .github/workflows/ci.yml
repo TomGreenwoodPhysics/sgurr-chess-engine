@@ -183,14 +183,45 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r web/backend/requirements.txt
+        run: pip install -r web/backend/requirements.lock.txt
 
       - name: Unit tests (draw rules, production config boundaries)
         run: python -m unittest discover -s web/backend -p "test_*.py" -v
+
+  container:
+    name: web container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t sgurr-web .
+
+      - name: Start container
+        run: docker run -d --name sgurr-web -p 8000:10000 sgurr-web
+
+      - name: Wait for readiness
+        run: |
+          for attempt in $(seq 1 90); do
+            curl --fail --silent http://127.0.0.1:8000/ready && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Exercise live engine paths
+        run: python web/tests/container_smoke.py http://127.0.0.1:8000
+
+      - name: Container logs
+        if: always()
+        run: docker logs sgurr-web || true
+
+      - name: Stop container
+        if: always()
+        run: docker rm --force sgurr-web || true
 
   browser:
     name: web frontend

@@ -733,6 +733,9 @@ function renderEditor() {
   }
 
   refs.editorPlayerButton.textContent = editorReturnLabel();
+  refs.editorPlayerButton.title = app.publicDemo
+    ? "Self-play is available locally; the free demo supports White or Black."
+    : "";
   refs.editorTurnButton.textContent = `First move: ${title(app.editor.turn)}`;
   refs.editorOddsRecipientButton.textContent = editorOddsLabel();
   refs.editorPlayButton.disabled = app.busy || app.thinking || !app.backendOk || !app.engineExists;
@@ -796,8 +799,8 @@ function renderBlobMemory() {
 }
 
 // Self-play is a mirror match, so the arena is named for the build fighting
-// itself: the quoted codename where a release has one ('Sgurr v6.0
-// "Banachdaich"' -> Banachdaich), otherwise whatever follows "Sgurr"
+// itself: the quoted codename where a release has one ('Sgurr v8.2
+// "Thearlaich"' -> Thearlaich), otherwise whatever follows "Sgurr"
 // ('Sgurr classical' -> Classical). This used to be hardcoded as "MacKenzie
 // Mirror" and froze there when v4.0 stopped being the current release.
 function engineCodename(label) {
@@ -813,8 +816,8 @@ function renderMenu() {
   refs.menuScreen.hidden = app.mode !== "menu";
   refs.menuTimeButton.textContent = currentTimeControl().label;
   refs.menuThemeButton.textContent = THEMES[app.themeKey]?.label || THEMES.wood.label;
-  const engineLabel = app.engineLabel || 'Sgurr v6.0 "Banachdaich"';
-  const engineSubtitle = app.engineSubtitle || "GEN5 NNUE + REFINED SEARCH · ~2807";
+  const engineLabel = app.engineLabel || 'Sgurr v8.2 "Thearlaich"';
+  const engineSubtitle = app.engineSubtitle || "GEN8 NNUE + PACKED TT · ~3012";
   refs.menuEngineButton.textContent = engineLabel;
   if (refs.menuEngineCaption) {
     refs.menuEngineCaption.textContent = engineSubtitle;
@@ -834,11 +837,36 @@ function renderMenu() {
   renderBlobMemory();
 
   const canStart = app.backendOk && app.engineExists && !app.busy && !app.thinking;
+  const availableEngines = app.engines.filter((entry) => entry.available !== false).length;
   refs.playWhiteButton.disabled = !canStart;
   refs.playBlackButton.disabled = !canStart;
   refs.watchButton.disabled = !canStart;
+  refs.watchButton.classList.toggle("demo-disabled", app.publicDemo);
+  if (app.publicDemo) {
+    const reason = "Self-play runs continuously and is available when running Sgurr locally.";
+    refs.watchButton.setAttribute("aria-disabled", "true");
+    refs.watchButton.setAttribute("aria-label", `Watch Sgurr vs itself. ${reason}`);
+    refs.watchButton.title = reason;
+  } else {
+    refs.watchButton.removeAttribute("aria-disabled");
+    refs.watchButton.removeAttribute("aria-label");
+    refs.watchButton.title = "";
+  }
+  refs.engineDownButton.disabled = availableEngines <= 1;
+  refs.engineUpButton.disabled = availableEngines <= 1;
   refs.loadFenButton.disabled = !canStart;
   refs.boardEditorButton.disabled = app.busy || app.thinking;
+
+  const watchOption = refs.fenSideSelect.querySelector('option[value="watch"]');
+  if (watchOption) {
+    watchOption.disabled = app.publicDemo;
+    watchOption.textContent = app.publicDemo
+      ? "Watch Sgurr vs itself · local only"
+      : "Watch Sgurr vs itself";
+    watchOption.title = app.publicDemo
+      ? "Continuous self-play is disabled on the free demo."
+      : "";
+  }
 
   if (app.menuMessage) {
     refs.menuStatus.textContent = app.menuMessage;
@@ -847,7 +875,7 @@ function renderMenu() {
     refs.menuStatus.textContent = "Waiting for backend at 127.0.0.1:8000";
     refs.menuStatus.dataset.state = "warning";
   } else if (!app.engineExists) {
-    refs.menuStatus.textContent = "Build sgurr_cpp\\sgr_v6_0.exe before playing";
+    refs.menuStatus.textContent = "Build the current Sgurr engine before playing";
     refs.menuStatus.dataset.state = "warning";
   } else {
     refs.menuStatus.textContent = "Ready";

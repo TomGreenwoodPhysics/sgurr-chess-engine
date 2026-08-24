@@ -50,6 +50,14 @@ class ProductionConfigTest(unittest.TestCase):
             ["play.example.com", "api.example.com"],
         )
 
+    def test_render_hostname_is_added_to_allowed_hosts(self) -> None:
+        hosts = allowed_hosts_from_env(
+            None,
+            platform_host="sgurr-demo.onrender.com",
+        )
+
+        self.assertIn("sgurr-demo.onrender.com", hosts)
+
     def test_invalid_or_wildcard_hosts_are_rejected(self) -> None:
         for value in ("*", "", "https://play.example.com", "play.example.com:443"):
             with self.subTest(value=value), self.assertRaises(RuntimeError):

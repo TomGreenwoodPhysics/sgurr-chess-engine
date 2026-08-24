@@ -17,7 +17,14 @@ refs.introCoreTrigger.addEventListener("click", wakeSgurr);
 refs.wakeSgurrButton.addEventListener("click", wakeSgurr);
 refs.playWhiteButton.addEventListener("click", () => startGame("white"));
 refs.playBlackButton.addEventListener("click", () => startGame("black"));
-refs.watchButton.addEventListener("click", () => startGame(null));
+refs.watchButton.addEventListener("click", () => {
+  if (app.publicDemo) {
+    app.menuMessage = "Self-play is available locally; continuous play is disabled on the free demo.";
+    render();
+    return;
+  }
+  startGame(null);
+});
 refs.timeDownButton.addEventListener("click", () => cycleTime(-1));
 refs.timeUpButton.addEventListener("click", () => cycleTime(1));
 refs.menuTimeButton.addEventListener("click", () => openModal(refs.timeModal));
@@ -195,6 +202,7 @@ document.addEventListener("click", (event) => {
   if (
     !button
     || button.disabled
+    || button.getAttribute("aria-disabled") === "true"
     || button.classList.contains("square")
     || button.dataset.sound === "none"
   ) {

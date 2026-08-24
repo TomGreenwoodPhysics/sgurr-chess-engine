@@ -96,6 +96,10 @@ function applyEngineSelection() {
   const list = app.engines;
   if (!list.length) return;
   app.selectedEngineIndex = ((app.selectedEngineIndex % list.length) + list.length) % list.length;
+  if (list[app.selectedEngineIndex]?.available === false) {
+    const availableIndex = list.findIndex((entry) => entry.available !== false);
+    if (availableIndex >= 0) app.selectedEngineIndex = availableIndex;
+  }
   const sel = list[app.selectedEngineIndex];
   app.engineLabel = sel.label;
   app.engineSubtitle = sel.subtitle || "";
@@ -104,7 +108,7 @@ function applyEngineSelection() {
 
 function engineChoiceMessage(sel) {
   return `Opponent: ${sel.label}`
-    + (sel.available === false ? " — binary missing, build it first!" : "");
+    + (sel.available === false ? ` — ${sel.unavailable_reason || "unavailable"}` : "");
 }
 
 // Pick an opponent outright rather than stepping to it. The gallery hands back
@@ -112,13 +116,20 @@ function engineChoiceMessage(sel) {
 // rating), so selection stays correct however the list is presented.
 function setEngineIndex(index) {
   if (!app.engines.length) {
-    return;
+    return false;
+  }
+  const selected = app.engines[index];
+  if (!selected || selected.available === false) {
+    app.menuMessage = selected?.unavailable_reason || "Engine unavailable";
+    render();
+    return false;
   }
   app.selectedEngineIndex = index;
   applyEngineSelection();
   app.menuMessage = engineChoiceMessage(app.engines[app.selectedEngineIndex]);
   renderEngineGallery();
   render();
+  return true;
 }
 
 // The opponent ladder. Sorted by rating so the progression from the
@@ -154,6 +165,12 @@ function renderEngineGallery() {
     button.className = `engine-card${selected ? " active" : ""}`
       + (engine.available === false ? " unavailable" : "");
     button.setAttribute("aria-pressed", String(selected));
+    if (engine.available === false) {
+      const reason = engine.unavailable_reason || "This engine is unavailable.";
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("aria-label", `${engine.label}. ${reason}`);
+      button.title = reason;
+    }
 
     const head = document.createElement("div");
     head.className = "engine-card-head";
@@ -169,7 +186,7 @@ function renderEngineGallery() {
     if (engine.available === false) {
       const badge = document.createElement("span");
       badge.className = "engine-badge missing";
-      badge.textContent = "NOT BUILT";
+      badge.textContent = engine.unavailable_badge || "NOT BUILT";
       head.appendChild(badge);
     }
 
@@ -197,22 +214,28 @@ function renderEngineGallery() {
 
     button.append(head, tech, meter);
     button.addEventListener("click", () => {
-      setEngineIndex(index);
-      closeAllModals();
+      if (setEngineIndex(index)) closeAllModals();
     });
     gallery.appendChild(button);
   }
 }
 
 function cycleEngine(direction) {
-  if (app.engines.length > 1) {
-    app.selectedEngineIndex += direction;
+  const available = app.engines
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.available !== false)
+    .map(({ index }) => index);
+  if (available.length > 1) {
+    const current = Math.max(0, available.indexOf(app.selectedEngineIndex));
+    app.selectedEngineIndex = available[
+      (current + direction + available.length) % available.length
+    ];
     applyEngineSelection();
     app.menuMessage = engineChoiceMessage(app.engines[app.selectedEngineIndex]);
     renderEngineGallery();
   } else {
-    app.menuMessage = app.engines.length === 1
-      ? `Only one engine available: ${app.engines[0].label}`
+    app.menuMessage = available.length === 1
+      ? `Only one engine available: ${app.engines[available[0]].label}`
       : "Engine list unavailable (is the backend running?)";
   }
   render();
@@ -223,6 +246,7 @@ async function fetchEngines() {
     const data = await apiGet("/api/engines");
     if (Array.isArray(data.engines) && data.engines.length) {
       app.engines = data.engines;
+      app.publicDemo = Boolean(data.public_demo);
       applyEngineSelection();
       renderEngineGallery();
       render();
@@ -235,12 +259,14 @@ async function fetchEngines() {
 async function refreshHealth() {
   const previousBackendOk = app.backendOk;
   const previousEngineExists = app.engineExists;
+  const previousPublicDemo = app.publicDemo;
   const previousError = app.error;
   try {
     const health = await apiGet("/health");
     app.backendOk = Boolean(health.ok);
     app.engineExists = Boolean(health.engine_exists);
-    app.backendDetail = app.engineExists ? "engine found" : "build sgr_v6_0.exe";
+    app.publicDemo = Boolean(health.public_demo);
+    app.backendDetail = app.engineExists ? "engine found" : "build sgr_v8_2";
     if (app.error === "Backend unavailable" || /fetch/i.test(app.error)) {
       app.error = "";
       app.status = app.mode === "menu" ? "Choose a side" : "Backend reconnected";
@@ -248,6 +274,7 @@ async function refreshHealth() {
     }
     const healthChanged = previousBackendOk !== app.backendOk
       || previousEngineExists !== app.engineExists
+      || previousPublicDemo !== app.publicDemo
       || previousError !== app.error;
     if (healthChanged) {
       render();

@@ -94,20 +94,32 @@ class SgurrUciEngine:
         *,
         startup_timeout: float = 5.0,
         net_path: Path | None = None,
+        require_nnue: bool = False,
     ) -> None:
         self.engine_path = engine_path
         self.startup_timeout = startup_timeout
         self.net_path = net_path
+        self.require_nnue = require_nnue
         self._process: subprocess.Popen[str] | None = None
         self._reader: threading.Thread | None = None
         self._lines: queue.Queue[str | None] = queue.Queue()
         self._lock = threading.RLock()
         self._new_game_pending = True
+        self._nnue_loaded = False
+        self._cancel_requested = threading.Event()
 
     @property
     def is_running(self) -> bool:
         process = self._process
         return process is not None and process.poll() is None
+
+    @property
+    def nnue_loaded(self) -> bool:
+        return self._nnue_loaded
+
+    def ensure_ready(self) -> None:
+        with self._lock:
+            self._start_locked()
 
     def mark_new_game(self) -> None:
         with self._lock:
@@ -133,6 +145,8 @@ class SgurrUciEngine:
         on_line: Callable[[str], None] | None = None,
     ) -> UciSearchResult:
         with self._lock:
+            if self._cancel_requested.is_set():
+                raise EngineCrashedError("Sgurr search was cancelled")
             self._start_locked()
             self._send_new_game_if_needed_locked()
             self._drain_lines_locked()
@@ -182,18 +196,26 @@ class SgurrUciEngine:
                     self._kill_locked()
 
             self._process = None
+            self._reader = None
+            self._new_game_pending = True
+            self._nnue_loaded = False
 
     def cancel(self) -> None:
         """Interrupt an active search without waiting for the search lock."""
+        self._cancel_requested.set()
         process = self._process
         if process is None or process.poll() is not None:
             return
-        try:
-            process.terminate()
-        except OSError:
-            pass
+        self._terminate_process(process)
+        if self._process is process:
+            self._process = None
+            self._reader = None
+            self._new_game_pending = True
+            self._nnue_loaded = False
 
     def _start_locked(self) -> None:
+        if self._cancel_requested.is_set():
+            raise EngineCrashedError("Sgurr search was cancelled")
         if self.is_running:
             return
 
@@ -205,6 +227,8 @@ class SgurrUciEngine:
             raise EngineStartupError(
                 f"Engine executable not found: {self.engine_path}"
             )
+        if self.require_nnue and (self.net_path is None or not self.net_path.is_file()):
+            raise EngineStartupError("NNUE network is unavailable")
 
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
@@ -217,8 +241,10 @@ class SgurrUciEngine:
         if self.net_path is not None:
             env["SGR_EVALFILE"] = str(self.net_path)
 
+        lines: queue.Queue[str | None] = queue.Queue()
+        self._lines = lines
         try:
-            self._process = subprocess.Popen(
+            process = subprocess.Popen(
                 [str(self.engine_path), "uci"],
                 cwd=str(self.engine_path.parent),
                 stdin=subprocess.PIPE,
@@ -234,16 +260,36 @@ class SgurrUciEngine:
         except OSError as exc:
             raise EngineStartupError(f"Could not start Sgurr: {exc}") from exc
 
-        self._reader = threading.Thread(target=self._reader_loop, daemon=True)
-        self._reader.start()
+        self._process = process
+        self._reader = threading.Thread(
+            target=self._reader_loop,
+            args=(process, lines),
+            daemon=True,
+        )
+        try:
+            self._reader.start()
+        except Exception as exc:
+            self._kill_locked()
+            raise EngineStartupError("Could not start the engine output reader") from exc
+
+        if self._cancel_requested.is_set():
+            self._kill_locked()
+            raise EngineCrashedError("Sgurr search was cancelled")
 
         try:
+            startup_lines: list[str] = []
             self._send_locked("uci")
             self._wait_for_locked(
                 lambda line: line.strip() == "uciok",
                 self.startup_timeout,
                 "uciok",
+                on_line=startup_lines.append,
             )
+            self._nnue_loaded = any(
+                line.startswith("info string nnue: loaded ") for line in startup_lines
+            )
+            if self.require_nnue and not self._nnue_loaded:
+                raise EngineStartupError("Sgurr started without the required NNUE network")
             self._send_locked("isready")
             self._wait_for_locked(
                 lambda line: line.strip() == "readyok",
@@ -266,17 +312,20 @@ class SgurrUciEngine:
         )
         self._new_game_pending = False
 
-    def _reader_loop(self) -> None:
-        process = self._process
-        if process is None or process.stdout is None:
-            self._lines.put(None)
+    def _reader_loop(
+        self,
+        process: subprocess.Popen[str],
+        lines: queue.Queue[str | None],
+    ) -> None:
+        if process.stdout is None:
+            lines.put(None)
             return
 
         try:
             for line in process.stdout:
-                self._lines.put(line.rstrip("\r\n"))
+                lines.put(line.rstrip("\r\n"))
         finally:
-            self._lines.put(None)
+            lines.put(None)
 
     def _send_locked(self, command: str) -> None:
         process = self._process
@@ -294,6 +343,8 @@ class SgurrUciEngine:
         predicate: Callable[[str], bool],
         timeout_seconds: float,
         label: str,
+        *,
+        on_line: Callable[[str], None] | None = None,
     ) -> str:
         deadline = time.monotonic() + timeout_seconds
         while True:
@@ -301,6 +352,8 @@ class SgurrUciEngine:
             if remaining <= 0:
                 raise EngineTimeoutError(f"Timed out waiting for {label}")
             line = self._read_line_locked(remaining)
+            if on_line is not None:
+                on_line(line)
             if predicate(line):
                 return line
 
@@ -339,13 +392,25 @@ class SgurrUciEngine:
         if process is None:
             return
 
-        if process.poll() is None:
-            try:
-                process.terminate()
-                process.wait(timeout=1.0)
-            except Exception:
+        self._terminate_process(process)
+        self._process = None
+        self._reader = None
+        self._new_game_pending = True
+        self._nnue_loaded = False
+        self._drain_lines_locked()
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen[str]) -> None:
+        if process.poll() is not None:
+            process.wait()
+            return
+        try:
+            process.terminate()
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=1.0)
+        except OSError:
+            if process.poll() is None:
                 process.kill()
                 process.wait(timeout=1.0)
-
-        self._process = None
-        self._drain_lines_locked()

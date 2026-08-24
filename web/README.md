@@ -149,8 +149,8 @@ set SGURR_ALLOWED_HOSTS=play.example.com
 python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Sgurr owns one persistent UCI process, so use one Uvicorn worker per engine
-instance. If the frontend and API are genuinely on different origins, list the
+Each Uvicorn worker owns its own engine processes, so run one worker for the
+hosted demo. If the frontend and API are genuinely on different origins, list the
 frontend origins explicitly:
 
 ```bat
@@ -168,9 +168,27 @@ ports. Local origins for ports `4173`, `5173`, and `5500` are enabled only when
 publishes frontend assets plus a fixed allowlist of repository-level music and
 result sounds; it never mounts the repository root as a static directory.
 
-Before exposing the service publicly, also configure HTTPS, process
-supervision, request logging, backups of release records, and infrastructure
-rate limiting for the engine endpoint.
+Before exposing a non-container deployment publicly, also configure HTTPS,
+process supervision, request logging, and request limits.
+
+### Free hosted demo
+
+The root `Dockerfile` builds scalar Linux versions of v8.2 and the trace
+engine, verifies the committed NNUE, and runs one Uvicorn worker:
+
+```bash
+docker build -t sgurr-web .
+docker run --rm -p 8000:10000 sgurr-web
+```
+
+The container enables `SGURR_PUBLIC_DEMO`. It exposes v8.2 only, permits one
+search at a time, caps engine and Search Network work, and disables continuous
+self-play. Historical opponents and deeper Search Network choices remain
+visible as local-only options. Normal local development is unchanged.
+
+For Render, create a Web Service from the repository, choose Docker and the
+Free instance, and set the health check path to `/ready`. Render supplies the
+public hostname and port automatically.
 
 ## 6. Tests
 
@@ -193,9 +211,10 @@ python -m unittest discover -s web\backend -p "test_*.py"
 ```
 
 The browser suite covers the intro/menu handoff, both human sides, board
-orientation, human/engine exchange, self-play, board editor entry, and
-missing-engine behaviour. Backend tests cover draw rules and production
-configuration boundaries.
+orientation, human/engine exchange, self-play, board editor entry, public-demo
+controls, and missing-engine behaviour. Backend tests cover draw rules,
+production configuration, request limits, concurrency, and rate limiting. CI
+also builds the Linux container and exercises the real engine and trace paths.
 
 ## Release And Licensing Records
 
@@ -218,6 +237,8 @@ obligations.
 
 ```text
 GET  /health
+GET  /ready
+GET  /api/capabilities
 POST /api/new
 POST /api/load-fen
 POST /api/player-move

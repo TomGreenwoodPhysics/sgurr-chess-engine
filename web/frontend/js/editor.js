@@ -153,8 +153,10 @@ async function copyEditorFen() {
 }
 
 function cycleEditorPlayer() {
-  const index = EDIT_RETURN_SIDES.indexOf(app.editor.returnSide);
-  app.editor.returnSide = EDIT_RETURN_SIDES[(index + 1) % EDIT_RETURN_SIDES.length];
+  const choices = app.publicDemo ? ["white", "black"] : EDIT_RETURN_SIDES;
+  const index = choices.indexOf(app.editor.returnSide);
+  const next = index < 0 ? 0 : (index + 1) % choices.length;
+  app.editor.returnSide = choices[next];
   setEditorStatus(editorReturnLabel());
 }
 

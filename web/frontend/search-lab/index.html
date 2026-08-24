@@ -95,9 +95,11 @@
                   <option value="replay">Record, then replay</option>
                 </select>
                 <label for="networkDepth">Target search depth</label>
-                <select id="networkDepth">
+                <select id="networkDepth" aria-describedby="networkDepthHint">
+                  <option value="4">4 · instant</option>
                   <option value="6">6 · instant</option>
                   <option value="10">10 · quick</option>
+                  <option value="12">12 · moderate</option>
                   <option value="14" selected>14 · deep</option>
                   <option value="16">16 · very deep</option>
                   <option value="18">18 · extreme</option>
@@ -176,7 +178,7 @@
 
             <div class="network-canvas-wrap" id="networkCanvasWrap">
               <canvas id="networkCanvas" tabindex="0" aria-label="Interactive radial search network. The root is search depth zero in the centre, and each ring is one depth farther from the root. Drag to pan, and use the mouse wheel or plus and minus keys to zoom."></canvas>
-              <div class="network-stream-state" id="networkStreamState" data-state="ready">
+              <div class="network-stream-state" id="networkStreamState" data-state="ready" role="status" aria-live="polite">
                 <i aria-hidden="true"></i><span>Ready</span>
               </div>
               <div class="network-viewport-controls" aria-label="Network view controls">
