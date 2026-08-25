@@ -492,6 +492,72 @@ a.menu-action-card:focus-visible {
   background: color-mix(in srgb, var(--accent), transparent 88%);
 }
 
+.menu-tools-grid .inside-sgurr-link {
+  grid-column: 1 / -1;
+  grid-template-columns: 30px minmax(0, 1fr) 54px;
+  min-height: 54px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 54%);
+  color: var(--text);
+  background:
+    radial-gradient(circle at 92% 50%, color-mix(in srgb, var(--accent-2), transparent 72%) 0 3%, transparent 28%),
+    linear-gradient(100deg, color-mix(in srgb, var(--accent), transparent 89%), transparent 54%),
+    var(--surface-2);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.menu-tools-grid .inside-sgurr-link:hover {
+  border-color: var(--accent);
+  background:
+    radial-gradient(circle at 92% 50%, color-mix(in srgb, var(--accent-2), transparent 62%) 0 3%, transparent 29%),
+    linear-gradient(100deg, color-mix(in srgb, var(--accent), transparent 83%), transparent 58%),
+    var(--surface-2);
+}
+
+.menu-cortex-mark {
+  position: relative;
+  width: 44px;
+  height: 28px;
+  justify-self: end;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 48%);
+  border-radius: 58% 44% 49% 53%;
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--accent), transparent 78%);
+}
+
+.menu-cortex-mark::before,
+.menu-cortex-mark::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 17px;
+  border: 1px solid color-mix(in srgb, var(--accent-2), transparent 57%);
+}
+
+.menu-cortex-mark::before {
+  left: 3px;
+  border-right: 0;
+  border-radius: 70% 25% 25% 70%;
+}
+
+.menu-cortex-mark::after {
+  right: 3px;
+  border-left: 0;
+  border-radius: 25% 70% 70% 25%;
+}
+
+.menu-cortex-mark i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  transform: translate(-50%, -50%);
+}
+
 .play-white {
   border-color: color-mix(in srgb, var(--white-eval), var(--edge) 28%);
   background:
@@ -642,9 +708,14 @@ a.menu-action-card:focus-visible {
     min-height: 42px;
   }
 
-  .menu-tools-grid button {
+  .menu-tools-grid button,
+  .menu-tools-grid a {
     min-height: 38px;
     font-size: 0.95rem;
+  }
+
+  .menu-tools-grid .inside-sgurr-link {
+    min-height: 42px;
   }
 
   .menu-status {
@@ -704,8 +775,13 @@ a.menu-action-card:focus-visible {
     min-height: 42px;
   }
 
-  .menu-tools-grid button {
+  .menu-tools-grid button,
+  .menu-tools-grid a {
     min-height: 38px;
+  }
+
+  .menu-tools-grid .inside-sgurr-link {
+    min-height: 42px;
   }
 }
 

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="sgurr-api-base" content="">
+    <title>Inside Sgurr — NNUE Cortex</title>
+    <meta name="description" content="Inspect the live Gen8 NNUE evaluator inside Sgurr, from chessboard features to its two accumulator perspectives and final score.">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#251a16">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Sgurr">
+    <meta property="og:title" content="Inside Sgurr — NNUE Cortex">
+    <meta property="og:description" content="Lift the hood on Sgurr's real Gen8 NNUE evaluator.">
+    <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23070a11'/><path d='M30 11C17 11 10 21 12 33c1 8 7 15 16 18V13m6-2c13 0 20 10 18 22-1 8-7 15-16 18V13' fill='none' stroke='%23e2b147' stroke-width='3'/><circle cx='32' cy='32' r='5' fill='%2370d7ff'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="inside-header">
+      <a class="inside-brand" href="../?view=menu" aria-label="Back to Sgurr main menu">
+        <span class="inside-brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span><strong>SGURR</strong><small>INSIDE SGURR</small></span>
+      </a>
+      <div class="inside-header-actions">
+        <label class="theme-control" for="labThemeSelect">
+          <span>Theme</span>
+          <select id="labThemeSelect" aria-label="Choose site theme"></select>
+        </label>
+        <a class="header-link" href="../search-lab/?mode=network">Search Network <span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="inside-intro" aria-labelledby="insideTitle">
+        <div>
+          <p class="eyebrow">NNUE evaluation</p>
+          <h1 id="insideTitle">Lift the hood on Sgurr.</h1>
+        </div>
+        <p>Move a piece and watch the real Gen8 network update. Every lane, clipped activation and score below is calculated from the same quantised weights used by Sgurr v8.2.</p>
+      </section>
+
+      <section class="inside-shell" id="insideShell" data-state="loading" aria-label="Sgurr NNUE evaluator">
+        <aside class="position-deck deck">
+          <div class="deck-heading">
+            <div>
+              <p class="deck-kicker">01 / Input</p>
+              <h2>Position</h2>
+            </div>
+            <span class="turn-badge" id="positionTurn">White to move</span>
+          </div>
+
+          <label class="field-label" for="positionPreset">Position</label>
+          <select class="field-control" id="positionPreset">
+            <option value="start">Starting position</option>
+            <option value="ruy">Ruy Lopez</option>
+            <option value="kiwipete">Kiwipete</option>
+            <option value="custom" hidden>Current position</option>
+          </select>
+
+          <div class="nnue-board" id="nnueBoard" aria-label="Interactive chessboard"></div>
+          <p class="board-status" id="boardStatus" aria-live="polite">Loading position</p>
+
+          <form class="fen-form" id="nnueFenForm" novalidate>
+            <label class="field-label" for="nnueFenInput">FEN</label>
+            <textarea class="field-control" id="nnueFenInput" rows="3" spellcheck="false" aria-describedby="fenStatus"></textarea>
+            <div class="position-actions">
+              <button type="submit" class="primary-button">Load position</button>
+              <button type="button" id="undoPosition" disabled>Undo</button>
+            </div>
+            <small id="fenStatus">Legal moves are checked by the backend before evaluation.</small>
+          </form>
+        </aside>
+
+        <section class="cortex-deck deck">
+          <div class="cortex-toolbar">
+            <div>
+              <p class="deck-kicker">02 / Accumulators</p>
+              <h2>Accumulator chamber</h2>
+            </div>
+            <div class="view-switch" role="group" aria-label="Accumulator view">
+              <button type="button" class="active" id="cortexViewButton" aria-pressed="true">Cortex</button>
+              <button type="button" id="circuitViewButton" aria-pressed="false">Circuit</button>
+            </div>
+          </div>
+
+          <div class="model-line" aria-live="polite">
+            <span class="model-signal" id="modelSignal" data-state="loading" aria-hidden="true"></span>
+            <span id="modelStatus">Loading Gen8 evaluator</span>
+            <code>768 → 384 × 2 → 1</code>
+          </div>
+
+          <div class="cortex-stage">
+            <canvas
+              id="cortexCanvas"
+              data-view="cortex"
+              tabindex="0"
+              role="img"
+              aria-label="Sgurr's 768 exact NNUE accumulator activations, arranged as two brain hemispheres. Use arrow keys to inspect lanes."
+            ></canvas>
+            <div class="stage-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="cortex-loading" id="cortexLoading" role="status" aria-live="polite">
+              <span class="loading-brain" aria-hidden="true"><i></i></span>
+              <strong id="loadingTitle">Opening the evaluator</strong>
+              <small id="loadingDetail">Verifying the shipped Gen8 network</small>
+              <button type="button" id="retryModel" hidden>Retry</button>
+            </div>
+          </div>
+
+          <div class="state-rail" role="group" aria-label="Accumulator state">
+            <span class="state-line" aria-hidden="true"></span>
+            <button type="button" id="beforeState" disabled aria-pressed="false"><small>Before</small><strong>Previous state</strong></button>
+            <button type="button" id="deltaState" disabled aria-pressed="false"><small>Delta</small><strong>Changed lanes</strong></button>
+            <button type="button" class="active" id="afterState" aria-pressed="true"><small>After</small><strong>Current state</strong></button>
+            <button type="button" class="replay-button" id="replayTransition" disabled aria-label="Replay accumulator update">↻ <span>Replay</span></button>
+          </div>
+
+          <p class="accuracy-note"><span>Exact values</span> The spatial arrangement is illustrative; the accumulator arithmetic and output score are bit-exact.</p>
+        </section>
+
+        <aside class="readout-deck deck">
+          <div class="deck-heading">
+            <div>
+              <p class="deck-kicker">03 / Output</p>
+              <h2>Readout</h2>
+            </div>
+            <span class="network-version">GEN8</span>
+          </div>
+
+          <section class="eval-readout" aria-live="polite">
+            <span>White evaluation</span>
+            <strong id="nnueEval">—</strong>
+            <small id="nnueEvalDetail">Awaiting evaluator</small>
+          </section>
+
+          <section class="flow-diagram" aria-label="NNUE architecture">
+            <div><strong id="pieceCount">—</strong><small>pieces</small></div>
+            <i aria-hidden="true"></i>
+            <div><strong>768</strong><small>inputs</small></div>
+            <i aria-hidden="true"></i>
+            <div class="flow-split"><strong>384 + 384</strong><small>accumulator lanes</small></div>
+            <i aria-hidden="true"></i>
+            <div><strong>1</strong><small>score</small></div>
+          </section>
+
+          <section class="metrics-grid" aria-label="Network state">
+            <div><span>Active features</span><strong id="activeFeatures">—</strong></div>
+            <div><span>Zero clipped</span><strong id="clippedLow">—</strong></div>
+            <div><span>Saturated</span><strong id="clippedHigh">—</strong></div>
+            <div><span>Raw output</span><strong id="rawOutput">—</strong></div>
+          </section>
+
+          <section class="update-readout">
+            <div class="section-heading">
+              <div><p class="deck-kicker">Last update</p><h3 id="updateTitle">Full refresh</h3></div>
+              <span id="changedLanes">768 lanes</span>
+            </div>
+            <div class="update-path">
+              <div><strong id="pieceEdits">—</strong><small>piece-square edits</small></div>
+              <i aria-hidden="true"></i>
+              <div><strong id="weightRows">—</strong><small>weight rows</small></div>
+              <i aria-hidden="true"></i>
+              <div><strong id="laneOperations">—</strong><small>lane operations</small></div>
+            </div>
+            <p class="feature-trace" id="featureTrace">Awaiting a position</p>
+          </section>
+
+          <section class="lane-inspector">
+            <div class="section-heading">
+              <div><p class="deck-kicker">Probe</p><h3 id="laneTitle">Select a lane</h3></div>
+              <span id="laneAddress">—</span>
+            </div>
+            <div class="lane-meter"><i id="laneMeter"></i></div>
+            <dl>
+              <div><dt>Raw accumulator</dt><dd id="laneRaw">—</dd></div>
+              <div><dt>Clipped ReLU</dt><dd id="laneClipped">—</dd></div>
+              <div><dt>Move delta</dt><dd id="laneDelta">—</dd></div>
+              <div><dt id="laneContributionLabel">Output contribution</dt><dd id="laneContribution">—</dd></div>
+            </dl>
+            <p id="laneNote">Hover, tap or use the arrow keys over the chamber.</p>
+          </section>
+        </aside>
+      </section>
+
+      <section class="under-hood" aria-labelledby="underHoodTitle">
+        <div>
+          <p class="eyebrow">What you are seeing</p>
+          <h2 id="underHoodTitle">One network, two points of view.</h2>
+        </div>
+        <div class="under-hood-grid">
+          <article><span>01</span><h3>Feature transformer</h3><p>Each occupied piece-square activates one of 768 inputs. The same learned weights build both perspectives.</p></article>
+          <article><span>02</span><h3>Two accumulators</h3><p>White and Black each receive 384 integer lanes. A move touches only its changed feature rows; Delta exposes the resulting lane changes.</p></article>
+          <article><span>03</span><h3>Clipped output</h3><p>Values are clipped to 0–255, weighted by side to move, and reduced to Sgurr's centipawn score.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="inside-footer">
+      <span>SGURR v8.2 “Thearlaich”</span>
+      <span>Gen8 NNUE · integer inference · 592,160-byte network</span>
+    </footer>
+
+    <dialog class="promotion-dialog" id="promotionDialog" aria-labelledby="promotionTitle">
+      <form method="dialog">
+        <p class="deck-kicker">Complete the move</p>
+        <h2 id="promotionTitle">Promote pawn</h2>
+        <div class="promotion-options">
+          <button type="submit" value="q"><span class="promotion-piece" data-piece="q">♕</span><strong>Queen</strong></button>
+          <button type="submit" value="r"><span class="promotion-piece" data-piece="r">♖</span><strong>Rook</strong></button>
+          <button type="submit" value="b"><span class="promotion-piece" data-piece="b">♗</span><strong>Bishop</strong></button>
+          <button type="submit" value="n"><span class="promotion-piece" data-piece="n">♘</span><strong>Knight</strong></button>
+        </div>
+        <button type="submit" class="promotion-cancel" value="cancel">Cancel</button>
+      </form>
+    </dialog>
+    <script type="module" src="inside-sgurr.js"></script>
+  </body>
+</html>

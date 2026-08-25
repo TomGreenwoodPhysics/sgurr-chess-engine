@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { startStaticServer } from "../static-server.mjs";
 
 const API_BASE = "http://127.0.0.1:8000";
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const AFTER_E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
 const AFTER_E4_E5_FEN = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+const PROMOTION_FEN = "7k/P7/8/8/8/8/8/7K w - - 0 1";
+const NNUE_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf";
+const NNUE_BYTES = readFileSync(new URL("../../../nets/gen8.nnue", import.meta.url));
 
 const WHITE_START_MOVES = [
   "a2a3", "a2a4", "b2b3", "b2b4", "c2c3", "c2c4", "d2d3", "d2d4",
@@ -160,6 +164,7 @@ async function installMockBackend(page, {
   engineExists = true,
   publicDemo = false,
   mateOpening = false,
+  nnueAvailable = true,
 } = {}) {
   const calls = [];
   await page.route(`${API_BASE}/**`, async (route) => {
@@ -167,6 +172,19 @@ async function installMockBackend(page, {
     const url = new URL(request.url());
     const path = url.pathname;
 
+    if (path === `/api/nnue/gen8/${NNUE_SHA256}.nnue`) {
+      if (!nnueAvailable) {
+        await json(route, { detail: "NNUE Lab unavailable" }, 503);
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/octet-stream",
+        headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        body: NNUE_BYTES,
+      });
+      return;
+    }
     if (path.startsWith("/assets/")) {
       await route.fulfill({ status: 204, contentType: "application/octet-stream", body: "" });
       return;
@@ -227,16 +245,25 @@ async function installMockBackend(page, {
       return;
     }
     if (path === "/api/load-fen") {
+      if (body.fen === "bad fen") {
+        await json(route, { detail: "Invalid FEN" }, 400);
+        return;
+      }
       if (body.fen === START_FEN) {
         await json(route, INITIAL_STATE);
         return;
       }
       const kingsOnly = body.fen.startsWith("4k3/8/8/8/8/8/8/4K3");
+      const promotion = body.fen === PROMOTION_FEN;
       await json(route, gameState({
         fen: body.fen,
         startFen: body.fen,
         turn: body.fen.split(" ")[1] === "b" ? "black" : "white",
-        legalMoves: kingsOnly ? [] : ["e1d1", "e1f1"],
+        legalMoves: kingsOnly
+          ? []
+          : promotion
+            ? ["a7a8q", "a7a8r", "a7a8b", "a7a8n"]
+            : ["e1d1", "e1f1"],
         premoveMoves: [],
         gameOver: kingsOnly,
         result: kingsOnly ? "1/2-1/2" : null,
@@ -363,10 +390,111 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator("#playWhiteButton")).toBeEnabled();
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
-  await expect(page.locator(".menu-action-card")).toHaveCount(5);
+  await expect(page.locator(".menu-action-card")).toHaveCount(6);
   await expect(page.locator(".menu-action-card small")).toHaveCount(0);
   await expect(page.locator(".search-lab-link strong")).toHaveText("Search Lab");
   await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
+  await expect(page.locator(".inside-sgurr-link strong")).toHaveText("Inside Sgurr");
+  await expect(page.locator(".inside-sgurr-link")).toHaveAttribute("href", "inside-sgurr/");
+});
+
+test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#nnueBoard .board-square")).toHaveCount(64);
+  await expect(page.locator("#modelStatus")).toContainText("Gen8 v1 verified");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#cortexViewButton")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-view", "cortex");
+  await page.locator("#cortexCanvas").focus();
+  for (let step = 0; step < 16; step += 1) await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#laneAddress")).toHaveText("B:000");
+
+  await page.locator("#circuitViewButton").click();
+  await expect(page.locator("#circuitViewButton")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-view", "circuit");
+
+  await page.locator('[data-square="e2"]').click();
+  await expect(page.locator('[data-square="e2"]')).toBeFocused();
+  await expect(page.locator('[data-square="e2"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-square="e4"]')).toHaveClass(/legal/);
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#pieceEdits")).toHaveText("2");
+  await expect(page.locator("#weightRows")).toHaveText("4");
+  await expect(page.locator("#laneOperations")).toHaveText("1,536");
+  await expect(page.locator("#featureTrace")).toContainText("inputs W 12→28 · B 436→420");
+  await expect(page.locator("#beforeState")).toBeEnabled();
+  await expect(page.locator("#deltaState")).toBeEnabled();
+
+  await page.locator("#beforeState").click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await page.locator("#deltaState").click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.21");
+  await expect(page.locator(".eval-readout > span")).toHaveText("White evaluation change");
+
+  await page.locator("#undoPosition").click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#positionTurn")).toHaveText("White to move");
+  await expect(page.locator('[data-square="e2"] .piece-image')).toBeVisible();
+  await expect(page.locator("#undoPosition")).toBeDisabled();
+});
+
+test("keeps the NNUE chamber usable on a narrow screen", async ({ page }) => {
+  test.setTimeout(30_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#cortexViewButton")).toBeVisible();
+  await expect(page.locator("#beforeState")).toBeVisible();
+  await expect(page.locator("#afterState")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("does not fabricate NNUE activity when the model is unavailable", async ({ page }) => {
+  await installMockBackend(page, { nnueAvailable: false });
+  await page.goto("/inside-sgurr/");
+
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "error");
+  await expect(page.locator("#modelStatus")).toHaveText("Evaluator unavailable");
+  await expect(page.locator("#loadingTitle")).toHaveText("The evaluator did not open");
+  await expect(page.locator("#retryModel")).toBeVisible();
+  await expect(page.locator("#nnueEval")).toHaveText("—");
+});
+
+test("offers a promotion choice in the NNUE position board", async ({ page }) => {
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await page.locator("#nnueFenInput").fill(PROMOTION_FEN);
+  await page.locator("#nnueFenForm .primary-button").click();
+  await expect(page.locator('[data-square="a7"]')).toBeEnabled();
+  await page.locator('[data-square="a7"]').click();
+  await page.locator('[data-square="a8"]').click();
+  await expect(page.locator("#promotionDialog")).toBeVisible();
+  await expect(page.locator("#promotionDialog .promotion-options button")).toHaveCount(4);
+  await page.locator("#promotionDialog .promotion-cancel").click();
+  await expect(page.locator("#promotionDialog")).toBeHidden();
+  await expect(page.locator('[data-square="a7"] .piece-image')).toBeVisible();
+});
+
+test("keeps rejected FEN text available for correction", async ({ page }) => {
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await page.locator("#nnueFenInput").fill("bad fen");
+  await page.locator("#nnueFenForm .primary-button").click();
+  await expect(page.locator("#fenStatus")).toHaveText("Invalid FEN");
+  await expect(page.locator("#nnueFenInput")).toHaveValue("bad fen");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 });
 
 test("uses volume sliders without duplicate audio toggles", async ({ page }) => {

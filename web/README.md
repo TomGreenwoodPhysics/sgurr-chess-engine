@@ -23,6 +23,7 @@ web/
   frontend/
     index.html             static browser UI (loads js/main.js + styles.css)
     search-lab/            guided search walkthrough + live depth stream
+    inside-sgurr/           exact browser-side Gen8 accumulator explorer
     styles.css             @import manifest; ordering IS the cascade
     styles/                12 CSS partials (base, intro, menu, board, core, ...)
     js/                    19 native ES modules; main.js is the entry point
@@ -211,8 +212,8 @@ python -m unittest discover -s web\backend -p "test_*.py"
 ```
 
 The browser suite covers the intro/menu handoff, both human sides, board
-orientation, human/engine exchange, self-play, board editor entry, public-demo
-controls, and missing-engine behaviour. Backend tests cover draw rules,
+orientation, human/engine exchange, self-play, board editor entry, Inside
+Sgurr's exact NNUE output, public-demo controls, and missing-engine behaviour. Backend tests cover draw rules,
 production configuration, request limits, concurrency, and rate limiting. CI
 also builds the Linux container and exercises the real engine and trace paths.
 
@@ -239,6 +240,7 @@ obligations.
 GET  /health
 GET  /ready
 GET  /api/capabilities
+GET  /api/nnue/gen8/<verified-sha>.nnue
 POST /api/new
 POST /api/load-fen
 POST /api/player-move
@@ -247,6 +249,10 @@ POST /api/engine-move
 POST /api/search-trace
 POST /api/search-network
 ```
+
+The content-addressed NNUE route serves only the verified Gen8 network with an
+immutable cache policy. Inside Sgurr checks the SHA-256 again in its worker
+before parsing or evaluating it.
 
 `/api/engine-move` sends UCI clock arguments when clock state is supplied and
 falls back to `go movetime <milliseconds>` for fixed-search callers. It parses
@@ -284,6 +290,9 @@ visibly alive after each bounded structural-node sample is full.
   completed-depth stream, and a glowing radial search web whose depth-from-root
   rings, timestamped traveling light, cutoffs, and transposition chords come
   from real engine events;
+- an Inside Sgurr view that verifies and evaluates the shipped Gen8 network in
+  a browser worker, then exposes both 384-lane accumulators as cortex, circuit,
+  and move-delta views;
 - responsive backend recovery without refreshing the browser.
 
 Accounts, online multiplayer, cloud infrastructure, training dashboards,

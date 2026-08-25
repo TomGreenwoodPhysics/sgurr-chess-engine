@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
+from web.backend import main
 from web.backend.main import (
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_ALLOWED_ORIGINS,
@@ -77,6 +81,48 @@ class ProductionConfigTest(unittest.TestCase):
             web_asset_path("sounds", "button.mp3")
 
         self.assertEqual(raised.exception.status_code, 404)
+
+    def test_nnue_asset_uses_canonical_route_and_headers(self) -> None:
+        self.assertEqual(
+            main.EXPECTED_NET_SHA256,
+            "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf",
+        )
+        self.assertEqual(
+            main.NNUE_ASSET_ROUTE,
+            f"/api/nnue/gen8/{main.EXPECTED_NET_SHA256}.nnue",
+        )
+
+        response = main.nnue_network_asset()
+
+        self.assertEqual(
+            Path(response.path),
+            (main.REPO_ROOT / "nets" / "gen8.nnue").resolve(),
+        )
+        self.assertEqual(response.media_type, "application/octet-stream")
+        self.assertEqual(response.headers["content-type"], "application/octet-stream")
+        self.assertEqual(
+            response.headers["cache-control"],
+            "public, max-age=31536000, immutable",
+        )
+        self.assertEqual(
+            response.headers["etag"],
+            f'"{main.EXPECTED_NET_SHA256}"',
+        )
+
+    def test_nnue_asset_returns_generic_503_for_invalid_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            missing = Path(temp_dir) / "missing.nnue"
+            altered = Path(temp_dir) / "altered.nnue"
+            altered.write_bytes(b"altered network")
+
+            for net_path in (missing, altered):
+                with self.subTest(net_path=net_path):
+                    with patch.object(main, "ENGINE_NET_PATH", net_path):
+                        with self.assertRaises(HTTPException) as raised:
+                            main.nnue_network_asset()
+
+                    self.assertEqual(raised.exception.status_code, 503)
+                    self.assertEqual(raised.exception.detail, "NNUE Lab unavailable")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
 BASE_URL = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+NNUE_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
+NNUE_ROUTE = f"/api/nnue/gen8/{NNUE_SHA256}.nnue"
 
 
 def get(path: str):
@@ -41,6 +45,25 @@ assert b"--accent" in get_bytes("/styles/base.css")
 assert len(get_bytes("/assets/intro/sgurr-cave-chamber.webp")) > 100_000
 assert len(get_bytes("/assets/intro/sgurr-social-card.jpg")) > 50_000
 assert b"<svg" in get_bytes("/assets/pieces/chessnut/wK.svg")
+
+with urlopen(f"{BASE_URL}{NNUE_ROUTE}", timeout=20) as response:
+    network = response.read()
+    assert response.headers.get_content_type() == "application/octet-stream"
+    assert response.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+assert len(network) == 592_160
+assert network[:4] == b"RUKN"
+assert hashlib.sha256(network).hexdigest() == NNUE_SHA256
+
+try:
+    get_bytes("/nets/gen8.nnue")
+    raise AssertionError("repository NNUE path was exposed")
+except HTTPError as exc:
+    assert exc.code == 404
+
+inside_sgurr = Path(__file__).resolve().parents[1] / "frontend" / "inside-sgurr"
+if (inside_sgurr / "index.html").is_file():
+    assert get_bytes("/inside-sgurr/")
+    assert get_bytes("/inside-sgurr/inside-sgurr.js")
 
 engines = get("/api/engines")
 available = [entry["id"] for entry in engines["engines"] if entry["available"]]

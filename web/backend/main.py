@@ -273,6 +273,7 @@ DEMO_TRACE_REQUESTS_PER_MINUTE = bounded_env_int(
 )
 MAX_REQUEST_BYTES = 65_536
 EXPECTED_NET_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
+NNUE_ASSET_ROUTE = f"/api/nnue/gen8/{EXPECTED_NET_SHA256}.nnue"
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
     "true",
@@ -1184,6 +1185,28 @@ def web_sound_asset(filename: str) -> FileResponse:
     return FileResponse(
         web_asset_path("sounds", filename),
         headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get(NNUE_ASSET_ROUTE, include_in_schema=False)
+def nnue_network_asset() -> FileResponse:
+    net_path = Path(ENGINE_NET_PATH)
+    try:
+        valid = (
+            net_path.is_file()
+            and hashlib.sha256(net_path.read_bytes()).hexdigest() == EXPECTED_NET_SHA256
+        )
+    except OSError:
+        valid = False
+    if not valid:
+        raise HTTPException(status_code=503, detail="NNUE Lab unavailable")
+    return FileResponse(
+        net_path,
+        media_type="application/octet-stream",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": f'"{EXPECTED_NET_SHA256}"',
+        },
     )
 
 

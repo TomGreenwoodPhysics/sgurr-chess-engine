@@ -201,14 +201,20 @@ expected, and that mistake cost an entire generation.
 
 `web/` serves the engine in a browser. FastAPI owns one persistent UCI process,
 validates chess state with `python-chess`, serves the frontend and an allowlist
-of media, and exposes a small JSON API. The frontend is 19 plain ES modules and
-12 CSS partials with no build step and no npm runtime dependency. Every
+of media, and exposes a small JSON API. The frontend uses plain ES modules and
+CSS with no build step and no npm runtime dependency. Every
 canonical release from the classical evaluation to v8.2 is selectable as an
 opponent, with its measured rating shown. See [web/README.md](web/README.md).
 
 ---
 
 ## See it work
+
+`web/frontend/inside-sgurr/` loads the shipped Gen8 network in a browser worker,
+verifies its SHA-256, and reproduces the engine's quantised integer forward
+pass. An interactive board drives two exact 384-lane accumulators that can be
+viewed as a cortex or unfolded into their circuit layout, with before, delta,
+and after states for every move.
 
 `web/frontend/search-lab/` draws a real search as a radial web, the animation
 at the top of this page. The centre is the root position and each ring outward
