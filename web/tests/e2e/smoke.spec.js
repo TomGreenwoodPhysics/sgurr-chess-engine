@@ -405,10 +405,29 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
 
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#nnueBoard .board-square")).toHaveCount(64);
-  await expect(page.locator("#modelStatus")).toContainText("Gen8 v1 verified");
+  await expect(page.locator("#modelStatus")).toContainText("Gen8 v1 loaded");
   await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator(".signal-path li")).toHaveCount(4);
+  await expect(page.locator(".visual-key > div")).toHaveCount(6);
+  const boardGeometry = await page.evaluate(() => {
+    const board = document.querySelector("#nnueBoard").getBoundingClientRect();
+    const occupied = document.querySelector('[data-square="a8"]').getBoundingClientRect();
+    const empty = document.querySelector('[data-square="a4"]').getBoundingClientRect();
+    return {
+      width: board.width,
+      ratioError: Math.abs(board.width - board.height),
+      rowError: Math.abs(occupied.height - empty.height),
+    };
+  });
+  expect(boardGeometry.width).toBeGreaterThan(380);
+  expect(boardGeometry.ratioError).toBeLessThanOrEqual(1);
+  expect(boardGeometry.rowError).toBeLessThanOrEqual(1);
   await expect(page.locator("#cortexViewButton")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-view", "cortex");
+  await page.locator('[data-lane-band="2"]').click();
+  await expect(page.locator('[data-lane-band="2"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-atlas-band", "2");
+  await expect(page.locator("#laneAtlasDetail")).toContainText("192–287");
   await page.locator("#cortexCanvas").focus();
   for (let step = 0; step < 16; step += 1) await page.keyboard.press("ArrowRight");
   await expect(page.locator("#laneAddress")).toHaveText("B:000");

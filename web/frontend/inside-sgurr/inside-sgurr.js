@@ -10,6 +10,12 @@ const POSITION_PRESETS = Object.freeze({
   kiwipete: "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
 });
 const PIECE_CODES = Object.freeze({ p: "P", n: "N", b: "B", r: "R", q: "Q", k: "K" });
+const LANE_BANDS = Object.freeze([
+  "Top quarter",
+  "Upper-middle quarter",
+  "Lower-middle quarter",
+  "Bottom quarter",
+]);
 
 const refs = {
   shell: document.querySelector("#insideShell"),
@@ -24,6 +30,8 @@ const refs = {
   canvas: document.querySelector("#cortexCanvas"),
   cortexView: document.querySelector("#cortexViewButton"),
   circuitView: document.querySelector("#circuitViewButton"),
+  laneAtlasDetail: document.querySelector("#laneAtlasDetail"),
+  laneBandButtons: [...document.querySelectorAll("[data-lane-band]")],
   beforeState: document.querySelector("#beforeState"),
   deltaState: document.querySelector("#deltaState"),
   afterState: document.querySelector("#afterState"),
@@ -74,11 +82,62 @@ let replayTimers = [];
 let bootSequence = 0;
 let boardFocusPending = false;
 let boardFocusSquare = null;
+let currentLaneBand = 0;
+let laneBandTimer = null;
 
 const visual = new CortexVisual(refs.canvas, (details) => {
   if (details) selectedLane = { perspective: details.perspective, index: details.index };
   renderLane(details);
 });
+
+function scheduleLaneBand() {
+  if (laneBandTimer !== null) window.clearTimeout(laneBandTimer);
+  laneBandTimer = null;
+  if (visual.reducedMotion || document.hidden) return;
+  laneBandTimer = window.setTimeout(() => {
+    setLaneBand((currentLaneBand + 1) % LANE_BANDS.length);
+  }, 7200);
+}
+
+function setLaneBand(band) {
+  currentLaneBand = Math.max(0, Math.min(LANE_BANDS.length - 1, Number(band) || 0));
+  visual.setAtlasBand(currentLaneBand);
+  for (const button of refs.laneBandButtons) {
+    const active = Number(button.dataset.laneBand) === currentLaneBand;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  renderLaneBand();
+  scheduleLaneBand();
+}
+
+function renderLaneBand() {
+  const first = currentLaneBand * 96;
+  const last = first + 96;
+  const prefix = `${LANE_BANDS[currentLaneBand]} · ${String(first).padStart(3, "0")}–${String(last - 1).padStart(3, "0")}`;
+  if (!transition) {
+    refs.laneAtlasDetail.textContent = `${prefix} in both accumulators.`;
+    return;
+  }
+  if (currentPhase === "delta" && transition.before) {
+    let changed = 0;
+    for (const values of [transition.whiteDelta, transition.blackDelta]) {
+      for (let index = first; index < last; index += 1) changed += values[index] !== 0 ? 1 : 0;
+    }
+    refs.laneAtlasDetail.textContent = `${prefix} · ${changed} of 192 changed.`;
+    return;
+  }
+  const snapshot = snapshotForPhase();
+  let active = 0;
+  let saturated = 0;
+  for (const values of [snapshot.whiteActivation, snapshot.blackActivation]) {
+    for (let index = first; index < last; index += 1) {
+      active += values[index] > 0 ? 1 : 0;
+      saturated += values[index] >= 255 ? 1 : 0;
+    }
+  }
+  refs.laneAtlasDetail.textContent = `${prefix} · ${active} of 192 active · ${saturated} clipped.`;
+}
 
 function makeWorker() {
   if (worker) worker.terminate();
@@ -313,7 +372,7 @@ function renderLane(details) {
     refs.laneDelta.textContent = "—";
     refs.laneContributionLabel.textContent = "Output contribution";
     refs.laneContribution.textContent = "—";
-    refs.laneNote.textContent = "Hover, tap or use the arrow keys over the chamber.";
+    refs.laneNote.textContent = "Hover, tap or use the arrow keys on the display.";
     return;
   }
   const perspective = details.perspective === "white" ? "White" : "Black";
@@ -325,9 +384,11 @@ function renderLane(details) {
   refs.laneDelta.textContent = `${details.delta >= 0 ? "+" : "−"}${formatInteger(Math.abs(details.delta))}`;
   refs.laneContributionLabel.textContent = details.phase === "delta" ? "White output change" : "White contribution";
   refs.laneContribution.textContent = `${formatSigned(details.centipawns)} cp`;
+  const firstLane = Math.floor(details.index / 96) * 96;
+  const band = `${String(firstLane).padStart(3, "0")}–${String(firstLane + 95).padStart(3, "0")}`;
   refs.laneNote.textContent = details.phase === "delta"
-    ? "This change includes the side-to-move output swap."
-    : `This lane enters the ${details.outputHalf} half of the output layer.`;
+    ? `Lane band ${band}. The value includes the side-to-move output swap.`
+    : `Lane band ${band}. This lane uses the ${details.outputHalf} output weights.`;
 }
 
 function strongestLane(snapshot) {
@@ -372,6 +433,7 @@ function setPhase(phase, { keepReplay = false } = {}) {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   }
+  renderLaneBand();
   renderEvaluation();
   refreshSelectedLane();
 }
@@ -437,7 +499,7 @@ async function loadFen(fen, { record = true, replay = true } = {}) {
     positionAccepted = true;
     await applyPosition(nextPosition, { beforeFen, record, replay });
     refs.fenStatus.dataset.state = "ready";
-    refs.fenStatus.textContent = "Position accepted. Move a piece or inspect the accumulator lanes.";
+    refs.fenStatus.textContent = "Position loaded. Choose a move or select a lane.";
   } catch (error) {
     if (positionAccepted) {
       showBootError(error);
@@ -546,7 +608,7 @@ async function loadModel(sequence) {
   }
   modelReady = true;
   refs.modelSignal.dataset.state = "ready";
-  refs.modelStatus.textContent = `Gen8 v${result.architecture.version} verified · exact integer inference`;
+  refs.modelStatus.textContent = `Gen8 v${result.architecture.version} loaded · exact integer inference`;
   return result;
 }
 
@@ -581,7 +643,7 @@ async function boot() {
     refs.shell.dataset.state = "ready";
     refs.boardStatus.dataset.state = "ready";
     refs.fenStatus.dataset.state = "ready";
-    refs.fenStatus.textContent = "Position accepted. Move a piece or inspect the accumulator lanes.";
+    refs.fenStatus.textContent = "Position loaded. Choose a move or select a lane.";
     busy = false;
     renderBoard();
   } catch (error) {
@@ -602,13 +664,25 @@ refs.preset.addEventListener("change", () => {
 refs.undo.addEventListener("click", undoPosition);
 refs.cortexView.addEventListener("click", () => setView("cortex"));
 refs.circuitView.addEventListener("click", () => setView("circuit"));
+for (const button of refs.laneBandButtons) {
+  button.addEventListener("click", () => setLaneBand(button.dataset.laneBand));
+}
 refs.beforeState.addEventListener("click", () => setPhase("before"));
 refs.deltaState.addEventListener("click", () => setPhase("delta"));
 refs.afterState.addEventListener("click", () => setPhase("after"));
 refs.replay.addEventListener("click", replayTransition);
 refs.retry.addEventListener("click", boot);
 document.addEventListener("sgurrthemechange", () => visual.draw(performance.now()));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && laneBandTimer !== null) {
+    window.clearTimeout(laneBandTimer);
+    laneBandTimer = null;
+  } else if (!document.hidden) {
+    scheduleLaneBand();
+  }
+});
 
 initLabPreferences();
+setLaneBand(0);
 renderBoard();
 boot();

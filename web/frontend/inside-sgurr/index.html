@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sgurr-api-base" content="">
     <title>Inside Sgurr — NNUE Cortex</title>
-    <meta name="description" content="Inspect the live Gen8 NNUE evaluator inside Sgurr, from chessboard features to its two accumulator perspectives and final score.">
+    <meta name="description" content="See how Sgurr's Gen8 NNUE turns a chess position into an evaluation.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#251a16">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
     <meta property="og:title" content="Inside Sgurr — NNUE Cortex">
-    <meta property="og:description" content="Lift the hood on Sgurr's real Gen8 NNUE evaluator.">
+    <meta property="og:description" content="Sgurr's Gen8 NNUE accumulators and output, read from the shipped network file.">
     <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23070a11'/><path d='M30 11C17 11 10 21 12 33c1 8 7 15 16 18V13m6-2c13 0 20 10 18 22-1 8-7 15-16 18V13' fill='none' stroke='%23e2b147' stroke-width='3'/><circle cx='32' cy='32' r='5' fill='%2370d7ff'/></svg>">
@@ -36,9 +36,9 @@
       <section class="inside-intro" aria-labelledby="insideTitle">
         <div>
           <p class="eyebrow">NNUE evaluation</p>
-          <h1 id="insideTitle">Lift the hood on Sgurr.</h1>
+          <h1 id="insideTitle">Inside Sgurr's evaluation.</h1>
         </div>
-        <p>Move a piece and watch the real Gen8 network update. Every lane, clipped activation and score below is calculated from the same quantised weights used by Sgurr v8.2.</p>
+        <p>This page reads the Gen8 network shipped with Sgurr v8.2. Make a move to see its two accumulators change and feed the score.</p>
       </section>
 
       <section class="inside-shell" id="insideShell" data-state="loading" aria-label="Sgurr NNUE evaluator">
@@ -46,7 +46,7 @@
           <div class="deck-heading">
             <div>
               <p class="deck-kicker">01 / Input</p>
-              <h2>Position</h2>
+              <h2>Chess position</h2>
             </div>
             <span class="turn-badge" id="positionTurn">White to move</span>
           </div>
@@ -60,7 +60,7 @@
           </select>
 
           <div class="nnue-board" id="nnueBoard" aria-label="Interactive chessboard"></div>
-          <p class="board-status" id="boardStatus" aria-live="polite">Loading position</p>
+          <p class="board-status" id="boardStatus" aria-live="polite">Choose a legal move to update the network.</p>
 
           <form class="fen-form" id="nnueFenForm" novalidate>
             <label class="field-label" for="nnueFenInput">FEN</label>
@@ -69,7 +69,7 @@
               <button type="submit" class="primary-button">Load position</button>
               <button type="button" id="undoPosition" disabled>Undo</button>
             </div>
-            <small id="fenStatus">Legal moves are checked by the backend before evaluation.</small>
+            <small id="fenStatus">The backend checks the FEN and returns its legal moves.</small>
           </form>
         </aside>
 
@@ -77,7 +77,7 @@
           <div class="cortex-toolbar">
             <div>
               <p class="deck-kicker">02 / Accumulators</p>
-              <h2>Accumulator chamber</h2>
+              <h2>NNUE accumulators</h2>
             </div>
             <div class="view-switch" role="group" aria-label="Accumulator view">
               <button type="button" class="active" id="cortexViewButton" aria-pressed="true">Cortex</button>
@@ -90,6 +90,27 @@
             <span id="modelStatus">Loading Gen8 evaluator</span>
             <code>768 → 384 × 2 → 1</code>
           </div>
+
+          <ol class="signal-path" aria-label="NNUE evaluation path">
+            <li><small>Input</small><strong>Piece-square rows</strong></li>
+            <li><small>Add</small><strong>Two accumulators</strong></li>
+            <li><small>Clamp</small><strong>0 to 255</strong></li>
+            <li><small>Output</small><strong>Weighted score</strong></li>
+          </ol>
+
+          <section class="lane-atlas" aria-labelledby="laneAtlasTitle">
+            <div class="lane-atlas-copy">
+              <p class="deck-kicker" id="laneAtlasTitle">Lane map</p>
+              <p id="laneAtlasDetail">Top quarter · 000–095 in both accumulators.</p>
+            </div>
+            <div class="lane-band-controls" role="group" aria-label="Highlight an accumulator address range">
+              <button type="button" class="active" data-lane-band="0" aria-pressed="true"><span>01</span>000–095</button>
+              <button type="button" data-lane-band="1" aria-pressed="false"><span>02</span>096–191</button>
+              <button type="button" data-lane-band="2" aria-pressed="false"><span>03</span>192–287</button>
+              <button type="button" data-lane-band="3" aria-pressed="false"><span>04</span>288–383</button>
+            </div>
+            <p class="lane-atlas-note">Each dot is one learned accumulator value. The bands are addresses, not fixed labels such as king safety or mobility.</p>
+          </section>
 
           <div class="cortex-stage">
             <canvas
@@ -108,6 +129,15 @@
             </div>
           </div>
 
+          <dl class="visual-key" aria-label="How to read the accumulator display">
+            <div><dt><i class="key-side key-white"></i>Left side</dt><dd>White-view accumulator</dd></div>
+            <div><dt><i class="key-side key-black"></i>Right side</dt><dd>Black-view accumulator</dd></div>
+            <div><dt><i class="key-dot key-gold"></i>Gold</dt><dd>Raises White's score</dd></div>
+            <div><dt><i class="key-dot key-cyan"></i>Cyan</dt><dd>Lowers White's score</dd></div>
+            <div><dt><i class="key-ring"></i>Violet ring</dt><dd>Activation clipped at 255</dd></div>
+            <div><dt><i class="key-core"></i>Centre</dt><dd>Combined output</dd></div>
+          </dl>
+
           <div class="state-rail" role="group" aria-label="Accumulator state">
             <span class="state-line" aria-hidden="true"></span>
             <button type="button" id="beforeState" disabled aria-pressed="false"><small>Before</small><strong>Previous state</strong></button>
@@ -116,7 +146,7 @@
             <button type="button" class="replay-button" id="replayTransition" disabled aria-label="Replay accumulator update">↻ <span>Replay</span></button>
           </div>
 
-          <p class="accuracy-note"><span>Exact values</span> The spatial arrangement is illustrative; the accumulator arithmetic and output score are bit-exact.</p>
+          <p class="accuracy-note"><span>Reading the display</span> Larger, brighter dots have more effect on the current score. The lines mark the 42 strongest links to the output. The brain outline is visual; the values are exact.</p>
         </section>
 
         <aside class="readout-deck deck">
@@ -153,7 +183,7 @@
 
           <section class="update-readout">
             <div class="section-heading">
-              <div><p class="deck-kicker">Last update</p><h3 id="updateTitle">Full refresh</h3></div>
+              <div><p class="deck-kicker">Position update</p><h3 id="updateTitle">Full refresh</h3></div>
               <span id="changedLanes">768 lanes</span>
             </div>
             <div class="update-path">
@@ -168,7 +198,7 @@
 
           <section class="lane-inspector">
             <div class="section-heading">
-              <div><p class="deck-kicker">Probe</p><h3 id="laneTitle">Select a lane</h3></div>
+              <div><p class="deck-kicker">Selected lane</p><h3 id="laneTitle">Select a lane</h3></div>
               <span id="laneAddress">—</span>
             </div>
             <div class="lane-meter"><i id="laneMeter"></i></div>
@@ -178,20 +208,21 @@
               <div><dt>Move delta</dt><dd id="laneDelta">—</dd></div>
               <div><dt id="laneContributionLabel">Output contribution</dt><dd id="laneContribution">—</dd></div>
             </dl>
-            <p id="laneNote">Hover, tap or use the arrow keys over the chamber.</p>
+            <p id="laneNote">Hover, tap or use the arrow keys on the display.</p>
           </section>
         </aside>
       </section>
 
       <section class="under-hood" aria-labelledby="underHoodTitle">
         <div>
-          <p class="eyebrow">What you are seeing</p>
-          <h2 id="underHoodTitle">One network, two points of view.</h2>
+          <p class="eyebrow">How it works</p>
+          <h2 id="underHoodTitle">From board to score.</h2>
         </div>
         <div class="under-hood-grid">
-          <article><span>01</span><h3>Feature transformer</h3><p>Each occupied piece-square activates one of 768 inputs. The same learned weights build both perspectives.</p></article>
-          <article><span>02</span><h3>Two accumulators</h3><p>White and Black each receive 384 integer lanes. A move touches only its changed feature rows; Delta exposes the resulting lane changes.</p></article>
-          <article><span>03</span><h3>Clipped output</h3><p>Values are clipped to 0–255, weighted by side to move, and reduced to Sgurr's centipawn score.</p></article>
+          <article><span>01</span><h3>Board features</h3><p>Each piece and square selects one row from a 768-row table.</p></article>
+          <article><span>02</span><h3>Two views</h3><p>The selected rows are added into two 384-value arrays. Black's view mirrors the board vertically.</p></article>
+          <article><span>03</span><h3>Clipping</h3><p>Values below 0 become 0. Values above 255 become 255.</p></article>
+          <article><span>04</span><h3>Output</h3><p>The two arrays use separate output weights. Their order follows the side to move.</p></article>
         </div>
       </section>
     </main>

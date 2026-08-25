@@ -30,6 +30,7 @@ class CortexVisual {
     this.view = "cortex";
     this.viewProgress = 0;
     this.viewTarget = 0;
+    this.atlasBand = 0;
     this.hovered = null;
     this.locked = null;
     this.width = 0;
@@ -41,6 +42,7 @@ class CortexVisual {
     this.animateUntil = performance.now() + 8000;
     this.contributionScale = 1;
     this.deltaScale = 1;
+    this.canvas.dataset.atlasBand = "0";
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -114,6 +116,12 @@ class CortexVisual {
         : "Sgurr's 768 exact NNUE accumulator activations, arranged as two brain hemispheres. Use arrow keys to inspect lanes.",
     );
     this.wake(3200);
+  }
+
+  setAtlasBand(band) {
+    this.atlasBand = clamp(Math.trunc(band), 0, 3);
+    this.canvas.dataset.atlasBand = String(this.atlasBand);
+    this.wake(2200);
   }
 
   resize() {
@@ -400,6 +408,38 @@ class CortexVisual {
     context.restore();
   }
 
+  drawBandGuide(context, palette) {
+    const first = this.atlasBand * 96;
+    const last = first + 95;
+    context.save();
+    context.setLineDash([3, 7]);
+    context.lineWidth = 0.8;
+    context.font = '700 8px "Cascadia Mono", Consolas, monospace';
+    context.textAlign = "center";
+    for (const perspective of ["white", "black"]) {
+      const points = [];
+      for (let index = first; index <= last; index += 1) points.push(this.point(perspective, index));
+      const left = Math.min(...points.map((point) => point.x)) - 8;
+      const right = Math.max(...points.map((point) => point.x)) + 8;
+      const top = Math.min(...points.map((point) => point.y)) - 8;
+      const bottom = Math.max(...points.map((point) => point.y)) + 8;
+      context.globalAlpha = 0.035;
+      context.fillStyle = palette.blue;
+      context.fillRect(left, top, right - left, bottom - top);
+      context.globalAlpha = 0.16;
+      context.strokeStyle = palette.blue;
+      context.strokeRect(left, top, right - left, bottom - top);
+      context.globalAlpha = 0.58;
+      context.fillStyle = palette.muted;
+      context.fillText(
+        `${String(first).padStart(3, "0")}–${String(last).padStart(3, "0")}`,
+        (left + right) / 2,
+        top - 5,
+      );
+    }
+    context.restore();
+  }
+
   drawCore(context, palette, time) {
     const snapshot = this.phase === "before" && this.transition?.before
       ? this.transition.before
@@ -469,12 +509,14 @@ class CortexVisual {
         const active = this.phase === "delta" ? rawValue !== 0 : values.activation[index] > 0;
         const saturated = values.activation[index] >= 255;
         const colour = rawValue >= 0 ? palette.accent : palette.blue;
+        const inBand = Math.floor(index / 96) === this.atlasBand;
         const ambient = this.reducedMotion ? 0 : Math.sin(time / 900 + index * 0.19) * 0.08;
-        const radius = 1.15 + intensity * 2.45 + ambient;
+        const radius = 1.15 + intensity * 2.45 + ambient + (inBand ? 0.2 : 0);
         context.save();
-        context.globalAlpha = active ? 0.16 + intensity * 0.78 : 0.08;
+        const opacity = active ? 0.16 + intensity * 0.78 : 0.08;
+        context.globalAlpha = opacity * (inBand ? 1 : 0.42);
         context.fillStyle = active ? colour : palette.edge;
-        if (intensity > 0.78) {
+        if (inBand && intensity > 0.62) {
           context.shadowColor = colour;
           context.shadowBlur = 8;
         }
@@ -523,6 +565,7 @@ class CortexVisual {
     context.fillRect(0, 0, this.width, this.height);
 
     this.drawOutline(context, palette);
+    this.drawBandGuide(context, palette);
     this.drawOutputConnections(context, palette);
     this.drawCells(context, palette, time);
     this.drawCore(context, palette, time);
