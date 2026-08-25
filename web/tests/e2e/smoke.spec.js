@@ -509,6 +509,27 @@ test("switches the accumulator display between the four readings", async ({ page
   await expect(page.locator("#displayModeNote")).toContainText("0 to 255");
 });
 
+test("fades the accumulator display between states instead of cutting", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settled");
+
+  await page.locator('.display-mode-buttons [data-display-mode="clipped"]').click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settling");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settled");
+
+  // The halos fade in and back out rather than appearing and vanishing.
+  await page.locator('[data-square="e2"]').click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-feature", "active");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settling");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settled");
+  await page.locator("#clearPieceInspector").click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settling");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settled");
+});
+
 test("walks a move along the evaluation path and back to the current state", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);

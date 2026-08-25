@@ -1,3 +1,11 @@
+const RAMP_STEPS = 64;
+const SETTLE_EPSILON = 0.003;
+// Time constants, in milliseconds, for the exponential easing. Roughly 3x these
+// numbers is how long a change takes to read as finished.
+const NODE_TAU = 88;
+const AMBIENT_TAU = 150;
+const CORE_TAU = 105;
+
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -18,6 +26,53 @@ function percentile(values, ratio = 0.94) {
     .sort((a, b) => a - b);
   if (!sorted.length) return 1;
   return Math.max(1, sorted[Math.floor((sorted.length - 1) * ratio)]);
+}
+
+function parseColour(value, fallback) {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value || "").trim());
+  if (!match) return fallback;
+  const digits = match[1].length === 3
+    ? [...match[1]].map((digit) => digit + digit).join("")
+    : match[1];
+  return [
+    parseInt(digits.slice(0, 2), 16),
+    parseInt(digits.slice(2, 4), 16),
+    parseInt(digits.slice(4, 6), 16),
+  ];
+}
+
+function mixColour(from, to, amount) {
+  return [
+    mix(from[0], to[0], amount),
+    mix(from[1], to[1], amount),
+    mix(from[2], to[2], amount),
+  ];
+}
+
+function buildRamp(negative, positive) {
+  const css = [];
+  const rgb = [];
+  for (let step = 0; step <= RAMP_STEPS; step += 1) {
+    const channels = mixColour(negative, positive, step / RAMP_STEPS).map(Math.round);
+    rgb.push(channels);
+    css.push(`rgb(${channels[0]}, ${channels[1]}, ${channels[2]})`);
+  }
+  return { css, rgb };
+}
+
+// Frame-rate independent easing: every value walks a fixed fraction of the
+// remaining distance per millisecond, so the same motion reads identically at
+// 30fps and 120fps. Returns whether the value moved.
+function approach(holder, key, target, blend) {
+  const distance = target - holder[key];
+  // Settle on an epsilon, not on equality: these live in Float32Arrays, so a
+  // stored value never compares equal to the double it was assigned from.
+  if (Math.abs(distance) <= SETTLE_EPSILON) {
+    holder[key] = target;
+    return false;
+  }
+  holder[key] = holder[key] + distance * blend;
+  return true;
 }
 
 function formatEval(centipawns) {
@@ -57,9 +112,25 @@ class CortexVisual {
     this.valueCache = new Map();
     this.connectionCache = null;
     this.footprintCache = null;
+    this.nodeIntensity = new Float32Array(768);
+    this.nodePolarity = new Float32Array(768);
+    this.nodeActivity = new Float32Array(768);
+    this.nodeSaturation = new Float32Array(768);
+    this.bandWeight = Float32Array.from([1, 0.42, 0.42, 0.42]);
+    this.scratch = { value: 0, intensity: 0, activity: 0, polarity: 0, saturation: 0 };
+    this.footprintFade = 0;
+    this.footprintTarget = 0;
+    this.violetBlend = 0;
+    this.corePolarity = 1;
+    this.coreBoost = 0;
+    this.motionPrimed = false;
+    this.settled = true;
+    this.rampCache = null;
+    this.rampKey = "";
     this.canvas.dataset.atlasBand = "0";
     this.canvas.dataset.displayMode = this.displayMode;
     this.canvas.dataset.anatomy = this.anatomyStage;
+    this.canvas.dataset.motion = "settled";
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -176,7 +247,9 @@ class CortexVisual {
     this.featureScale = footprint
       ? percentile([...footprint.whiteWeights, ...footprint.blackWeights], 0.9)
       : 1;
-    this.footprintCache = footprint ? this.rankFootprint(footprint) : null;
+    // Keep the old ranking alive so the halos can fade out instead of vanishing.
+    if (footprint) this.footprintCache = this.rankFootprint(footprint);
+    this.footprintTarget = footprint ? 1 : 0;
     this.canvas.dataset.feature = footprint ? "active" : "idle";
     this.wake(2600);
   }
@@ -241,10 +314,14 @@ class CortexVisual {
 
   frame(time) {
     this.animationFrame = null;
-    if (time - this.lastFrame < 42 && !this.reducedMotion) {
+    // Draw at the display rate while anything is still easing, and drop back to
+    // an idle cadence once the picture has settled.
+    const gate = this.settled && this.viewProgress === this.viewTarget ? 42 : 0;
+    if (time - this.lastFrame < gate && !this.reducedMotion) {
       this.start();
       return;
     }
+    const delta = clamp(time - this.lastFrame, 1, 120);
     this.lastFrame = time;
     const distance = this.viewTarget - this.viewProgress;
     if (Math.abs(distance) > 0.001) {
@@ -254,11 +331,92 @@ class CortexVisual {
     } else {
       this.viewProgress = this.viewTarget;
     }
+    this.advance(delta);
     this.draw(time);
     if (
-      this.viewProgress !== this.viewTarget
+      !this.settled
+      || this.viewProgress !== this.viewTarget
       || (!this.reducedMotion && time < this.animateUntil)
     ) this.start();
+  }
+
+  // Walks every displayed value towards the value the network actually holds.
+  // Nothing is drawn from the raw data directly, so every change fades.
+  advance(delta) {
+    const instant = this.reducedMotion || !this.motionPrimed;
+    const nodeBlend = instant ? 1 : 1 - Math.exp(-delta / NODE_TAU);
+    const ambientBlend = instant ? 1 : 1 - Math.exp(-delta / AMBIENT_TAU);
+    const coreBlend = instant ? 1 : 1 - Math.exp(-delta / CORE_TAU);
+    let moving = false;
+
+    if (this.transition) {
+      for (const perspective of ["white", "black"]) {
+        const base = perspective === "white" ? 0 : 384;
+        const values = this.valuesFor(perspective);
+        for (let index = 0; index < 384; index += 1) {
+          const slot = base + index;
+          const target = this.measureNode(perspective, index, values, this.scratch);
+          moving = approach(this.nodeIntensity, slot, target.intensity, nodeBlend) || moving;
+          moving = approach(this.nodePolarity, slot, target.polarity, nodeBlend) || moving;
+          moving = approach(this.nodeActivity, slot, target.activity, nodeBlend) || moving;
+          moving = approach(this.nodeSaturation, slot, target.saturation, nodeBlend) || moving;
+        }
+      }
+      this.motionPrimed = true;
+    }
+
+    for (let band = 0; band < 4; band += 1) {
+      moving = approach(this.bandWeight, band, band === this.atlasBand ? 1 : 0.42, ambientBlend) || moving;
+    }
+    moving = approach(this, "footprintFade", this.footprintTarget, ambientBlend) || moving;
+    moving = approach(this, "violetBlend", this.displayMode === "clipped" ? 1 : 0, ambientBlend) || moving;
+    moving = approach(this, "coreBoost", this.anatomyStage === "output" ? 5 : 0, coreBlend) || moving;
+    moving = approach(this, "corePolarity", this.evaluation() >= 0 ? 1 : -1, coreBlend) || moving;
+    if (this.footprintFade === 0 && this.footprintTarget === 0) this.footprintCache = null;
+
+    if (this.settled === moving) {
+      this.settled = !moving;
+      this.canvas.dataset.motion = this.settled ? "settled" : "settling";
+    }
+  }
+
+  evaluation() {
+    if (!this.transition) return 0;
+    if (this.phase === "delta" && this.transition.before) {
+      return this.transition.after.whiteRelative - this.transition.before.whiteRelative;
+    }
+    const snapshot = this.phase === "before" && this.transition.before
+      ? this.transition.before
+      : this.transition.after;
+    return snapshot.whiteRelative;
+  }
+
+  colourRamp(palette) {
+    const key = `${palette.accent}|${palette.blue}|${palette.violet}|${this.violetBlend.toFixed(2)}`;
+    if (this.rampKey !== key) {
+      this.rampCache = buildRamp(
+        parseColour(palette.blue, [112, 215, 255]),
+        mixColour(
+          parseColour(palette.accent, [226, 177, 71]),
+          parseColour(palette.violet, [169, 140, 255]),
+          this.violetBlend,
+        ),
+      );
+      this.rampKey = key;
+    }
+    return this.rampCache;
+  }
+
+  rampIndex(polarity) {
+    return Math.round((clamp(polarity, -1, 1) + 1) * (RAMP_STEPS / 2));
+  }
+
+  rampColour(ramp, polarity) {
+    return ramp.css[this.rampIndex(polarity)];
+  }
+
+  rampRgb(ramp, polarity) {
+    return ramp.rgb[this.rampIndex(polarity)];
   }
 
   palette() {
@@ -326,81 +484,85 @@ class CortexVisual {
   buildValues(perspective) {
     const before = this.transition.before || this.transition.after;
     const after = this.transition.after;
-    if (this.phase === "before") {
-      return {
-        accumulator: perspective === "white" ? before.whiteAccumulator : before.blackAccumulator,
-        activation: perspective === "white" ? before.whiteActivation : before.blackActivation,
-        contribution: perspective === "white" ? before.whiteContribution : before.blackContribution,
-        delta: perspective === "white" ? this.transition.whiteDelta : this.transition.blackDelta,
-      };
+    const snapshot = this.phase === "before" ? before : after;
+    const white = perspective === "white";
+    const signed = new Float32Array(384);
+    if (this.phase === "delta" && this.transition.before) {
+      const beforeContribution = white ? before.whiteContribution : before.blackContribution;
+      const afterContribution = white ? after.whiteContribution : after.blackContribution;
+      const beforeSign = before.sideToMove === 0 ? 1 : -1;
+      const afterSign = after.sideToMove === 0 ? 1 : -1;
+      for (let index = 0; index < 384; index += 1) {
+        signed[index] = afterContribution[index] * afterSign - beforeContribution[index] * beforeSign;
+      }
+    } else {
+      const contribution = white ? snapshot.whiteContribution : snapshot.blackContribution;
+      const sign = snapshot.sideToMove === 0 ? 1 : -1;
+      for (let index = 0; index < 384; index += 1) {
+        signed[index] = contribution[index] * sign;
+      }
     }
     return {
-      accumulator: perspective === "white" ? after.whiteAccumulator : after.blackAccumulator,
-      activation: perspective === "white" ? after.whiteActivation : after.blackActivation,
-      contribution: perspective === "white" ? after.whiteContribution : after.blackContribution,
-      delta: perspective === "white" ? this.transition.whiteDelta : this.transition.blackDelta,
+      accumulator: white ? snapshot.whiteAccumulator : snapshot.blackAccumulator,
+      activation: white ? snapshot.whiteActivation : snapshot.blackActivation,
+      delta: white ? this.transition.whiteDelta : this.transition.blackDelta,
+      signed,
     };
   }
 
-  nodeState(perspective, index, palette) {
-    const values = this.valuesFor(perspective);
-    const snapshot = this.phase === "before" && this.transition.before
-      ? this.transition.before
-      : this.transition.after;
-    const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
+  // Fills `out` with the values this lane should be showing, as plain numbers.
+  // `polarity` is -1 for the cyan end of the ramp and +1 for the warm end.
+  measureNode(perspective, index, values, out) {
     if (this.displayMode === "change") {
       const value = values.delta[index];
-      return {
-        value,
-        intensity: clamp(Math.abs(value) / this.deltaScale, 0, 1),
-        active: value !== 0,
-        colour: value >= 0 ? palette.accent : palette.blue,
-        saturated: false,
-      };
+      out.value = value;
+      out.intensity = clamp(Math.abs(value) / this.deltaScale, 0, 1);
+      out.activity = value === 0 ? 0 : 1;
+      out.polarity = value >= 0 ? 1 : -1;
+      out.saturation = 0;
+      return out;
     }
     if (this.displayMode === "activation") {
       const value = values.activation[index];
-      return {
-        value,
-        intensity: value / 255,
-        active: value > 0,
-        colour: perspective === "white" ? palette.accent : palette.blue,
-        saturated: value >= 255,
-      };
+      out.value = value;
+      out.intensity = value / 255;
+      out.activity = value > 0 ? 1 : 0;
+      out.polarity = perspective === "white" ? 1 : -1;
+      out.saturation = value >= 255 ? 1 : 0;
+      return out;
     }
     if (this.displayMode === "clipped") {
       const raw = values.accumulator[index];
       const high = raw >= 255;
       const low = raw <= 0;
-      return {
-        value: high ? 1 : low ? -1 : 0,
-        intensity: high || low ? 1 : 0,
-        active: high || low,
-        colour: high ? palette.violet : palette.blue,
-        saturated: high,
-      };
+      out.value = high ? 1 : low ? -1 : 0;
+      out.intensity = high || low ? 1 : 0;
+      out.activity = high || low ? 1 : 0;
+      out.polarity = high ? 1 : -1;
+      out.saturation = high ? 1 : 0;
+      return out;
     }
-    let value = values.contribution[index] * whiteSign;
-    let scale = this.contributionScale;
-    if (this.phase === "delta" && this.transition.before) {
-      const before = this.transition.before;
-      const beforeValues = perspective === "white"
-        ? before.whiteContribution
-        : before.blackContribution;
-      const afterValues = perspective === "white"
-        ? this.transition.after.whiteContribution
-        : this.transition.after.blackContribution;
-      const beforeSign = before.sideToMove === 0 ? 1 : -1;
-      const afterSign = this.transition.after.sideToMove === 0 ? 1 : -1;
-      value = afterValues[index] * afterSign - beforeValues[index] * beforeSign;
-      scale = this.contributionDeltaScale;
-    }
+    const value = values.signed[index];
+    const scale = this.phase === "delta" && this.transition.before
+      ? this.contributionDeltaScale
+      : this.contributionScale;
+    out.value = value;
+    out.intensity = clamp(Math.abs(value) / scale, 0, 1);
+    out.activity = values.activation[index] > 0 || (this.phase === "delta" && value !== 0) ? 1 : 0;
+    out.polarity = value >= 0 ? 1 : -1;
+    out.saturation = values.activation[index] >= 255 ? 1 : 0;
+    return out;
+  }
+
+  nodeState(perspective, index, palette) {
+    const target = this.measureNode(perspective, index, this.valuesFor(perspective), this.scratch);
+    const warm = this.displayMode === "clipped" ? palette.violet : palette.accent;
     return {
-      value,
-      intensity: clamp(Math.abs(value) / scale, 0, 1),
-      active: values.activation[index] > 0 || (this.phase === "delta" && value !== 0),
-      colour: value >= 0 ? palette.accent : palette.blue,
-      saturated: values.activation[index] >= 255,
+      value: target.value,
+      intensity: target.intensity,
+      active: target.activity > 0,
+      colour: target.polarity >= 0 ? warm : palette.blue,
+      saturated: target.saturation > 0,
     };
   }
 
@@ -413,20 +575,7 @@ class CortexVisual {
     const outputOffset = target.perspective === "white"
       ? snapshot.sideToMove === 0 ? 0 : 384
       : snapshot.sideToMove === 1 ? 0 : 384;
-    const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
-    let contribution = values.contribution[target.index] * whiteSign;
-    if (this.phase === "delta" && this.transition.before) {
-      const before = this.transition.before;
-      const beforeValues = target.perspective === "white"
-        ? before.whiteContribution
-        : before.blackContribution;
-      const afterValues = target.perspective === "white"
-        ? this.transition.after.whiteContribution
-        : this.transition.after.blackContribution;
-      const beforeSign = before.sideToMove === 0 ? 1 : -1;
-      const afterSign = this.transition.after.sideToMove === 0 ? 1 : -1;
-      contribution = afterValues[target.index] * afterSign - beforeValues[target.index] * beforeSign;
-    }
+    const contribution = values.signed[target.index];
     return {
       ...target,
       phase: this.phase,
@@ -590,23 +739,26 @@ class CortexVisual {
 
   drawContours(context, palette) {
     if (!this.transition) return;
+    const ramp = this.colourRamp(palette);
     context.save();
     context.globalCompositeOperation = "screen";
     for (const perspective of ["white", "black"]) {
+      const base = perspective === "white" ? 0 : 384;
       for (let rowGroup = 0; rowGroup < 6; rowGroup += 1) {
         for (let columnGroup = 0; columnGroup < 4; columnGroup += 1) {
           let intensity = 0;
-          let signed = 0;
+          let polarity = 0;
           let x = 0;
           let y = 0;
           let count = 0;
           for (let row = rowGroup * 4; row < rowGroup * 4 + 4; row += 1) {
             for (let column = columnGroup * 4; column < columnGroup * 4 + 4; column += 1) {
               const index = row * 16 + column;
-              const state = this.nodeState(perspective, index, palette);
+              const slot = base + index;
+              const weight = this.nodeIntensity[slot] * this.nodeActivity[slot];
               const point = this.point(perspective, index);
-              intensity += state.intensity;
-              signed += state.value;
+              intensity += weight;
+              polarity += this.nodePolarity[slot] * weight;
               x += point.x;
               y += point.y;
               count += 1;
@@ -616,19 +768,19 @@ class CortexVisual {
           if (strength < 0.08) continue;
           x /= count;
           y /= count;
-          const colour = this.displayMode === "activation"
-            ? perspective === "white" ? palette.accent : palette.blue
-            : this.displayMode === "clipped"
-              ? signed >= 0 ? palette.violet : palette.blue
-              : signed >= 0 ? palette.accent : palette.blue;
+          // Lean hard towards whichever way the group tilts, so a patch keeps a
+          // definite hue instead of averaging out to grey; it still crossfades.
+          const tilt = clamp((polarity / Math.max(intensity, 0.0001)) * 2.6, -1, 1);
+          const colour = this.rampColour(ramp, tilt);
+          const [red, green, blue] = this.rampRgb(ramp, tilt);
           const radius = 18 + strength * 34;
           context.save();
           context.translate(x, y);
           context.scale(1.65, 0.78);
           const glow = context.createRadialGradient(0, 0, 1, 0, 0, radius);
-          glow.addColorStop(0, `${colour}24`);
-          glow.addColorStop(0.46, `${colour}10`);
-          glow.addColorStop(1, `${colour}00`);
+          glow.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0.141)`);
+          glow.addColorStop(0.46, `rgba(${red}, ${green}, ${blue}, 0.063)`);
+          glow.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
           context.fillStyle = glow;
           context.beginPath();
           context.arc(0, 0, radius, 0, Math.PI * 2);
@@ -649,14 +801,15 @@ class CortexVisual {
   }
 
   drawFeatureFootprint(context, palette) {
-    if (!this.footprintCache) return;
+    if (!this.footprintCache || this.footprintFade <= 0.01) return;
     for (const perspective of ["white", "black"]) {
       context.save();
       context.globalCompositeOperation = "screen";
+      context.globalAlpha = this.footprintFade;
       for (const item of this.footprintCache[perspective]) {
         const point = this.point(perspective, item.index);
         const colour = item.positive ? palette.accent2 : palette.violet;
-        const radius = 5 + clamp(item.strength, 0, 1) * 9;
+        const radius = 5 + clamp(item.strength, 0, 1) * 9 * this.footprintFade;
         const glow = context.createRadialGradient(point.x, point.y, 1, point.x, point.y, radius);
         glow.addColorStop(0, `${colour}78`);
         glow.addColorStop(0.32, `${colour}28`);
@@ -724,18 +877,12 @@ class CortexVisual {
   }
 
   drawCore(context, palette, time) {
-    const snapshot = this.phase === "before" && this.transition?.before
-      ? this.transition.before
-      : this.transition?.after;
-    const evaluation = this.phase === "delta" && this.transition?.before
-      ? this.transition.after.whiteRelative - this.transition.before.whiteRelative
-      : snapshot?.whiteRelative || 0;
-    const colour = evaluation >= 0 ? palette.accent : palette.blue;
+    const evaluation = this.evaluation();
+    const colour = this.rampColour(this.colourRamp(palette), this.corePolarity);
     const x = this.width * 0.5;
     const y = this.height * 0.77;
     const pulse = this.reducedMotion ? 0 : Math.sin(time / 940) * 1.6;
-    const anatomyBoost = this.anatomyStage === "output" ? 5 : 0;
-    const radius = clamp(this.width * 0.034, 22, 38) + pulse + anatomyBoost;
+    const radius = clamp(this.width * 0.034, 22, 38) + pulse + this.coreBoost;
     const glow = context.createRadialGradient(x, y, 2, x, y, radius * 2.7);
     glow.addColorStop(0, colour);
     glow.addColorStop(0.23, palette.accent2);
@@ -755,11 +902,13 @@ class CortexVisual {
       context.stroke();
     }
     context.restore();
+    // The number itself never interpolates: a score shown here is one the
+    // network actually produced.
     let scoreText = formatEval(evaluation);
     if (this.transition?.before && ["input", "accumulators", "clamp"].includes(this.anatomyStage)) {
-      scoreText = `${formatEval(this.transition.before.whiteRelative)} →`;
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} \→`;
     } else if (this.transition?.before && this.anatomyStage === "output") {
-      scoreText = `${formatEval(this.transition.before.whiteRelative)} → ${formatEval(this.transition.after.whiteRelative)}`;
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} \→ ${formatEval(this.transition.after.whiteRelative)}`;
     }
     context.save();
     context.fillStyle = palette.text;
@@ -790,19 +939,41 @@ class CortexVisual {
 
   drawCells(context, palette, time) {
     if (!this.transition) return;
+    const ramp = this.colourRamp(palette);
     const selected = this.locked || this.hovered;
     context.save();
+
+    // The dormant lattice: every lane, one fill per address band.
+    context.fillStyle = palette.edge;
+    for (let band = 0; band < 4; band += 1) {
+      context.globalAlpha = 0.08 * this.bandWeight[band];
+      context.beginPath();
+      for (const perspective of ["white", "black"]) {
+        for (let index = band * 96; index < band * 96 + 96; index += 1) {
+          const point = this.point(perspective, index);
+          context.moveTo(point.x + 1.15, point.y);
+          context.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
+        }
+      }
+      context.fill();
+    }
+
+    // The lanes that are carrying something, drawn over the lattice.
     for (const perspective of ["white", "black"]) {
+      const base = perspective === "white" ? 0 : 384;
       for (let index = 0; index < 384; index += 1) {
+        const slot = base + index;
+        const activity = this.nodeActivity[slot];
+        if (activity <= 0.01) continue;
+        const intensity = this.nodeIntensity[slot];
+        const bandWeight = this.bandWeight[Math.floor(index / 96)];
         const point = this.point(perspective, index);
-        const { intensity, active, colour, saturated } = this.nodeState(perspective, index, palette);
-        const inBand = Math.floor(index / 96) === this.atlasBand;
         const ambient = this.reducedMotion ? 0 : Math.sin(time / 900 + index * 0.19) * 0.08;
-        const radius = 1.15 + intensity * 2.45 + ambient + (inBand ? 0.2 : 0);
-        const opacity = active ? 0.16 + intensity * 0.78 : 0.08;
-        context.globalAlpha = opacity * (inBand ? 1 : 0.42);
-        context.fillStyle = active ? colour : palette.edge;
-        if (inBand && intensity > 0.62) {
+        const radius = 1.15 + intensity * 2.45 + ambient + (bandWeight - 0.42) * 0.34;
+        const colour = this.rampColour(ramp, this.nodePolarity[slot]);
+        context.globalAlpha = (0.16 + intensity * 0.78) * activity * bandWeight;
+        context.fillStyle = colour;
+        if (intensity > 0.62 && bandWeight > 0.9) {
           context.shadowColor = colour;
           context.shadowBlur = 8;
         } else {
@@ -811,8 +982,9 @@ class CortexVisual {
         context.beginPath();
         context.arc(point.x, point.y, radius, 0, Math.PI * 2);
         context.fill();
-        if (saturated) {
-          context.globalAlpha = 0.52;
+        const saturation = this.nodeSaturation[slot];
+        if (saturation > 0.01) {
+          context.globalAlpha = 0.52 * saturation;
           context.strokeStyle = palette.violet;
           context.lineWidth = 0.7;
           context.stroke();

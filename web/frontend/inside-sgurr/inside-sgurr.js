@@ -95,6 +95,7 @@ const refs = {
   loadingDetail: document.querySelector("#loadingDetail"),
   retry: document.querySelector("#retryModel"),
   evaluation: document.querySelector("#nnueEval"),
+  evalReadout: document.querySelector(".eval-readout"),
   evaluationLabel: document.querySelector(".eval-readout > span"),
   evaluationDetail: document.querySelector("#nnueEvalDetail"),
   pieceCount: document.querySelector("#pieceCount"),
@@ -387,6 +388,16 @@ function snapshotForPhase() {
   return transition.after;
 }
 
+// Re-triggers the settle animation so a new score fades in rather than swapping.
+function pulseEvaluation() {
+  const next = refs.evaluation.textContent;
+  if (refs.evalReadout.dataset.value === next) return;
+  refs.evalReadout.dataset.value = next;
+  refs.evalReadout.dataset.updated = "false";
+  void refs.evalReadout.offsetWidth;
+  refs.evalReadout.dataset.updated = "true";
+}
+
 function renderEvaluation() {
   const snapshot = snapshotForPhase();
   if (!snapshot) return;
@@ -405,6 +416,7 @@ function renderEvaluation() {
   refs.clippedLow.textContent = `${snapshot.clippedLow} / 768`;
   refs.clippedHigh.textContent = `${snapshot.clippedHigh} / 768`;
   refs.rawOutput.textContent = formatInteger(snapshot.raw);
+  pulseEvaluation();
 }
 
 function renderUpdate() {
