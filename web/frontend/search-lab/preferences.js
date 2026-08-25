@@ -22,11 +22,15 @@ function applyTheme(nextTheme) {
 }
 
 function playInterfaceSound({ rate = 1, volume = 1 } = {}) {
-  if (localStorage.getItem("sgurrSoundEnabled") === "false") return;
+  const storedMasterVolume = Number(localStorage.getItem("sgurrMasterVolume") ?? "1");
+  const masterVolume = Number.isFinite(storedMasterVolume)
+    ? Math.max(0, Math.min(1, storedMasterVolume))
+    : 1;
   const storedVolume = Number(localStorage.getItem("sgurrSoundVolume") || "0.8");
   const soundVolume = Number.isFinite(storedVolume)
     ? Math.max(0, Math.min(1, storedVolume))
     : 0.8;
+  if (masterVolume === 0 || soundVolume === 0) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return;
 
@@ -40,7 +44,7 @@ function playInterfaceSound({ rate = 1, volume = 1 } = {}) {
   oscillator.frequency.setValueAtTime(480 * rate, startedAt);
   oscillator.frequency.exponentialRampToValueAtTime(320 * rate, startedAt + 0.045);
   envelope.gain.setValueAtTime(0.0001, startedAt);
-  envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, soundVolume * volume * 0.12), startedAt + 0.006);
+  envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, masterVolume * soundVolume * volume * 0.12), startedAt + 0.006);
   envelope.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.045);
   oscillator.connect(envelope).connect(audioContext.destination);
   oscillator.start(startedAt);
