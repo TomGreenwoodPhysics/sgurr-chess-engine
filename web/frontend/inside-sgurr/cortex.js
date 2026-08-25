@@ -14,11 +14,6 @@ function mix(a, b, amount) {
   return a + (b - a) * amount;
 }
 
-function hash(index, salt = 0) {
-  const value = Math.sin((index + 1) * 91.173 + salt * 37.719) * 43758.5453;
-  return value - Math.floor(value);
-}
-
 function percentile(values, ratio = 0.94) {
   const sorted = values
     .filter((value) => Number.isFinite(value))
@@ -88,13 +83,7 @@ class CortexVisual {
     this.onInspect = onInspect;
     this.transition = null;
     this.phase = "after";
-    this.view = "cortex";
-    this.viewProgress = 0;
-    this.viewTarget = 0;
-    this.atlasBand = 0;
     this.displayMode = "contribution";
-    this.featureFootprint = null;
-    this.featureScale = 1;
     this.anatomyStage = "idle";
     this.anatomyStarted = performance.now();
     this.hovered = null;
@@ -106,20 +95,21 @@ class CortexVisual {
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.inViewport = true;
     this.animateUntil = performance.now() + 8000;
+    this.grid = { cell: 10, top: 0, bottom: 0, whiteLeft: 0, blackLeft: 0 };
     this.contributionScale = 1;
     this.contributionDeltaScale = 1;
     this.deltaScale = 1;
     this.valueCache = new Map();
     this.connectionCache = null;
-    this.footprintCache = null;
     this.nodeIntensity = new Float32Array(768);
     this.nodePolarity = new Float32Array(768);
     this.nodeActivity = new Float32Array(768);
     this.nodeSaturation = new Float32Array(768);
-    this.bandWeight = Float32Array.from([1, 0.42, 0.42, 0.42]);
+    this.focusWeight = new Float32Array(768);
+    this.focusTarget = new Float32Array(768);
+    this.focusOn = false;
+    this.focusFade = 0;
     this.scratch = { value: 0, intensity: 0, activity: 0, polarity: 0, saturation: 0 };
-    this.footprintFade = 0;
-    this.footprintTarget = 0;
     this.violetBlend = 0;
     this.corePolarity = 1;
     this.coreBoost = 0;
@@ -127,10 +117,10 @@ class CortexVisual {
     this.settled = true;
     this.rampCache = null;
     this.rampKey = "";
-    this.canvas.dataset.atlasBand = "0";
     this.canvas.dataset.displayMode = this.displayMode;
     this.canvas.dataset.anatomy = this.anatomyStage;
     this.canvas.dataset.motion = "settled";
+    this.canvas.dataset.feature = "idle";
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -215,61 +205,12 @@ class CortexVisual {
     this.wake(2400);
   }
 
-  setView(view) {
-    this.view = view;
-    this.viewTarget = view === "circuit" ? 1 : 0;
-    this.canvas.dataset.view = view;
-    this.canvas.setAttribute(
-      "aria-label",
-      view === "circuit"
-        ? "Sgurr's 768 exact NNUE accumulator activations in two 16 by 24 lane arrays. Use arrow keys to inspect lanes."
-        : "Sgurr's 768 exact NNUE accumulator activations, arranged as two brain hemispheres. Use arrow keys to inspect lanes.",
-    );
-    this.wake(3200);
-  }
-
-  setAtlasBand(band) {
-    this.atlasBand = clamp(Math.trunc(band), 0, 3);
-    this.canvas.dataset.atlasBand = String(this.atlasBand);
-    this.wake(2200);
-  }
-
   setDisplayMode(mode) {
     if (!["contribution", "change", "activation", "clipped"].includes(mode)) return;
     this.displayMode = mode;
     this.connectionCache = null;
     this.canvas.dataset.displayMode = mode;
     this.wake(2400);
-  }
-
-  setFeatureFootprint(footprint) {
-    this.featureFootprint = footprint;
-    this.featureScale = footprint
-      ? percentile([...footprint.whiteWeights, ...footprint.blackWeights], 0.9)
-      : 1;
-    // Keep the old ranking alive so the halos can fade out instead of vanishing.
-    if (footprint) this.footprintCache = this.rankFootprint(footprint);
-    this.footprintTarget = footprint ? 1 : 0;
-    this.canvas.dataset.feature = footprint ? "active" : "idle";
-    this.wake(2600);
-  }
-
-  rankFootprint(footprint) {
-    const ranked = {};
-    for (const perspective of ["white", "black"]) {
-      const weights = perspective === "white" ? footprint.whiteWeights : footprint.blackWeights;
-      const candidates = [];
-      for (let index = 0; index < 384; index += 1) {
-        candidates.push({
-          index,
-          positive: weights[index] >= 0,
-          strength: Math.abs(weights[index]) / this.featureScale,
-        });
-      }
-      candidates.sort((a, b) => b.strength - a.strength);
-      ranked[perspective] = candidates.slice(0, 34);
-    }
-    return ranked;
   }
 
   rankConnections(palette) {
@@ -282,6 +223,36 @@ class CortexVisual {
     }
     candidates.sort((a, b) => b.strength - a.strength);
     return candidates.slice(0, 42);
+  }
+
+  // Marks the lanes a piece or a move actually drives. Values are magnitudes;
+  // they are normalised against the strongest lane in the pair, so the display
+  // shows where the weight is, not an arbitrary cut-off.
+  setFocus(whiteValues, blackValues) {
+    if (!whiteValues || !blackValues) {
+      this.focusTarget.fill(0);
+      this.focusOn = false;
+      this.canvas.dataset.feature = "idle";
+      this.wake(2200);
+      return;
+    }
+    const scale = percentile([...whiteValues, ...blackValues], 0.88);
+    for (let index = 0; index < 384; index += 1) {
+      this.focusTarget[index] = clamp(Math.abs(whiteValues[index]) / scale, 0, 1) ** 1.5;
+      this.focusTarget[384 + index] = clamp(Math.abs(blackValues[index]) / scale, 0, 1) ** 1.5;
+    }
+    this.focusOn = true;
+    this.canvas.dataset.feature = "active";
+    this.wake(2600);
+  }
+
+  focusChangedLanes() {
+    if (!this.transition?.before) return;
+    this.setFocus(this.transition.whiteDelta, this.transition.blackDelta);
+  }
+
+  clearFocus() {
+    this.setFocus(null, null);
   }
 
   setAnatomyStage(stage) {
@@ -299,6 +270,7 @@ class CortexVisual {
     this.canvas.width = Math.round(this.width * dpr);
     this.canvas.height = Math.round(this.height * dpr);
     this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.computeLayout();
     this.draw(performance.now());
   }
 
@@ -316,28 +288,16 @@ class CortexVisual {
     this.animationFrame = null;
     // Draw at the display rate while anything is still easing, and drop back to
     // an idle cadence once the picture has settled.
-    const gate = this.settled && this.viewProgress === this.viewTarget ? 42 : 0;
+    const gate = this.settled ? 42 : 0;
     if (time - this.lastFrame < gate && !this.reducedMotion) {
       this.start();
       return;
     }
     const delta = clamp(time - this.lastFrame, 1, 120);
     this.lastFrame = time;
-    const distance = this.viewTarget - this.viewProgress;
-    if (Math.abs(distance) > 0.001) {
-      this.viewProgress = this.reducedMotion
-        ? this.viewTarget
-        : this.viewProgress + distance * 0.13;
-    } else {
-      this.viewProgress = this.viewTarget;
-    }
     this.advance(delta);
     this.draw(time);
-    if (
-      !this.settled
-      || this.viewProgress !== this.viewTarget
-      || (!this.reducedMotion && time < this.animateUntil)
-    ) this.start();
+    if (!this.settled || (!this.reducedMotion && time < this.animateUntil)) this.start();
   }
 
   // Walks every displayed value towards the value the network actually holds.
@@ -365,15 +325,13 @@ class CortexVisual {
       this.motionPrimed = true;
     }
 
-    for (let band = 0; band < 4; band += 1) {
-      moving = approach(this.bandWeight, band, band === this.atlasBand ? 1 : 0.42, ambientBlend) || moving;
+    for (let slot = 0; slot < 768; slot += 1) {
+      moving = approach(this.focusWeight, slot, this.focusTarget[slot], nodeBlend) || moving;
     }
-    moving = approach(this, "footprintFade", this.footprintTarget, ambientBlend) || moving;
+    moving = approach(this, "focusFade", this.focusOn ? 1 : 0, ambientBlend) || moving;
     moving = approach(this, "violetBlend", this.displayMode === "clipped" ? 1 : 0, ambientBlend) || moving;
     moving = approach(this, "coreBoost", this.anatomyStage === "output" ? 5 : 0, coreBlend) || moving;
     moving = approach(this, "corePolarity", this.evaluation() >= 0 ? 1 : -1, coreBlend) || moving;
-    if (this.footprintFade === 0 && this.footprintTarget === 0) this.footprintCache = null;
-
     if (this.settled === moving) {
       this.settled = !moving;
       this.canvas.dataset.motion = this.settled ? "settled" : "settling";
@@ -434,42 +392,41 @@ class CortexVisual {
     };
   }
 
-  brainPoint(perspective, index) {
-    const row = Math.floor(index / 16);
-    const column = index % 16;
-    const vertical = ((row + 0.5) / 24) * 2 - 1;
-    const widthAtRow = 0.2 + Math.sqrt(Math.max(0, 1 - vertical * vertical)) * 0.8;
-    const depth = (column + 0.58) / 16;
-    const hemisphereWidth = this.width * 0.39;
-    const centre = this.width * 0.5;
-    const gap = this.width * 0.021;
-    const horizontal = (0.08 + depth * 0.92) * widthAtRow;
-    const direction = perspective === "white" ? -1 : 1;
-    const jitterX = (hash(index, perspective === "white" ? 1 : 2) - 0.5) * this.width * 0.008;
-    const jitterY = (hash(index, perspective === "white" ? 3 : 4) - 0.5) * this.height * 0.012;
-    return {
-      x: centre + direction * (gap + horizontal * hemisphereWidth) + jitterX,
-      y: this.height * 0.48 + vertical * this.height * 0.37 + jitterY + Math.abs(horizontal) * this.height * 0.018,
-    };
-  }
-
-  circuitPoint(perspective, index) {
-    const row = Math.floor(index / 16);
-    const column = index % 16;
-    const left = perspective === "white" ? this.width * 0.065 : this.width * 0.57;
-    const cellWidth = this.width * 0.365 / 15;
-    const cellHeight = this.height * 0.66 / 23;
-    return {
-      x: left + column * cellWidth,
-      y: this.height * 0.16 + row * cellHeight,
+  // Both accumulators are 16 x 24 grids of lanes. Lane 0 is top left of its
+  // panel and addresses run left to right, so a row is 16 consecutive lanes.
+  // Cells stay square and the pair is centred in whatever space the stage has.
+  computeLayout() {
+    const header = 46;
+    const footer = clamp(this.height * 0.19, 92, 150);
+    const usableHeight = Math.max(60, this.height - header - footer);
+    const gutter = 42;
+    const gap = clamp(this.width * 0.062, 40, 78);
+    const panelWidth = (this.width - gutter * 2 - gap) / 2;
+    const cell = Math.max(4, Math.min(panelWidth / 15, usableHeight / 23));
+    const gridWidth = cell * 15;
+    const left = gutter + (this.width - gutter * 2 - (gridWidth * 2 + gap)) / 2;
+    this.grid = {
+      cell,
+      top: header + (usableHeight - cell * 23) / 2,
+      bottom: header + (usableHeight - cell * 23) / 2 + cell * 23,
+      whiteLeft: left,
+      blackLeft: left + gridWidth + gap,
     };
   }
 
   point(perspective, index) {
-    const brain = this.brainPoint(perspective, index);
-    const circuit = this.circuitPoint(perspective, index);
-    const eased = this.viewProgress * this.viewProgress * (3 - 2 * this.viewProgress);
-    return { x: mix(brain.x, circuit.x, eased), y: mix(brain.y, circuit.y, eased) };
+    const left = perspective === "white" ? this.grid.whiteLeft : this.grid.blackLeft;
+    return {
+      x: left + (index % 16) * this.grid.cell,
+      y: this.grid.top + Math.floor(index / 16) * this.grid.cell,
+    };
+  }
+
+  coreCentre() {
+    return {
+      x: this.width * 0.5,
+      y: this.grid.bottom + (this.height - this.grid.bottom) * 0.46,
+    };
   }
 
   valuesFor(perspective) {
@@ -652,48 +609,10 @@ class CortexVisual {
     this.draw(performance.now());
   }
 
-  drawOutline(context, palette) {
-    const opacity = 1 - this.viewProgress;
-    if (opacity <= 0.01) return;
-    context.save();
-    context.globalAlpha = opacity * 0.42;
-    context.strokeStyle = palette.edge;
-    context.lineWidth = 1.2;
-    for (const direction of [-1, 1]) {
-      context.beginPath();
-      context.moveTo(this.width * 0.5 + direction * this.width * 0.012, this.height * 0.86);
-      context.bezierCurveTo(
-        this.width * (0.5 + direction * 0.23), this.height * 0.94,
-        this.width * (0.5 + direction * 0.48), this.height * 0.68,
-        this.width * (0.5 + direction * 0.43), this.height * 0.36,
-      );
-      context.bezierCurveTo(
-        this.width * (0.5 + direction * 0.4), this.height * 0.08,
-        this.width * (0.5 + direction * 0.12), this.height * 0.04,
-        this.width * 0.5 + direction * this.width * 0.012, this.height * 0.13,
-      );
-      context.stroke();
-    }
-    context.setLineDash([4, 8]);
-    context.globalAlpha = opacity * 0.19;
-    for (let fold = 0; fold < 6; fold += 1) {
-      const y = this.height * (0.23 + fold * 0.095);
-      context.beginPath();
-      context.moveTo(this.width * 0.18, y);
-      context.bezierCurveTo(this.width * 0.28, y - 28, this.width * 0.38, y + 28, this.width * 0.47, y);
-      context.stroke();
-      context.beginPath();
-      context.moveTo(this.width * 0.53, y);
-      context.bezierCurveTo(this.width * 0.62, y + 28, this.width * 0.72, y - 28, this.width * 0.82, y);
-      context.stroke();
-    }
-    context.restore();
-  }
-
   drawOutputConnections(context, palette) {
     if (!this.transition || this.displayMode !== "contribution") return;
     this.connectionCache ||= this.rankConnections(palette);
-    const core = { x: this.width * 0.5, y: this.height * 0.77 };
+    const core = this.coreCentre();
     const anatomyBoost = this.anatomyStage === "output" ? 0.3 : 0.18;
     context.save();
     context.lineWidth = 0.75;
@@ -714,175 +633,12 @@ class CortexVisual {
     context.restore();
   }
 
-  drawBandGuide(context, palette) {
-    const first = this.atlasBand * 96;
-    const last = first + 95;
-    context.save();
-    context.font = '700 8px "Cascadia Mono", Consolas, monospace';
-    context.textAlign = "center";
-    for (const perspective of ["white", "black"]) {
-      const points = [];
-      for (let index = first; index <= last; index += 1) points.push(this.point(perspective, index));
-      const left = Math.min(...points.map((point) => point.x)) - 8;
-      const right = Math.max(...points.map((point) => point.x)) + 8;
-      const top = Math.min(...points.map((point) => point.y)) - 8;
-      context.globalAlpha = 0.62;
-      context.fillStyle = palette.muted;
-      context.fillText(
-        `${String(first).padStart(3, "0")}–${String(last).padStart(3, "0")}`,
-        (left + right) / 2,
-        top - 5,
-      );
-    }
-    context.restore();
-  }
-
-  drawContours(context, palette) {
-    if (!this.transition) return;
-    const ramp = this.colourRamp(palette);
-    context.save();
-    context.globalCompositeOperation = "screen";
-    for (const perspective of ["white", "black"]) {
-      const base = perspective === "white" ? 0 : 384;
-      for (let rowGroup = 0; rowGroup < 6; rowGroup += 1) {
-        for (let columnGroup = 0; columnGroup < 4; columnGroup += 1) {
-          let intensity = 0;
-          let polarity = 0;
-          let x = 0;
-          let y = 0;
-          let count = 0;
-          for (let row = rowGroup * 4; row < rowGroup * 4 + 4; row += 1) {
-            for (let column = columnGroup * 4; column < columnGroup * 4 + 4; column += 1) {
-              const index = row * 16 + column;
-              const slot = base + index;
-              const weight = this.nodeIntensity[slot] * this.nodeActivity[slot];
-              const point = this.point(perspective, index);
-              intensity += weight;
-              polarity += this.nodePolarity[slot] * weight;
-              x += point.x;
-              y += point.y;
-              count += 1;
-            }
-          }
-          const strength = intensity / count;
-          if (strength < 0.08) continue;
-          x /= count;
-          y /= count;
-          // Lean hard towards whichever way the group tilts, so a patch keeps a
-          // definite hue instead of averaging out to grey; it still crossfades.
-          const tilt = clamp((polarity / Math.max(intensity, 0.0001)) * 2.6, -1, 1);
-          const colour = this.rampColour(ramp, tilt);
-          const [red, green, blue] = this.rampRgb(ramp, tilt);
-          const radius = 18 + strength * 34;
-          context.save();
-          context.translate(x, y);
-          context.scale(1.65, 0.78);
-          const glow = context.createRadialGradient(0, 0, 1, 0, 0, radius);
-          glow.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0.141)`);
-          glow.addColorStop(0.46, `rgba(${red}, ${green}, ${blue}, 0.063)`);
-          glow.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
-          context.fillStyle = glow;
-          context.beginPath();
-          context.arc(0, 0, radius, 0, Math.PI * 2);
-          context.fill();
-          if (strength > 0.46) {
-            context.globalAlpha = 0.08 + strength * 0.08;
-            context.strokeStyle = colour;
-            context.lineWidth = 0.65;
-            context.beginPath();
-            context.ellipse(0, 0, radius * 0.72, radius * 0.72, 0, 0, Math.PI * 2);
-            context.stroke();
-          }
-          context.restore();
-        }
-      }
-    }
-    context.restore();
-  }
-
-  drawFeatureFootprint(context, palette) {
-    if (!this.footprintCache || this.footprintFade <= 0.01) return;
-    for (const perspective of ["white", "black"]) {
-      context.save();
-      context.globalCompositeOperation = "screen";
-      context.globalAlpha = this.footprintFade;
-      for (const item of this.footprintCache[perspective]) {
-        const point = this.point(perspective, item.index);
-        const colour = item.positive ? palette.accent2 : palette.violet;
-        const radius = 5 + clamp(item.strength, 0, 1) * 9 * this.footprintFade;
-        const glow = context.createRadialGradient(point.x, point.y, 1, point.x, point.y, radius);
-        glow.addColorStop(0, `${colour}78`);
-        glow.addColorStop(0.32, `${colour}28`);
-        glow.addColorStop(1, `${colour}00`);
-        context.fillStyle = glow;
-        context.beginPath();
-        context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-        context.fill();
-      }
-      context.restore();
-    }
-  }
-
-  strongestChangedLane(perspective) {
-    if (!this.transition?.before) return 192;
-    const values = perspective === "white" ? this.transition.whiteDelta : this.transition.blackDelta;
-    let target = 0;
-    for (let index = 1; index < values.length; index += 1) {
-      if (Math.abs(values[index]) > Math.abs(values[target])) target = index;
-    }
-    return target;
-  }
-
-  drawAnatomyPulses(context, palette, time) {
-    if (!["input", "accumulators"].includes(this.anatomyStage)) return;
-    const elapsed = time - this.anatomyStarted;
-    const progress = this.reducedMotion ? 1 : clamp(elapsed / 950, 0, 1);
-    const eased = progress * progress * (3 - 2 * progress);
-    const start = { x: this.width * 0.5, y: this.height * 0.02 };
-    context.save();
-    for (const perspective of ["white", "black"]) {
-      const target = this.point(perspective, this.strongestChangedLane(perspective));
-      const control = {
-        x: mix(start.x, target.x, 0.52),
-        y: this.height * 0.11,
-      };
-      context.globalAlpha = 0.22;
-      context.strokeStyle = perspective === "white" ? palette.accent : palette.blue;
-      context.lineWidth = 1;
-      context.beginPath();
-      context.moveTo(start.x, start.y);
-      context.quadraticCurveTo(control.x, control.y, target.x, target.y);
-      context.stroke();
-      const oneMinus = 1 - eased;
-      const x = oneMinus * oneMinus * start.x + 2 * oneMinus * eased * control.x + eased * eased * target.x;
-      const y = oneMinus * oneMinus * start.y + 2 * oneMinus * eased * control.y + eased * eased * target.y;
-      const colour = perspective === "white" ? palette.accent : palette.blue;
-      context.globalAlpha = 0.9;
-      context.fillStyle = colour;
-      context.shadowColor = colour;
-      context.shadowBlur = 12;
-      context.beginPath();
-      context.arc(x, y, 3.2, 0, Math.PI * 2);
-      context.fill();
-      if (this.anatomyStage === "accumulators") {
-        context.globalAlpha = 0.35;
-        context.strokeStyle = colour;
-        context.lineWidth = 1;
-        context.beginPath();
-        context.arc(target.x, target.y, 8 + Math.sin(time / 180) * 2, 0, Math.PI * 2);
-        context.stroke();
-      }
-    }
-    context.restore();
-  }
-
   drawCore(context, palette, time) {
     const evaluation = this.evaluation();
     const colour = this.rampColour(this.colourRamp(palette), this.corePolarity);
-    const x = this.width * 0.5;
-    const y = this.height * 0.77;
+    const { x, y } = this.coreCentre();
     const pulse = this.reducedMotion ? 0 : Math.sin(time / 940) * 1.6;
-    const radius = clamp(this.width * 0.034, 22, 38) + pulse + this.coreBoost;
+    const radius = clamp(this.width * 0.032, 20, 34) + pulse + this.coreBoost;
     const glow = context.createRadialGradient(x, y, 2, x, y, radius * 2.7);
     glow.addColorStop(0, colour);
     glow.addColorStop(0.23, palette.accent2);
@@ -905,10 +661,10 @@ class CortexVisual {
     // The number itself never interpolates: a score shown here is one the
     // network actually produced.
     let scoreText = formatEval(evaluation);
-    if (this.transition?.before && ["input", "accumulators", "clamp"].includes(this.anatomyStage)) {
-      scoreText = `${formatEval(this.transition.before.whiteRelative)} \→`;
+    if (this.transition?.before && ["board", "lanes"].includes(this.anatomyStage)) {
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} →`;
     } else if (this.transition?.before && this.anatomyStage === "output") {
-      scoreText = `${formatEval(this.transition.before.whiteRelative)} \→ ${formatEval(this.transition.after.whiteRelative)}`;
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} → ${formatEval(this.transition.after.whiteRelative)}`;
     }
     context.save();
     context.fillStyle = palette.text;
@@ -921,19 +677,44 @@ class CortexVisual {
     context.restore();
   }
 
-  drawLabels(context, palette) {
+  // How far a wave of light has travelled down the grid, in rows, while a move
+  // is being pushed through the network. Null when nothing is igniting.
+  igniteFront(time) {
+    if (this.anatomyStage !== "lanes" || this.reducedMotion) return null;
+    const progress = (time - this.anatomyStarted) / 780;
+    return progress < 0 || progress > 1.3 ? null : progress * 30 - 3;
+  }
+
+  drawPanels(context, palette) {
     context.save();
-    context.textAlign = "center";
-    context.fillStyle = palette.muted;
-    context.globalAlpha = 0.58;
-    context.font = '700 10px "Cascadia Mono", Consolas, monospace';
-    const labels = {
-      contribution: this.phase === "delta" ? "WHITE-RELATIVE OUTPUT CHANGE" : "WHITE-RELATIVE OUTPUT CONTRIBUTION",
-      change: "RAW ACCUMULATOR MOVE DELTA",
-      activation: "CLIPPED ACTIVATION [0, 255]",
-      clipped: "CLIPPED LOW [0] / HIGH [255]",
-    };
-    context.fillText(labels[this.displayMode], this.width * 0.5, this.height * 0.94);
+    for (const perspective of ["white", "black"]) {
+      const first = this.point(perspective, 0);
+      const last = this.point(perspective, 383);
+      context.textAlign = "left";
+      context.font = '700 9px "Cascadia Mono", Consolas, monospace';
+      context.fillStyle = palette.muted;
+      context.globalAlpha = 0.7;
+      const compact = this.width < 560;
+      context.fillText(
+        perspective === "white"
+          ? compact ? "WHITE VIEW" : "WHITE VIEW · BOARD AS ENTERED"
+          : compact ? "BLACK VIEW" : "BLACK VIEW · RANKS MIRRORED",
+        first.x - 12,
+        first.y - 22,
+      );
+      context.globalAlpha = 0.13;
+      context.strokeStyle = palette.edge;
+      context.lineWidth = 1;
+      context.strokeRect(first.x - 13, first.y - 12, last.x - first.x + 26, last.y - first.y + 24);
+      context.textAlign = "right";
+      context.font = '700 8px "Cascadia Mono", Consolas, monospace';
+      context.globalAlpha = 0.42;
+      context.fillStyle = palette.muted;
+      for (let row = 0; row < 24; row += 4) {
+        const point = this.point(perspective, row * 16);
+        context.fillText(String(row * 16).padStart(3, "0"), point.x - 13, point.y + 3);
+      }
+    }
     context.restore();
   }
 
@@ -941,24 +722,22 @@ class CortexVisual {
     if (!this.transition) return;
     const ramp = this.colourRamp(palette);
     const selected = this.locked || this.hovered;
+    const front = this.igniteFront(time);
     context.save();
 
-    // The dormant lattice: every lane, one fill per address band.
+    // The dormant lattice, so the shape of both accumulators is always readable.
     context.fillStyle = palette.edge;
-    for (let band = 0; band < 4; band += 1) {
-      context.globalAlpha = 0.08 * this.bandWeight[band];
-      context.beginPath();
-      for (const perspective of ["white", "black"]) {
-        for (let index = band * 96; index < band * 96 + 96; index += 1) {
-          const point = this.point(perspective, index);
-          context.moveTo(point.x + 1.15, point.y);
-          context.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
-        }
+    context.globalAlpha = 0.09;
+    context.beginPath();
+    for (const perspective of ["white", "black"]) {
+      for (let index = 0; index < 384; index += 1) {
+        const point = this.point(perspective, index);
+        context.moveTo(point.x + 1.15, point.y);
+        context.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
       }
-      context.fill();
     }
+    context.fill();
 
-    // The lanes that are carrying something, drawn over the lattice.
     for (const perspective of ["white", "black"]) {
       const base = perspective === "white" ? 0 : 384;
       for (let index = 0; index < 384; index += 1) {
@@ -966,16 +745,22 @@ class CortexVisual {
         const activity = this.nodeActivity[slot];
         if (activity <= 0.01) continue;
         const intensity = this.nodeIntensity[slot];
-        const bandWeight = this.bandWeight[Math.floor(index / 96)];
+        const focus = this.focusWeight[slot];
+        // With no focus every lane reads normally. With one, the lanes the piece
+        // or the move actually drives stay lit and the rest step back.
+        const emphasis = mix(1, mix(0.07, 1.5, focus), this.focusFade);
+        const wave = front === null
+          ? 0
+          : clamp(1 - Math.abs(front - Math.floor(index / 16)) / 3.5, 0, 1) * focus;
         const point = this.point(perspective, index);
         const ambient = this.reducedMotion ? 0 : Math.sin(time / 900 + index * 0.19) * 0.08;
-        const radius = 1.15 + intensity * 2.45 + ambient + (bandWeight - 0.42) * 0.34;
+        const radius = 1.15 + intensity * 2.45 * emphasis + ambient + wave * 2.4;
         const colour = this.rampColour(ramp, this.nodePolarity[slot]);
-        context.globalAlpha = (0.16 + intensity * 0.78) * activity * bandWeight;
+        context.globalAlpha = clamp((0.16 + intensity * 0.78) * activity * emphasis + wave * 0.5, 0, 1);
         context.fillStyle = colour;
-        if (intensity > 0.62 && bandWeight > 0.9) {
+        if (intensity * emphasis > 0.62 || wave > 0.3) {
           context.shadowColor = colour;
-          context.shadowBlur = 8;
+          context.shadowBlur = 8 + wave * 12;
         } else {
           context.shadowBlur = 0;
         }
@@ -989,6 +774,16 @@ class CortexVisual {
           context.lineWidth = 0.7;
           context.stroke();
         }
+        // Ring the lanes this piece or move drives hardest.
+        const marked = focus * this.focusFade;
+        if (marked > 0.62) {
+          context.globalAlpha = (marked - 0.62) * 1.6;
+          context.strokeStyle = colour;
+          context.lineWidth = 0.9;
+          context.beginPath();
+          context.arc(point.x, point.y, radius + 3.4, 0, Math.PI * 2);
+          context.stroke();
+        }
       }
     }
     context.restore();
@@ -999,7 +794,7 @@ class CortexVisual {
       context.lineWidth = 1.4;
       context.globalAlpha = 0.92;
       context.beginPath();
-      context.arc(point.x, point.y, 8, 0, Math.PI * 2);
+      context.arc(point.x, point.y, 7, 0, Math.PI * 2);
       context.stroke();
       context.restore();
     }
@@ -1024,15 +819,10 @@ class CortexVisual {
     context.fillStyle = background;
     context.fillRect(0, 0, this.width, this.height);
 
-    this.drawOutline(context, palette);
-    this.drawBandGuide(context, palette);
-    this.drawContours(context, palette);
+    this.drawPanels(context, palette);
     this.drawOutputConnections(context, palette);
-    this.drawFeatureFootprint(context, palette);
     this.drawCells(context, palette, time);
-    this.drawAnatomyPulses(context, palette, time);
     this.drawCore(context, palette, time);
-    this.drawLabels(context, palette);
   }
 }
 

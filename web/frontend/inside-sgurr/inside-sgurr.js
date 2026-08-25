@@ -10,13 +10,6 @@ const POSITION_PRESETS = Object.freeze({
   kiwipete: "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
 });
 const PIECE_CODES = Object.freeze({ p: "P", n: "N", b: "B", r: "R", q: "Q", k: "K" });
-const LANE_BANDS = Object.freeze([
-  "Top quarter",
-  "Upper-middle quarter",
-  "Lower-middle quarter",
-  "Bottom quarter",
-]);
-const GUIDE_KEY = "sgurrInsideGuide";
 const PHASE_ORDER = Object.freeze(["before", "delta", "after"]);
 const PHASE_LABELS = Object.freeze({ before: "Before", delta: "Change", after: "After" });
 const DISPLAY_MODES = Object.freeze({
@@ -41,12 +34,9 @@ const DISPLAY_MODES = Object.freeze({
     cyan: "Held at 0",
   },
 });
-const ANATOMY_STEPS = Object.freeze({ input: 0, accumulators: 1, clamp: 2, output: 3 });
 const ANATOMY_SEQUENCE = Object.freeze([
-  { stage: "board", phase: "before", hold: 400 },
-  { stage: "input", phase: "before", hold: 560 },
-  { stage: "accumulators", phase: "delta", hold: 680 },
-  { stage: "clamp", phase: "delta", hold: 460 },
+  { stage: "board", phase: "before", hold: 420 },
+  { stage: "lanes", phase: "delta", hold: 900 },
   { stage: "output", phase: "after", hold: 620 },
 ]);
 
@@ -61,25 +51,15 @@ const refs = {
   fenStatus: document.querySelector("#fenStatus"),
   undo: document.querySelector("#undoPosition"),
   canvas: document.querySelector("#cortexCanvas"),
-  cortexView: document.querySelector("#cortexViewButton"),
-  circuitView: document.querySelector("#circuitViewButton"),
-  laneAtlasDetail: document.querySelector("#laneAtlasDetail"),
-  laneBandButtons: [...document.querySelectorAll("[data-lane-band]")],
   displayModeButtons: [...document.querySelectorAll(".display-mode-buttons [data-display-mode]")],
   displayModeNote: document.querySelector("#displayModeNote"),
-  visualKey: document.querySelector(".visual-key"),
+  stageLegend: document.querySelector(".stage-legend"),
   goldKeyText: document.querySelector("#goldKeyText"),
   cyanKeyText: document.querySelector("#cyanKeyText"),
-  signalPath: document.querySelector(".signal-path"),
-  signalSteps: [...document.querySelectorAll("[data-anatomy-step]")],
   timeline: document.querySelector("#stateTimeline"),
-  guide: document.querySelector("#insideGuide"),
-  dismissGuide: document.querySelector("#dismissInsideGuide"),
   pieceInspector: document.querySelector("#pieceInspector"),
   pieceInspectorTitle: document.querySelector("#pieceInspectorTitle"),
-  pieceInspectorEmpty: document.querySelector("#pieceInspectorEmpty"),
-  pieceFeatureData: document.querySelector("#pieceFeatureData"),
-  pieceFootprintNote: document.querySelector("#pieceFootprintNote"),
+  pieceInspectorNote: document.querySelector("#pieceInspectorNote"),
   clearPieceInspector: document.querySelector("#clearPieceInspector"),
   whiteFeatureIndex: document.querySelector("#whiteFeatureIndex"),
   whiteFeatureSummary: document.querySelector("#whiteFeatureSummary"),
@@ -134,10 +114,7 @@ let modelReady = false;
 let currentPhase = "after";
 let replayTimers = [];
 let bootSequence = 0;
-let boardFocusPending = false;
-let boardFocusSquare = null;
-let currentLaneBand = 0;
-let laneBandTimer = null;
+let boardSquares = new Map();
 let inspectedSquare = null;
 let featureRequest = 0;
 
@@ -145,55 +122,6 @@ const visual = new CortexVisual(refs.canvas, (details) => {
   if (details) selectedLane = { perspective: details.perspective, index: details.index };
   renderLane(details);
 });
-
-function scheduleLaneBand() {
-  if (laneBandTimer !== null) window.clearTimeout(laneBandTimer);
-  laneBandTimer = null;
-  if (visual.reducedMotion || document.hidden) return;
-  laneBandTimer = window.setTimeout(() => {
-    setLaneBand((currentLaneBand + 1) % LANE_BANDS.length);
-  }, 7200);
-}
-
-function setLaneBand(band) {
-  currentLaneBand = Math.max(0, Math.min(LANE_BANDS.length - 1, Number(band) || 0));
-  visual.setAtlasBand(currentLaneBand);
-  for (const button of refs.laneBandButtons) {
-    const active = Number(button.dataset.laneBand) === currentLaneBand;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  }
-  renderLaneBand();
-  scheduleLaneBand();
-}
-
-function renderLaneBand() {
-  const first = currentLaneBand * 96;
-  const last = first + 96;
-  const prefix = `${LANE_BANDS[currentLaneBand]} · ${String(first).padStart(3, "0")}–${String(last - 1).padStart(3, "0")}`;
-  if (!transition) {
-    refs.laneAtlasDetail.textContent = `${prefix} in both accumulators.`;
-    return;
-  }
-  if (currentPhase === "delta" && transition.before) {
-    let changed = 0;
-    for (const values of [transition.whiteDelta, transition.blackDelta]) {
-      for (let index = first; index < last; index += 1) changed += values[index] !== 0 ? 1 : 0;
-    }
-    refs.laneAtlasDetail.textContent = `${prefix} · ${changed} of 192 changed.`;
-    return;
-  }
-  const snapshot = snapshotForPhase();
-  let active = 0;
-  let saturated = 0;
-  for (const values of [snapshot.whiteActivation, snapshot.blackActivation]) {
-    for (let index = first; index < last; index += 1) {
-      active += values[index] > 0 ? 1 : 0;
-      saturated += values[index] >= 255 ? 1 : 0;
-    }
-  }
-  refs.laneAtlasDetail.textContent = `${prefix} · ${active} of 192 active · ${saturated} clipped.`;
-}
 
 function setDisplayMode(mode) {
   const details = DISPLAY_MODES[mode];
@@ -207,7 +135,7 @@ function setDisplayMode(mode) {
   refs.displayModeNote.textContent = details.note;
   refs.goldKeyText.textContent = details.gold;
   refs.cyanKeyText.textContent = details.cyan;
-  refs.visualKey.dataset.displayMode = mode;
+  refs.stageLegend.dataset.displayMode = mode;
 }
 
 function makeWorker() {
@@ -282,47 +210,22 @@ function legalTargets() {
   );
 }
 
-function renderBoard() {
-  const activeSquare = refs.board.contains(document.activeElement)
-    ? document.activeElement?.dataset.square
-    : null;
-  if (activeSquare) {
-    boardFocusPending = true;
-    boardFocusSquare = activeSquare;
-  }
-  const parsed = parseFen(position?.fen || START_FEN);
-  const pieceBySquare = new Map(parsed.pieces.map((piece) => [piece.square, piece]));
-  const targets = legalTargets();
-  const legalSources = new Set((position?.legal_moves || []).map((move) => move.slice(0, 2)));
-  const lastMove = position?.last_move?.uci || "";
+function buildBoard() {
   const fragment = document.createDocumentFragment();
-
+  boardSquares = new Map();
   for (let rank = 7; rank >= 0; rank -= 1) {
     for (let file = 0; file < 8; file += 1) {
-      const square = rank * 8 + file;
-      const name = squareName(square);
-      const piece = pieceBySquare.get(square);
+      const name = squareName(rank * 8 + file);
       const button = document.createElement("button");
       button.type = "button";
       button.className = `board-square${(rank + file) % 2 === 0 ? " dark" : ""}`;
       button.dataset.square = name;
-      button.disabled = busy || (!legalSources.has(name) && !targets.has(name) && !piece);
-      button.setAttribute("aria-label", `${piece ? piece.label : "Empty"}, ${name}`);
-      button.setAttribute("aria-pressed", String(name === selectedSquare));
-      if (name === selectedSquare) button.classList.add("selected");
-      if (name === inspectedSquare) button.classList.add("inspected");
-      if (targets.has(name)) button.classList.add("legal");
-      if (lastMove && (name === lastMove.slice(0, 2) || name === lastMove.slice(2, 4))) {
-        button.classList.add("last-move");
-      }
-      if (piece) {
-        const image = document.createElement("img");
-        image.className = "piece-image";
-        image.src = pieceAsset(piece.piece);
-        image.alt = "";
-        image.draggable = false;
-        button.appendChild(image);
-      }
+      const image = document.createElement("img");
+      image.className = "piece-image";
+      image.alt = "";
+      image.draggable = false;
+      image.hidden = true;
+      button.appendChild(image);
       if (file === 0) {
         const label = document.createElement("span");
         label.className = "square-rank";
@@ -335,17 +238,44 @@ function renderBoard() {
         label.textContent = "abcdefgh"[file];
         button.appendChild(label);
       }
+      boardSquares.set(name, { button, image });
       fragment.appendChild(button);
     }
   }
-
   refs.board.replaceChildren(fragment);
-  if (!busy && boardFocusPending) {
-    const preferred = refs.board.querySelector(`[data-square="${selectedSquare || boardFocusSquare}"]:not(:disabled)`)
-      || refs.board.querySelector(".board-square:not(:disabled)");
-    boardFocusPending = false;
-    if (preferred) requestAnimationFrame(() => preferred.focus({ preventScroll: true }));
+}
+
+// Updates the existing squares rather than rebuilding them, so selecting a
+// piece never tears down and repaints the board.
+function renderBoard() {
+  if (!boardSquares.size) buildBoard();
+  const parsed = parseFen(position?.fen || START_FEN);
+  const pieceBySquare = new Map(parsed.pieces.map((piece) => [piece.squareName, piece]));
+  const targets = legalTargets();
+  const legalSources = new Set((position?.legal_moves || []).map((move) => move.slice(0, 2)));
+  const lastMove = position?.last_move?.uci || "";
+
+  for (const [name, { button, image }] of boardSquares) {
+    const piece = pieceBySquare.get(name);
+    button.disabled = busy || (!legalSources.has(name) && !targets.has(name) && !piece);
+    button.setAttribute("aria-label", `${piece ? piece.label : "Empty"}, ${name}`);
+    button.setAttribute("aria-pressed", String(name === selectedSquare));
+    button.classList.toggle("selected", name === selectedSquare);
+    button.classList.toggle("inspected", name === inspectedSquare);
+    button.classList.toggle("legal", targets.has(name));
+    button.classList.toggle(
+      "last-move",
+      Boolean(lastMove) && (name === lastMove.slice(0, 2) || name === lastMove.slice(2, 4)),
+    );
+    const source = piece ? pieceAsset(piece.piece) : "";
+    if (source) {
+      if (!image.src.endsWith(source.replace("../", "/"))) image.src = source;
+      image.hidden = false;
+    } else {
+      image.hidden = true;
+    }
   }
+
   refs.fenInput.value = position?.fen || START_FEN;
   refs.preset.value = Object.entries(POSITION_PRESETS)
     .find(([, fen]) => fen === (position?.fen || START_FEN))?.[0] || "custom";
@@ -356,7 +286,7 @@ function renderBoard() {
     refs.boardStatus.textContent = `${position.result || "Game over"} · ${reason}`;
   } else if (position) {
     const count = position.legal_moves.length;
-    refs.boardStatus.textContent = `${count} legal move${count === 1 ? "" : "s"} · select a piece to update the network`;
+    refs.boardStatus.textContent = `${count} legal move${count === 1 ? "" : "s"} · select a piece to light its lanes`;
   }
 }
 
@@ -467,11 +397,9 @@ function renderLane(details) {
   refs.laneDelta.textContent = `${details.delta >= 0 ? "+" : "−"}${formatInteger(Math.abs(details.delta))}`;
   refs.laneContributionLabel.textContent = details.phase === "delta" ? "White output change" : "White contribution";
   refs.laneContribution.textContent = `${formatSigned(details.centipawns)} cp`;
-  const firstLane = Math.floor(details.index / 96) * 96;
-  const band = `${String(firstLane).padStart(3, "0")}–${String(firstLane + 95).padStart(3, "0")}`;
   refs.laneNote.textContent = details.phase === "delta"
-    ? `Lane band ${band}. The value includes the side-to-move output swap.`
-    : `Lane band ${band}. This lane uses the ${details.outputHalf} output weights.`;
+    ? "The value includes the side-to-move output swap."
+    : `This lane uses the ${details.outputHalf} output weights.`;
 }
 
 function summariseWeights(weights) {
@@ -493,12 +421,10 @@ function clearPieceInspection({ redraw = true } = {}) {
   featureRequest += 1;
   const wasInspecting = inspectedSquare !== null;
   inspectedSquare = null;
-  visual.setFeatureFootprint(null);
+  visual.clearFocus();
   refs.pieceInspector.dataset.state = "idle";
   refs.pieceInspectorTitle.textContent = "Select a piece";
-  refs.pieceInspectorEmpty.hidden = false;
-  refs.pieceFeatureData.hidden = true;
-  refs.pieceFootprintNote.hidden = true;
+  refs.pieceInspectorNote.textContent = "Click any piece to light the lanes its two feature rows drive.";
   refs.clearPieceInspector.hidden = true;
   refs.whiteFeatureIndex.textContent = "W:—";
   refs.blackFeatureIndex.textContent = "B:—";
@@ -515,9 +441,7 @@ async function inspectPiece(piece) {
   inspectedSquare = piece.squareName;
   refs.pieceInspector.dataset.state = "loading";
   refs.pieceInspectorTitle.textContent = `${piece.label} on ${piece.squareName}`;
-  refs.pieceInspectorEmpty.hidden = true;
-  refs.pieceFeatureData.hidden = false;
-  refs.pieceFootprintNote.hidden = true;
+  refs.pieceInspectorNote.textContent = "Reading both feature rows from the network.";
   refs.clearPieceInspector.hidden = false;
   refs.whiteFeatureIndex.textContent = `W:${String(whiteIndex).padStart(3, "0")}`;
   refs.blackFeatureIndex.textContent = `B:${String(blackIndex).padStart(3, "0")}`;
@@ -526,17 +450,15 @@ async function inspectPiece(piece) {
   try {
     const message = await requestWorker("feature", { whiteIndex, blackIndex });
     if (request !== featureRequest) return;
-    visual.setFeatureFootprint({
-      whiteWeights: message.whiteWeights,
-      blackWeights: message.blackWeights,
-    });
+    visual.setFocus(message.whiteWeights, message.blackWeights);
     refs.whiteFeatureSummary.textContent = summariseWeights(message.whiteWeights);
     refs.blackFeatureSummary.textContent = summariseWeights(message.blackWeights);
-    refs.pieceFootprintNote.hidden = false;
+    refs.pieceInspectorNote.textContent = "Lit lanes are the ones this piece pushes hardest.";
     refs.pieceInspector.dataset.state = "ready";
   } catch (error) {
     if (request !== featureRequest) return;
     refs.pieceInspector.dataset.state = "idle";
+    refs.pieceInspectorNote.textContent = "That feature row could not be read.";
     refs.whiteFeatureSummary.textContent = "row unavailable";
     refs.blackFeatureSummary.textContent = "row unavailable";
   }
@@ -574,15 +496,9 @@ function cancelReplay() {
 
 function setAnatomy(stage) {
   refs.shell.dataset.anatomy = stage;
+  if (stage === "lanes") visual.focusChangedLanes();
+  if (stage === "idle" && inspectedSquare === null) visual.clearFocus();
   visual.setAnatomyStage(stage);
-  const step = ANATOMY_STEPS[stage];
-  const running = stage !== "idle";
-  refs.signalPath.dataset.active = String(running);
-  for (const item of refs.signalSteps) {
-    const index = Number(item.dataset.anatomyStep);
-    item.classList.toggle("active", running && index === step);
-    item.classList.toggle("complete", running && step !== undefined && index < step);
-  }
 }
 
 function setPhase(phase, { keepReplay = false } = {}) {
@@ -601,7 +517,6 @@ function setPhase(phase, { keepReplay = false } = {}) {
   }
   refs.timeline.value = String(PHASE_ORDER.indexOf(phase));
   refs.timeline.setAttribute("aria-valuetext", PHASE_LABELS[phase]);
-  renderLaneBand();
   renderEvaluation();
   refreshSelectedLane();
 }
@@ -634,15 +549,6 @@ function replayTransition() {
     replayTimers = [];
     setAnatomy("idle");
   }, offset));
-}
-
-function setView(view) {
-  visual.setView(view);
-  const cortex = view === "cortex";
-  refs.cortexView.classList.toggle("active", cortex);
-  refs.circuitView.classList.toggle("active", !cortex);
-  refs.cortexView.setAttribute("aria-pressed", String(cortex));
-  refs.circuitView.setAttribute("aria-pressed", String(!cortex));
 }
 
 async function evaluate(beforeFen, afterFen, { replay = false } = {}) {
@@ -799,11 +705,6 @@ async function loadModel(sequence) {
   return result;
 }
 
-function dismissGuide() {
-  refs.guide.hidden = true;
-  localStorage.setItem(GUIDE_KEY, "dismissed");
-}
-
 function showBootError(error) {
   modelReady = false;
   busy = true;
@@ -833,7 +734,6 @@ async function boot() {
     history = [];
     await applyPosition(nextPosition);
     refs.shell.dataset.state = "ready";
-    refs.guide.hidden = localStorage.getItem(GUIDE_KEY) === "dismissed";
     refs.boardStatus.dataset.state = "ready";
     refs.fenStatus.dataset.state = "ready";
     refs.fenStatus.textContent = "Position loaded. Choose a move or select a lane.";
@@ -855,11 +755,6 @@ refs.preset.addEventListener("change", () => {
   if (modelReady && fen) loadFen(fen);
 });
 refs.undo.addEventListener("click", undoPosition);
-refs.cortexView.addEventListener("click", () => setView("cortex"));
-refs.circuitView.addEventListener("click", () => setView("circuit"));
-for (const button of refs.laneBandButtons) {
-  button.addEventListener("click", () => setLaneBand(button.dataset.laneBand));
-}
 for (const button of refs.displayModeButtons) {
   button.addEventListener("click", () => setDisplayMode(button.dataset.displayMode));
 }
@@ -867,24 +762,13 @@ refs.timeline.addEventListener("input", () => {
   setPhase(PHASE_ORDER[Number(refs.timeline.value)] || "after");
 });
 refs.clearPieceInspector.addEventListener("click", () => clearPieceInspection());
-refs.dismissGuide.addEventListener("click", dismissGuide);
 refs.beforeState.addEventListener("click", () => setPhase("before"));
 refs.deltaState.addEventListener("click", () => setPhase("delta"));
 refs.afterState.addEventListener("click", () => setPhase("after"));
 refs.replay.addEventListener("click", replayTransition);
 refs.retry.addEventListener("click", boot);
 document.addEventListener("sgurrthemechange", () => visual.draw(performance.now()));
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden && laneBandTimer !== null) {
-    window.clearTimeout(laneBandTimer);
-    laneBandTimer = null;
-  } else if (!document.hidden) {
-    scheduleLaneBand();
-  }
-});
-
 initLabPreferences();
 setDisplayMode("contribution");
-setLaneBand(0);
 renderBoard();
 boot();

@@ -68,14 +68,13 @@
                 <p class="deck-kicker">Piece feature</p>
                 <h3 id="pieceInspectorTitle">Select a piece</h3>
               </div>
-              <button type="button" id="clearPieceInspector" aria-label="Clear piece inspection" hidden>×</button>
+              <button type="button" id="clearPieceInspector" aria-label="Clear piece inspection" hidden>&times;</button>
             </div>
-            <p class="piece-inspector-empty" id="pieceInspectorEmpty">Click any piece to inspect the two feature rows it adds to the accumulators.</p>
-            <div class="piece-feature-data" id="pieceFeatureData" hidden>
-              <div><span>White view</span><strong id="whiteFeatureIndex">W:—</strong><small id="whiteFeatureSummary">—</small></div>
-              <div><span>Black view</span><strong id="blackFeatureIndex">B:—</strong><small id="blackFeatureSummary">—</small></div>
+            <div class="piece-feature-data" id="pieceFeatureData">
+              <div><span>White view</span><strong id="whiteFeatureIndex">W:&mdash;</strong><small id="whiteFeatureSummary">&mdash;</small></div>
+              <div><span>Black view</span><strong id="blackFeatureIndex">B:&mdash;</strong><small id="blackFeatureSummary">&mdash;</small></div>
             </div>
-            <p class="piece-footprint-note" id="pieceFootprintNote" hidden>Brighter halos mark the largest weights in these two rows.</p>
+            <p class="piece-inspector-note" id="pieceInspectorNote">Click any piece to light the lanes its two feature rows drive.</p>
           </section>
 
           <form class="fen-form" id="nnueFenForm" novalidate>
@@ -95,77 +94,27 @@
               <p class="deck-kicker">02 / Accumulators</p>
               <h2>NNUE accumulators</h2>
             </div>
-            <div class="view-switch" role="group" aria-label="Accumulator view">
-              <button type="button" class="active" id="cortexViewButton" aria-pressed="true">Cortex</button>
-              <button type="button" id="circuitViewButton" aria-pressed="false">Circuit</button>
+            <div class="display-mode-buttons" role="group" aria-label="Choose the lane values to display">
+              <button type="button" class="active" data-display-mode="contribution" aria-pressed="true">Contribution</button>
+              <button type="button" data-display-mode="change" aria-pressed="false">Move change</button>
+              <button type="button" data-display-mode="activation" aria-pressed="false">Activation</button>
+              <button type="button" data-display-mode="clipped" aria-pressed="false">Clipped</button>
             </div>
           </div>
 
           <div class="model-line" aria-live="polite">
             <span class="model-signal" id="modelSignal" data-state="loading" aria-hidden="true"></span>
             <span id="modelStatus">Loading Gen8 evaluator</span>
-            <code>768 → 384 × 2 → 1</code>
+            <code>768 &rarr; 384 &times; 2 &rarr; 1</code>
           </div>
-
-          <section class="quick-guide" id="insideGuide" hidden aria-labelledby="insideGuideTitle">
-            <div>
-              <p class="deck-kicker">Quick guide</p>
-              <strong id="insideGuideTitle">Make one move, then follow its path.</strong>
-            </div>
-            <ol>
-              <li><span>1</span>Move a piece</li>
-              <li><span>2</span>Watch the lanes change</li>
-              <li><span>3</span>Read the score</li>
-            </ol>
-            <button type="button" id="dismissInsideGuide">Got it</button>
-          </section>
-
-          <ol class="signal-path" aria-label="NNUE evaluation path">
-            <li data-anatomy-step="0"><small>Input</small><strong>Piece-square rows</strong></li>
-            <li data-anatomy-step="1"><small>Add</small><strong>Two accumulators</strong></li>
-            <li data-anatomy-step="2"><small>Clamp</small><strong>0 to 255</strong></li>
-            <li data-anatomy-step="3"><small>Output</small><strong>Weighted score</strong></li>
-          </ol>
-
-          <section class="lane-atlas" aria-labelledby="laneAtlasTitle">
-            <div class="lane-atlas-copy">
-              <p class="deck-kicker" id="laneAtlasTitle">Lane map</p>
-              <p id="laneAtlasDetail">Top quarter · 000–095 in both accumulators.</p>
-            </div>
-            <div class="lane-band-controls" role="group" aria-label="Highlight an accumulator address range">
-              <button type="button" class="active" data-lane-band="0" aria-pressed="true"><span>01</span>000–095</button>
-              <button type="button" data-lane-band="1" aria-pressed="false"><span>02</span>096–191</button>
-              <button type="button" data-lane-band="2" aria-pressed="false"><span>03</span>192–287</button>
-              <button type="button" data-lane-band="3" aria-pressed="false"><span>04</span>288–383</button>
-            </div>
-            <p class="lane-atlas-note">Each dot is one learned accumulator value. The bands are addresses, not fixed labels such as king safety or mobility.</p>
-          </section>
-
-          <section class="display-controls" aria-labelledby="displayControlsTitle">
-            <div>
-              <p class="deck-kicker" id="displayControlsTitle">Display</p>
-              <p id="displayModeNote">Colour shows whether each lane raises or lowers White's score.</p>
-            </div>
-            <div class="display-mode-buttons" role="group" aria-label="Choose the node values to display">
-              <button type="button" class="active" data-display-mode="contribution" aria-pressed="true">Contribution</button>
-              <button type="button" data-display-mode="change" aria-pressed="false">Move change</button>
-              <button type="button" data-display-mode="activation" aria-pressed="false">Activation</button>
-              <button type="button" data-display-mode="clipped" aria-pressed="false">Clipped</button>
-            </div>
-          </section>
 
           <div class="cortex-stage">
             <canvas
               id="cortexCanvas"
-              data-view="cortex"
               tabindex="0"
               role="img"
-              aria-label="Sgurr's 768 exact NNUE accumulator activations, arranged as two brain hemispheres. Use arrow keys to inspect lanes."
+              aria-label="Sgurr's 768 exact NNUE accumulator lanes, as two 16 by 24 grids. Use arrow keys to inspect a lane."
             ></canvas>
-            <div class="perspective-cues" aria-hidden="true">
-              <div><i class="mini-board"><span>↑</span></i><span><strong>White view</strong><small>Board as entered</small></span></div>
-              <div><i class="mini-board mirrored"><span>↓</span></i><span><strong>Black view</strong><small>Ranks mirrored</small></span></div>
-            </div>
             <div class="stage-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
             <div class="cortex-loading" id="cortexLoading" role="status" aria-live="polite">
               <span class="loading-brain" aria-hidden="true"><i></i></span>
@@ -175,14 +124,12 @@
             </div>
           </div>
 
-          <dl class="visual-key" aria-label="How to read the accumulator display">
-            <div><dt><i class="key-side key-white"></i>Left side</dt><dd>White-view accumulator</dd></div>
-            <div><dt><i class="key-side key-black"></i>Right side</dt><dd>Black-view accumulator</dd></div>
-            <div><dt><i class="key-dot key-gold"></i>Gold</dt><dd id="goldKeyText">Raises White's score</dd></div>
-            <div><dt><i class="key-dot key-cyan"></i>Cyan</dt><dd id="cyanKeyText">Lowers White's score</dd></div>
-            <div><dt><i class="key-ring"></i>Violet ring</dt><dd>Activation clipped at 255</dd></div>
-            <div><dt><i class="key-core"></i>Centre</dt><dd>White-relative score</dd></div>
-          </dl>
+          <p class="stage-legend">
+            <span><i class="key-dot key-warm"></i><b id="goldKeyText">Raises White's score</b></span>
+            <span><i class="key-dot key-cool"></i><b id="cyanKeyText">Lowers White's score</b></span>
+            <span><i class="key-ring"></i><b>Clipped at 255</b></span>
+            <em id="displayModeNote">Colour shows whether each lane raises or lowers White's score.</em>
+          </p>
 
           <div class="state-rail" aria-label="Accumulator state timeline">
             <div class="state-track">
@@ -193,10 +140,8 @@
                 <button type="button" class="active" id="afterState" aria-pressed="true"><small>After</small><strong>Current</strong></button>
               </div>
             </div>
-            <button type="button" class="replay-button" id="replayTransition" disabled aria-label="Replay move anatomy">↻ <span>Replay move</span></button>
+            <button type="button" class="replay-button" id="replayTransition" disabled aria-label="Replay the move through the network">&#8635; <span>Replay move</span></button>
           </div>
-
-          <p class="accuracy-note"><span>Reading the display</span> Larger, brighter dots have more effect on the current score. The lines mark the 42 strongest links to the output. The brain outline is visual; the values are exact.</p>
         </section>
 
         <aside class="readout-deck deck">
