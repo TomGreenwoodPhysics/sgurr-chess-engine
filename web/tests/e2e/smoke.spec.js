@@ -390,10 +390,9 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator("#playWhiteButton")).toBeEnabled();
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
-  await expect(page.locator(".menu-action-card")).toHaveCount(6);
+  await expect(page.locator(".menu-action-card")).toHaveCount(5);
   await expect(page.locator(".menu-action-card small")).toHaveCount(0);
-  await expect(page.locator(".search-lab-link strong")).toHaveText("Search Lab");
-  await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
+  await expect(page.locator(".search-lab-link")).toHaveCount(0);
   await expect(page.locator(".inside-sgurr-link strong")).toHaveText("Inside Sgurr");
   await expect(page.locator(".inside-sgurr-link")).toHaveAttribute("href", "inside-sgurr/");
 });
@@ -1109,10 +1108,36 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await expect(canvas).toHaveAttribute("data-engine-nodes-mode", "replay");
 });
 
+test("presents both labs as one destination with the engine explained", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#twoPartsTitle")).toHaveText("Sgurr is two moving parts.");
+  await expect(page.locator(".two-parts-copy p").last()).toContainText("search");
+  await expect(page.locator(".two-parts-copy p").last()).toContainText("evaluation");
+  await expect(page.locator(".two-parts-list li")).toHaveCount(2);
+  await expect(page.locator('.two-parts-list li[data-current="true"] strong')).toHaveText("Evaluation");
+  await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Evaluation Lab");
+  await expect(page.locator(".inside-brand small")).toHaveText("EVALUATION LAB");
+
+  await page.locator('.lab-switch a:not([aria-current])').click();
+  await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
+  await expect(page.locator("#twoPartsTitle")).toHaveText("Sgurr is two moving parts.");
+  await expect(page.locator('.two-parts-list li[data-current="true"] strong')).toHaveText("Search");
+  await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Search Lab");
+  await expect(page.locator(".brand small")).toHaveText("SEARCH LAB");
+
+  await page.locator('.lab-switch a:not([aria-current])').click();
+  await expect(page).toHaveURL(/\/inside-sgurr\/$/);
+});
+
 test("returns from the microscope directly to the main menu", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
-  await page.locator(".search-lab-link").click();
+  await page.locator(".inside-sgurr-link").click();
+  await expect(page).toHaveURL(/\/inside-sgurr\/$/);
+  await page.locator('.lab-switch a:not([aria-current])').click();
   await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
   await expect(page.locator("#networkTab")).toHaveClass(/active/);
   await expect(page.locator("#networkPanel")).toBeVisible();
@@ -1367,3 +1392,4 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   await expect(page.locator(".side-panel")).not.toHaveClass(/review-mode/);
   await expect(page.locator("#resultModal")).toBeVisible();
 });
+

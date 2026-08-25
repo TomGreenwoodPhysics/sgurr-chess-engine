@@ -1,0 +1,117 @@
+/* Shared chrome for the two Inside Sgurr labs. Both labs keep their own page
+   styles; this file only carries what has to look identical across them: the
+   lab switcher in the header and the band explaining the engine's two halves. */
+
+.lab-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--edge), transparent 30%);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2), transparent 24%);
+}
+
+.lab-switch a {
+  min-height: 32px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  font: 800 0.68rem var(--font-interface, inherit);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.lab-switch a:hover { color: var(--text); background: color-mix(in srgb, var(--surface-3), transparent 40%); }
+
+.lab-switch a[aria-current="page"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent), var(--surface-2) 76%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 58%);
+}
+
+.two-parts {
+  /* Sits inside each lab's <main>, which already sets the page gutter. */
+  padding: 18px 0 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 22px;
+}
+
+.two-parts-copy p {
+  max-width: 62ch;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.two-parts-copy strong { color: var(--text); font-weight: 800; }
+
+.two-parts-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  list-style: none;
+}
+
+.two-parts-list li {
+  min-width: 0;
+  padding: 11px 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--edge), transparent 42%);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2), transparent 45%);
+}
+
+.two-parts-list li[data-current="true"] {
+  border-color: color-mix(in srgb, var(--accent), transparent 45%);
+  background: color-mix(in srgb, var(--accent), var(--surface-2) 88%);
+}
+
+.two-parts-list span {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 52%);
+  border-radius: 50%;
+  color: var(--accent);
+  font: 800 0.56rem var(--font-data, monospace);
+}
+
+.two-parts-list div { display: grid; gap: 2px; }
+.two-parts-list strong { color: var(--text); font-size: 0.78rem; }
+.two-parts-list small { color: var(--muted); font-size: 0.66rem; line-height: 1.35; }
+
+@media (max-width: 1000px) {
+  .two-parts { grid-template-columns: 1fr; gap: 14px; }
+}
+
+/* Narrow headers wrap, and the switcher takes its own row rather than
+   pushing the theme controls off the side of the page. */
+@media (max-width: 900px) {
+  .inside-header,
+  .lab-header {
+    flex-wrap: wrap;
+    row-gap: 9px;
+    padding: 9px 0;
+  }
+
+  .lab-switch { order: 3; width: 100%; justify-content: center; }
+}
+
+@media (max-width: 620px) {
+  .two-parts-list { grid-template-columns: 1fr; }
+  .lab-switch { padding: 2px; }
+  .lab-switch a { padding: 0 10px; font-size: 0.62rem; }
+}

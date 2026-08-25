@@ -4,38 +4,63 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sgurr-api-base" content="">
-    <title>Inside Sgurr — NNUE Cortex</title>
+    <title>Inside Sgurr — Evaluation Lab</title>
     <meta name="description" content="See how Sgurr's Gen8 NNUE turns a chess position into an evaluation.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#251a16">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
-    <meta property="og:title" content="Inside Sgurr — NNUE Cortex">
+    <meta property="og:title" content="Inside Sgurr — Evaluation Lab">
     <meta property="og:description" content="Sgurr's Gen8 NNUE accumulators and output, read from the shipped network file.">
     <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23070a11'/><path d='M30 11C17 11 10 21 12 33c1 8 7 15 16 18V13m6-2c13 0 20 10 18 22-1 8-7 15-16 18V13' fill='none' stroke='%23e2b147' stroke-width='3'/><circle cx='32' cy='32' r='5' fill='%2370d7ff'/></svg>">
+    <link rel="stylesheet" href="../styles/lab-shell.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <header class="inside-header">
       <a class="inside-brand" href="../?view=menu" aria-label="Back to Sgurr main menu">
         <span class="inside-brand-mark" aria-hidden="true"><i></i><i></i></span>
-        <span><strong>SGURR</strong><small>INSIDE SGURR</small></span>
+        <span><strong>SGURR</strong><small>EVALUATION LAB</small></span>
       </a>
+      <nav class="lab-switch" aria-label="Choose a lab">
+          <a href="../search-lab/?mode=network">Search Lab</a>
+          <a href="../inside-sgurr/" aria-current="page">Evaluation Lab</a>
+        </nav>
       <div class="inside-header-actions">
         <label class="theme-control" for="labThemeSelect">
           <span>Theme</span>
           <select id="labThemeSelect" aria-label="Choose site theme"></select>
         </label>
-        <a class="header-link" href="../search-lab/?mode=network">Search Network <span aria-hidden="true">→</span></a>
+        <a class="header-link" href="../?view=menu">Play Sgurr <span aria-hidden="true">→</span></a>
       </div>
     </header>
 
     <main>
+      <section class="two-parts" aria-labelledby="twoPartsTitle">
+        <div class="two-parts-copy">
+          <p class="eyebrow">Inside Sgurr</p>
+          <h2 id="twoPartsTitle">Sgurr is two moving parts.</h2>
+          <p>Every move comes from two systems working together. The <strong>search</strong> decides which
+            moves are worth looking at and how deeply to follow them. The <strong>evaluation</strong> scores
+            the positions the search reaches. Neither is any use on its own.</p>
+        </div>
+        <ol class="two-parts-list">
+          <li data-current="false">
+            <span>01</span>
+            <div><strong>Search</strong><small>Which moves to look at, and how deep to go.</small></div>
+          </li>
+          <li data-current="true">
+            <span>02</span>
+            <div><strong>Evaluation</strong><small>How good a position is, read from the Gen8 network.</small></div>
+          </li>
+        </ol>
+      </section>
+
       <section class="inside-intro" aria-labelledby="insideTitle">
         <div>
-          <p class="eyebrow">NNUE evaluation</p>
+          <p class="eyebrow">Evaluation Lab</p>
           <h1 id="insideTitle">Inside Sgurr's evaluation.</h1>
         </div>
         <p>This page reads the Gen8 network shipped with Sgurr v8.2. Make a move to see its two accumulators change and feed the score.</p>

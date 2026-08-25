@@ -3,25 +3,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sgurr-api-base" content="">
-    <title>Search Microscope — Sgurr</title>
+    <title>Inside Sgurr — Search Lab</title>
     <meta name="description" content="Watch Sgurr build, challenge, and revise a chess move through iterative deepening, or stream a live search from the engine.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#251a16">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
-    <meta property="og:title" content="Sgurr Search Microscope">
+    <meta property="og:title" content="Inside Sgurr — Search Lab">
     <meta property="og:description" content="Step through a real Sgurr search, then watch the engine think live.">
     <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23251a16'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e2b147' stroke-width='3' opacity='.7'/><circle cx='32' cy='32' r='11' fill='%23c96f3a'/></svg>">
+    <link rel="stylesheet" href="../styles/lab-shell.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <header class="lab-header">
       <a class="brand" href="../?view=menu" aria-label="Back to Sgurr main menu">
         <span class="brand-core" aria-hidden="true"></span>
-        <span><strong>SGURR</strong><small>SEARCH MICROSCOPE</small></span>
+        <span><strong>SGURR</strong><small>SEARCH LAB</small></span>
       </a>
+      <nav class="lab-switch" aria-label="Choose a lab">
+          <a href="../search-lab/?mode=network" aria-current="page">Search Lab</a>
+          <a href="../inside-sgurr/">Evaluation Lab</a>
+        </nav>
       <div class="lab-header-actions">
         <label class="lab-theme-control" for="labDetailSelect">
           <span>Detail</span>
@@ -36,9 +41,29 @@
     </header>
 
     <main>
+      <section class="two-parts" aria-labelledby="twoPartsTitle">
+        <div class="two-parts-copy">
+          <p class="eyebrow">Inside Sgurr</p>
+          <h2 id="twoPartsTitle">Sgurr is two moving parts.</h2>
+          <p>Every move comes from two systems working together. The <strong>search</strong> decides which
+            moves are worth looking at and how deeply to follow them. The <strong>evaluation</strong> scores
+            the positions the search reaches. Neither is any use on its own.</p>
+        </div>
+        <ol class="two-parts-list">
+          <li data-current="true">
+            <span>01</span>
+            <div><strong>Search</strong><small>Which moves to look at, and how deep to go.</small></div>
+          </li>
+          <li data-current="false">
+            <span>02</span>
+            <div><strong>Evaluation</strong><small>How good a position is, read from the Gen8 network.</small></div>
+          </li>
+        </ol>
+      </section>
+
       <section class="lab-intro" aria-labelledby="labTitle">
         <div>
-          <p class="eyebrow">Inside the engine</p>
+          <p class="eyebrow">Search Lab</p>
           <h1 id="labTitle">A move is not found.<br>It survives.</h1>
         </div>
         <p class="intro-copy">Sgurr repeatedly searches the same position more deeply. The apparent best move can change as replies emerge, shortcuts reject whole branches, and quiet tactical continuations settle the final score.</p>
