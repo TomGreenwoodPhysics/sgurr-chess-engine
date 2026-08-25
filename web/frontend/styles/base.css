@@ -21,8 +21,11 @@
   --piece-white-edge: #482d1d;
   --piece-black-edge: #ebcfa8;
   --shadow: rgba(0, 0, 0, 0.28);
+  --font-interface: Bahnschrift, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+  --font-data: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
   color-scheme: dark;
-  font-family: Bahnschrift, "Segoe UI", Arial, sans-serif;
+  font-family: var(--font-interface);
 }
 
 :root[data-theme="frost"] {

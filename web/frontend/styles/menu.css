@@ -166,7 +166,16 @@
 .ghost-button,
 .menu-tools-grid button,
 .menu-tools-grid a {
-  background: rgba(45, 39, 51, 0.62);
+  background: color-mix(in srgb, var(--surface-2), transparent 18%);
+}
+
+.ghost-button {
+  border-color: color-mix(in srgb, var(--edge), transparent 18%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 94%), transparent),
+    color-mix(in srgb, var(--surface), transparent 20%);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg), transparent 52%);
+  backdrop-filter: blur(8px);
 }
 
 .menu-tools-grid .position-lab-button {
@@ -235,8 +244,10 @@
   margin: 0;
   font-size: clamp(3.6rem, 5.2vw, 6.1rem);
   line-height: 0.9;
-  letter-spacing: 0;
-  font-weight: 900;
+  font-family: var(--font-display);
+  letter-spacing: 0.11em;
+  font-weight: 500;
+  text-indent: 0.11em;
   text-shadow:
     0 2px 0 color-mix(in srgb, var(--bg), transparent 40%),
     0 0 28px color-mix(in srgb, var(--accent), transparent 62%);
@@ -305,11 +316,21 @@
 
 .menu-section-label {
   margin: 20px 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 800;
-  letter-spacing: 0;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.menu-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--edge), transparent 14%), transparent);
 }
 
 .menu-section-label:first-of-type {
@@ -338,7 +359,12 @@
 
 .selector-value {
   color: var(--text);
-  background: var(--surface-2);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 94%), transparent 42%),
+    var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text), transparent 91%),
+    0 8px 20px color-mix(in srgb, var(--bg), transparent 66%);
 }
 
 .large-selector .selector-value {
@@ -352,6 +378,14 @@
   min-height: 48px;
 }
 
+.selector-row > button:first-child,
+.selector-row > button:last-child {
+  border-color: color-mix(in srgb, var(--edge), transparent 12%);
+  background: color-mix(in srgb, var(--surface-2), transparent 12%);
+  color: var(--accent);
+  font-size: 1.08rem;
+}
+
 .menu-play-grid,
 .menu-tools-grid {
   display: grid;
@@ -360,26 +394,103 @@
 }
 
 .menu-play-grid button {
-  min-height: 52px;
-  font-size: 1.36rem;
+  min-height: 64px;
 }
 
 .menu-play-grid #watchButton {
   grid-column: 1 / -1;
-  min-height: 46px;
+  min-height: 58px;
 }
 
 .menu-tools-grid button,
 .menu-tools-grid a {
-  min-height: 40px;
-  font-size: 1.08rem;
+  min-height: 58px;
+}
+
+.menu-action-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  padding: 9px 13px;
+  border-radius: 10px;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text), transparent 90%),
+    0 9px 22px color-mix(in srgb, var(--bg), transparent 64%);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.menu-action-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 42%;
+  height: 2px;
+  opacity: 0.72;
+  background: linear-gradient(90deg, transparent, var(--accent));
+}
+
+.menu-action-index {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor, transparent 66%);
+  border-radius: 50%;
+  font: 800 0.58rem var(--font-data);
+  letter-spacing: 0.06em;
+  opacity: 0.82;
+}
+
+.menu-action-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-action-copy strong {
+  overflow: hidden;
+  font-size: 1rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-action-copy small {
+  color: color-mix(in srgb, currentColor, transparent 34%);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.menu-action-card:hover:not(:disabled):not([aria-disabled="true"]) .menu-action-index,
+.menu-action-card:focus-visible .menu-action-index {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent), transparent 72%);
+}
+
+a.menu-action-card:hover,
+a.menu-action-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text), transparent 89%),
+    0 8px 22px color-mix(in srgb, var(--accent), transparent 84%);
+  transform: translateY(-1px);
 }
 
 .menu-tools-grid .search-lab-link {
-  display: grid;
-  place-items: center;
   border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 62%);
-  border-radius: 8px;
   color: var(--text);
   font-weight: 700;
   text-decoration: none;
@@ -391,13 +502,25 @@
 }
 
 .play-white {
-  background: var(--white-eval);
+  border-color: color-mix(in srgb, var(--white-eval), var(--edge) 28%);
+  background:
+    linear-gradient(115deg, transparent 35%, color-mix(in srgb, var(--accent), transparent 80%)),
+    var(--white-eval);
   color: #17131a;
 }
 
 .play-black {
-  background: var(--black-eval);
+  border-color: color-mix(in srgb, var(--text), transparent 76%);
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--text), transparent 94%), transparent 58%),
+    color-mix(in srgb, var(--black-eval), #000 8%);
   color: var(--text);
+}
+
+.menu-watch-card {
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--accent-2), transparent 90%), transparent 46%),
+    var(--surface-2);
 }
 
 .menu-status {

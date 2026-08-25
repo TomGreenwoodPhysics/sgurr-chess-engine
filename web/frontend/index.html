@@ -133,15 +133,30 @@
 
           <p class="menu-section-label">Play</p>
           <div class="menu-play-grid">
-            <button type="button" class="play-white" id="playWhiteButton">Play as White</button>
-            <button type="button" class="play-black" id="playBlackButton">Play as Black</button>
-            <button type="button" id="watchButton">Watch Sgurr vs itself</button>
+            <button type="button" class="menu-action-card play-white" id="playWhiteButton">
+              <span class="menu-action-index" aria-hidden="true">01</span>
+              <span class="menu-action-copy"><strong>Play as White</strong><small>You move first</small></span>
+            </button>
+            <button type="button" class="menu-action-card play-black" id="playBlackButton">
+              <span class="menu-action-index" aria-hidden="true">02</span>
+              <span class="menu-action-copy"><strong>Play as Black</strong><small>Sgurr opens</small></span>
+            </button>
+            <button type="button" class="menu-action-card menu-watch-card" id="watchButton">
+              <span class="menu-action-index" aria-hidden="true">03</span>
+              <span class="menu-action-copy"><strong>Watch Sgurr vs itself</strong><small>Two cores, one board</small></span>
+            </button>
           </div>
 
           <p class="menu-section-label">Position tools</p>
           <div class="menu-tools-grid">
-            <button type="button" class="position-lab-button" id="positionLabButton">Position Lab</button>
-            <a class="search-lab-link" href="search-lab/?mode=network">Watch Sgurr think</a>
+            <button type="button" class="menu-action-card position-lab-button" id="positionLabButton">
+              <span class="menu-action-index" aria-hidden="true">04</span>
+              <span class="menu-action-copy"><strong>Position Lab</strong><small>Build, play, analyse</small></span>
+            </button>
+            <a class="menu-action-card search-lab-link" href="search-lab/?mode=network">
+              <span class="menu-action-index" aria-hidden="true">05</span>
+              <span class="menu-action-copy"><strong>Search Lab</strong><small>Watch Sgurr think</small></span>
+            </a>
           </div>
 
           <div class="menu-status" id="menuStatus">Checking backend</div>
@@ -643,12 +658,12 @@
           <div><strong>← / →</strong><span>Step backward or forward one ply</span></div>
           <div><strong>G</strong><span>Ask Sgurr to move now</span></div>
           <div><strong>C / P</strong><span>Copy FEN or export PGN</span></div>
-          <div><strong>E</strong><span>Open the board editor</span></div>
+          <div><strong>E</strong><span>Open Position Lab</span></div>
           <div><strong>Space</strong><span>Pause or resume watch mode</span></div>
           <div><strong>T</strong><span>Cycle theme</span></div>
           <div><strong>F</strong><span>Flip the board manually</span></div>
           <div><strong>Z</strong><span>Toggle board focus mode</span></div>
-          <div><strong>L</strong><span>Open editor and paste FEN</span></div>
+          <div><strong>L</strong><span>Open Position Lab at the FEN field</span></div>
           <div><strong>?</strong><span>Show this help</span></div>
           <div><strong>Esc</strong><span>Close overlays or promotion chooser</span></div>
         </div>

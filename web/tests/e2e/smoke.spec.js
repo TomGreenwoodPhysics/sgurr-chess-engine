@@ -350,6 +350,9 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator("#playWhiteButton")).toBeEnabled();
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
+  await expect(page.locator(".menu-action-card")).toHaveCount(5);
+  await expect(page.locator("#playWhiteButton small")).toHaveText("You move first");
+  await expect(page.locator(".search-lab-link strong")).toHaveText("Search Lab");
   await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
 });
 
