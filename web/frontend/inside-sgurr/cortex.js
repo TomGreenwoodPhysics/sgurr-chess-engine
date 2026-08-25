@@ -20,6 +20,12 @@ function percentile(values, ratio = 0.94) {
   return Math.max(1, sorted[Math.floor((sorted.length - 1) * ratio)]);
 }
 
+function formatEval(centipawns) {
+  const pawns = centipawns / 100;
+  const rounded = Math.abs(pawns) < 0.005 ? 0 : pawns;
+  return `${rounded >= 0 ? "+" : "−"}${Math.abs(rounded).toFixed(2)}`;
+}
+
 class CortexVisual {
   constructor(canvas, onInspect) {
     this.canvas = canvas;
@@ -31,6 +37,11 @@ class CortexVisual {
     this.viewProgress = 0;
     this.viewTarget = 0;
     this.atlasBand = 0;
+    this.displayMode = "contribution";
+    this.featureFootprint = null;
+    this.featureScale = 1;
+    this.anatomyStage = "idle";
+    this.anatomyStarted = performance.now();
     this.hovered = null;
     this.locked = null;
     this.width = 0;
@@ -41,8 +52,14 @@ class CortexVisual {
     this.inViewport = true;
     this.animateUntil = performance.now() + 8000;
     this.contributionScale = 1;
+    this.contributionDeltaScale = 1;
     this.deltaScale = 1;
+    this.valueCache = new Map();
+    this.connectionCache = null;
+    this.footprintCache = null;
     this.canvas.dataset.atlasBand = "0";
+    this.canvas.dataset.displayMode = this.displayMode;
+    this.canvas.dataset.anatomy = this.anatomyStage;
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -88,12 +105,33 @@ class CortexVisual {
 
   setTransition(transition) {
     this.transition = transition;
+    this.valueCache.clear();
+    this.connectionCache = null;
     const afterValues = [
       ...transition.after.whiteContribution,
       ...transition.after.blackContribution,
     ];
     const deltaValues = [...transition.whiteDelta, ...transition.blackDelta];
     this.contributionScale = percentile(afterValues);
+    if (transition.before) {
+      const beforeSign = transition.before.sideToMove === 0 ? 1 : -1;
+      const afterSign = transition.after.sideToMove === 0 ? 1 : -1;
+      const contributionDeltas = [];
+      for (const perspective of ["white", "black"]) {
+        const beforeValues = perspective === "white"
+          ? transition.before.whiteContribution
+          : transition.before.blackContribution;
+        const afterPerspectiveValues = perspective === "white"
+          ? transition.after.whiteContribution
+          : transition.after.blackContribution;
+        for (let index = 0; index < 384; index += 1) {
+          contributionDeltas.push(afterPerspectiveValues[index] * afterSign - beforeValues[index] * beforeSign);
+        }
+      }
+      this.contributionDeltaScale = percentile(contributionDeltas);
+    } else {
+      this.contributionDeltaScale = this.contributionScale;
+    }
     this.deltaScale = percentile(deltaValues);
     this.locked = null;
     this.hovered = null;
@@ -102,6 +140,7 @@ class CortexVisual {
 
   setPhase(phase) {
     this.phase = phase;
+    this.connectionCache = null;
     this.wake(2400);
   }
 
@@ -122,6 +161,61 @@ class CortexVisual {
     this.atlasBand = clamp(Math.trunc(band), 0, 3);
     this.canvas.dataset.atlasBand = String(this.atlasBand);
     this.wake(2200);
+  }
+
+  setDisplayMode(mode) {
+    if (!["contribution", "change", "activation", "clipped"].includes(mode)) return;
+    this.displayMode = mode;
+    this.connectionCache = null;
+    this.canvas.dataset.displayMode = mode;
+    this.wake(2400);
+  }
+
+  setFeatureFootprint(footprint) {
+    this.featureFootprint = footprint;
+    this.featureScale = footprint
+      ? percentile([...footprint.whiteWeights, ...footprint.blackWeights], 0.9)
+      : 1;
+    this.footprintCache = footprint ? this.rankFootprint(footprint) : null;
+    this.canvas.dataset.feature = footprint ? "active" : "idle";
+    this.wake(2600);
+  }
+
+  rankFootprint(footprint) {
+    const ranked = {};
+    for (const perspective of ["white", "black"]) {
+      const weights = perspective === "white" ? footprint.whiteWeights : footprint.blackWeights;
+      const candidates = [];
+      for (let index = 0; index < 384; index += 1) {
+        candidates.push({
+          index,
+          positive: weights[index] >= 0,
+          strength: Math.abs(weights[index]) / this.featureScale,
+        });
+      }
+      candidates.sort((a, b) => b.strength - a.strength);
+      ranked[perspective] = candidates.slice(0, 34);
+    }
+    return ranked;
+  }
+
+  rankConnections(palette) {
+    const candidates = [];
+    for (const perspective of ["white", "black"]) {
+      for (let index = 0; index < 384; index += 1) {
+        const state = this.nodeState(perspective, index, palette);
+        candidates.push({ perspective, index, strength: state.intensity, positive: state.value >= 0 });
+      }
+    }
+    candidates.sort((a, b) => b.strength - a.strength);
+    return candidates.slice(0, 42);
+  }
+
+  setAnatomyStage(stage) {
+    this.anatomyStage = stage;
+    this.anatomyStarted = performance.now();
+    this.canvas.dataset.anatomy = stage;
+    this.wake(stage === "idle" ? 800 : 2200);
   }
 
   resize() {
@@ -222,6 +316,14 @@ class CortexVisual {
 
   valuesFor(perspective) {
     if (!this.transition) return null;
+    const cached = this.valueCache.get(`${this.phase}:${perspective}`);
+    if (cached) return cached;
+    const values = this.buildValues(perspective);
+    this.valueCache.set(`${this.phase}:${perspective}`, values);
+    return values;
+  }
+
+  buildValues(perspective) {
     const before = this.transition.before || this.transition.after;
     const after = this.transition.after;
     if (this.phase === "before") {
@@ -237,6 +339,68 @@ class CortexVisual {
       activation: perspective === "white" ? after.whiteActivation : after.blackActivation,
       contribution: perspective === "white" ? after.whiteContribution : after.blackContribution,
       delta: perspective === "white" ? this.transition.whiteDelta : this.transition.blackDelta,
+    };
+  }
+
+  nodeState(perspective, index, palette) {
+    const values = this.valuesFor(perspective);
+    const snapshot = this.phase === "before" && this.transition.before
+      ? this.transition.before
+      : this.transition.after;
+    const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
+    if (this.displayMode === "change") {
+      const value = values.delta[index];
+      return {
+        value,
+        intensity: clamp(Math.abs(value) / this.deltaScale, 0, 1),
+        active: value !== 0,
+        colour: value >= 0 ? palette.accent : palette.blue,
+        saturated: false,
+      };
+    }
+    if (this.displayMode === "activation") {
+      const value = values.activation[index];
+      return {
+        value,
+        intensity: value / 255,
+        active: value > 0,
+        colour: perspective === "white" ? palette.accent : palette.blue,
+        saturated: value >= 255,
+      };
+    }
+    if (this.displayMode === "clipped") {
+      const raw = values.accumulator[index];
+      const high = raw >= 255;
+      const low = raw <= 0;
+      return {
+        value: high ? 1 : low ? -1 : 0,
+        intensity: high || low ? 1 : 0,
+        active: high || low,
+        colour: high ? palette.violet : palette.blue,
+        saturated: high,
+      };
+    }
+    let value = values.contribution[index] * whiteSign;
+    let scale = this.contributionScale;
+    if (this.phase === "delta" && this.transition.before) {
+      const before = this.transition.before;
+      const beforeValues = perspective === "white"
+        ? before.whiteContribution
+        : before.blackContribution;
+      const afterValues = perspective === "white"
+        ? this.transition.after.whiteContribution
+        : this.transition.after.blackContribution;
+      const beforeSign = before.sideToMove === 0 ? 1 : -1;
+      const afterSign = this.transition.after.sideToMove === 0 ? 1 : -1;
+      value = afterValues[index] * afterSign - beforeValues[index] * beforeSign;
+      scale = this.contributionDeltaScale;
+    }
+    return {
+      value,
+      intensity: clamp(Math.abs(value) / scale, 0, 1),
+      active: values.activation[index] > 0 || (this.phase === "delta" && value !== 0),
+      colour: value >= 0 ? palette.accent : palette.blue,
+      saturated: values.activation[index] >= 255,
     };
   }
 
@@ -378,23 +542,16 @@ class CortexVisual {
   }
 
   drawOutputConnections(context, palette) {
-    if (!this.transition || this.phase === "delta") return;
-    const candidates = [];
-    for (const perspective of ["white", "black"]) {
-      const values = this.valuesFor(perspective);
-      for (let index = 0; index < 384; index += 1) {
-        const strength = Math.abs(values.contribution[index]) / this.contributionScale;
-        candidates.push({ perspective, index, strength });
-      }
-    }
-    candidates.sort((a, b) => b.strength - a.strength);
+    if (!this.transition || this.displayMode !== "contribution") return;
+    this.connectionCache ||= this.rankConnections(palette);
     const core = { x: this.width * 0.5, y: this.height * 0.77 };
+    const anatomyBoost = this.anatomyStage === "output" ? 0.3 : 0.18;
     context.save();
     context.lineWidth = 0.75;
-    for (const item of candidates.slice(0, 42)) {
+    for (const item of this.connectionCache) {
       const point = this.point(item.perspective, item.index);
-      context.globalAlpha = clamp(item.strength, 0.04, 1) * 0.18;
-      context.strokeStyle = item.perspective === "white" ? palette.accent : palette.blue;
+      context.globalAlpha = clamp(item.strength, 0.04, 1) * anatomyBoost;
+      context.strokeStyle = item.positive ? palette.accent : palette.blue;
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.quadraticCurveTo(
@@ -412,8 +569,6 @@ class CortexVisual {
     const first = this.atlasBand * 96;
     const last = first + 95;
     context.save();
-    context.setLineDash([3, 7]);
-    context.lineWidth = 0.8;
     context.font = '700 8px "Cascadia Mono", Consolas, monospace';
     context.textAlign = "center";
     for (const perspective of ["white", "black"]) {
@@ -422,20 +577,148 @@ class CortexVisual {
       const left = Math.min(...points.map((point) => point.x)) - 8;
       const right = Math.max(...points.map((point) => point.x)) + 8;
       const top = Math.min(...points.map((point) => point.y)) - 8;
-      const bottom = Math.max(...points.map((point) => point.y)) + 8;
-      context.globalAlpha = 0.035;
-      context.fillStyle = palette.blue;
-      context.fillRect(left, top, right - left, bottom - top);
-      context.globalAlpha = 0.16;
-      context.strokeStyle = palette.blue;
-      context.strokeRect(left, top, right - left, bottom - top);
-      context.globalAlpha = 0.58;
+      context.globalAlpha = 0.62;
       context.fillStyle = palette.muted;
       context.fillText(
         `${String(first).padStart(3, "0")}–${String(last).padStart(3, "0")}`,
         (left + right) / 2,
         top - 5,
       );
+    }
+    context.restore();
+  }
+
+  drawContours(context, palette) {
+    if (!this.transition) return;
+    context.save();
+    context.globalCompositeOperation = "screen";
+    for (const perspective of ["white", "black"]) {
+      for (let rowGroup = 0; rowGroup < 6; rowGroup += 1) {
+        for (let columnGroup = 0; columnGroup < 4; columnGroup += 1) {
+          let intensity = 0;
+          let signed = 0;
+          let x = 0;
+          let y = 0;
+          let count = 0;
+          for (let row = rowGroup * 4; row < rowGroup * 4 + 4; row += 1) {
+            for (let column = columnGroup * 4; column < columnGroup * 4 + 4; column += 1) {
+              const index = row * 16 + column;
+              const state = this.nodeState(perspective, index, palette);
+              const point = this.point(perspective, index);
+              intensity += state.intensity;
+              signed += state.value;
+              x += point.x;
+              y += point.y;
+              count += 1;
+            }
+          }
+          const strength = intensity / count;
+          if (strength < 0.08) continue;
+          x /= count;
+          y /= count;
+          const colour = this.displayMode === "activation"
+            ? perspective === "white" ? palette.accent : palette.blue
+            : this.displayMode === "clipped"
+              ? signed >= 0 ? palette.violet : palette.blue
+              : signed >= 0 ? palette.accent : palette.blue;
+          const radius = 18 + strength * 34;
+          context.save();
+          context.translate(x, y);
+          context.scale(1.65, 0.78);
+          const glow = context.createRadialGradient(0, 0, 1, 0, 0, radius);
+          glow.addColorStop(0, `${colour}24`);
+          glow.addColorStop(0.46, `${colour}10`);
+          glow.addColorStop(1, `${colour}00`);
+          context.fillStyle = glow;
+          context.beginPath();
+          context.arc(0, 0, radius, 0, Math.PI * 2);
+          context.fill();
+          if (strength > 0.46) {
+            context.globalAlpha = 0.08 + strength * 0.08;
+            context.strokeStyle = colour;
+            context.lineWidth = 0.65;
+            context.beginPath();
+            context.ellipse(0, 0, radius * 0.72, radius * 0.72, 0, 0, Math.PI * 2);
+            context.stroke();
+          }
+          context.restore();
+        }
+      }
+    }
+    context.restore();
+  }
+
+  drawFeatureFootprint(context, palette) {
+    if (!this.footprintCache) return;
+    for (const perspective of ["white", "black"]) {
+      context.save();
+      context.globalCompositeOperation = "screen";
+      for (const item of this.footprintCache[perspective]) {
+        const point = this.point(perspective, item.index);
+        const colour = item.positive ? palette.accent2 : palette.violet;
+        const radius = 5 + clamp(item.strength, 0, 1) * 9;
+        const glow = context.createRadialGradient(point.x, point.y, 1, point.x, point.y, radius);
+        glow.addColorStop(0, `${colour}78`);
+        glow.addColorStop(0.32, `${colour}28`);
+        glow.addColorStop(1, `${colour}00`);
+        context.fillStyle = glow;
+        context.beginPath();
+        context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.restore();
+    }
+  }
+
+  strongestChangedLane(perspective) {
+    if (!this.transition?.before) return 192;
+    const values = perspective === "white" ? this.transition.whiteDelta : this.transition.blackDelta;
+    let target = 0;
+    for (let index = 1; index < values.length; index += 1) {
+      if (Math.abs(values[index]) > Math.abs(values[target])) target = index;
+    }
+    return target;
+  }
+
+  drawAnatomyPulses(context, palette, time) {
+    if (!["input", "accumulators"].includes(this.anatomyStage)) return;
+    const elapsed = time - this.anatomyStarted;
+    const progress = this.reducedMotion ? 1 : clamp(elapsed / 950, 0, 1);
+    const eased = progress * progress * (3 - 2 * progress);
+    const start = { x: this.width * 0.5, y: this.height * 0.02 };
+    context.save();
+    for (const perspective of ["white", "black"]) {
+      const target = this.point(perspective, this.strongestChangedLane(perspective));
+      const control = {
+        x: mix(start.x, target.x, 0.52),
+        y: this.height * 0.11,
+      };
+      context.globalAlpha = 0.22;
+      context.strokeStyle = perspective === "white" ? palette.accent : palette.blue;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+      context.quadraticCurveTo(control.x, control.y, target.x, target.y);
+      context.stroke();
+      const oneMinus = 1 - eased;
+      const x = oneMinus * oneMinus * start.x + 2 * oneMinus * eased * control.x + eased * eased * target.x;
+      const y = oneMinus * oneMinus * start.y + 2 * oneMinus * eased * control.y + eased * eased * target.y;
+      const colour = perspective === "white" ? palette.accent : palette.blue;
+      context.globalAlpha = 0.9;
+      context.fillStyle = colour;
+      context.shadowColor = colour;
+      context.shadowBlur = 12;
+      context.beginPath();
+      context.arc(x, y, 3.2, 0, Math.PI * 2);
+      context.fill();
+      if (this.anatomyStage === "accumulators") {
+        context.globalAlpha = 0.35;
+        context.strokeStyle = colour;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.arc(target.x, target.y, 8 + Math.sin(time / 180) * 2, 0, Math.PI * 2);
+        context.stroke();
+      }
     }
     context.restore();
   }
@@ -450,8 +733,9 @@ class CortexVisual {
     const colour = evaluation >= 0 ? palette.accent : palette.blue;
     const x = this.width * 0.5;
     const y = this.height * 0.77;
-    const pulse = this.reducedMotion ? 0 : Math.sin(time / 640) * 2;
-    const radius = clamp(this.width * 0.034, 22, 38) + pulse;
+    const pulse = this.reducedMotion ? 0 : Math.sin(time / 940) * 1.6;
+    const anatomyBoost = this.anatomyStage === "output" ? 5 : 0;
+    const radius = clamp(this.width * 0.034, 22, 38) + pulse + anatomyBoost;
     const glow = context.createRadialGradient(x, y, 2, x, y, radius * 2.7);
     glow.addColorStop(0, colour);
     glow.addColorStop(0.23, palette.accent2);
@@ -471,54 +755,58 @@ class CortexVisual {
       context.stroke();
     }
     context.restore();
+    let scoreText = formatEval(evaluation);
+    if (this.transition?.before && ["input", "accumulators", "clamp"].includes(this.anatomyStage)) {
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} →`;
+    } else if (this.transition?.before && this.anatomyStage === "output") {
+      scoreText = `${formatEval(this.transition.before.whiteRelative)} → ${formatEval(this.transition.after.whiteRelative)}`;
+    }
+    context.save();
+    context.fillStyle = palette.text;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `750 ${scoreText.length > 8 ? 9 : 12}px "Cascadia Mono", Consolas, monospace`;
+    context.shadowColor = "rgba(0, 0, 0, 0.85)";
+    context.shadowBlur = 5;
+    context.fillText(scoreText, x, y);
+    context.restore();
   }
 
   drawLabels(context, palette) {
     context.save();
     context.textAlign = "center";
     context.fillStyle = palette.muted;
-    context.globalAlpha = 0.76;
+    context.globalAlpha = 0.58;
     context.font = '700 10px "Cascadia Mono", Consolas, monospace';
-    context.fillText("WHITE PERSPECTIVE · 384", this.width * 0.25, this.height * 0.08);
-    context.fillText("BLACK PERSPECTIVE · 384", this.width * 0.75, this.height * 0.08);
-    context.globalAlpha = 0.5 + this.viewProgress * 0.45;
-    context.fillText(
-      this.phase === "delta" ? "RAW ACCUMULATOR DELTA" : "CLIPPED RELU [0, 255]",
-      this.width * 0.5,
-      this.height * 0.94,
-    );
+    const labels = {
+      contribution: this.phase === "delta" ? "WHITE-RELATIVE OUTPUT CHANGE" : "WHITE-RELATIVE OUTPUT CONTRIBUTION",
+      change: "RAW ACCUMULATOR MOVE DELTA",
+      activation: "CLIPPED ACTIVATION [0, 255]",
+      clipped: "CLIPPED LOW [0] / HIGH [255]",
+    };
+    context.fillText(labels[this.displayMode], this.width * 0.5, this.height * 0.94);
     context.restore();
   }
 
   drawCells(context, palette, time) {
     if (!this.transition) return;
     const selected = this.locked || this.hovered;
+    context.save();
     for (const perspective of ["white", "black"]) {
-      const values = this.valuesFor(perspective);
-      const snapshot = this.phase === "before" && this.transition.before
-        ? this.transition.before
-        : this.transition.after;
-      const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
       for (let index = 0; index < 384; index += 1) {
         const point = this.point(perspective, index);
-        const rawValue = this.phase === "delta"
-          ? values.delta[index]
-          : values.contribution[index] * whiteSign;
-        const scale = this.phase === "delta" ? this.deltaScale : this.contributionScale;
-        const intensity = clamp(Math.abs(rawValue) / scale, 0, 1);
-        const active = this.phase === "delta" ? rawValue !== 0 : values.activation[index] > 0;
-        const saturated = values.activation[index] >= 255;
-        const colour = rawValue >= 0 ? palette.accent : palette.blue;
+        const { intensity, active, colour, saturated } = this.nodeState(perspective, index, palette);
         const inBand = Math.floor(index / 96) === this.atlasBand;
         const ambient = this.reducedMotion ? 0 : Math.sin(time / 900 + index * 0.19) * 0.08;
         const radius = 1.15 + intensity * 2.45 + ambient + (inBand ? 0.2 : 0);
-        context.save();
         const opacity = active ? 0.16 + intensity * 0.78 : 0.08;
         context.globalAlpha = opacity * (inBand ? 1 : 0.42);
         context.fillStyle = active ? colour : palette.edge;
         if (inBand && intensity > 0.62) {
           context.shadowColor = colour;
           context.shadowBlur = 8;
+        } else {
+          context.shadowBlur = 0;
         }
         context.beginPath();
         context.arc(point.x, point.y, radius, 0, Math.PI * 2);
@@ -529,9 +817,9 @@ class CortexVisual {
           context.lineWidth = 0.7;
           context.stroke();
         }
-        context.restore();
       }
     }
+    context.restore();
     if (selected) {
       const point = this.point(selected.perspective, selected.index);
       context.save();
@@ -566,8 +854,11 @@ class CortexVisual {
 
     this.drawOutline(context, palette);
     this.drawBandGuide(context, palette);
+    this.drawContours(context, palette);
     this.drawOutputConnections(context, palette);
+    this.drawFeatureFootprint(context, palette);
     this.drawCells(context, palette, time);
+    this.drawAnatomyPulses(context, palette, time);
     this.drawCore(context, palette, time);
     this.drawLabels(context, palette);
   }

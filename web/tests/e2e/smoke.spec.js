@@ -462,6 +462,117 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#undoPosition")).toBeDisabled();
 });
 
+test("reads a piece's two feature rows out of the shipped network", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await expect(page.locator("#pieceInspector")).toHaveAttribute("data-state", "idle");
+  await page.locator('[data-square="e2"]').click();
+  await expect(page.locator("#pieceInspector")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#pieceInspectorTitle")).toHaveText("White pawn on e2");
+  await expect(page.locator("#whiteFeatureIndex")).toHaveText("W:012");
+  await expect(page.locator("#blackFeatureIndex")).toHaveText("B:436");
+  await expect(page.locator("#whiteFeatureSummary")).toContainText("peak");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-feature", "active");
+  await expect(page.locator('[data-square="e2"]')).toHaveClass(/inspected/);
+
+  // A piece with no legal move of its own is still readable.
+  await page.locator('[data-square="d8"]').click();
+  await expect(page.locator("#pieceInspectorTitle")).toHaveText("Black queen on d8");
+
+  await page.locator("#clearPieceInspector").click();
+  await expect(page.locator("#pieceInspector")).toHaveAttribute("data-state", "idle");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-feature", "idle");
+  await expect(page.locator('[data-square="d8"]')).not.toHaveClass(/inspected/);
+});
+
+test("switches the accumulator display between the four readings", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-display-mode", "contribution");
+  await expect(page.locator("#goldKeyText")).toHaveText("Raises White's score");
+
+  await page.locator('.display-mode-buttons [data-display-mode="clipped"]').click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-display-mode", "clipped");
+  await expect(page.locator('.display-mode-buttons [data-display-mode="clipped"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.display-mode-buttons [data-display-mode="contribution"]')).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#goldKeyText")).toHaveText("Held at 255");
+  await expect(page.locator("#cyanKeyText")).toHaveText("Held at 0");
+
+  await page.locator('.display-mode-buttons [data-display-mode="activation"]').click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-display-mode", "activation");
+  await expect(page.locator("#displayModeNote")).toContainText("0 to 255");
+});
+
+test("walks a move along the evaluation path and back to the current state", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await expect(page.locator("#stateTimeline")).toBeDisabled();
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#stateTimeline")).toBeEnabled();
+  await expect(page.locator(".signal-path")).toHaveAttribute("data-active", "false");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "idle");
+
+  await page.locator("#replayTransition").click();
+  await expect(page.locator(".signal-path")).toHaveAttribute("data-active", "true");
+  await expect(page.locator(".signal-path li.active")).toHaveCount(1);
+  await expect(page.locator(".signal-path")).toHaveAttribute("data-active", "false", { timeout: 8000 });
+  await expect(page.locator("#afterState")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+});
+
+test("scrubs the state timeline through before, change and after", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#stateTimeline")).toHaveValue("2");
+
+  await page.locator("#stateTimeline").fill("0");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#beforeState")).toHaveAttribute("aria-pressed", "true");
+
+  await page.locator("#stateTimeline").fill("1");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.21");
+  await expect(page.locator(".eval-readout > span")).toHaveText("White evaluation change");
+
+  await page.locator("#afterState").click();
+  await expect(page.locator("#stateTimeline")).toHaveValue("2");
+});
+
+test("shows the quick guide once and remembers it was dismissed", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await expect(page.locator("#insideGuide")).toBeVisible();
+  await page.locator("#dismissInsideGuide").click();
+  await expect(page.locator("#insideGuide")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("sgurrInsideGuide"))).toBe("dismissed");
+
+  // A returning visitor never sees it again. The shared setup wipes storage on
+  // every navigation, so seed the dismissal the way a real second visit would.
+  await page.addInitScript(() => localStorage.setItem("sgurrInsideGuide", "dismissed"));
+  await page.reload();
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#insideGuide")).toBeHidden();
+});
+
 test("keeps the NNUE chamber usable on a narrow screen", async ({ page }) => {
   test.setTimeout(30_000);
   await page.setViewportSize({ width: 390, height: 844 });

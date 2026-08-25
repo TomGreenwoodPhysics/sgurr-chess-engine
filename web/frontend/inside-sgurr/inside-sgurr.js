@@ -1,7 +1,7 @@
 import { apiUrl, START_FEN } from "../js/config.js";
 import { initLabPreferences } from "../search-lab/preferences.js";
 import { CortexVisual } from "./cortex.js";
-import { EXPECTED_NETWORK, parseFen } from "./nnue-model.js";
+import { EXPECTED_NETWORK, featureIndex, parseFen } from "./nnue-model.js";
 
 const NETWORK_PATH = `/api/nnue/gen8/${EXPECTED_NETWORK.sha256}.nnue`;
 const POSITION_PRESETS = Object.freeze({
@@ -15,6 +15,39 @@ const LANE_BANDS = Object.freeze([
   "Upper-middle quarter",
   "Lower-middle quarter",
   "Bottom quarter",
+]);
+const GUIDE_KEY = "sgurrInsideGuide";
+const PHASE_ORDER = Object.freeze(["before", "delta", "after"]);
+const PHASE_LABELS = Object.freeze({ before: "Before", delta: "Change", after: "After" });
+const DISPLAY_MODES = Object.freeze({
+  contribution: {
+    note: "Colour shows whether each lane raises or lowers White's score.",
+    gold: "Raises White's score",
+    cyan: "Lowers White's score",
+  },
+  change: {
+    note: "Only the lanes this move changed, sized by their raw accumulator delta.",
+    gold: "Delta above zero",
+    cyan: "Delta below zero",
+  },
+  activation: {
+    note: "Every lane after clipping, from 0 to 255, whatever it does to the score.",
+    gold: "White-view activation",
+    cyan: "Black-view activation",
+  },
+  clipped: {
+    note: "Only the lanes held at an end of the clipped range.",
+    gold: "Held at 255",
+    cyan: "Held at 0",
+  },
+});
+const ANATOMY_STEPS = Object.freeze({ input: 0, accumulators: 1, clamp: 2, output: 3 });
+const ANATOMY_SEQUENCE = Object.freeze([
+  { stage: "board", phase: "before", hold: 400 },
+  { stage: "input", phase: "before", hold: 560 },
+  { stage: "accumulators", phase: "delta", hold: 680 },
+  { stage: "clamp", phase: "delta", hold: 460 },
+  { stage: "output", phase: "after", hold: 620 },
 ]);
 
 const refs = {
@@ -32,6 +65,26 @@ const refs = {
   circuitView: document.querySelector("#circuitViewButton"),
   laneAtlasDetail: document.querySelector("#laneAtlasDetail"),
   laneBandButtons: [...document.querySelectorAll("[data-lane-band]")],
+  displayModeButtons: [...document.querySelectorAll(".display-mode-buttons [data-display-mode]")],
+  displayModeNote: document.querySelector("#displayModeNote"),
+  visualKey: document.querySelector(".visual-key"),
+  goldKeyText: document.querySelector("#goldKeyText"),
+  cyanKeyText: document.querySelector("#cyanKeyText"),
+  signalPath: document.querySelector(".signal-path"),
+  signalSteps: [...document.querySelectorAll("[data-anatomy-step]")],
+  timeline: document.querySelector("#stateTimeline"),
+  guide: document.querySelector("#insideGuide"),
+  dismissGuide: document.querySelector("#dismissInsideGuide"),
+  pieceInspector: document.querySelector("#pieceInspector"),
+  pieceInspectorTitle: document.querySelector("#pieceInspectorTitle"),
+  pieceInspectorEmpty: document.querySelector("#pieceInspectorEmpty"),
+  pieceFeatureData: document.querySelector("#pieceFeatureData"),
+  pieceFootprintNote: document.querySelector("#pieceFootprintNote"),
+  clearPieceInspector: document.querySelector("#clearPieceInspector"),
+  whiteFeatureIndex: document.querySelector("#whiteFeatureIndex"),
+  whiteFeatureSummary: document.querySelector("#whiteFeatureSummary"),
+  blackFeatureIndex: document.querySelector("#blackFeatureIndex"),
+  blackFeatureSummary: document.querySelector("#blackFeatureSummary"),
   beforeState: document.querySelector("#beforeState"),
   deltaState: document.querySelector("#deltaState"),
   afterState: document.querySelector("#afterState"),
@@ -84,6 +137,8 @@ let boardFocusPending = false;
 let boardFocusSquare = null;
 let currentLaneBand = 0;
 let laneBandTimer = null;
+let inspectedSquare = null;
+let featureRequest = 0;
 
 const visual = new CortexVisual(refs.canvas, (details) => {
   if (details) selectedLane = { perspective: details.perspective, index: details.index };
@@ -137,6 +192,21 @@ function renderLaneBand() {
     }
   }
   refs.laneAtlasDetail.textContent = `${prefix} · ${active} of 192 active · ${saturated} clipped.`;
+}
+
+function setDisplayMode(mode) {
+  const details = DISPLAY_MODES[mode];
+  if (!details) return;
+  visual.setDisplayMode(mode);
+  for (const button of refs.displayModeButtons) {
+    const active = button.dataset.displayMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  refs.displayModeNote.textContent = details.note;
+  refs.goldKeyText.textContent = details.gold;
+  refs.cyanKeyText.textContent = details.cyan;
+  refs.visualKey.dataset.displayMode = mode;
 }
 
 function makeWorker() {
@@ -235,10 +305,11 @@ function renderBoard() {
       button.type = "button";
       button.className = `board-square${(rank + file) % 2 === 0 ? " dark" : ""}`;
       button.dataset.square = name;
-      button.disabled = busy || (!legalSources.has(name) && !targets.has(name));
+      button.disabled = busy || (!legalSources.has(name) && !targets.has(name) && !piece);
       button.setAttribute("aria-label", `${piece ? piece.label : "Empty"}, ${name}`);
       button.setAttribute("aria-pressed", String(name === selectedSquare));
       if (name === selectedSquare) button.classList.add("selected");
+      if (name === inspectedSquare) button.classList.add("inspected");
       if (targets.has(name)) button.classList.add("legal");
       if (lastMove && (name === lastMove.slice(0, 2) || name === lastMove.slice(2, 4))) {
         button.classList.add("last-move");
@@ -391,6 +462,74 @@ function renderLane(details) {
     : `Lane band ${band}. This lane uses the ${details.outputHalf} output weights.`;
 }
 
+function summariseWeights(weights) {
+  let peak = 0;
+  let peakLane = 0;
+  let total = 0;
+  for (let lane = 0; lane < weights.length; lane += 1) {
+    total += Math.abs(weights[lane]);
+    if (Math.abs(weights[lane]) > Math.abs(peak)) {
+      peak = weights[lane];
+      peakLane = lane;
+    }
+  }
+  const mean = total / weights.length;
+  return `peak ${formatSigned(peak, 0)} at ${String(peakLane).padStart(3, "0")} · mean |w| ${mean.toFixed(1)}`;
+}
+
+function clearPieceInspection({ redraw = true } = {}) {
+  featureRequest += 1;
+  const wasInspecting = inspectedSquare !== null;
+  inspectedSquare = null;
+  visual.setFeatureFootprint(null);
+  refs.pieceInspector.dataset.state = "idle";
+  refs.pieceInspectorTitle.textContent = "Select a piece";
+  refs.pieceInspectorEmpty.hidden = false;
+  refs.pieceFeatureData.hidden = true;
+  refs.pieceFootprintNote.hidden = true;
+  refs.clearPieceInspector.hidden = true;
+  refs.whiteFeatureIndex.textContent = "W:—";
+  refs.blackFeatureIndex.textContent = "B:—";
+  refs.whiteFeatureSummary.textContent = "—";
+  refs.blackFeatureSummary.textContent = "—";
+  if (redraw && wasInspecting) renderBoard();
+}
+
+async function inspectPiece(piece) {
+  if (!modelReady) return;
+  const request = ++featureRequest;
+  const whiteIndex = featureIndex(0, piece);
+  const blackIndex = featureIndex(1, piece);
+  inspectedSquare = piece.squareName;
+  refs.pieceInspector.dataset.state = "loading";
+  refs.pieceInspectorTitle.textContent = `${piece.label} on ${piece.squareName}`;
+  refs.pieceInspectorEmpty.hidden = true;
+  refs.pieceFeatureData.hidden = false;
+  refs.pieceFootprintNote.hidden = true;
+  refs.clearPieceInspector.hidden = false;
+  refs.whiteFeatureIndex.textContent = `W:${String(whiteIndex).padStart(3, "0")}`;
+  refs.blackFeatureIndex.textContent = `B:${String(blackIndex).padStart(3, "0")}`;
+  refs.whiteFeatureSummary.textContent = "reading row";
+  refs.blackFeatureSummary.textContent = "reading row";
+  try {
+    const message = await requestWorker("feature", { whiteIndex, blackIndex });
+    if (request !== featureRequest) return;
+    visual.setFeatureFootprint({
+      whiteWeights: message.whiteWeights,
+      blackWeights: message.blackWeights,
+    });
+    refs.whiteFeatureSummary.textContent = summariseWeights(message.whiteWeights);
+    refs.blackFeatureSummary.textContent = summariseWeights(message.blackWeights);
+    refs.pieceFootprintNote.hidden = false;
+    refs.pieceInspector.dataset.state = "ready";
+  } catch (error) {
+    if (request !== featureRequest) return;
+    refs.pieceInspector.dataset.state = "idle";
+    refs.whiteFeatureSummary.textContent = "row unavailable";
+    refs.blackFeatureSummary.textContent = "row unavailable";
+  }
+}
+
 function strongestLane(snapshot) {
   let target = { perspective: "white", index: 0 };
   let strength = -1;
@@ -415,8 +554,23 @@ function refreshSelectedLane() {
 }
 
 function cancelReplay() {
+  if (!replayTimers.length) return;
   for (const timer of replayTimers) window.clearTimeout(timer);
   replayTimers = [];
+  setAnatomy("idle");
+}
+
+function setAnatomy(stage) {
+  refs.shell.dataset.anatomy = stage;
+  visual.setAnatomyStage(stage);
+  const step = ANATOMY_STEPS[stage];
+  const running = stage !== "idle";
+  refs.signalPath.dataset.active = String(running);
+  for (const item of refs.signalSteps) {
+    const index = Number(item.dataset.anatomyStep);
+    item.classList.toggle("active", running && index === step);
+    item.classList.toggle("complete", running && step !== undefined && index < step);
+  }
 }
 
 function setPhase(phase, { keepReplay = false } = {}) {
@@ -433,6 +587,8 @@ function setPhase(phase, { keepReplay = false } = {}) {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   }
+  refs.timeline.value = String(PHASE_ORDER.indexOf(phase));
+  refs.timeline.setAttribute("aria-valuetext", PHASE_LABELS[phase]);
   renderLaneBand();
   renderEvaluation();
   refreshSelectedLane();
@@ -440,18 +596,32 @@ function setPhase(phase, { keepReplay = false } = {}) {
 
 function replayTransition() {
   cancelReplay();
-  if (!transition?.before || visual.reducedMotion) {
+  if (!transition?.before) {
     setPhase("after", { keepReplay: true });
     return;
   }
-  setPhase("before", { keepReplay: true });
-  replayTimers.push(
-    window.setTimeout(() => setPhase("delta", { keepReplay: true }), 520),
-    window.setTimeout(() => {
-      setPhase("after", { keepReplay: true });
+  if (visual.reducedMotion) {
+    setPhase("after", { keepReplay: true });
+    setAnatomy("output");
+    replayTimers.push(window.setTimeout(() => {
       replayTimers = [];
-    }, 1300),
-  );
+      setAnatomy("idle");
+    }, 700));
+    return;
+  }
+  let offset = 0;
+  for (const step of ANATOMY_SEQUENCE) {
+    const start = offset;
+    replayTimers.push(window.setTimeout(() => {
+      setPhase(step.phase, { keepReplay: true });
+      setAnatomy(step.stage);
+    }, start));
+    offset += step.hold;
+  }
+  replayTimers.push(window.setTimeout(() => {
+    replayTimers = [];
+    setAnatomy("idle");
+  }, offset));
 }
 
 function setView(view) {
@@ -472,6 +642,7 @@ async function evaluate(beforeFen, afterFen, { replay = false } = {}) {
   refs.beforeState.disabled = !transition.before;
   refs.deltaState.disabled = !transition.before;
   refs.replay.disabled = !transition.before;
+  refs.timeline.disabled = !transition.before;
   renderUpdate();
   setPhase("after");
   if (replay && transition.before) replayTransition();
@@ -483,6 +654,7 @@ async function applyPosition(nextPosition, { beforeFen = null, record = false, r
   if (record && previous) history.push(previous);
   position = nextPosition;
   selectedSquare = null;
+  clearPieceInspection({ redraw: false });
   renderBoard();
   refs.undo.disabled = busy || history.length === 0;
 }
@@ -580,6 +752,9 @@ async function handleBoardClick(event) {
   }
   const isLegalSource = position.legal_moves.some((move) => move.startsWith(square));
   selectedSquare = isLegalSource && selectedSquare !== square ? square : null;
+  const piece = parseFen(position.fen).pieces.find((entry) => entry.squareName === square);
+  if (piece) inspectPiece(piece);
+  else clearPieceInspection({ redraw: false });
   renderBoard();
 }
 
@@ -612,6 +787,11 @@ async function loadModel(sequence) {
   return result;
 }
 
+function dismissGuide() {
+  refs.guide.hidden = true;
+  localStorage.setItem(GUIDE_KEY, "dismissed");
+}
+
 function showBootError(error) {
   modelReady = false;
   busy = true;
@@ -641,6 +821,7 @@ async function boot() {
     history = [];
     await applyPosition(nextPosition);
     refs.shell.dataset.state = "ready";
+    refs.guide.hidden = localStorage.getItem(GUIDE_KEY) === "dismissed";
     refs.boardStatus.dataset.state = "ready";
     refs.fenStatus.dataset.state = "ready";
     refs.fenStatus.textContent = "Position loaded. Choose a move or select a lane.";
@@ -667,6 +848,14 @@ refs.circuitView.addEventListener("click", () => setView("circuit"));
 for (const button of refs.laneBandButtons) {
   button.addEventListener("click", () => setLaneBand(button.dataset.laneBand));
 }
+for (const button of refs.displayModeButtons) {
+  button.addEventListener("click", () => setDisplayMode(button.dataset.displayMode));
+}
+refs.timeline.addEventListener("input", () => {
+  setPhase(PHASE_ORDER[Number(refs.timeline.value)] || "after");
+});
+refs.clearPieceInspector.addEventListener("click", () => clearPieceInspection());
+refs.dismissGuide.addEventListener("click", dismissGuide);
 refs.beforeState.addEventListener("click", () => setPhase("before"));
 refs.deltaState.addEventListener("click", () => setPhase("delta"));
 refs.afterState.addEventListener("click", () => setPhase("after"));
@@ -683,6 +872,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 initLabPreferences();
+setDisplayMode("contribution");
 setLaneBand(0);
 renderBoard();
 boot();

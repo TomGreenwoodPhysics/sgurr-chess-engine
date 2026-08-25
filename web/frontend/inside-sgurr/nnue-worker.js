@@ -45,6 +45,37 @@ self.addEventListener("message", async (event) => {
       }
       const transition = evaluateTransition(network, message.beforeFen, message.afterFen);
       self.postMessage({ type: "evaluation", requestId: message.requestId, transition });
+      return;
+    }
+
+    if (message.type === "feature") {
+      if (!network) {
+        throw new Error("Evaluator is not loaded");
+      }
+      const whiteIndex = Number(message.whiteIndex);
+      const blackIndex = Number(message.blackIndex);
+      if (
+        !Number.isInteger(whiteIndex)
+        || !Number.isInteger(blackIndex)
+        || whiteIndex < 0
+        || blackIndex < 0
+        || whiteIndex >= network.input
+        || blackIndex >= network.input
+      ) {
+        throw new Error("Feature index is outside the Gen8 input table");
+      }
+      const whiteWeights = network.featureWeights.slice(
+        whiteIndex * network.hidden,
+        (whiteIndex + 1) * network.hidden,
+      );
+      const blackWeights = network.featureWeights.slice(
+        blackIndex * network.hidden,
+        (blackIndex + 1) * network.hidden,
+      );
+      self.postMessage(
+        { type: "feature", requestId: message.requestId, whiteWeights, blackWeights },
+        [whiteWeights.buffer, blackWeights.buffer],
+      );
     }
   } catch (error) {
     self.postMessage({
