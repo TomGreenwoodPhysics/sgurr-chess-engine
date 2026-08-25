@@ -459,19 +459,10 @@
 
 .menu-action-copy strong {
   overflow: hidden;
-  font-size: 1rem;
+  font-size: 1.04rem;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.menu-action-copy small {
-  color: color-mix(in srgb, currentColor, transparent 34%);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.045em;
-  line-height: 1.15;
-  text-transform: uppercase;
 }
 
 .menu-action-card:hover:not(:disabled):not([aria-disabled="true"]) .menu-action-index,

@@ -282,7 +282,8 @@ function evalDisplay(evalInfo) {
     return "0.0";
   }
   if (evalInfo.kind === "mate") {
-    return evalInfo.value > 0 ? "M" : "-M";
+    const distance = Math.abs(Math.trunc(Number(evalInfo.value) || 0));
+    return evalInfo.display || `${evalInfo.value < 0 ? "-" : ""}M${distance || ""}`;
   }
   const cp = Number(evalInfo.value) || 0;
   if (cp >= 90000) {
@@ -391,6 +392,7 @@ function renderReviewPanel() {
     return;
   }
   const reviewing = app.review.active && app.mode === "game";
+  refs.sidePanel?.classList.toggle("review-mode", reviewing);
   refs.reviewBlock.hidden = !reviewing;
   if (refs.trendLabel) {
     refs.trendLabel.textContent = reviewing ? "Eval trend (full game)" : "Eval trend";
@@ -962,8 +964,8 @@ function renderAnalysis() {
     refs.analysisDecisionSummary.textContent = leaderRuns.length === 1
       ? `${latestRun.move} has led at every completed depth${analysis.running ? " so far." : "."}`
       : `${latestRun.move} took the lead at depth ${latestRun.startDepth} and ${analysis.running ? "leads now." : `held through depth ${latestRun.endDepth}.`}`;
-    leaderRuns.slice(-8).forEach((run, index, visibleRuns) => {
-      const sourceIndex = leaderRuns.length - visibleRuns.length + index;
+    leaderRuns.slice(-8).reverse().forEach((run, index) => {
+      const sourceIndex = leaderRuns.length - 1 - index;
       const previousRun = sourceIndex > 0 ? leaderRuns[sourceIndex - 1] : null;
       const isLatest = sourceIndex === leaderRuns.length - 1;
       const button = document.createElement("button");

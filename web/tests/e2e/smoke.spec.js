@@ -159,6 +159,7 @@ async function installMockBackend(page, {
   finishWatch = false,
   engineExists = true,
   publicDemo = false,
+  mateOpening = false,
 } = {}) {
   const calls = [];
   await page.route(`${API_BASE}/**`, async (route) => {
@@ -289,7 +290,19 @@ async function installMockBackend(page, {
       if (finishWatch) {
         await json(route, WATCH_DRAW_STATE);
       } else if (body?.fen === START_FEN) {
-        await json(route, AFTER_E4_STATE);
+        await json(route, mateOpening ? {
+          ...AFTER_E4_STATE,
+          latest_eval: {
+            kind: "mate",
+            value: -4,
+            display: "-M4",
+            depth: 12,
+            nodes: 5800,
+            time_ms: 42,
+            pv: ["e2e4"],
+            perspective: "white",
+          },
+        } : AFTER_E4_STATE);
       } else if (body?.fen === AFTER_E4_FEN) {
         await json(route, AFTER_E4_E5_STATE);
       } else if (body?.fen === AFTER_NF3_FEN) {
@@ -351,9 +364,39 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
   await expect(page.locator(".menu-action-card")).toHaveCount(5);
-  await expect(page.locator("#playWhiteButton small")).toHaveText("You move first");
+  await expect(page.locator(".menu-action-card small")).toHaveCount(0);
   await expect(page.locator(".search-lab-link strong")).toHaveText("Search Lab");
   await expect(page.locator(".search-lab-link")).toHaveAttribute("href", "search-lab/?mode=network");
+});
+
+test("uses volume sliders without duplicate audio toggles", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#menuSettingsButton").click();
+
+  await expect(page.locator("#settingsModal")).toBeVisible();
+  await expect(page.locator("#soundEnabledInput, #musicEnabledInput, #gameMusicEnabledInput")).toHaveCount(0);
+  await page.locator("#masterVolumeInput").fill("0.55");
+  await expect(page.locator("#masterVolumeValue")).toHaveText("55%");
+  await page.locator("#musicVolumeInput").fill("0.25");
+  await expect(page.locator("#musicVolumeValue")).toHaveText("25%");
+
+  const stored = await page.evaluate(() => ({
+    master: localStorage.getItem("sgurrMasterVolume"),
+    menu: localStorage.getItem("sgurrMusicVolume"),
+    oldMenuToggle: localStorage.getItem("sgurrMusicEnabled"),
+  }));
+  expect(stored).toEqual({ master: "0.55", menu: "0.25", oldMenuToggle: null });
+});
+
+test("shows the remaining mate distance", async ({ page }) => {
+  await installMockBackend(page, { mateOpening: true });
+  await openMainMenu(page);
+  await page.locator("#playBlackButton").click();
+
+  await expect(page.locator("#evalChip")).toHaveText("-M4");
+  await expect(page.locator("#evalValue")).toHaveText("-M4");
+  await expect(page.locator("#trendValue")).toHaveText("-M4");
 });
 
 test("keeps local-only controls visible in the free demo", async ({ page }) => {
@@ -952,9 +995,9 @@ test("streams deep position analysis and steps through Sgurr's line", async ({ p
   await expect(page.locator("#analysisDepths button")).toHaveCount(2);
   await expect(page.locator("#analysisDecisionSummary")).toContainText("e4 took the lead at depth 6");
   await expect(page.locator("#analysisChangeCount")).toHaveText("2 leaders");
-  await expect(page.locator(".analysis-leader-card").first()).toContainText("d4");
-  await expect(page.locator(".analysis-leader-card").last()).toContainText("D6-D12");
-  await expect(page.locator(".analysis-leader-card").last()).toContainText("FINAL");
+  await expect(page.locator(".analysis-leader-card").first()).toContainText("D6-D12");
+  await expect(page.locator(".analysis-leader-card").first()).toContainText("FINAL");
+  await expect(page.locator(".analysis-leader-card").last()).toContainText("d4");
   await expect(page.locator("#analysisPvMoves button")).toHaveCount(3);
 
   await page.locator('#analysisPvMoves button[data-ply="3"]').click();
@@ -1049,6 +1092,18 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   await expect(swing).toContainText("3.7 pawns");
   await expect(page.locator("#reviewMove")).toHaveText("2. Nf3");
 
+  const reviewGeometry = await page.evaluate(() => {
+    const panel = document.querySelector(".side-panel").getBoundingClientRect();
+    const trend = document.querySelector(".trend-block").getBoundingClientRect();
+    return {
+      panelBottom: panel.bottom,
+      trendBottom: trend.bottom,
+      overflow: getComputedStyle(document.querySelector(".side-panel")).overflow,
+    };
+  });
+  expect(reviewGeometry.trendBottom).toBeLessThanOrEqual(reviewGeometry.panelBottom + 1);
+  expect(reviewGeometry.overflow).toBe("visible");
+
   // Stepping back reaches the start position, and the controls bound there.
   await page.locator("#reviewStartButton").click();
   await expect(page.locator("#reviewMove")).toHaveText("Start position");
@@ -1061,5 +1116,6 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   // Ending review hands the result modal back.
   await page.locator("#reviewExitButton").click();
   await expect(page.locator("#reviewBlock")).toBeHidden();
+  await expect(page.locator(".side-panel")).not.toHaveClass(/review-mode/);
   await expect(page.locator("#resultModal")).toBeVisible();
 });

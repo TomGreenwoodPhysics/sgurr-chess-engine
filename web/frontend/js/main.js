@@ -136,35 +136,22 @@ refs.animationModeSelect.addEventListener("change", () => {
   saveSettings();
   render();
 });
-refs.soundEnabledInput.addEventListener("change", () => {
-  app.soundEnabled = refs.soundEnabledInput.checked;
+refs.masterVolumeInput.addEventListener("input", () => {
+  app.masterVolume = Math.max(0, Math.min(1, Number(refs.masterVolumeInput.value)));
   saveSettings();
-  if (app.soundEnabled) {
-    playSound("button", { volume: 1.1 });
-  }
-  render();
+  syncMenuMusic({ force: true });
+  syncGameMusic({ force: true });
+  renderSettings();
 });
 refs.soundVolumeInput.addEventListener("input", () => {
   app.soundVolume = Math.max(0, Math.min(1, Number(refs.soundVolumeInput.value)));
   saveSettings();
   renderSettings();
 });
-refs.musicEnabledInput.addEventListener("change", () => {
-  app.musicEnabled = refs.musicEnabledInput.checked;
-  saveSettings();
-  syncMenuMusic({ force: true });
-  renderSettings();
-});
 refs.musicVolumeInput.addEventListener("input", () => {
   app.musicVolume = Math.max(0, Math.min(1, Number(refs.musicVolumeInput.value)));
   saveSettings();
   syncMenuMusic({ force: true });
-  renderSettings();
-});
-refs.gameMusicEnabledInput.addEventListener("change", () => {
-  app.gameMusicEnabled = refs.gameMusicEnabledInput.checked;
-  saveSettings();
-  syncGameMusic({ force: true });
   renderSettings();
 });
 refs.gameMusicVolumeInput.addEventListener("input", () => {
@@ -179,6 +166,7 @@ refs.clearPreferencesButton.addEventListener("click", () => {
   localStorage.removeItem("sgurrAutoFlip");
   localStorage.removeItem("sgurrShowEngineInfo");
   localStorage.removeItem("sgurrAnimationMode");
+  localStorage.removeItem("sgurrMasterVolume");
   localStorage.removeItem("sgurrSoundEnabled");
   localStorage.removeItem("sgurrSoundVolume");
   localStorage.removeItem("sgurrMusicEnabled");
@@ -190,14 +178,14 @@ refs.clearPreferencesButton.addEventListener("click", () => {
   app.autoFlipAsBlack = true;
   app.showEngineInfo = true;
   app.animationMode = "On";
-  app.soundEnabled = true;
+  app.masterVolume = 1;
   app.soundVolume = 0.8;
-  app.musicEnabled = true;
   app.musicVolume = 0.2;
-  app.gameMusicEnabled = true;
   app.gameMusicVolume = 0.35;
   applyTheme();
   saveSettings();
+  syncMenuMusic({ force: true });
+  syncGameMusic({ force: true });
   render();
 });
 refs.clearMemoryButton.addEventListener("click", () => {

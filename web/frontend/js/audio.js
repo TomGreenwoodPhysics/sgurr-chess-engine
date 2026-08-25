@@ -11,7 +11,7 @@ function initAudio() {
   for (const name of Object.keys(SOUND_FILES)) {
     const audio = new Audio(soundUrl(name));
     audio.preload = "auto";
-    audio.volume = Math.max(0, Math.min(1, app.soundVolume));
+    audio.volume = Math.max(0, Math.min(1, app.masterVolume * app.soundVolume));
     app.audio[name] = audio;
   }
 
@@ -120,7 +120,7 @@ function playProceduralSound(name, { volume = 1, rate = 1 } = {}) {
   // Ceiling is above 1.0 so specific sounds (button, move) can be amplified
   // past unity gain; the synth tones peak at ~0.12 internally, so headroom is
   // large and there is no clipping risk.
-  master.gain.value = Math.max(0, Math.min(6, app.soundVolume * volume));
+  master.gain.value = Math.max(0, Math.min(6, app.masterVolume * app.soundVolume * volume));
   master.connect(context.destination);
   const now = context.currentTime + 0.004;
   const tone = (at, options) => scheduleSynthTone(context, master, now + at / speed, {
@@ -195,9 +195,9 @@ function syncMenuMusic({ force = false, immediate = false } = {}) {
   // Hold the menu music back until the intro has fully departed -- the cave
   // belongs to the rumble and the reveal swell. finishIntro() force-syncs,
   // so the music fades in the moment the menu actually appears.
-  const shouldRun = app.musicEnabled && app.mode === "menu" && app.intro.complete;
+  const shouldRun = app.masterVolume > 0 && app.musicVolume > 0 && app.mode === "menu" && app.intro.complete;
   const shouldPlay = shouldRun && !document.hidden;
-  const target = shouldPlay ? app.musicVolume : 0;
+  const target = shouldPlay ? app.masterVolume * app.musicVolume : 0;
   if (
     !force
     && app.musicShouldRun === shouldRun
@@ -274,15 +274,16 @@ function syncGameMusic({ force = false, immediate = false } = {}) {
   }
 
   const shouldRun =
-    app.gameMusicEnabled &&
+    app.masterVolume > 0 &&
+    app.gameMusicVolume > 0 &&
     app.mode === "game" &&
     app.humanSide !== null &&
     !app.gameOver;
   const shouldPlay = shouldRun && !document.hidden;
   const intensity = shouldPlay ? gameMusicIntensity() : 0;
   const targets = {
-    pulse: shouldPlay ? app.gameMusicVolume * (1 - intensity * 0.52) : 0,
-    urgent: shouldPlay ? app.gameMusicVolume * intensity * 0.72 : 0,
+    pulse: shouldPlay ? app.masterVolume * app.gameMusicVolume * (1 - intensity * 0.52) : 0,
+    urgent: shouldPlay ? app.masterVolume * app.gameMusicVolume * intensity * 0.72 : 0,
   };
   const mixKey = `${shouldRun}:${shouldPlay}:${targets.pulse.toFixed(3)}:${targets.urgent.toFixed(3)}`;
   if (!force && app.gameMusicMixKey === mixKey) {
@@ -339,12 +340,12 @@ function syncGameMusic({ force = false, immediate = false } = {}) {
 
 function playSound(name, { volume = 1, rate = 1, delay = 0, condition = null } = {}) {
   const procedural = PROCEDURAL_SOUND_NAMES.has(name);
-  if (!app.soundEnabled || (!app.audio[name] && !procedural)) {
+  if (app.masterVolume <= 0 || app.soundVolume <= 0 || (!app.audio[name] && !procedural)) {
     return;
   }
 
   const start = () => {
-    if (!app.soundEnabled || (condition && !condition())) {
+    if (app.masterVolume <= 0 || app.soundVolume <= 0 || (condition && !condition())) {
       return;
     }
     if (procedural) {
@@ -353,7 +354,7 @@ function playSound(name, { volume = 1, rate = 1, delay = 0, condition = null } =
     }
     try {
       const audio = app.audio[name].cloneNode(true);
-      audio.volume = Math.max(0, Math.min(1, app.soundVolume * volume));
+      audio.volume = Math.max(0, Math.min(1, app.masterVolume * app.soundVolume * volume));
       audio.playbackRate = Math.max(0.5, Math.min(2, rate));
       audio.play().catch(() => {});
     } catch {

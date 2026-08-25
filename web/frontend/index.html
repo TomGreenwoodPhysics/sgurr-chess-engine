@@ -135,15 +135,15 @@
           <div class="menu-play-grid">
             <button type="button" class="menu-action-card play-white" id="playWhiteButton">
               <span class="menu-action-index" aria-hidden="true">01</span>
-              <span class="menu-action-copy"><strong>Play as White</strong><small>You move first</small></span>
+              <span class="menu-action-copy"><strong>Play as White</strong></span>
             </button>
             <button type="button" class="menu-action-card play-black" id="playBlackButton">
               <span class="menu-action-index" aria-hidden="true">02</span>
-              <span class="menu-action-copy"><strong>Play as Black</strong><small>Sgurr opens</small></span>
+              <span class="menu-action-copy"><strong>Play as Black</strong></span>
             </button>
             <button type="button" class="menu-action-card menu-watch-card" id="watchButton">
               <span class="menu-action-index" aria-hidden="true">03</span>
-              <span class="menu-action-copy"><strong>Watch Sgurr vs itself</strong><small>Two cores, one board</small></span>
+              <span class="menu-action-copy"><strong>Watch Sgurr vs itself</strong></span>
             </button>
           </div>
 
@@ -151,11 +151,11 @@
           <div class="menu-tools-grid">
             <button type="button" class="menu-action-card position-lab-button" id="positionLabButton">
               <span class="menu-action-index" aria-hidden="true">04</span>
-              <span class="menu-action-copy"><strong>Position Lab</strong><small>Build, play, analyse</small></span>
+              <span class="menu-action-copy"><strong>Position Lab</strong></span>
             </button>
             <a class="menu-action-card search-lab-link" href="search-lab/?mode=network">
               <span class="menu-action-index" aria-hidden="true">05</span>
-              <span class="menu-action-copy"><strong>Search Lab</strong><small>Watch Sgurr think</small></span>
+              <span class="menu-action-copy"><strong>Search Lab</strong></span>
             </a>
           </div>
 
@@ -582,62 +582,70 @@
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>
         <div class="settings-list">
-          <label class="toggle-row">
-            <span>
-              <strong>Auto-flip as Black</strong>
-              <small>Match the desktop board orientation behavior.</small>
-            </span>
-            <input type="checkbox" id="autoFlipInput">
-          </label>
-          <label class="toggle-row">
-            <span>
-              <strong>Show engine info</strong>
-              <small>Display backend status and latest search metadata.</small>
-            </span>
-            <input type="checkbox" id="showEngineInfoInput">
-          </label>
-          <label class="settings-field">
-            Animations
-            <select id="animationModeSelect">
-              <option value="On">On</option>
-              <option value="Off">Off</option>
-            </select>
-          </label>
-          <label class="toggle-row">
-            <span>
-              <strong>Move sounds</strong>
-              <small>Use the existing desktop GUI sound effects.</small>
-            </span>
-            <input type="checkbox" id="soundEnabledInput">
-          </label>
-          <label class="settings-field">
-            Sound volume
-            <input type="range" id="soundVolumeInput" min="0" max="1" step="0.05">
-          </label>
-          <label class="toggle-row">
-            <span>
-              <strong>Menu music</strong>
-              <small>Play Sgurr's theme on the main menu only.</small>
-            </span>
-            <input type="checkbox" id="musicEnabledInput">
-          </label>
-          <label class="settings-field">
-            Menu music volume
-            <input type="range" id="musicVolumeInput" min="0" max="1" step="0.05">
-          </label>
-          <label class="toggle-row">
-            <span>
-              <strong>In-game music</strong>
-              <small>Use an adaptive score while playing against Sgurr.</small>
-            </span>
-            <input type="checkbox" id="gameMusicEnabledInput">
-          </label>
-          <label class="settings-field">
-            In-game music volume
-            <input type="range" id="gameMusicVolumeInput" min="0" max="1" step="0.05">
-          </label>
-          <button type="button" id="clearPreferencesButton">Reset web preferences</button>
-          <button type="button" id="clearMemoryButton">Forget recorded encounters</button>
+          <section class="settings-section" aria-labelledby="displaySettingsTitle">
+            <h3 id="displaySettingsTitle">Display</h3>
+            <label class="toggle-row">
+              <span>
+                <strong>Auto-flip as Black</strong>
+                <small>Keep your pieces nearest you.</small>
+              </span>
+              <input type="checkbox" id="autoFlipInput">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Show engine info</strong>
+                <small>Show depth, nodes and search time.</small>
+              </span>
+              <input type="checkbox" id="showEngineInfoInput">
+            </label>
+            <label class="settings-field compact-settings-field">
+              <span class="settings-field-heading"><strong>Animations</strong></span>
+              <select id="animationModeSelect">
+                <option value="On">On</option>
+                <option value="Off">Off</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="settings-section audio-settings" aria-labelledby="audioSettingsTitle">
+            <div class="settings-section-heading">
+              <h3 id="audioSettingsTitle">Audio</h3>
+              <p>Set a slider to zero to mute it.</p>
+            </div>
+            <label class="settings-field master-volume-field">
+              <span class="settings-field-heading">
+                <strong>Master volume</strong>
+                <output id="masterVolumeValue" for="masterVolumeInput">100%</output>
+              </span>
+              <input type="range" id="masterVolumeInput" min="0" max="1" step="0.05">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-heading">
+                <strong>Move sounds</strong>
+                <output id="soundVolumeValue" for="soundVolumeInput">80%</output>
+              </span>
+              <input type="range" id="soundVolumeInput" min="0" max="1" step="0.05">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-heading">
+                <strong>Menu music</strong>
+                <output id="musicVolumeValue" for="musicVolumeInput">20%</output>
+              </span>
+              <input type="range" id="musicVolumeInput" min="0" max="1" step="0.05">
+            </label>
+            <label class="settings-field">
+              <span class="settings-field-heading">
+                <strong>Game music</strong>
+                <output id="gameMusicVolumeValue" for="gameMusicVolumeInput">35%</output>
+              </span>
+              <input type="range" id="gameMusicVolumeInput" min="0" max="1" step="0.05">
+            </label>
+          </section>
+
+          <div class="settings-reset-actions">
+            <button type="button" id="clearPreferencesButton">Reset preferences</button>
+            <button type="button" id="clearMemoryButton">Forget encounters</button>
+          </div>
         </div>
       </section>
     </div>

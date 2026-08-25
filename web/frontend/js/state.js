@@ -117,12 +117,14 @@ const refs = {
   autoFlipInput: document.querySelector("#autoFlipInput"),
   showEngineInfoInput: document.querySelector("#showEngineInfoInput"),
   animationModeSelect: document.querySelector("#animationModeSelect"),
-  soundEnabledInput: document.querySelector("#soundEnabledInput"),
+  masterVolumeInput: document.querySelector("#masterVolumeInput"),
+  masterVolumeValue: document.querySelector("#masterVolumeValue"),
   soundVolumeInput: document.querySelector("#soundVolumeInput"),
-  musicEnabledInput: document.querySelector("#musicEnabledInput"),
+  soundVolumeValue: document.querySelector("#soundVolumeValue"),
   musicVolumeInput: document.querySelector("#musicVolumeInput"),
-  gameMusicEnabledInput: document.querySelector("#gameMusicEnabledInput"),
+  musicVolumeValue: document.querySelector("#musicVolumeValue"),
   gameMusicVolumeInput: document.querySelector("#gameMusicVolumeInput"),
+  gameMusicVolumeValue: document.querySelector("#gameMusicVolumeValue"),
   clearPreferencesButton: document.querySelector("#clearPreferencesButton"),
   clearMemoryButton: document.querySelector("#clearMemoryButton"),
   resultModal: document.querySelector("#resultModal"),
@@ -183,6 +185,13 @@ const refs = {
   analysisMenuButton: document.querySelector("#analysisMenuButton"),
   analysisLimitNote: document.querySelector("#analysisLimitNote"),
 };
+
+function storedChannelVolume(volumeKey, legacyEnabledKey, fallback) {
+  if (localStorage.getItem(legacyEnabledKey) === "false") {
+    return 0;
+  }
+  return Number(localStorage.getItem(volumeKey) ?? String(fallback));
+}
 
 const app = {
   fen: START_FEN,
@@ -253,12 +262,10 @@ const app = {
   autoFlipAsBlack: localStorage.getItem("sgurrAutoFlip") !== "false",
   showEngineInfo: localStorage.getItem("sgurrShowEngineInfo") !== "false",
   animationMode: localStorage.getItem("sgurrAnimationMode") === "Off" ? "Off" : "On",
-  soundEnabled: localStorage.getItem("sgurrSoundEnabled") !== "false",
-  soundVolume: Number(localStorage.getItem("sgurrSoundVolume") || "0.8"),
-  musicEnabled: localStorage.getItem("sgurrMusicEnabled") !== "false",
-  musicVolume: Number(localStorage.getItem("sgurrMusicVolume") || "0.2"),
-  gameMusicEnabled: localStorage.getItem("sgurrGameMusicEnabled") !== "false",
-  gameMusicVolume: Number(localStorage.getItem("sgurrGameMusicVolume") || "0.35"),
+  masterVolume: Number(localStorage.getItem("sgurrMasterVolume") ?? "1"),
+  soundVolume: storedChannelVolume("sgurrSoundVolume", "sgurrSoundEnabled", 0.8),
+  musicVolume: storedChannelVolume("sgurrMusicVolume", "sgurrMusicEnabled", 0.2),
+  gameMusicVolume: storedChannelVolume("sgurrGameMusicVolume", "sgurrGameMusicEnabled", 0.35),
   audioUnlocked: false,
   audio: {},
   audioContext: null,
@@ -342,6 +349,10 @@ const app = {
   gameOrigin: "standard",
 };
 
+if (!Number.isFinite(app.masterVolume)) {
+  app.masterVolume = 1;
+}
+app.masterVolume = Math.max(0, Math.min(1, app.masterVolume));
 if (!Number.isFinite(app.soundVolume)) {
   app.soundVolume = 0.8;
 }

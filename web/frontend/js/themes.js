@@ -168,12 +168,13 @@ function saveSettings() {
   localStorage.setItem("sgurrAutoFlip", String(app.autoFlipAsBlack));
   localStorage.setItem("sgurrShowEngineInfo", String(app.showEngineInfo));
   localStorage.setItem("sgurrAnimationMode", app.animationMode);
-  localStorage.setItem("sgurrSoundEnabled", String(app.soundEnabled));
+  localStorage.setItem("sgurrMasterVolume", String(app.masterVolume));
   localStorage.setItem("sgurrSoundVolume", String(app.soundVolume));
-  localStorage.setItem("sgurrMusicEnabled", String(app.musicEnabled));
   localStorage.setItem("sgurrMusicVolume", String(app.musicVolume));
-  localStorage.setItem("sgurrGameMusicEnabled", String(app.gameMusicEnabled));
   localStorage.setItem("sgurrGameMusicVolume", String(app.gameMusicVolume));
+  localStorage.removeItem("sgurrSoundEnabled");
+  localStorage.removeItem("sgurrMusicEnabled");
+  localStorage.removeItem("sgurrGameMusicEnabled");
 }
 
 function renderThemeGallery() {
@@ -223,12 +224,14 @@ function renderSettings() {
   refs.autoFlipInput.checked = app.autoFlipAsBlack;
   refs.showEngineInfoInput.checked = app.showEngineInfo;
   refs.animationModeSelect.value = app.animationMode;
-  refs.soundEnabledInput.checked = app.soundEnabled;
+  refs.masterVolumeInput.value = String(app.masterVolume);
+  refs.masterVolumeValue.textContent = `${Math.round(app.masterVolume * 100)}%`;
   refs.soundVolumeInput.value = String(app.soundVolume);
-  refs.musicEnabledInput.checked = app.musicEnabled;
+  refs.soundVolumeValue.textContent = `${Math.round(app.soundVolume * 100)}%`;
   refs.musicVolumeInput.value = String(app.musicVolume);
-  refs.gameMusicEnabledInput.checked = app.gameMusicEnabled;
+  refs.musicVolumeValue.textContent = `${Math.round(app.musicVolume * 100)}%`;
   refs.gameMusicVolumeInput.value = String(app.gameMusicVolume);
+  refs.gameMusicVolumeValue.textContent = `${Math.round(app.gameMusicVolume * 100)}%`;
 }
 
 export {

@@ -9,6 +9,12 @@
   padding: 14px 0 0;
 }
 
+.side-panel.review-mode {
+  height: auto;
+  overflow: visible;
+  padding-bottom: 10px;
+}
+
 .side-panel[hidden],
 .editor-panel[hidden],
 .analysis-panel[hidden] {
