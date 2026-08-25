@@ -61,7 +61,7 @@
   box-shadow: 0 0 18px color-mix(in srgb, var(--accent), transparent 85%);
 }
 
-.editor-panel[data-intent="analysis"] .editor-header-block {
+.editor-header-block {
   border-color: color-mix(in srgb, var(--accent), var(--edge) 35%);
   background:
     radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--accent), transparent 74%), transparent 38%),

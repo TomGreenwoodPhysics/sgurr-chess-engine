@@ -4,7 +4,7 @@ import { cancelDrag, cancelPromotion, handleBoardPointerMove, handleBoardPointer
 import { currentTimeControl, syncClock } from "./clocks.js";
 import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
 import { initDemoTooltips } from "./demo-tooltip.js";
-import { analyseEditorPosition, clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, finishEditorPrimaryAction, loadEditorStartPosition, loadFenIntoEditor } from "./editor.js";
+import { analyseEditorPosition, clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterPositionLab, exitBoardEditor, finishBoardEditor, loadEditorStartPosition, loadFenIntoEditor } from "./editor.js";
 import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
 import { cancelPremoves, copyFen, exportPgn, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
 import { finishIntro, initIntro, wakeSgurr } from "./intro.js";
@@ -41,8 +41,7 @@ refs.menuEngineButton.addEventListener("click", () => {
 });
 refs.menuSettingsButton.addEventListener("click", () => openModal(refs.settingsModal));
 refs.menuHelpButton.addEventListener("click", () => openModal(refs.helpModal));
-refs.analysePositionButton.addEventListener("click", () => enterBoardEditor("analysis"));
-refs.boardEditorButton.addEventListener("click", () => enterBoardEditor("play"));
+refs.positionLabButton.addEventListener("click", () => enterPositionLab());
 refs.focusModeButton.addEventListener("click", () => toggleFocusMode());
 refs.newGameButton.addEventListener("click", () => startGame(app.humanSide));
 refs.undoMoveButton.addEventListener("click", undoMove);
@@ -77,7 +76,7 @@ refs.analysisEditButton.addEventListener("click", () => {
   const fen = app.analysis.sourceFen;
   app.editor.returnSide = app.analysis.orientation;
   stopPositionAnalysis({ updateStatus: false });
-  enterBoardEditor("analysis", fen);
+  enterPositionLab(fen);
 });
 refs.analysisCopyFenButton.addEventListener("click", copyAnalysisFen);
 refs.analysisMenuButton.addEventListener("click", () => {
@@ -340,7 +339,7 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "r" && app.mode === "game") {
     startGame(app.humanSide);
   } else if (event.key === "Enter" && app.mode === "editor") {
-    finishEditorPrimaryAction();
+    analyseEditorPosition();
   } else if (event.key.toLowerCase() === "u" && app.mode === "game") {
     undoMove();
   } else if (event.key === "ArrowLeft" && app.mode === "game") {
@@ -375,9 +374,9 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "t") {
     cycleTheme(1);
   } else if (event.key.toLowerCase() === "e" && app.mode !== "editor") {
-    enterBoardEditor("play");
+    enterPositionLab();
   } else if (event.key.toLowerCase() === "l") {
-    enterBoardEditor("play");
+    enterPositionLab();
     window.requestAnimationFrame(() => refs.editorFenInput.focus());
   } else if (event.key.toLowerCase() === "z" && app.mode === "game") {
     toggleFocusMode();

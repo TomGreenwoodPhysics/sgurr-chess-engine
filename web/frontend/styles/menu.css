@@ -169,14 +169,14 @@
   background: rgba(45, 39, 51, 0.62);
 }
 
-.menu-tools-grid .analyse-menu-button {
+.menu-tools-grid .position-lab-button {
   border-color: color-mix(in srgb, var(--accent), var(--edge) 38%);
   background:
     linear-gradient(120deg, color-mix(in srgb, var(--accent), transparent 83%), transparent 68%),
     var(--surface-2);
 }
 
-.menu-tools-grid .analyse-menu-button:hover:not(:disabled) {
+.menu-tools-grid .position-lab-button:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: 0 0 22px color-mix(in srgb, var(--accent), transparent 82%);
 }
@@ -376,7 +376,6 @@
 }
 
 .menu-tools-grid .search-lab-link {
-  grid-column: 1 / -1;
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 62%);

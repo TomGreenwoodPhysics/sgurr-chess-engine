@@ -140,8 +140,7 @@
 
           <p class="menu-section-label">Position tools</p>
           <div class="menu-tools-grid">
-            <button type="button" class="analyse-menu-button" id="analysePositionButton">Analyse position</button>
-            <button type="button" id="boardEditorButton">Board editor</button>
+            <button type="button" class="position-lab-button" id="positionLabButton">Position Lab</button>
             <a class="search-lab-link" href="search-lab/?mode=network">Watch Sgurr think</a>
           </div>
 
@@ -367,13 +366,13 @@
         </section>
       </aside>
 
-      <aside class="editor-panel" id="editorPanel" aria-label="Board editor" hidden>
+      <aside class="editor-panel" id="editorPanel" aria-label="Position Lab" hidden>
         <div class="editor-column">
           <section class="panel-block header-block editor-header-block">
             <div>
               <p class="eyebrow">Position tools</p>
-              <h2 id="editorHeading">Board editor</h2>
-              <p class="editor-purpose" id="editorPurpose">Build a position, then play it against Sgurr.</p>
+              <h2 id="editorHeading">Position Lab</h2>
+              <p class="editor-purpose" id="editorPurpose">Build or paste a position, then play it or ask Sgurr for a deep analysis.</p>
             </div>
           </section>
 
@@ -387,12 +386,12 @@
           </section>
 
           <section class="panel-block editor-section">
-            <p class="panel-label">Play setup</p>
+            <p class="panel-label">Position actions</p>
             <button id="editorPlayerButton" type="button">You play: White</button>
             <button id="editorTurnButton" type="button">First move: White</button>
             <div class="editor-primary-actions">
               <button id="editorPlayButton" type="button">Play from here</button>
-              <button id="editorAnalyseButton" class="analysis-action" type="button">Analyse position</button>
+              <button id="editorAnalyseButton" class="analysis-action preferred" type="button">Deep analysis</button>
             </div>
           </section>
 
@@ -408,7 +407,7 @@
 
           <section class="panel-block status-block editor-status-block">
             <p class="panel-label">Status</p>
-            <p id="editorStatus">Board editor</p>
+            <p id="editorStatus">Position Lab ready</p>
           </section>
 
           <section class="side-actions editor-actions">
@@ -490,10 +489,13 @@
         <section class="panel-block analysis-depth-block">
           <div class="analysis-section-heading">
             <div>
-              <p class="panel-label">Iterative deepening</p>
-              <p>Click a completed depth to inspect its line.</p>
+              <p class="panel-label">Best-move evolution</p>
+              <p id="analysisDecisionSummary">Only changes in Sgurr's preferred move appear here.</p>
             </div>
-            <span class="analysis-live-badge" id="analysisLiveBadge">LIVE</span>
+            <div class="analysis-depth-status">
+              <span class="analysis-change-count" id="analysisChangeCount">0 leaders</span>
+              <span class="analysis-live-badge" id="analysisLiveBadge">LIVE</span>
+            </div>
           </div>
           <div class="analysis-depths" id="analysisDepths"></div>
         </section>

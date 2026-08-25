@@ -35,7 +35,7 @@ health = get("/health")
 assert health["ok"] is True
 assert health["nnue_loaded"] is True
 assert b"Sgurr" in get_bytes("/")
-assert b"Analyse position" in get_bytes("/")
+assert b"Position Lab" in get_bytes("/")
 assert b"Search Microscope" in get_bytes("/search-lab/")
 assert b"--accent" in get_bytes("/styles/base.css")
 assert len(get_bytes("/assets/intro/sgurr-cave-chamber.webp")) > 100_000

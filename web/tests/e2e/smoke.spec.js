@@ -247,6 +247,11 @@ async function installMockBackend(page, {
       const events = [
         { type: "started", engine: "v8.2", label: 'Sgurr v8.2 "Thearlaich"', perspective: "white", movetime_ms: 5000 },
         {
+          type: "iteration", kind: "cp", value: 8, display: "+0.1", depth: 3,
+          nodes: 720, nps: 240000, time_ms: 3, pv: ["d2d4"],
+          pv_san: ["d4"], pv_fens: [START_FEN],
+        },
+        {
           type: "iteration", kind: "cp", value: 18, display: "+0.2", depth: 6,
           nodes: 8200, nps: 820000, time_ms: 10, pv: ["e2e4", "e7e5"],
           pv_san: ["e4", "e5"], pv_fens: [START_FEN, AFTER_E4_FEN, AFTER_E4_E5_FEN],
@@ -371,10 +376,10 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
 
   await page.locator("#engineModal [data-close-modal]").click();
-  await page.locator("#boardEditorButton").click();
+  await page.locator("#positionLabButton").click();
   await expect(page.locator("#editorPlayerButton")).toHaveAttribute("data-demo-reason", /self-play/i);
   await page.locator("#editorMainMenuButton").click();
-  await expect(page.locator("#analysePositionButton")).toBeEnabled();
+  await expect(page.locator("#positionLabButton")).toBeEnabled();
 });
 
 test("starts at v8.2 and cycles left through weaker engines", async ({ page }) => {
@@ -870,23 +875,46 @@ test("enters the two-core arena in Watch mode", async ({ page }) => {
   await expect(page.locator("#resultModal")).toHaveAttribute("data-outcome", "watch-draw");
 });
 
-test("opens the board editor with a full editable board", async ({ page }) => {
+test("opens Position Lab with a full editable board", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
-  await page.locator("#boardEditorButton").click();
+  await page.locator("#positionLabButton").click();
 
   await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "editor");
   await expect(page.locator("#editorPanel")).toBeVisible();
-  await expect(page.locator("#editorPanel h2")).toHaveText("Board editor");
+  await expect(page.locator("#editorPanel h2")).toHaveText("Position Lab");
   await expect(page.locator("#board .square")).toHaveCount(64);
   await expect(page.locator("#editorPlayButton")).toBeEnabled();
+});
+
+test("keeps Position Lab footer controls accessible on a short desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 620 });
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#positionLabButton").click();
+
+  const geometry = await page.evaluate(() => {
+    const panel = document.querySelector("#editorPanel").getBoundingClientRect();
+    const actions = document.querySelector(".editor-actions").getBoundingClientRect();
+    return {
+      panelBottom: panel.bottom,
+      actionsBottom: actions.bottom,
+      overflow: getComputedStyle(document.querySelector("#editorPanel")).overflow,
+    };
+  });
+  expect(geometry.actionsBottom).toBeLessThanOrEqual(geometry.panelBottom + 1);
+  expect(geometry.overflow).toBe("visible");
+
+  await page.locator("#editorHelpButton").scrollIntoViewIfNeeded();
+  await page.locator("#editorHelpButton").click();
+  await expect(page.locator("#helpModal")).toBeVisible();
 });
 
 test("loads a full FEN into the editor and starts play from it", async ({ page }) => {
   const calls = await installMockBackend(page);
   const fen = "r3k2r/8/8/8/8/8/8/R3K2R b Kq - 17 42";
   await openMainMenu(page);
-  await page.locator("#boardEditorButton").click();
+  await page.locator("#positionLabButton").click();
   await page.locator("#editorFenInput").fill(fen);
   await page.locator("#editorLoadFenButton").click();
 
@@ -906,9 +934,9 @@ test("loads a full FEN into the editor and starts play from it", async ({ page }
 test("streams deep position analysis and steps through Sgurr's line", async ({ page }) => {
   const calls = await installMockBackend(page, { publicDemo: true });
   await openMainMenu(page);
-  await page.locator("#analysePositionButton").click();
+  await page.locator("#positionLabButton").click();
 
-  await expect(page.locator("#editorHeading")).toHaveText("Analyse position");
+  await expect(page.locator("#editorHeading")).toHaveText("Position Lab");
   await expect(page.locator("#editorAnalyseButton")).toHaveClass(/preferred/);
   await page.locator("#editorAnalyseButton").click();
 
@@ -919,6 +947,11 @@ test("streams deep position analysis and steps through Sgurr's line", async ({ p
   await expect(page.locator("#analysisDepth")).toHaveText("12");
   await expect(page.locator("#analysisBestMove")).toHaveText("e4");
   await expect(page.locator("#analysisDepths button")).toHaveCount(2);
+  await expect(page.locator("#analysisDecisionSummary")).toContainText("e4 took the lead at depth 6");
+  await expect(page.locator("#analysisChangeCount")).toHaveText("2 leaders");
+  await expect(page.locator(".analysis-leader-card").first()).toContainText("d4");
+  await expect(page.locator(".analysis-leader-card").last()).toContainText("D6-D12");
+  await expect(page.locator(".analysis-leader-card").last()).toContainText("FINAL");
   await expect(page.locator("#analysisPvMoves button")).toHaveCount(3);
 
   await page.locator('#analysisPvMoves button[data-ply="3"]').click();
@@ -939,7 +972,7 @@ test("keeps position analysis usable on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installMockBackend(page, { publicDemo: true });
   await openMainMenu(page);
-  await page.locator("#analysePositionButton").click();
+  await page.locator("#positionLabButton").click();
   await page.locator("#editorAnalyseButton").click();
 
   await expect(page.locator("#analysisPanel")).toBeVisible();
@@ -952,7 +985,7 @@ test("keeps position analysis usable on a narrow screen", async ({ page }) => {
 test("keeps an edited position and offers to replay it", async ({ page }) => {
   const calls = await installMockBackend(page);
   await openMainMenu(page);
-  await page.locator("#boardEditorButton").click();
+  await page.locator("#positionLabButton").click();
   await page.locator("#editorClearButton").click();
   await page.locator('.palette-button[title="White king"]').click();
   await page.locator('[data-square="e1"]').click();
@@ -961,7 +994,7 @@ test("keeps an edited position and offers to replay it", async ({ page }) => {
   await expect(page.locator("#board .piece-image")).toHaveCount(2);
 
   await page.locator("#editorCancelButton").click();
-  await page.locator("#boardEditorButton").click();
+  await page.locator("#positionLabButton").click();
   await expect(page.locator("#board .piece-image")).toHaveCount(2);
   await page.locator("#editorPlayButton").click();
 

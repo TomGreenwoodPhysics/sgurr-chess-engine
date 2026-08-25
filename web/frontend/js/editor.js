@@ -159,7 +159,7 @@ function setEditorStatus(message, isError = false) {
   render();
 }
 
-function enterBoardEditor(intent = "play", sourceFen = null) {
+function enterPositionLab(sourceFen = null) {
   if (app.busy || app.thinking) {
     setStatus("Wait for Sgurr to finish thinking");
     return;
@@ -170,7 +170,6 @@ function enterBoardEditor(intent = "play", sourceFen = null) {
   const previousMode = app.mode === "editor" ? app.editor.previousMode : app.mode;
 
   app.editor.previousMode = previousMode;
-  app.editor.intent = intent === "analysis" ? "analysis" : "play";
   if (sourceFen) {
     loadEditorPosition(sourceFen);
     app.editor.initialised = true;
@@ -199,9 +198,7 @@ function enterBoardEditor(intent = "play", sourceFen = null) {
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
-  app.editor.status = app.editor.intent === "analysis"
-    ? "Build or paste a position for Sgurr to analyse"
-    : "Build or paste a position, then play from it";
+  app.editor.status = "Build or paste a position, then play it or run a deep analysis";
   app.editor.error = "";
   app.activeAnimation = null;
   app.pendingAnimation = null;
@@ -326,12 +323,6 @@ async function analyseEditorPosition() {
     app.busy = false;
     setEditorStatus(error.message || String(error), true);
   }
-}
-
-function finishEditorPrimaryAction() {
-  return app.editor.intent === "analysis"
-    ? analyseEditorPosition()
-    : finishBoardEditor();
 }
 
 function cycleEditorTurn() {
@@ -515,11 +506,10 @@ export {
   editorOddsLabel,
   editorPositionError,
   setEditorStatus,
-  enterBoardEditor,
+  enterPositionLab,
   exitBoardEditor,
   finishBoardEditor,
   analyseEditorPosition,
-  finishEditorPrimaryAction,
   loadFenIntoEditor,
   copyEditorFen,
   cycleEditorPlayer,

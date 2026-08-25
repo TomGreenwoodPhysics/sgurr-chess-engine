@@ -17,12 +17,13 @@
 
 .editor-panel {
   width: calc(var(--editor-column-width) * 2 + 12px);
-  height: var(--play-height);
+  min-height: var(--play-height);
+  height: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  overflow: hidden;
-  padding: 14px 0 0;
+  overflow: visible;
+  padding: 14px 0 10px;
 }
 
 .editor-column {

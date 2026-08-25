@@ -192,7 +192,7 @@ function renderStatus() {
   statusBlock.classList.toggle("animations-off", app.animationMode === "Off");
 
   if (app.mode === "editor") {
-    refs.statusPill.textContent = app.editor.error || "Board editor";
+    refs.statusPill.textContent = app.editor.error || "Position Lab";
   } else if (app.mode === "analysis") {
     refs.statusPill.textContent = app.analysis.error
       || (app.analysis.running ? "Sgurr is analysing" : "Position analysis");
@@ -752,12 +752,8 @@ function renderEditor() {
     return;
   }
 
-  const analysing = app.editor.intent === "analysis";
-  refs.editorHeading.textContent = analysing ? "Analyse position" : "Board editor";
-  refs.editorPurpose.textContent = analysing
-    ? "Paste a FEN or build a position for a deeper Sgurr search."
-    : "Paste a FEN or build a position, then play it against Sgurr.";
-  refs.editorPanel.dataset.intent = app.editor.intent;
+  refs.editorHeading.textContent = "Position Lab";
+  refs.editorPurpose.textContent = "Build or paste a position, then play it or ask Sgurr for a deep analysis.";
   if (document.activeElement !== refs.editorFenInput && !app.busy) {
     refs.editorFenInput.value = composeEditorFen();
   }
@@ -773,8 +769,7 @@ function renderEditor() {
   refs.editorPlayButton.disabled = actionDisabled;
   refs.editorAnalyseButton.disabled = actionDisabled;
   refs.editorLoadFenButton.disabled = app.busy || !app.backendOk;
-  refs.editorPlayButton.classList.toggle("preferred", !analysing);
-  refs.editorAnalyseButton.classList.toggle("preferred", analysing);
+  refs.editorAnalyseButton.classList.add("preferred");
   refs.editorStatus.textContent = app.editor.status;
   refs.editorStatus.closest(".status-block").classList.toggle("error", Boolean(app.editor.error));
 
@@ -823,6 +818,58 @@ function formatAnalysisCount(value) {
     return `${(number / 1_000).toFixed(number >= 100_000 ? 0 : 1)}k`;
   }
   return number.toLocaleString();
+}
+
+function analysisLeaderRuns(iterations) {
+  const runs = [];
+  const ordered = [...iterations].sort((left, right) => left.depth - right.depth);
+  ordered.forEach((iteration) => {
+    const uci = iteration.pv?.[0] || "";
+    const move = iteration.pv_san?.[0] || uci;
+    if (!move) {
+      return;
+    }
+    const key = uci || move;
+    const current = runs.at(-1);
+    if (current?.key === key) {
+      current.endDepth = iteration.depth;
+      current.iteration = iteration;
+      current.depths.push(iteration.depth);
+      return;
+    }
+    runs.push({
+      key,
+      uci,
+      move,
+      startDepth: iteration.depth,
+      endDepth: iteration.depth,
+      firstIteration: iteration,
+      iteration,
+      depths: [iteration.depth],
+    });
+  });
+  return runs;
+}
+
+function analysisRunDetail(run, previousRun) {
+  const details = [run.startDepth === run.endDepth
+    ? `reported at depth ${run.startDepth}`
+    : `held through depth ${run.endDepth}`];
+  if (run.depths.length > 1) {
+    details.push(`${run.depths.length} completed iterations`);
+  }
+  if (
+    previousRun?.iteration?.kind === "cp"
+    && run.firstIteration?.kind === "cp"
+    && Number.isFinite(previousRun.iteration.value)
+    && Number.isFinite(run.firstIteration.value)
+  ) {
+    const shift = run.firstIteration.value - previousRun.iteration.value;
+    if (shift !== 0) {
+      details.push(`${shift > 0 ? "+" : ""}${(shift / 100).toFixed(1)} eval shift`);
+    }
+  }
+  return details.join(" · ");
 }
 
 function renderAnalysis() {
@@ -900,29 +947,65 @@ function renderAnalysis() {
   }
 
   refs.analysisDepths.innerHTML = "";
-  const recent = analysis.iterations.slice(-10).reverse();
-  if (!recent.length) {
+  const leaderRuns = analysisLeaderRuns(analysis.iterations);
+  refs.analysisChangeCount.textContent = leaderRuns.length === 1
+    ? "1 leader"
+    : `${leaderRuns.length} leaders`;
+  if (!leaderRuns.length) {
+    refs.analysisDecisionSummary.textContent = "Only changes in Sgurr's preferred move appear here.";
     const waiting = document.createElement("p");
     waiting.className = "analysis-depth-waiting";
     waiting.textContent = analysis.error ? analysis.error : "Waiting for Sgurr's first completed search depth";
     refs.analysisDepths.appendChild(waiting);
   } else {
-    recent.forEach((iteration) => {
+    const latestRun = leaderRuns.at(-1);
+    refs.analysisDecisionSummary.textContent = leaderRuns.length === 1
+      ? `${latestRun.move} has led at every completed depth${analysis.running ? " so far." : "."}`
+      : `${latestRun.move} took the lead at depth ${latestRun.startDepth} and ${analysis.running ? "leads now." : `held through depth ${latestRun.endDepth}.`}`;
+    leaderRuns.slice(-8).forEach((run, index, visibleRuns) => {
+      const sourceIndex = leaderRuns.length - visibleRuns.length + index;
+      const previousRun = sourceIndex > 0 ? leaderRuns[sourceIndex - 1] : null;
+      const isLatest = sourceIndex === leaderRuns.length - 1;
       const button = document.createElement("button");
       button.type = "button";
-      button.dataset.depth = String(iteration.depth);
-      button.className = iteration.depth === analysis.selectedDepth ? "active" : "";
+      button.dataset.depth = String(run.endDepth);
+      button.className = `analysis-leader-card${run.depths.includes(analysis.selectedDepth) ? " active" : ""}${isLatest ? " latest" : ""}`;
+      button.setAttribute("aria-label", `Inspect ${run.move} at depth ${run.endDepth}`);
+
+      const marker = document.createElement("span");
+      marker.className = "analysis-leader-marker";
+      marker.textContent = String(sourceIndex + 1).padStart(2, "0");
+
+      const copy = document.createElement("span");
+      copy.className = "analysis-leader-copy";
+      const moveLine = document.createElement("span");
+      moveLine.className = "analysis-leader-move";
+      const move = document.createElement("strong");
+      move.textContent = run.move;
+      const uci = document.createElement("code");
+      uci.textContent = run.uci || "candidate";
+      moveLine.append(move, uci);
+      const detail = document.createElement("small");
+      detail.textContent = analysisRunDetail(run, previousRun);
+      const work = document.createElement("span");
+      work.className = "analysis-leader-work";
+      work.textContent = `${formatAnalysisCount(run.iteration.nodes)} nodes · ${formatAnalysisCount(run.iteration.time_ms)} ms`;
+      copy.append(moveLine, detail, work);
+
+      const readout = document.createElement("span");
+      readout.className = "analysis-leader-readout";
       const depth = document.createElement("strong");
-      depth.textContent = `D${iteration.depth}`;
+      depth.textContent = run.startDepth === run.endDepth
+        ? `D${run.startDepth}`
+        : `D${run.startDepth}-D${run.endDepth}`;
       const score = document.createElement("span");
       score.className = "depth-score";
-      score.textContent = iteration.display || "0.0";
-      const move = document.createElement("span");
-      move.className = "depth-move";
-      move.textContent = iteration.pv_san?.[0] || iteration.pv?.[0] || "—";
-      const nodes = document.createElement("small");
-      nodes.textContent = `${formatAnalysisCount(iteration.nodes)} nodes`;
-      button.append(depth, score, move, nodes);
+      score.textContent = run.iteration.display || "0.0";
+      const state = document.createElement("small");
+      state.textContent = isLatest ? analysis.running ? "LEADING" : "FINAL" : "CHANGED";
+      readout.append(depth, score, state);
+
+      button.append(marker, copy, readout);
       refs.analysisDepths.appendChild(button);
     });
   }
@@ -1015,8 +1098,7 @@ function renderMenu() {
   refs.engineUpButton.disabled = availableEngines <= 1;
   setDemoReason(refs.engineDownButton, historicalReason);
   setDemoReason(refs.engineUpButton, historicalReason);
-  refs.analysePositionButton.disabled = !canStart;
-  refs.boardEditorButton.disabled = app.busy || app.thinking;
+  refs.positionLabButton.disabled = app.busy || app.thinking;
 
   if (app.menuMessage) {
     refs.menuStatus.textContent = app.menuMessage;
