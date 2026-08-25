@@ -1,11 +1,12 @@
 import { initAudio, playSound, syncGameMusic, syncMenuMusic } from "./audio.js";
+import { copyAnalysisFen, selectAnalysisDepth, selectAnalysisPly, startPositionAnalysis, stepAnalysisPly, stopPositionAnalysis } from "./analysis.js";
 import { cancelDrag, cancelPromotion, handleBoardPointerMove, handleBoardPointerUp, hasPremoves, positionPromotionDialog } from "./board.js";
 import { currentTimeControl, syncClock } from "./clocks.js";
 import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
 import { initDemoTooltips } from "./demo-tooltip.js";
-import { clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, loadEditorStartPosition } from "./editor.js";
+import { analyseEditorPosition, clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterBoardEditor, exitBoardEditor, finishBoardEditor, finishEditorPrimaryAction, loadEditorStartPosition, loadFenIntoEditor } from "./editor.js";
 import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
-import { cancelPremoves, copyFen, exportPgn, loadFenFromModal, openFenModal, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
+import { cancelPremoves, copyFen, exportPgn, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
 import { finishIntro, initIntro, wakeSgurr } from "./intro.js";
 import { initMenuCore } from "./menu-core.js";
 import { defaultBlobMemory } from "./memory.js";
@@ -40,8 +41,8 @@ refs.menuEngineButton.addEventListener("click", () => {
 });
 refs.menuSettingsButton.addEventListener("click", () => openModal(refs.settingsModal));
 refs.menuHelpButton.addEventListener("click", () => openModal(refs.helpModal));
-refs.loadFenButton.addEventListener("click", openFenModal);
-refs.boardEditorButton.addEventListener("click", enterBoardEditor);
+refs.analysePositionButton.addEventListener("click", () => enterBoardEditor("analysis"));
+refs.boardEditorButton.addEventListener("click", () => enterBoardEditor("play"));
 refs.focusModeButton.addEventListener("click", () => toggleFocusMode());
 refs.newGameButton.addEventListener("click", () => startGame(app.humanSide));
 refs.undoMoveButton.addEventListener("click", undoMove);
@@ -57,6 +58,8 @@ refs.resultMenuButton.addEventListener("click", returnToMainMenu);
 refs.editorPlayerButton.addEventListener("click", cycleEditorPlayer);
 refs.editorTurnButton.addEventListener("click", cycleEditorTurn);
 refs.editorPlayButton.addEventListener("click", finishBoardEditor);
+refs.editorAnalyseButton.addEventListener("click", analyseEditorPosition);
+refs.editorLoadFenButton.addEventListener("click", loadFenIntoEditor);
 refs.editorOddsRecipientButton.addEventListener("click", cycleEditorOddsRecipient);
 refs.editorStartButton.addEventListener("click", loadEditorStartPosition);
 refs.editorCopyFenButton.addEventListener("click", copyEditorFen);
@@ -65,6 +68,37 @@ refs.editorCancelButton.addEventListener("click", () => exitBoardEditor());
 refs.editorMainMenuButton.addEventListener("click", returnToMainMenu);
 refs.editorSettingsButton.addEventListener("click", () => openModal(refs.settingsModal));
 refs.editorHelpButton.addEventListener("click", () => openModal(refs.helpModal));
+refs.analysisStopButton.addEventListener("click", () => stopPositionAnalysis());
+refs.analysisAgainButton.addEventListener("click", () => startPositionAnalysis(
+  app.analysis.sourceFen,
+  { orientation: app.analysis.orientation },
+));
+refs.analysisEditButton.addEventListener("click", () => {
+  const fen = app.analysis.sourceFen;
+  app.editor.returnSide = app.analysis.orientation;
+  stopPositionAnalysis({ updateStatus: false });
+  enterBoardEditor("analysis", fen);
+});
+refs.analysisCopyFenButton.addEventListener("click", copyAnalysisFen);
+refs.analysisMenuButton.addEventListener("click", () => {
+  stopPositionAnalysis({ updateStatus: false });
+  returnToMainMenu();
+});
+refs.analysisPrevPlyButton.addEventListener("click", () => stepAnalysisPly(-1));
+refs.analysisRootButton.addEventListener("click", () => selectAnalysisPly(0));
+refs.analysisNextPlyButton.addEventListener("click", () => stepAnalysisPly(1));
+refs.analysisPvMoves.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("button[data-ply]") : null;
+  if (button) {
+    selectAnalysisPly(Number(button.dataset.ply));
+  }
+});
+refs.analysisDepths.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("button[data-depth]") : null;
+  if (button) {
+    selectAnalysisDepth(Number(button.dataset.depth));
+  }
+});
 refs.pauseWatchButton.addEventListener("click", () => {
   if (app.humanSide !== null) {
     return;
@@ -173,7 +207,6 @@ refs.clearMemoryButton.addEventListener("click", () => {
   localStorage.removeItem("sgurrBlobMemory");
   render();
 });
-refs.loadFenSubmitButton.addEventListener("click", loadFenFromModal);
 document.querySelectorAll("[data-close-modal]").forEach((button) => {
   button.addEventListener("click", closeAllModals);
 });
@@ -263,7 +296,6 @@ function overlayIsOpen() {
       refs.engineModal,
       refs.settingsModal,
       refs.helpModal,
-      refs.fenModal,
     ].some((modal) => !modal.hidden)
   );
 }
@@ -294,6 +326,9 @@ window.addEventListener("keydown", (event) => {
       toggleFocusMode(false);
     } else if (app.mode === "editor" && !overlayIsOpen()) {
       exitBoardEditor();
+    } else if (app.mode === "analysis" && !overlayIsOpen()) {
+      stopPositionAnalysis({ updateStatus: false });
+      returnToMainMenu();
     } else {
       closeAllModals();
       if (!refs.promotionBackdrop.hidden) {
@@ -305,7 +340,7 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "r" && app.mode === "game") {
     startGame(app.humanSide);
   } else if (event.key === "Enter" && app.mode === "editor") {
-    finishBoardEditor();
+    finishEditorPrimaryAction();
   } else if (event.key.toLowerCase() === "u" && app.mode === "game") {
     undoMove();
   } else if (event.key === "ArrowLeft" && app.mode === "game") {
@@ -340,12 +375,13 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "t") {
     cycleTheme(1);
   } else if (event.key.toLowerCase() === "e" && app.mode !== "editor") {
-    enterBoardEditor();
+    enterBoardEditor("play");
   } else if (event.key.toLowerCase() === "l") {
-    openFenModal();
+    enterBoardEditor("play");
+    window.requestAnimationFrame(() => refs.editorFenInput.focus());
   } else if (event.key.toLowerCase() === "z" && app.mode === "game") {
     toggleFocusMode();
-  } else if (event.key.toLowerCase() === "f" && (app.mode === "game" || app.mode === "editor")) {
+  } else if (event.key.toLowerCase() === "f" && ["game", "editor", "analysis"].includes(app.mode)) {
     app.manualFlip = !app.manualFlip;
     render();
   } else if (event.key === "?" || event.key === "F1") {

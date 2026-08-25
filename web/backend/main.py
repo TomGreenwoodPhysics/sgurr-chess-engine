@@ -254,7 +254,7 @@ DEMO_ENGINE_MAX_MOVETIME_MS = bounded_env_int(
     "SGURR_ENGINE_MAX_MOVETIME_MS", 2_000, 100, 10_000
 )
 DEMO_TRACE_MAX_MOVETIME_MS = bounded_env_int(
-    "SGURR_TRACE_MAX_MOVETIME_MS", 1_500, 100, 5_000
+    "SGURR_TRACE_MAX_MOVETIME_MS", 5_000, 100, 5_000
 )
 DEMO_NETWORK_MAX_DEPTH = bounded_env_int(
     "SGURR_NETWORK_MAX_DEPTH", 12, 4, 20
@@ -913,7 +913,44 @@ def project_premove_sequence(
     return projected, available
 
 
-def eval_payload(info: UciInfo | None, search_turn: chess.Color) -> dict[str, object] | None:
+def pv_payload(board: chess.Board, moves: list[str] | None) -> dict[str, object]:
+    """Convert a legal UCI principal variation into display-ready SAN and FENs."""
+    variation = board.copy(stack=False)
+    san_moves: list[str] = []
+    fens = [variation.fen()]
+
+    for move_text in moves or []:
+        try:
+            move = chess.Move.from_uci(move_text)
+        except ValueError:
+            break
+        if move not in variation.legal_moves:
+            break
+        san_moves.append(variation.san(move))
+        variation.push(move)
+        fens.append(variation.fen())
+
+    return {
+        "pv_san": san_moves,
+        "pv_fens": fens,
+    }
+
+
+def move_san(board: chess.Board, move_text: str) -> str | None:
+    try:
+        move = chess.Move.from_uci(move_text)
+    except ValueError:
+        return None
+    if move not in board.legal_moves:
+        return None
+    return board.san(move)
+
+
+def eval_payload(
+    info: UciInfo | None,
+    search_turn: chess.Color,
+    board: chess.Board | None = None,
+) -> dict[str, object] | None:
     if info is None:
         return None
 
@@ -927,7 +964,7 @@ def eval_payload(info: UciInfo | None, search_turn: chess.Color) -> dict[str, ob
     else:
         display = f"{white_relative / 100:+.1f}"
 
-    return {
+    payload: dict[str, object] = {
         "kind": info.score_kind,
         "value": white_relative,
         "display": display,
@@ -940,6 +977,9 @@ def eval_payload(info: UciInfo | None, search_turn: chess.Color) -> dict[str, ob
         "raw": info.raw,
         "perspective": "white",
     }
+    if board is not None:
+        payload.update(pv_payload(board, info.pv))
+    return payload
 
 
 def state_payload(
@@ -1336,6 +1376,7 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
                     "label": entry["label"],
                     "fen": board.fen(),
                     "perspective": "white",
+                    "movetime_ms": movetime_ms,
                 }
             )
 
@@ -1343,7 +1384,7 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
                 event_type, value = event_queue.get()
 
                 if event_type == "iteration":
-                    payload = eval_payload(value, search_turn)
+                    payload = eval_payload(value, search_turn, board)
                     if payload is not None:
                         yield encode({"type": "iteration", **payload})
                     continue
@@ -1353,7 +1394,8 @@ def search_trace(request: SearchTraceRequest) -> StreamingResponse:
                         {
                             "type": "complete",
                             "bestmove": value.bestmove,
-                            "final": eval_payload(value.info, search_turn),
+                            "bestmove_san": move_san(board, value.bestmove),
+                            "final": eval_payload(value.info, search_turn, board),
                         }
                     )
                 else:

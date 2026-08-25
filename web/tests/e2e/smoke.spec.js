@@ -211,7 +211,10 @@ async function installMockBackend(page, {
       await json(route, {
         public_demo: publicDemo,
         self_play: !publicDemo,
-        limits: { search_network_depth: publicDemo ? 12 : 20 },
+        limits: {
+          search_network_depth: publicDemo ? 12 : 20,
+          search_trace_movetime_ms: publicDemo ? 5000 : 5000,
+        },
       });
       return;
     }
@@ -223,15 +226,50 @@ async function installMockBackend(page, {
       return;
     }
     if (path === "/api/load-fen") {
+      if (body.fen === START_FEN) {
+        await json(route, INITIAL_STATE);
+        return;
+      }
+      const kingsOnly = body.fen.startsWith("4k3/8/8/8/8/8/8/4K3");
       await json(route, gameState({
         fen: body.fen,
         startFen: body.fen,
-        legalMoves: [],
+        turn: body.fen.split(" ")[1] === "b" ? "black" : "white",
+        legalMoves: kingsOnly ? [] : ["e1d1", "e1f1"],
         premoveMoves: [],
-        gameOver: true,
-        result: "1/2-1/2",
-        reason: "insufficient_material",
+        gameOver: kingsOnly,
+        result: kingsOnly ? "1/2-1/2" : null,
+        reason: kingsOnly ? "insufficient_material" : null,
       }));
+      return;
+    }
+    if (path === "/api/search-trace") {
+      const events = [
+        { type: "started", engine: "v8.2", label: 'Sgurr v8.2 "Thearlaich"', perspective: "white", movetime_ms: 5000 },
+        {
+          type: "iteration", kind: "cp", value: 18, display: "+0.2", depth: 6,
+          nodes: 8200, nps: 820000, time_ms: 10, pv: ["e2e4", "e7e5"],
+          pv_san: ["e4", "e5"], pv_fens: [START_FEN, AFTER_E4_FEN, AFTER_E4_E5_FEN],
+        },
+        {
+          type: "iteration", kind: "cp", value: 31, display: "+0.3", depth: 12,
+          nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["e2e4", "e7e5", "g1f3"],
+          pv_san: ["e4", "e5", "Nf3"], pv_fens: [START_FEN, AFTER_E4_FEN, AFTER_E4_E5_FEN, AFTER_NF3_FEN],
+        },
+        {
+          type: "complete", bestmove: "e2e4", bestmove_san: "e4",
+          final: {
+            kind: "cp", value: 31, display: "+0.3", depth: 12,
+            nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["e2e4", "e7e5", "g1f3"],
+            pv_san: ["e4", "e5", "Nf3"], pv_fens: [START_FEN, AFTER_E4_FEN, AFTER_E4_E5_FEN, AFTER_NF3_FEN],
+          },
+        },
+      ];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/x-ndjson",
+        body: `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+      });
       return;
     }
     if (path === "/api/player-move" && body?.move === "e2e4") {
@@ -336,8 +374,7 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await page.locator("#boardEditorButton").click();
   await expect(page.locator("#editorPlayerButton")).toHaveAttribute("data-demo-reason", /self-play/i);
   await page.locator("#editorMainMenuButton").click();
-  await page.locator("#loadFenButton").click();
-  await expect(page.locator("#fenSideSelect")).toHaveAttribute("data-demo-reason", /self-play/i);
+  await expect(page.locator("#analysePositionButton")).toBeEnabled();
 });
 
 test("starts at v8.2 and cycles left through weaker engines", async ({ page }) => {
@@ -843,6 +880,73 @@ test("opens the board editor with a full editable board", async ({ page }) => {
   await expect(page.locator("#editorPanel h2")).toHaveText("Board editor");
   await expect(page.locator("#board .square")).toHaveCount(64);
   await expect(page.locator("#editorPlayButton")).toBeEnabled();
+});
+
+test("loads a full FEN into the editor and starts play from it", async ({ page }) => {
+  const calls = await installMockBackend(page);
+  const fen = "r3k2r/8/8/8/8/8/8/R3K2R b Kq - 17 42";
+  await openMainMenu(page);
+  await page.locator("#boardEditorButton").click();
+  await page.locator("#editorFenInput").fill(fen);
+  await page.locator("#editorLoadFenButton").click();
+
+  await expect(page.locator("#editorStatus")).toHaveText("FEN loaded into the editor");
+  await expect(page.locator("#editorTurnButton")).toHaveText("First move: Black");
+  await expect(page.locator("#editorFenInput")).toHaveValue(fen);
+  await expect(page.locator("#board .piece-image")).toHaveCount(6);
+
+  await page.locator("#editorPlayerButton").click();
+  await expect(page.locator("#editorPlayerButton")).toHaveText("You play: Black");
+  await page.locator("#editorPlayButton").click();
+  await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "game");
+  expect(calls.filter((call) => call.path === "/api/load-fen")).toHaveLength(2);
+  expect(calls.filter((call) => call.path === "/api/load-fen").at(-1).body.fen).toBe(fen);
+});
+
+test("streams deep position analysis and steps through Sgurr's line", async ({ page }) => {
+  const calls = await installMockBackend(page, { publicDemo: true });
+  await openMainMenu(page);
+  await page.locator("#analysePositionButton").click();
+
+  await expect(page.locator("#editorHeading")).toHaveText("Analyse position");
+  await expect(page.locator("#editorAnalyseButton")).toHaveClass(/preferred/);
+  await page.locator("#editorAnalyseButton").click();
+
+  await expect(page.locator("#analysisPanel")).toBeVisible();
+  await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "analysis");
+  await expect(page.locator("#analysisStatus")).toContainText("prefers e4");
+  await expect(page.locator("#analysisScore")).toHaveText("+0.3");
+  await expect(page.locator("#analysisDepth")).toHaveText("12");
+  await expect(page.locator("#analysisBestMove")).toHaveText("e4");
+  await expect(page.locator("#analysisDepths button")).toHaveCount(2);
+  await expect(page.locator("#analysisPvMoves button")).toHaveCount(3);
+
+  await page.locator('#analysisPvMoves button[data-ply="3"]').click();
+  await expect(page.locator("#analysisPlyCounter")).toContainText("3 plies");
+  await expect(page.locator('[data-square="g1"]')).toHaveClass(/last/);
+  await expect(page.locator('[data-square="f3"]')).toHaveClass(/last/);
+  await page.locator("#analysisRootButton").click();
+  await expect(page.locator("#analysisPlyCounter")).toHaveText("Root position");
+
+  const searchCall = calls.find((call) => call.path === "/api/search-trace");
+  expect(searchCall.body.movetime_ms).toBe(5000);
+  await page.locator("#analysisEditButton").click();
+  await expect(page.locator("#editorPanel")).toBeVisible();
+  await expect(page.locator("#editorFenInput")).toHaveValue(START_FEN);
+});
+
+test("keeps position analysis usable on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installMockBackend(page, { publicDemo: true });
+  await openMainMenu(page);
+  await page.locator("#analysePositionButton").click();
+  await page.locator("#editorAnalyseButton").click();
+
+  await expect(page.locator("#analysisPanel")).toBeVisible();
+  await expect(page.locator("#analysisAgainButton")).toBeVisible();
+  await expect(page.locator("#analysisPvMoves button")).toHaveCount(3);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test("keeps an edited position and offers to replay it", async ({ page }) => {

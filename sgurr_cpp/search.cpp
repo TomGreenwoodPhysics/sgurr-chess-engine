@@ -335,6 +335,48 @@ void trace_pruned(const Move& move, int ply, int depth, const char* reason) {
 }
 #endif
 
+std::vector<Move> extract_principal_variation(
+    Engine& engine,
+    Board& board,
+    const Move& root_move,
+    int depth
+) {
+    std::vector<Move> pv;
+    std::vector<UndoInfo> undos;
+    std::vector<U64> seen{board.hash_key};
+
+    MoveList legal_moves = board.generate_legal_moves();
+    if (std::find(legal_moves.begin(), legal_moves.end(), root_move) == legal_moves.end()) {
+        return pv;
+    }
+
+    pv.push_back(root_move);
+    undos.push_back(board.make_move(root_move));
+    seen.push_back(board.hash_key);
+
+    while (static_cast<int>(pv.size()) < depth) {
+        const TTEntry& slot = engine.transposition_table[board.hash_key & engine.tt_mask];
+        if (slot.key != board.hash_key || slot.best_move == NO_MOVE) {
+            break;
+        }
+        legal_moves = board.generate_legal_moves();
+        if (std::find(legal_moves.begin(), legal_moves.end(), slot.best_move) == legal_moves.end()) {
+            break;
+        }
+        pv.push_back(slot.best_move);
+        undos.push_back(board.make_move(slot.best_move));
+        if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) {
+            break;
+        }
+        seen.push_back(board.hash_key);
+    }
+
+    for (auto undo = undos.rbegin(); undo != undos.rend(); ++undo) {
+        board.unmake_move(*undo);
+    }
+    return pv;
+}
+
 } // namespace
 
 Engine::Engine() {
@@ -671,6 +713,10 @@ SearchResult Engine::search_best_move(
         }
 
         long long ms = static_cast<long long>(elapsed_seconds(start_time) * 1000);
+        std::vector<Move> pv;
+        if (best_move.has_value()) {
+            pv = extract_principal_variation(*this, board, *best_move, depth);
+        }
 
         // `tbhits` used to carry the transposition-table hit count here. That
         // field means ENDGAME TABLEBASE hits in UCI, and this engine has no
@@ -692,8 +738,11 @@ SearchResult Engine::search_best_move(
 
         // Omit `pv` entirely rather than emitting the non-move token "none":
         // a GUI parsing the pv field is entitled to expect moves in it.
-        if (best_move.has_value()) {
-            std::cout << " pv " << move_to_string(*best_move);
+        if (!pv.empty()) {
+            std::cout << " pv";
+            for (const Move& pv_move : pv) {
+                std::cout << ' ' << move_to_string(pv_move);
+            }
         }
 
         std::cout << "\n";

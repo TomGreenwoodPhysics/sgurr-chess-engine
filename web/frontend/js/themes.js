@@ -53,7 +53,6 @@ function userModals() {
     refs.engineModal,
     refs.settingsModal,
     refs.helpModal,
-    refs.fenModal,
   ];
 }
 
@@ -124,7 +123,7 @@ function openModal(modal) {
   // Focus the dialog box itself rather than its first control, so assistive
   // technology reads the title before the buttons. It is not natively
   // focusable, hence the programmatic tabindex. Callers that want a specific
-  // control focused (openFenModal, say) simply focus it after this returns.
+  // control focused simply focuses it after this returns.
   const box = modal.querySelector('[role="dialog"]');
   if (box) {
     box.tabIndex = -1;
@@ -143,7 +142,6 @@ function closeAllModals(options) {
   for (const modal of userModals()) {
     modal.hidden = true;
   }
-  refs.fenError.textContent = "";
   setBackgroundInert(false);
   if (restoreFocus) {
     if (modalReturnFocus?.isConnected) {

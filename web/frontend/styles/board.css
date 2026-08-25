@@ -4,6 +4,7 @@
   --eval-rail-width: 72px;
   --side-width: 390px;
   --editor-column-width: 306px;
+  --analysis-width: 560px;
   --play-height: calc(var(--board-size) + var(--player-row) + var(--player-row));
   --play-width: calc(var(--eval-rail-width) + var(--board-size));
   --eval-track-height: min(704px, calc(var(--board-size) - 16px));
@@ -66,6 +67,11 @@
 .app-shell[data-mode="editor"] {
   width: min(calc(var(--play-width) + var(--editor-column-width) * 2 + 30px), calc(100vw - 28px));
   grid-template-columns: var(--play-width) calc(var(--editor-column-width) * 2 + 12px);
+}
+
+.app-shell[data-mode="analysis"] {
+  width: min(calc(var(--play-width) + var(--analysis-width) + 18px), calc(100vw - 28px));
+  grid-template-columns: var(--play-width) var(--analysis-width);
 }
 
 .board-area {

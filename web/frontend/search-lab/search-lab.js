@@ -1,5 +1,6 @@
 import { apiUrl } from "../js/config.js";
 import { initDemoTooltips, setDemoReason } from "../js/demo-tooltip.js";
+import { readNdjson } from "../js/ndjson.js";
 import { initSearchNetwork } from "./network.js";
 import { initLabPreferences } from "./preferences.js";
 
@@ -829,25 +830,6 @@ function handleLiveEvent(event) {
   refs.liveDetail.textContent = `Depth ${event.depth} arrived after ${formatCount(event.time_ms)} ms. The stream carries completed iterations, not individual nodes.`;
 }
 
-async function readNdjson(response) {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("This browser cannot read the live search stream");
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      if (line.trim()) handleLiveEvent(JSON.parse(line));
-    }
-    if (done) break;
-  }
-  if (buffer.trim()) handleLiveEvent(JSON.parse(buffer));
-}
-
 async function runLiveSearch() {
   if (!capabilitiesReady || searchRunning) return;
   if (liveController) liveController.abort();
@@ -873,7 +855,7 @@ async function runLiveSearch() {
       try { detail = (await response.json()).detail || detail; } catch { /* keep status */ }
       throw new Error(detail);
     }
-    await readNdjson(response);
+    await readNdjson(response, handleLiveEvent);
   } catch (error) {
     if (error.name === "AbortError") return;
     refs.searchSignal.className = "search-signal error";

@@ -104,7 +104,11 @@ function materialFromPieces(pieces) {
 }
 
 function boardOrientation() {
-  const orientationSide = app.mode === "editor" ? app.editor.returnSide : app.humanSide;
+  const orientationSide = app.mode === "editor"
+    ? app.editor.returnSide
+    : app.mode === "analysis"
+      ? app.analysis.orientation
+      : app.humanSide;
   const autoOrientation = app.autoFlipAsBlack && orientationSide === "black" ? "black" : "white";
   if (!app.manualFlip) {
     return autoOrientation;
@@ -838,12 +842,13 @@ function renderBoard() {
   // app.inCheck and the mate reveal describe the final position, so they must
   // not be painted onto an earlier one while reviewing.
   const checkedKing =
-    !editing && !reviewing && app.inCheck ? kingSquare(pieces, app.turn) : null;
+    app.mode === "game" && !reviewing && app.inCheck ? kingSquare(pieces, app.turn) : null;
   const matedKing =
-    !reviewing && checkmateRevealPending() ? kingSquare(pieces, app.turn) : null;
+    app.mode === "game" && !reviewing && checkmateRevealPending() ? kingSquare(pieces, app.turn) : null;
 
   refs.board.innerHTML = "";
   refs.board.classList.toggle("editor-mode", editing);
+  refs.board.classList.toggle("analysis-mode", app.mode === "analysis");
   refs.board.classList.toggle("animations-off", app.animationMode === "Off");
   refs.board.classList.toggle("premove-mode", premoving);
   for (const square of orientedSquares()) {

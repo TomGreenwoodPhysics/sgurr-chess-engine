@@ -140,7 +140,7 @@
 
           <p class="menu-section-label">Position tools</p>
           <div class="menu-tools-grid">
-            <button type="button" id="loadFenButton">Load FEN</button>
+            <button type="button" class="analyse-menu-button" id="analysePositionButton">Analyse position</button>
             <button type="button" id="boardEditorButton">Board editor</button>
             <a class="search-lab-link" href="search-lab/?mode=network">Watch Sgurr think</a>
           </div>
@@ -372,15 +372,28 @@
           <section class="panel-block header-block editor-header-block">
             <div>
               <p class="eyebrow">Position tools</p>
-              <h2>Board editor</h2>
+              <h2 id="editorHeading">Board editor</h2>
+              <p class="editor-purpose" id="editorPurpose">Build a position, then play it against Sgurr.</p>
             </div>
+          </section>
+
+          <section class="panel-block editor-section editor-fen-block">
+            <div class="editor-section-heading">
+              <p class="panel-label">FEN</p>
+              <span>Paste or edit</span>
+            </div>
+            <textarea id="editorFenInput" rows="3" spellcheck="false" aria-label="Position FEN"></textarea>
+            <button id="editorLoadFenButton" type="button">Load FEN into board</button>
           </section>
 
           <section class="panel-block editor-section">
             <p class="panel-label">Play setup</p>
             <button id="editorPlayerButton" type="button">You play: White</button>
             <button id="editorTurnButton" type="button">First move: White</button>
-            <button id="editorPlayButton" type="button">Play from here</button>
+            <div class="editor-primary-actions">
+              <button id="editorPlayButton" type="button">Play from here</button>
+              <button id="editorAnalyseButton" class="analysis-action" type="button">Analyse position</button>
+            </div>
           </section>
 
           <section class="panel-block editor-section">
@@ -423,6 +436,76 @@
             <div class="editor-grid" id="editorOdds"></div>
           </section>
         </div>
+      </aside>
+
+      <aside class="analysis-panel" id="analysisPanel" aria-label="Sgurr position analysis" hidden>
+        <section class="analysis-hero">
+          <div class="analysis-hero-copy">
+            <p class="eyebrow">Deep position analysis</p>
+            <h2 id="analysisEngineName">Sgurr v8.2</h2>
+            <p id="analysisStatus" aria-live="polite">Preparing the position</p>
+          </div>
+          <div class="analysis-core-wrap" aria-hidden="true">
+            <span class="analysis-orbit"></span>
+            <span class="sgurr-core analysis-core" id="analysisCore"></span>
+          </div>
+        </section>
+
+        <section class="analysis-verdict">
+          <div>
+            <p class="panel-label">Sgurr's verdict</p>
+            <p class="analysis-score" id="analysisScore">0.0</p>
+            <p class="analysis-perspective">White-relative evaluation</p>
+          </div>
+          <div class="analysis-best">
+            <p class="panel-label">Best move</p>
+            <p id="analysisBestMove">Waiting</p>
+            <small id="analysisBestMoveUci">Completed depths will appear live</small>
+          </div>
+        </section>
+
+        <section class="analysis-metrics" aria-label="Search metrics">
+          <div><span>Depth</span><strong id="analysisDepth">&mdash;</strong></div>
+          <div><span>Nodes</span><strong id="analysisNodes">&mdash;</strong></div>
+          <div><span>Speed</span><strong id="analysisNps">&mdash;</strong></div>
+          <div><span>Time</span><strong id="analysisTime">&mdash;</strong></div>
+        </section>
+
+        <section class="panel-block analysis-line-block">
+          <div class="analysis-section-heading">
+            <div>
+              <p class="panel-label">Principal variation</p>
+              <p id="analysisLineLabel">Sgurr's predicted continuation</p>
+            </div>
+            <span id="analysisPlyCounter">Position</span>
+          </div>
+          <div class="analysis-pv" id="analysisPvMoves" aria-label="Principal variation moves"></div>
+          <div class="analysis-pv-nav">
+            <button id="analysisPrevPlyButton" type="button" aria-label="Previous principal variation position">&lt;</button>
+            <button id="analysisRootButton" type="button">Root position</button>
+            <button id="analysisNextPlyButton" type="button" aria-label="Next principal variation position">&gt;</button>
+          </div>
+        </section>
+
+        <section class="panel-block analysis-depth-block">
+          <div class="analysis-section-heading">
+            <div>
+              <p class="panel-label">Iterative deepening</p>
+              <p>Click a completed depth to inspect its line.</p>
+            </div>
+            <span class="analysis-live-badge" id="analysisLiveBadge">LIVE</span>
+          </div>
+          <div class="analysis-depths" id="analysisDepths"></div>
+        </section>
+
+        <section class="analysis-controls">
+          <button id="analysisStopButton" type="button">Stop</button>
+          <button id="analysisAgainButton" class="analysis-action" type="button">Analyse again</button>
+          <button id="analysisEditButton" type="button">Edit position</button>
+          <button id="analysisCopyFenButton" type="button">Copy FEN</button>
+          <button id="analysisMenuButton" type="button">Main menu</button>
+        </section>
+        <p class="analysis-limit-note" id="analysisLimitNote">Bounded server analysis &middot; up to 5 seconds &middot; one principal variation</p>
       </aside>
     </main>
 
@@ -563,39 +646,10 @@
           <div><strong>T</strong><span>Cycle theme</span></div>
           <div><strong>F</strong><span>Flip the board manually</span></div>
           <div><strong>Z</strong><span>Toggle board focus mode</span></div>
-          <div><strong>L</strong><span>Load FEN</span></div>
+          <div><strong>L</strong><span>Open editor and paste FEN</span></div>
           <div><strong>?</strong><span>Show this help</span></div>
           <div><strong>Esc</strong><span>Close overlays or promotion chooser</span></div>
         </div>
-      </section>
-    </div>
-
-    <div class="modal-backdrop" id="fenModal" hidden>
-      <section class="modal-box" role="dialog" aria-modal="true" aria-labelledby="fenModalTitle">
-        <div class="modal-header">
-          <div>
-            <h2 id="fenModalTitle">Load FEN</h2>
-            <p>Start a playable web game from a legal FEN.</p>
-          </div>
-          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
-        </div>
-        <label class="fen-field">
-          FEN
-          <textarea id="fenInput" rows="4" spellcheck="false"></textarea>
-        </label>
-        <label class="fen-field">
-          Side after load
-          <select id="fenSideSelect">
-            <option value="white">Play as White</option>
-            <option value="black">Play as Black</option>
-            <option value="watch">Watch Sgurr vs itself</option>
-          </select>
-        </label>
-        <div class="modal-actions">
-          <button type="button" id="loadFenSubmitButton">Load position</button>
-          <button type="button" data-close-modal>Cancel</button>
-        </div>
-        <p class="modal-error" id="fenError"></p>
       </section>
     </div>
 

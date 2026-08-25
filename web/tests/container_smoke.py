@@ -35,6 +35,7 @@ health = get("/health")
 assert health["ok"] is True
 assert health["nnue_loaded"] is True
 assert b"Sgurr" in get_bytes("/")
+assert b"Analyse position" in get_bytes("/")
 assert b"Search Microscope" in get_bytes("/search-lab/")
 assert b"--accent" in get_bytes("/styles/base.css")
 assert len(get_bytes("/assets/intro/sgurr-cave-chamber.webp")) > 100_000
@@ -60,6 +61,9 @@ with post(
         assert exc.code == 429
     trace_events = [json.loads(line) for line in trace if line.strip()]
     assert any(event["type"] == "complete" for event in trace_events)
+    iterations = [event for event in trace_events if event["type"] == "iteration"]
+    assert len(iterations[-1]["pv_san"]) >= 2
+    assert len(iterations[-1]["pv_fens"]) == len(iterations[-1]["pv_san"]) + 1
 
 with post(
     "/api/engine-move",

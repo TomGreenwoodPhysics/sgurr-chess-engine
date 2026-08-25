@@ -4,6 +4,7 @@
     --editor-column-width: 286px;
     --eval-track-height: min(704px, calc(var(--board-size) - 16px));
   }
+
 }
 
 @media (max-width: 1240px) {
@@ -16,6 +17,11 @@
   }
 
   .app-shell[data-mode="editor"] {
+    width: min(792px, calc(100vw - 28px));
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell[data-mode="analysis"] {
     width: min(792px, calc(100vw - 28px));
     grid-template-columns: 1fr;
   }
@@ -59,6 +65,14 @@
   }
 
   .editor-panel {
+    width: min(720px, 100%);
+    height: auto;
+    min-height: 0;
+    margin: 0 auto;
+    overflow: visible;
+  }
+
+  .analysis-panel {
     width: min(720px, 100%);
     height: auto;
     min-height: 0;

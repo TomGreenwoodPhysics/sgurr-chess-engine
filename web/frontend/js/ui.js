@@ -3,7 +3,7 @@ import { boardOrientation, checkmateRevealPending, engineTurnAvailable, hasPremo
 import { activeClockColour, colourIsEngine, currentTimeControl, playerCardMarkup, syncClock, visibleClock } from "./clocks.js";
 import { CAPTURED_PIECE_CODES, CHECKMATE_DRILLS, EDIT_PALETTE, ODDS_PRESETS, PIECES, THEMES, apiBaseLabel } from "./config.js";
 import { setDemoReason } from "./demo-tooltip.js";
-import { editorOddsLabel, editorReturnLabel, loadCheckmateDrill, loadOddsPreset, toggleEditorBrush } from "./editor.js";
+import { composeEditorFen, editorOddsLabel, editorReturnLabel, loadCheckmateDrill, loadOddsPreset, toggleEditorBrush } from "./editor.js";
 import { favoriteMemoryOpening } from "./memory.js";
 import { applyCoreMood, coreLineText } from "./personality.js";
 import { plyMoveText, reviewCurrent, reviewEntries, reviewEvalAt, reviewEvalSeries, reviewSwing } from "./review.js";
@@ -120,8 +120,9 @@ function renderStatus() {
   refs.focusModeButton.textContent = app.focusMode ? "Exit focus" : "Focus";
   refs.focusModeButton.setAttribute("aria-pressed", String(app.focusMode));
   refs.focusModeButton.title = app.focusMode ? "Exit focus mode (Z)" : "Focus mode (Z)";
-  refs.sidePanel.hidden = app.mode === "editor";
+  refs.sidePanel.hidden = app.mode === "editor" || app.mode === "analysis";
   refs.editorPanel.hidden = app.mode !== "editor";
+  refs.analysisPanel.hidden = app.mode !== "analysis";
   refs.sidePanel.dataset.turn = app.turn;
   refs.sidePanel.dataset.thinking = String(app.thinking);
 
@@ -192,6 +193,9 @@ function renderStatus() {
 
   if (app.mode === "editor") {
     refs.statusPill.textContent = app.editor.error || "Board editor";
+  } else if (app.mode === "analysis") {
+    refs.statusPill.textContent = app.analysis.error
+      || (app.analysis.running ? "Sgurr is analysing" : "Position analysis");
   }
 }
 
@@ -215,6 +219,20 @@ function renderPlayerCards() {
     refs.bottomPlayerCard.classList.toggle("active", app.editor.turn === bottomColour);
     refs.topPlayerCard.classList.remove("flagged");
     refs.bottomPlayerCard.classList.remove("flagged");
+    return;
+  }
+
+  if (app.mode === "analysis") {
+    refs.topPlayerPresence.hidden = true;
+    refs.bottomPlayerPresence.hidden = true;
+    refs.topPlayerCard.classList.remove("engine-side", "human-side", "flagged");
+    refs.bottomPlayerCard.classList.remove("engine-side", "human-side", "flagged");
+    refs.topPlayerName.innerHTML = `<strong>${title(topColour)} pieces</strong><small>ANALYSIS BOARD</small>`;
+    refs.bottomPlayerName.innerHTML = `<strong>${title(bottomColour)} pieces</strong><small>ANALYSIS BOARD</small>`;
+    refs.topPlayerClock.textContent = app.turn === topColour ? "to move" : "—";
+    refs.bottomPlayerClock.textContent = app.turn === bottomColour ? "to move" : "—";
+    refs.topPlayerCard.classList.toggle("active", app.turn === topColour);
+    refs.bottomPlayerCard.classList.toggle("active", app.turn === bottomColour);
     return;
   }
 
@@ -734,6 +752,15 @@ function renderEditor() {
     return;
   }
 
+  const analysing = app.editor.intent === "analysis";
+  refs.editorHeading.textContent = analysing ? "Analyse position" : "Board editor";
+  refs.editorPurpose.textContent = analysing
+    ? "Paste a FEN or build a position for a deeper Sgurr search."
+    : "Paste a FEN or build a position, then play it against Sgurr.";
+  refs.editorPanel.dataset.intent = app.editor.intent;
+  if (document.activeElement !== refs.editorFenInput && !app.busy) {
+    refs.editorFenInput.value = composeEditorFen();
+  }
   refs.editorPlayerButton.textContent = editorReturnLabel();
   const editorSelfPlayReason = app.publicDemo
     ? "Self-play is available locally; the free demo supports White or Black."
@@ -742,7 +769,12 @@ function renderEditor() {
   setDemoReason(refs.editorPlayerButton, editorSelfPlayReason);
   refs.editorTurnButton.textContent = `First move: ${title(app.editor.turn)}`;
   refs.editorOddsRecipientButton.textContent = editorOddsLabel();
-  refs.editorPlayButton.disabled = app.busy || app.thinking || !app.backendOk || !app.engineExists;
+  const actionDisabled = app.busy || app.thinking || !app.backendOk || !app.engineExists;
+  refs.editorPlayButton.disabled = actionDisabled;
+  refs.editorAnalyseButton.disabled = actionDisabled;
+  refs.editorLoadFenButton.disabled = app.busy || !app.backendOk;
+  refs.editorPlayButton.classList.toggle("preferred", !analysing);
+  refs.editorAnalyseButton.classList.toggle("preferred", analysing);
   refs.editorStatus.textContent = app.editor.status;
   refs.editorStatus.closest(".status-block").classList.toggle("error", Boolean(app.editor.error));
 
@@ -776,6 +808,123 @@ function renderEditor() {
     button.appendChild(icon);
     button.addEventListener("click", () => toggleEditorBrush(piece));
     refs.editorPalette.appendChild(button);
+  }
+}
+
+function formatAnalysisCount(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "—";
+  }
+  if (number >= 1_000_000) {
+    return `${(number / 1_000_000).toFixed(number >= 10_000_000 ? 0 : 1)}m`;
+  }
+  if (number >= 1_000) {
+    return `${(number / 1_000).toFixed(number >= 100_000 ? 0 : 1)}k`;
+  }
+  return number.toLocaleString();
+}
+
+function renderAnalysis() {
+  if (app.mode !== "analysis") {
+    return;
+  }
+
+  const analysis = app.analysis;
+  const selected = analysis.iterations.find(
+    (iteration) => iteration.depth === analysis.selectedDepth,
+  ) || analysis.iterations.at(-1) || null;
+  const pvSan = selected?.pv_san || [];
+  const pvFens = selected?.pv_fens || [analysis.sourceFen];
+  const selectedPly = Math.min(analysis.selectedPly, Math.max(0, pvFens.length - 1));
+  const bestSan = selected?.pv_san?.[0] || analysis.bestmoveSan;
+  const bestUci = selected?.pv?.[0] || analysis.bestmove;
+
+  refs.analysisEngineName.textContent = analysis.engineLabel;
+  refs.analysisStatus.textContent = analysis.status;
+  refs.analysisPanel.dataset.state = analysis.error
+    ? "error"
+    : analysis.running
+      ? "running"
+      : analysis.complete
+        ? "complete"
+        : "idle";
+  refs.analysisCore.classList.toggle("ready", app.backendOk && app.engineExists);
+  refs.analysisCore.classList.toggle("thinking", analysis.running);
+  refs.analysisScore.textContent = selected?.display || "0.0";
+  refs.analysisBestMove.textContent = bestSan || (analysis.running ? "Calculating" : "—");
+  refs.analysisBestMoveUci.textContent = bestUci || "Completed depths will appear live";
+  refs.analysisDepth.textContent = selected?.depth ?? "—";
+  refs.analysisNodes.textContent = formatAnalysisCount(selected?.nodes);
+  refs.analysisNps.textContent = selected?.nps ? `${formatAnalysisCount(selected.nps)}/s` : "—";
+  refs.analysisTime.textContent = selected?.time_ms === null || selected?.time_ms === undefined
+    ? "—"
+    : selected.time_ms >= 1_000
+      ? `${(selected.time_ms / 1_000).toFixed(1)}s`
+      : `${selected.time_ms}ms`;
+  refs.analysisLineLabel.textContent = selected
+    ? `Depth ${selected.depth} · ${pvSan.length} predicted ${pvSan.length === 1 ? "ply" : "plies"}`
+    : "Sgurr's predicted continuation";
+  refs.analysisPlyCounter.textContent = selectedPly
+    ? `After ${selectedPly} ${selectedPly === 1 ? "ply" : "plies"}`
+    : "Root position";
+  refs.analysisLimitNote.textContent = `Bounded server analysis · up to ${(analysis.movetimeMs / 1_000).toFixed(0)} seconds · one principal variation`;
+  refs.analysisLiveBadge.textContent = analysis.running ? "LIVE" : analysis.error ? "ERROR" : "COMPLETE";
+  refs.analysisStopButton.disabled = !analysis.running;
+  refs.analysisAgainButton.disabled = analysis.running || !app.backendOk || !app.engineExists;
+  refs.analysisPrevPlyButton.disabled = selectedPly <= 0;
+  refs.analysisRootButton.disabled = selectedPly === 0;
+  refs.analysisNextPlyButton.disabled = selectedPly >= pvFens.length - 1;
+
+  refs.analysisPvMoves.innerHTML = "";
+  if (!pvSan.length) {
+    const empty = document.createElement("p");
+    empty.className = "analysis-empty-line";
+    empty.textContent = analysis.error
+      ? "No completed principal variation"
+      : "Waiting for the first completed depth…";
+    refs.analysisPvMoves.appendChild(empty);
+  } else {
+    pvSan.forEach((san, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.ply = String(index + 1);
+      button.className = index + 1 === selectedPly ? "active" : "";
+      const count = document.createElement("span");
+      count.textContent = String(index + 1);
+      const move = document.createElement("strong");
+      move.textContent = san;
+      button.append(count, move);
+      refs.analysisPvMoves.appendChild(button);
+    });
+  }
+
+  refs.analysisDepths.innerHTML = "";
+  const recent = analysis.iterations.slice(-10).reverse();
+  if (!recent.length) {
+    const waiting = document.createElement("p");
+    waiting.className = "analysis-depth-waiting";
+    waiting.textContent = analysis.error ? analysis.error : "Waiting for Sgurr's first completed search depth";
+    refs.analysisDepths.appendChild(waiting);
+  } else {
+    recent.forEach((iteration) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.depth = String(iteration.depth);
+      button.className = iteration.depth === analysis.selectedDepth ? "active" : "";
+      const depth = document.createElement("strong");
+      depth.textContent = `D${iteration.depth}`;
+      const score = document.createElement("span");
+      score.className = "depth-score";
+      score.textContent = iteration.display || "0.0";
+      const move = document.createElement("span");
+      move.className = "depth-move";
+      move.textContent = iteration.pv_san?.[0] || iteration.pv?.[0] || "—";
+      const nodes = document.createElement("small");
+      nodes.textContent = `${formatAnalysisCount(iteration.nodes)} nodes`;
+      button.append(depth, score, move, nodes);
+      refs.analysisDepths.appendChild(button);
+    });
   }
 }
 
@@ -866,23 +1015,8 @@ function renderMenu() {
   refs.engineUpButton.disabled = availableEngines <= 1;
   setDemoReason(refs.engineDownButton, historicalReason);
   setDemoReason(refs.engineUpButton, historicalReason);
-  refs.loadFenButton.disabled = !canStart;
+  refs.analysePositionButton.disabled = !canStart;
   refs.boardEditorButton.disabled = app.busy || app.thinking;
-
-  const watchOption = refs.fenSideSelect.querySelector('option[value="watch"]');
-  if (watchOption) {
-    watchOption.disabled = app.publicDemo;
-    watchOption.textContent = app.publicDemo
-      ? "Watch Sgurr vs itself · local only"
-      : "Watch Sgurr vs itself";
-    watchOption.title = app.publicDemo
-      ? "Continuous self-play is disabled on the free demo."
-      : "";
-  }
-  setDemoReason(
-    refs.fenSideSelect,
-    app.publicDemo ? "The self-play option is available when running Sgurr locally." : "",
-  );
 
   if (app.menuMessage) {
     refs.menuStatus.textContent = app.menuMessage;
@@ -911,6 +1045,7 @@ function render() {
   renderMoves();
   renderBackend();
   renderEditor();
+  renderAnalysis();
   renderReviewPanel();
   renderResultModal();
   syncMenuMusic();
@@ -949,6 +1084,7 @@ export {
   resultPresentation,
   renderResultModal,
   renderEditor,
+  renderAnalysis,
   renderBlobMemory,
   renderMenu,
   render,

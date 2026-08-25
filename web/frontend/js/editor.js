@@ -1,12 +1,62 @@
 import { syncClock } from "./clocks.js";
-import { CHECKMATE_DRILLS, EDIT_RETURN_SIDES, ODDS_PRESETS, ODDS_RECIPIENTS, START_FEN } from "./config.js";
+import { startPositionAnalysis } from "./analysis.js";
+import { CHECKMATE_DRILLS, EDIT_RETURN_SIDES, ODDS_PRESETS, ODDS_RECIPIENTS, START_FEN, apiUrl } from "./config.js";
 import { startFromFen } from "./game.js";
-import { app } from "./state.js";
+import { app, refs } from "./state.js";
 import { render, setStatus } from "./ui.js";
-import { clonePieces, fenTurn, parseFenPieces, pieceForColour, pieceLabel, piecesToBoardFen, startingPieces, title } from "./utils.js";
+import { clonePieces, parseFenPieces, pieceForColour, pieceLabel, piecesToBoardFen, startingPieces, title } from "./utils.js";
 
 const EDITOR_DRAFT_KEY = "sgurrEditorDraft";
 const EDITOR_PIECES = new Set("PNBRQKpnbrqk");
+
+function fenParts(fen) {
+  const parts = String(fen || "").trim().split(/\s+/);
+  return {
+    turn: parts[1] === "b" ? "black" : "white",
+    castlingRights: /^[KQkq]+$/.test(parts[2] || "") ? parts[2] : "-",
+    epSquare: /^([a-h][36]|-)$/.test(parts[3] || "") ? parts[3] : "-",
+    halfmoveClock: Math.max(0, Number.parseInt(parts[4], 10) || 0),
+    fullmoveNumber: Math.max(1, Number.parseInt(parts[5], 10) || 1),
+  };
+}
+
+function loadEditorPosition(fen) {
+  const meta = fenParts(fen);
+  app.editor.pieces = parseFenPieces(fen);
+  app.editor.turn = meta.turn;
+  app.editor.castlingRights = meta.castlingRights;
+  app.editor.epSquare = meta.epSquare;
+  app.editor.halfmoveClock = meta.halfmoveClock;
+  app.editor.fullmoveNumber = meta.fullmoveNumber;
+  app.editor.brush = null;
+  app.editor.heldPiece = null;
+  app.editor.heldFrom = null;
+}
+
+function resetEditorPositionMetadata({ start = false } = {}) {
+  app.editor.castlingRights = start ? "KQkq" : "-";
+  app.editor.epSquare = "-";
+  app.editor.halfmoveClock = 0;
+  app.editor.fullmoveNumber = 1;
+}
+
+function castlingRightsForPieces(pieces) {
+  let rights = "";
+  if (pieces.e1 === "K") {
+    rights += pieces.h1 === "R" ? "K" : "";
+    rights += pieces.a1 === "R" ? "Q" : "";
+  }
+  if (pieces.e8 === "k") {
+    rights += pieces.h8 === "r" ? "k" : "";
+    rights += pieces.a8 === "r" ? "q" : "";
+  }
+  return rights || "-";
+}
+
+function markEditorBoardChanged() {
+  app.editor.epSquare = "-";
+  app.editor.halfmoveClock = 0;
+}
 
 function readEditorDraft() {
   try {
@@ -23,6 +73,12 @@ function readEditorDraft() {
       turn: draft.turn === "black" ? "black" : "white",
       returnSide: ["white", "black", null].includes(draft.returnSide) ? draft.returnSide : "white",
       oddsRecipient: draft.oddsRecipient === "engine" ? "engine" : "you",
+      castlingRights: /^[KQkq]+$/.test(draft.castlingRights || "")
+        ? draft.castlingRights
+        : castlingRightsForPieces(draft.pieces),
+      epSquare: /^([a-h][36]|-)$/.test(draft.epSquare || "") ? draft.epSquare : "-",
+      halfmoveClock: Math.max(0, Number.parseInt(draft.halfmoveClock, 10) || 0),
+      fullmoveNumber: Math.max(1, Number.parseInt(draft.fullmoveNumber, 10) || 1),
     };
   } catch {
     return null;
@@ -35,31 +91,22 @@ function saveEditorDraft() {
     turn: app.editor.turn,
     returnSide: app.editor.returnSide,
     oddsRecipient: app.editor.oddsRecipient,
+    castlingRights: app.editor.castlingRights,
+    epSquare: app.editor.epSquare,
+    halfmoveClock: app.editor.halfmoveClock,
+    fullmoveNumber: app.editor.fullmoveNumber,
   }));
 }
 
 function composeEditorFen() {
   const pieces = app.editor.pieces;
-  let rights = "";
+  const availableRights = castlingRightsForPieces(pieces).replace("-", "");
 
-  if (pieces.e1 === "K") {
-    if (pieces.h1 === "R") {
-      rights += "K";
-    }
-    if (pieces.a1 === "R") {
-      rights += "Q";
-    }
-  }
-  if (pieces.e8 === "k") {
-    if (pieces.h8 === "r") {
-      rights += "k";
-    }
-    if (pieces.a8 === "r") {
-      rights += "q";
-    }
-  }
-
-  return `${piecesToBoardFen(pieces)} ${app.editor.turn === "white" ? "w" : "b"} ${rights || "-"} - 0 1`;
+  const requestedRights = app.editor.castlingRights === "-" ? "" : app.editor.castlingRights;
+  const rights = [..."KQkq"].filter(
+    (right) => requestedRights.includes(right) && availableRights.includes(right),
+  ).join("");
+  return `${piecesToBoardFen(pieces)} ${app.editor.turn === "white" ? "w" : "b"} ${rights || "-"} ${app.editor.epSquare || "-"} ${app.editor.halfmoveClock} ${app.editor.fullmoveNumber}`;
 }
 
 function editorReturnLabel() {
@@ -112,7 +159,7 @@ function setEditorStatus(message, isError = false) {
   render();
 }
 
-function enterBoardEditor() {
+function enterBoardEditor(intent = "play", sourceFen = null) {
   if (app.busy || app.thinking) {
     setStatus("Wait for Sgurr to finish thinking");
     return;
@@ -123,11 +170,23 @@ function enterBoardEditor() {
   const previousMode = app.mode === "editor" ? app.editor.previousMode : app.mode;
 
   app.editor.previousMode = previousMode;
-  if (!app.editor.initialised) {
+  app.editor.intent = intent === "analysis" ? "analysis" : "play";
+  if (sourceFen) {
+    loadEditorPosition(sourceFen);
+    app.editor.initialised = true;
+  } else if (!app.editor.initialised) {
     const draft = readEditorDraft();
     const sourceFen = app.mode === "game" ? app.fen : START_FEN;
-    app.editor.pieces = draft?.pieces || parseFenPieces(sourceFen);
-    app.editor.turn = draft?.turn || fenTurn(sourceFen);
+    if (draft) {
+      app.editor.pieces = draft.pieces;
+      app.editor.turn = draft.turn;
+      app.editor.castlingRights = draft.castlingRights;
+      app.editor.epSquare = draft.epSquare;
+      app.editor.halfmoveClock = draft.halfmoveClock;
+      app.editor.fullmoveNumber = draft.fullmoveNumber;
+    } else {
+      loadEditorPosition(sourceFen);
+    }
     app.editor.returnSide = draft
       ? draft.returnSide
       : app.mode === "game" ? app.humanSide : "white";
@@ -140,7 +199,9 @@ function enterBoardEditor() {
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
-  app.editor.status = "Board editor";
+  app.editor.status = app.editor.intent === "analysis"
+    ? "Build or paste a position for Sgurr to analyse"
+    : "Build or paste a position, then play from it";
   app.editor.error = "";
   app.activeAnimation = null;
   app.pendingAnimation = null;
@@ -204,8 +265,78 @@ function cycleEditorPlayer() {
   setEditorStatus(editorReturnLabel());
 }
 
+async function requestFenState(fen, signal = undefined) {
+  const response = await fetch(apiUrl("/api/load-fen"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fen }),
+    signal,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || `Position could not be loaded (${response.status})`);
+  }
+  return data;
+}
+
+async function loadFenIntoEditor() {
+  const fen = refs.editorFenInput.value.trim();
+  if (!fen) {
+    setEditorStatus("Enter a FEN first", true);
+    return;
+  }
+
+  app.busy = true;
+  app.editor.status = "Checking FEN";
+  app.editor.error = "";
+  render();
+  try {
+    const data = await requestFenState(fen);
+    loadEditorPosition(data.fen);
+    app.busy = false;
+    setEditorStatus("FEN loaded into the editor");
+  } catch (error) {
+    app.busy = false;
+    setEditorStatus(error.message || String(error), true);
+    refs.editorFenInput.value = fen;
+    refs.editorFenInput.focus();
+  }
+}
+
+async function analyseEditorPosition() {
+  const localError = editorPositionError();
+  if (localError) {
+    setEditorStatus(`Fix position: ${localError}`, true);
+    return;
+  }
+
+  const fen = composeEditorFen();
+  app.busy = true;
+  app.editor.status = "Checking position";
+  app.editor.error = "";
+  render();
+  try {
+    const data = await requestFenState(fen);
+    app.busy = false;
+    await startPositionAnalysis(data.fen, {
+      orientation: app.editor.returnSide || app.editor.turn,
+      validated: data,
+    });
+  } catch (error) {
+    app.busy = false;
+    setEditorStatus(error.message || String(error), true);
+  }
+}
+
+function finishEditorPrimaryAction() {
+  return app.editor.intent === "analysis"
+    ? analyseEditorPosition()
+    : finishBoardEditor();
+}
+
 function cycleEditorTurn() {
   app.editor.turn = app.editor.turn === "white" ? "black" : "white";
+  app.editor.epSquare = "-";
   setEditorStatus(`First move: ${title(app.editor.turn)}`);
 }
 
@@ -217,6 +348,7 @@ function cycleEditorOddsRecipient() {
 
 function clearEditorBoard() {
   app.editor.pieces = {};
+  resetEditorPositionMetadata();
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
@@ -226,6 +358,7 @@ function clearEditorBoard() {
 function loadEditorStartPosition() {
   app.editor.pieces = startingPieces();
   app.editor.turn = "white";
+  resetEditorPositionMetadata({ start: true });
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
@@ -273,6 +406,7 @@ function loadCheckmateDrill(key) {
   });
 
   app.editor.pieces = pieces;
+  resetEditorPositionMetadata();
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
@@ -319,6 +453,7 @@ function loadOddsPreset(key) {
 
   app.editor.pieces = pieces;
   app.editor.turn = "white";
+  resetEditorPositionMetadata({ start: true });
   app.editor.brush = null;
   app.editor.heldPiece = null;
   app.editor.heldFrom = null;
@@ -331,6 +466,7 @@ function handleEditorSquare(square) {
   if (app.editor.brush) {
     app.editor.pieces = clonePieces(app.editor.pieces);
     app.editor.pieces[square] = app.editor.brush;
+    markEditorBoardChanged();
     app.editor.heldPiece = null;
     app.editor.heldFrom = null;
     setEditorStatus(`${pieceLabel(app.editor.brush)} placed on ${square}`);
@@ -340,6 +476,7 @@ function handleEditorSquare(square) {
   if (app.editor.heldPiece) {
     app.editor.pieces = clonePieces(app.editor.pieces);
     app.editor.pieces[square] = app.editor.heldPiece;
+    markEditorBoardChanged();
     setEditorStatus(`${pieceLabel(app.editor.heldPiece)} moved to ${square}`);
     app.editor.heldPiece = null;
     app.editor.heldFrom = null;
@@ -350,6 +487,7 @@ function handleEditorSquare(square) {
   if (piece) {
     app.editor.pieces = clonePieces(app.editor.pieces);
     delete app.editor.pieces[square];
+    markEditorBoardChanged();
     app.editor.heldPiece = piece;
     app.editor.heldFrom = square;
     setEditorStatus(`${pieceLabel(piece)} picked up`);
@@ -366,6 +504,7 @@ function handleEditorDelete(square) {
   if (app.editor.pieces[square]) {
     app.editor.pieces = clonePieces(app.editor.pieces);
     delete app.editor.pieces[square];
+    markEditorBoardChanged();
     setEditorStatus(`${square} cleared`);
   }
 }
@@ -379,6 +518,9 @@ export {
   enterBoardEditor,
   exitBoardEditor,
   finishBoardEditor,
+  analyseEditorPosition,
+  finishEditorPrimaryAction,
+  loadFenIntoEditor,
   copyEditorFen,
   cycleEditorPlayer,
   cycleEditorTurn,

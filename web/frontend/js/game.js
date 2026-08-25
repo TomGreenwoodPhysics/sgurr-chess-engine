@@ -9,7 +9,6 @@ import { blobMemoryGreeting } from "./memory.js";
 import { coreMoveLine, setThinkingState } from "./personality.js";
 import { resetReview } from "./review.js";
 import { app, refs } from "./state.js";
-import { closeAllModals, openModal } from "./themes.js";
 import { render, setStatus } from "./ui.js";
 import { parseFenPieces, pieceColor, title } from "./utils.js";
 
@@ -28,6 +27,11 @@ function cancelLiveGameWork() {
 
 function returnToMainMenu() {
   syncClock();
+  if (app.analysis.controller) {
+    app.analysis.runId += 1;
+    app.analysis.controller.abort();
+    app.analysis.controller = null;
+  }
   cancelLiveGameWork();
   app.mode = "menu";
   app.focusMode = false;
@@ -152,40 +156,6 @@ async function rematchGame() {
     await startFromFen(startFen, side, "Rematch from custom position", origin);
   } catch (error) {
     setError(error);
-  }
-}
-
-function openFenModal() {
-  refs.fenInput.value = app.fen === START_FEN ? "" : app.fen;
-  refs.fenSideSelect.value = app.humanSide === null ? "watch" : app.humanSide || "white";
-  refs.fenError.textContent = "";
-  openModal(refs.fenModal);
-  refs.fenInput.focus();
-}
-
-async function loadFenFromModal() {
-  const fen = refs.fenInput.value.trim();
-  if (!fen) {
-    refs.fenError.textContent = "Enter a FEN first.";
-    return;
-  }
-
-  const sideValue = refs.fenSideSelect.value;
-  if (app.publicDemo && sideValue === "watch") {
-    refs.fenError.textContent = "Self-play is available when running Sgurr locally.";
-    return;
-  }
-  const side = sideValue === "watch" ? null : sideValue;
-  clearTimeout(app.watchTimer);
-  setBusy(true, false);
-
-  try {
-    closeAllModals();
-    await startFromFen(fen, side, "Loaded FEN");
-  } catch (error) {
-    setBusy(false, false);
-    refs.fenError.textContent = error.message || String(error);
-    openModal(refs.fenModal);
   }
 }
 
@@ -707,8 +677,6 @@ export {
   startGame,
   startFromFen,
   rematchGame,
-  openFenModal,
-  loadFenFromModal,
   makePlayerMove,
   engineClockPayload,
   requestEngineMove,

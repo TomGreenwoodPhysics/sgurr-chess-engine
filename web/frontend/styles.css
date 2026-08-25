@@ -8,6 +8,7 @@
 @import "styles/core.css";
 @import "styles/panels.css";
 @import "styles/editor.css";
+@import "styles/analysis.css";
 @import "styles/modals.css";
 @import "styles/result.css";
 @import "styles/demo-tooltip.css";

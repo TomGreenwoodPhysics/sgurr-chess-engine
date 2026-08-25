@@ -10,7 +10,8 @@
 }
 
 .side-panel[hidden],
-.editor-panel[hidden] {
+.editor-panel[hidden],
+.analysis-panel[hidden] {
   display: none;
 }
 

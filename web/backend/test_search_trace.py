@@ -5,7 +5,7 @@ import unittest
 import chess
 from pydantic import ValidationError
 
-from web.backend.main import SearchNetworkRequest, SearchTraceRequest, eval_payload
+from web.backend.main import SearchNetworkRequest, SearchTraceRequest, eval_payload, move_san
 from web.backend.sgurr_uci import parse_uci_info
 
 
@@ -39,6 +39,31 @@ class SearchTraceTest(unittest.TestCase):
     def test_trace_duration_is_bounded(self) -> None:
         with self.assertRaises(ValidationError):
             SearchTraceRequest(fen=chess.STARTING_FEN, movetime_ms=5_001)
+
+    def test_trace_payload_includes_san_and_navigable_positions(self) -> None:
+        info = parse_uci_info(
+            "info depth 10 score cp 31 nodes 12000 nps 800000 "
+            "time 15 pv e2e4 e7e5 g1f3"
+        )
+
+        payload = eval_payload(info, chess.WHITE, chess.Board())
+
+        self.assertEqual(payload["pv_san"], ["e4", "e5", "Nf3"])
+        self.assertEqual(len(payload["pv_fens"]), 4)
+        self.assertEqual(
+            chess.Board(payload["pv_fens"][-1]).piece_at(chess.F3),
+            chess.Piece.from_symbol("N"),
+        )
+        self.assertEqual(move_san(chess.Board(), "e2e4"), "e4")
+
+    def test_invalid_pv_tail_is_safely_truncated(self) -> None:
+        info = parse_uci_info("info depth 3 score cp 4 pv e2e4 e2e5")
+
+        payload = eval_payload(info, chess.WHITE, chess.Board())
+
+        self.assertEqual(payload["pv"], ["e2e4", "e2e5"])
+        self.assertEqual(payload["pv_san"], ["e4"])
+        self.assertEqual(len(payload["pv_fens"]), 2)
 
     def test_network_trace_depth_is_bounded_for_interactive_use(self) -> None:
         self.assertEqual(SearchNetworkRequest(fen=chess.STARTING_FEN).depth, 6)

@@ -7,6 +7,67 @@
   min-height: 92px;
 }
 
+.editor-purpose {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.editor-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editor-section-heading .panel-label {
+  margin: 0;
+}
+
+.editor-section-heading span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-fen-block textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg), var(--surface) 35%);
+  color: var(--text);
+  padding: 9px 10px;
+  font: 0.72rem/1.45 Consolas, "Courier New", monospace;
+}
+
+.editor-fen-block textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent), transparent 48%);
+  outline-offset: 1px;
+}
+
+.editor-primary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.editor-primary-actions button.preferred {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), var(--surface) 76%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent), transparent 85%);
+}
+
+.editor-panel[data-intent="analysis"] .editor-header-block {
+  border-color: color-mix(in srgb, var(--accent), var(--edge) 35%);
+  background:
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--accent), transparent 74%), transparent 38%),
+    var(--surface);
+}
+
 .editor-status-block {
   min-height: 98px;
 }
