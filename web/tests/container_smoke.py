@@ -40,7 +40,9 @@ assert health["ok"] is True
 assert health["nnue_loaded"] is True
 assert b"Sgurr" in get_bytes("/")
 assert b"Position Lab" in get_bytes("/")
-assert b"Search Microscope" in get_bytes("/search-lab/")
+search_lab = get_bytes("/search-lab/")
+assert b'id="labTitle"' in search_lab
+assert b'id="networkPanel"' in search_lab
 assert b"--accent" in get_bytes("/styles/base.css")
 assert len(get_bytes("/assets/intro/sgurr-cave-chamber.webp")) > 100_000
 assert len(get_bytes("/assets/intro/sgurr-social-card.jpg")) > 50_000
