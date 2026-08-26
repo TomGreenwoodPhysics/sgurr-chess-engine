@@ -69,27 +69,27 @@ const POSITIONS = {
   },
   closedruy: position("Closed Ruy Lopez", "r1bq1rk1/2pnbppp/p2p1n2/1p2p3/3PP3/1BP2N1P/PP3PP1/RNBQR1K1 w - - 1 11", "A dense manoeuvring battle behind locked pawns", ["b8", "d7"]),
   iqp: position("Isolated queen's pawn", "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBP3/PPQ1NPPP/R4RK1 w - - 0 11", "Activity and outposts versus a long-term weakness", ["c7", "c6"]),
-  hedgehog: position("Hedgehog structure", "r3k2r/1bqnbppp/pp1ppn2/8/2PQP3/1PN2NP1/P4PBP/R1BR2K1 w kq - 1 12", "A compressed position full of latent pawn breaks", ["b8", "d7"]),
+  hedgehog: position("Hedgehog structure", "r3k2r/1bqnbppp/pp1ppn2/8/2PQP3/1PN2NP1/P4PBP/R1BR2K1 w kq - 1 12", "A compressed position with several possible pawn breaks", ["b8", "d7"]),
   maroczy: position("Maróczy Bind", "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9", "Space restriction against a flexible Sicilian setup", ["e1", "g1"]),
   stonewall: position("Stonewall structure", "rnbqk2r/pp4pp/2pbpn2/3p1p2/2PP4/5NP1/PP2PPBP/RNBQ1RK1 w kq - 0 7", "A locked centre and fixed kingside squares", ["c7", "c6"]),
   botvinnik: position("Botvinnik English", "r1bq1rk1/ppp3bp/2np1np1/4pp2/2P1P3/2NP2P1/PP2NPBP/R1BQ1RK1 w - - 4 9", "A closed centre with attacks growing on both wings", ["e8", "g8"]),
   benoni: position("Modern Benoni", "rnbqk2r/pp3pbp/3p1np1/2pP4/4PP2/2N5/PP4PP/R1BQKBNR w KQkq - 1 8", "A queenside majority races kingside counterplay", ["f8", "g7"]),
-  frenchlocked: position("Closed French", "r3kbnr/pp1b1ppp/1qn1p3/3pP3/3P4/3B1N2/PP3PPP/RNBQK2R w KQkq - 1 8", "Pawn chains make every break consequential", ["c8", "d7"]),
+  frenchlocked: position("Closed French", "r3kbnr/pp1b1ppp/1qn1p3/3pP3/3P4/3B1N2/PP3PPP/RNBQK2R w KQkq - 1 8", "Pawn chains with critical breaks on both wings", ["c8", "d7"]),
   symenglish: position("Symmetrical English", "r1bq1rk1/pp1pppbp/2n2np1/8/2PN4/2N3P1/PP2PPBP/R1BQ1RK1 b - - 0 8", "Near symmetry hiding several sharp imbalances", ["f3", "d4"]),
-  kiwipete: position("Kiwipete stress test", "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1", "Maximum move density · pins, castling and captures collide"),
-  promotionattack: position("Promotion-rank attack", "rnbq1k1r/pp1Pbppp/2p2n2/8/2B5/8/PPP1NPPP/RNBQK2R w KQ - 1 8", "A pawn on the seventh rank distorts the whole search"),
-  pinnedmaze: position("Pinned-piece maze", "r4rk1/1pp1qppp/p1np1n2/8/4P1b1/1BN1B3/PPP1QPPP/R4RK1 w - - 0 10", "Forty-five legal moves around a web of pins"),
+  kiwipete: position("Kiwipete stress test", "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1", "High move count with pins, castling and captures"),
+  promotionattack: position("Promotion-rank attack", "rnbq1k1r/pp1Pbppp/2p2n2/8/2B5/8/PPP1NPPP/RNBQK2R w KQ - 1 8", "A passed pawn has reached the seventh rank"),
+  pinnedmaze: position("Pinned-piece maze", "r4rk1/1pp1qppp/p1np1n2/8/4P1b1/1BN1B3/PPP1QPPP/R4RK1 w - - 0 10", "Forty-five legal moves with several pinned pieces"),
   greekgift: position("Greek Gift sacrifice", "r1bqkb1r/pp1n1ppB/2n1p3/3pP3/3p4/2N2N2/PPP2PPP/R1BQ1RK1 b kq - 0 8", "A bishop lands on h7 and the king must calculate", ["d3", "h7"]),
   yugoslav: position("Yugoslav Attack", "2rq1rk1/pp1bppbp/3p1np1/4n3/3NP2P/1BN1BP2/PPPQ2P1/2KR3R b - - 0 12", "Opposite-side castling with both attacks already moving", ["h2", "h4"]),
-  kidstorm: position("King's Indian pawn storm", "r1bq1rk1/pppnn1bp/3p4/3Pp1p1/2P1Pp2/2N2P2/PP2BBPP/R2QNRK1 w - - 0 13", "Locked centre · both wings poised to erupt", ["g6", "g5"]),
+  kidstorm: position("King's Indian pawn storm", "r1bq1rk1/pppnn1bp/3p4/3Pp1p1/2P1Pp2/2N2P2/PP2BBPP/R2QNRK1 w - - 0 13", "Locked centre with attacks on both wings", ["g6", "g5"]),
   legaltrap: position("Légal Trap crossroads", "r2qkbnr/ppp2ppp/2np4/4N2b/2B1P3/2N4P/PPPP1PP1/R1BQK2R b KQkq - 0 6", "A loose queen and a mating net compete", ["f3", "e5"]),
   scotch: position("Scotch tactical centre", "r1b1kb1r/ppp2ppp/2n5/3q4/3pn3/2N2N2/PPP2PPP/R1BQR1K1 b kq - 1 8", "An exposed centre with forty-seven legal replies", ["b1", "c3"]),
   evans: position("Evans Gambit", "r1bqk1nr/pppp1ppp/2n5/b7/2B1P3/1QPp1N2/P4PPP/RNB2RK1 b kq - 1 8", "Material is secondary to time and open lines", ["d1", "b3"]),
-  poisonedpawn: position("Najdorf Poisoned Pawn", "rnb1kb1r/1p3ppp/p2ppn2/6B1/3NPP2/q1N5/P1PQ2PP/1R2KB1R w Kkq - 2 10", "The queen raids b2 while development catches fire", ["b2", "a3"]),
+  poisonedpawn: position("Najdorf Poisoned Pawn", "rnb1kb1r/1p3ppp/p2ppn2/6B1/3NPP2/q1N5/P1PQ2PP/1R2KB1R w Kkq - 2 10", "Black's queen takes b2 while both sides are still developing", ["b2", "a3"]),
   kingsgambit: position("King's Gambit melee", "rnbqkb1r/ppp2p1p/3p4/8/3PPnpP/2N5/PPP3P1/R1BQKB1R b KQkq - 0 9", "An open king, advanced pawns and unstable material", ["d2", "d4"]),
   traxler: position("Traxler counterattack", "r1bqk2r/pppp1Npp/2n5/4p3/2B1n3/4K3/PPPP2PP/RNBQ3R b kq - 1 7", "Both kings are exposed and quiet moves barely exist", ["f2", "e3"]),
   marshall: position("Marshall Attack", "r1bq1rk1/4bppp/p1p5/1p1nR3/8/1BP5/PP1P1PPP/RNBQ2K1 w - - 0 12", "Material traded for a sustained initiative", ["c7", "c6"]),
-  semislav: position("Botvinnik Semi-Slav", "r1bqkb1r/3n1ppp/4pP2/1p6/3p4/3B1N2/PP3PPP/R1BQK2R b KQkq - 0 12", "Passed pawns and exposed diagonals make a calculation maze", ["e5", "f6"]),
+  semislav: position("Botvinnik Semi-Slav", "r1bqkb1r/3n1ppp/4pP2/1p6/3p4/3B1N2/PP3PPP/R1BQK2R b KQkq - 0 12", "Passed pawns and exposed diagonals create a tactical position", ["e5", "f6"]),
   panov: position("Panov Attack", "rnbqk2r/pp3ppp/4p3/3n4/1b1P4/2N2N2/PP1B1PPP/R2QKB1R b KQkq - 1 8", "An isolated centre with forty-four candidate moves", ["c1", "d2"]),
   opposition: {
     name: "King and pawn ending",
@@ -112,20 +112,20 @@ const POSITIONS = {
     aria: "Opposite-coloured bishop ending with White to move",
     last: [],
   },
-  rookrace: position("Rook and pawn race", "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", "Passed pawns pull both rooks across the board"),
+  rookrace: position("Rook and pawn race", "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", "Both rooks must respond to distant passed pawns"),
   philidor: position("Philidor rook defence", "8/8/8/4k3/4P3/8/6K1/3R1r2 w - - 0 1", "Checks, king shelter and one critical rank"),
   vancura: position("Vancura rook defence", "8/8/R7/P4k2/8/4r3/7K/8 b - - 0 1", "Side checks fight a rook pawn on the sixth"),
   rookpawns: position("Four-pawn rook ending", "8/5pk1/3p2p1/4p2p/4P3/3P1PP1/5K1P/2R3r1 w - - 0 1", "Active rooks versus a dense pawn structure"),
-  queenend: position("Queen endgame", "6k1/5pp1/7p/3q4/3P4/4Q1P1/5P1P/6K1 w - - 0 1", "Checks branch everywhere across an open board"),
+  queenend: position("Queen endgame", "6k1/5pp1/7p/3q4/3P4/4Q1P1/5P1P/6K1 w - - 0 1", "An open board with many possible checks"),
   queenpawn: position("Queen versus advanced pawn", "8/1P6/8/8/8/4k3/8/3Q2K1 w - - 0 1", "Promotion threats force exact queen geometry"),
   pawnrace: position("Opposite-wing pawn race", "8/5pk1/4p2p/8/8/1P4P1/5P1P/6K1 w - - 0 1", "Both kings choose between pursuit and promotion"),
-  triangulation: position("King triangulation", "8/8/4k3/3p1p2/3P1P2/4K3/8/8 w - - 0 1", "A tiny tree where move order changes everything"),
+  triangulation: position("King triangulation", "8/8/4k3/3p1p2/3P1P2/4K3/8/8 w - - 0 1", "A small tree in which move order determines the result"),
   bishopknight: position("Bishop versus knight", "8/5pk1/3bp2p/4P3/2P2P2/2N3P1/5K1P/8 w - - 0 1", "Long diagonals against short-range blockades"),
   knights: position("Knight endgame", "8/5pk1/4p2p/3nP3/3N1P2/6P1/5K1P/8 w - - 0 1", "Outposts and zugzwang create looping routes"),
   samebishops: position("Same-coloured bishops", "8/5pk1/3bp2p/4P3/2P2P2/3B2P1/5K1P/8 w - - 0 1", "Competing diagonals and pawn targets"),
-  rookknight: position("Rook and knight versus pawns", "6k1/5ppp/8/8/8/3N4/5PPP/4R1K1 w - - 0 1", "A material imbalance with a wide first ring"),
+  rookknight: position("Rook and knight versus pawns", "6k1/5ppp/8/8/8/3N4/5PPP/4R1K1 w - - 0 1", "A material imbalance with many legal moves"),
   bishoppair: position("Bishop pair versus knight", "8/5pk1/4p2p/8/2B2P2/2B2nP1/5K1P/8 b - - 0 1", "The side in check must find a path through two diagonals"),
-  rookbishoprook: position("Rook and bishop versus rook", "8/8/8/4k3/8/3BK3/5R2/6r1 w - - 0 1", "A notoriously deep conversion on an almost empty board"),
+  rookbishoprook: position("Rook and bishop versus rook", "8/8/8/4k3/8/3BK3/5R2/6r1 w - - 0 1", "A technically difficult conversion on an almost empty board"),
   connectedpassers: position("Connected passed pawns", "8/2k5/8/3PP3/8/8/4K3/8 w - - 0 1", "Two pawns create a clean, deep promotion race"),
 };
 
@@ -171,7 +171,7 @@ const WALKTHROUGH = [
     depth: 4,
     phase: "pvs",
     tag: "CHEAP CHALLENGES",
-    text: "The presumed best move gets a full search. Later candidates begin with narrow PVS probes; 1…h5 survives its challenge and becomes the new leader.",
+    text: "The presumed best move gets a full search. Later candidates begin with narrow PVS probes; 1…h5 passes its probe and becomes the new leader.",
   },
   {
     depth: 5,
@@ -189,7 +189,7 @@ const WALKTHROUGH = [
     depth: 9,
     phase: "pvs",
     tag: "A DEEP REPLY",
-    text: "Another ply exposes a reply that changes the root verdict. 1…g6 becomes best; branches that cannot beat the current bound are cut without full expansion.",
+    text: "Another ply exposes a reply that changes the root score. 1…g6 becomes best; branches that cannot beat the current bound are cut without full expansion.",
   },
   {
     depth: 10,
@@ -329,13 +329,13 @@ function updateNetworkDepthControl() {
     : `Record depth-${depth} search`;
   const hint = depth >= 18
     ? live
-      ? "Extreme depth: watch every iteration live as the horizon expands from 1 to the target."
-      : "Extreme depth: this can take a while, especially in tactical positions."
+      ? "The search will stream each completed iteration from depth 1 to the target."
+      : "This depth can take a while, especially in tactical positions."
     : depth >= 14
       ? live
-        ? "Every completed iteration stays in the web while the next depth unfolds."
+        ? "Each completed iteration remains visible while the next depth runs."
         : "The full iterative search is recorded; real-time replay preserves its timing."
-      : "The web streams continuously from depth 1 to the selected horizon.";
+      : "The network updates continuously from depth 1 to the selected horizon.";
   refs.networkDepthHint.textContent = publicDemo ? `${hint} ${demoDepthReason()}` : hint;
   if (mode === "network") refs.modeNote.textContent = live
     ? `Live engine trace · depths 1–${depth} · no prerecorded motion`
@@ -543,7 +543,7 @@ function formatScore(score) {
 }
 
 function moveLabel(uci) {
-  if (!uci) return "—";
+  if (!uci) return "-";
   if (MOVE_NAMES[uci]) return MOVE_NAMES[uci];
   if (uci.length >= 4) return `${uci.slice(0, 2)}→${uci.slice(2, 4)}${uci.slice(4)}`;
   return uci;
@@ -601,7 +601,7 @@ function renderLiveCandidates(leader, depth) {
     const empty = createCandidate("waiting", "completed depths will appear here", false);
     empty.classList.remove("seen");
     empty.querySelector("strong").textContent = "No leader yet";
-    empty.querySelector("code").textContent = "—";
+    empty.querySelector("code").textContent = "-";
     refs.candidateGrid.appendChild(empty);
     return;
   }
@@ -691,15 +691,15 @@ function resetLive() {
   setPosition(position);
   liveIterations = [];
   liveCandidates = [];
-  refs.depthValue.textContent = "—";
+  refs.depthValue.textContent = "-";
   refs.nodesValue.textContent = "0";
   refs.npsValue.textContent = "waiting";
-  refs.scoreValue.textContent = "—";
+  refs.scoreValue.textContent = "-";
   refs.scoreKind.textContent = "White relative";
-  refs.leaderValue.textContent = "—";
+  refs.leaderValue.textContent = "-";
   refs.leaderUci.textContent = "waiting";
   refs.eventTag.textContent = "LIVE TRACE";
-  refs.explanationText.textContent = "Run the engine to watch each completed iterative-deepening pass arrive from Sgurr in real time.";
+  refs.explanationText.textContent = "Run the engine to see each completed iterative-deepening pass as it arrives.";
   refs.searchSignal.className = "search-signal";
   refs.searchSignal.querySelector("strong").textContent = "Ready for a live search";
   refs.liveDetail.textContent = "This starts a separate Sgurr process, so it cannot interrupt anyone playing a game.";
@@ -734,7 +734,7 @@ function setMode(nextMode) {
     : live
       ? "A separate engine process · completed depths only"
       : "Recorded from Sgurr v8.2 · exact completed-depth output";
-  refs.iterationTitle.textContent = live ? "The live verdict" : "The verdict keeps moving";
+  refs.iterationTitle.textContent = live ? "Best move by completed depth" : "Best move by depth";
   refs.iterationCopy.textContent = live
     ? "Every mark arrives directly from the engine. The final mark is the deepest pass completed before its time limit."
     : "Each dot is a fully completed depth. Unfinished work is discarded when the clock expires.";
@@ -809,13 +809,13 @@ function handleLiveEvent(event) {
   }
   if (event.type !== "iteration") return;
 
-  const uci = event.pv?.[0] || "—";
+  const uci = event.pv?.[0] || "-";
   const iteration = { ...event, uci, score: event.value };
   liveIterations.push(iteration);
-  if (uci !== "—" && !liveCandidates.some((candidate) => candidate.uci === uci)) {
+  if (uci !== "-" && !liveCandidates.some((candidate) => candidate.uci === uci)) {
     liveCandidates.push({ uci, depth: event.depth });
   }
-  refs.depthValue.textContent = String(event.depth ?? "—");
+  refs.depthValue.textContent = String(event.depth ?? "-");
   refs.nodesValue.textContent = formatCount(event.nodes);
   refs.npsValue.textContent = formatRate(event.nps || ((event.nodes || 0) / Math.max(event.time_ms || 1, 1)) * 1000);
   refs.scoreValue.textContent = event.kind === "mate" ? event.display : formatScore(event.value);

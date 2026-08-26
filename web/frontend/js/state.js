@@ -235,7 +235,7 @@ const app = {
   clockFlagged: null,
   clockCueSecond: null,
   searchToken: 0,
-  coreMessage: "Opponent core online",
+  coreMessage: "Engine ready",
   coreLineMode: "system",
   coreDialogueLastPly: -99,
   coreDialogueLastKey: "",

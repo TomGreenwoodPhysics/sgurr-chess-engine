@@ -14,7 +14,7 @@ import { decoratePieceNode, formatClock, pieceColor, pieceLabel, title } from ".
 function setStatus(message, isError = false) {
   app.status = message;
   if (!app.thinking) {
-    app.coreMessage = isError ? "Signal interrupted" : message;
+    app.coreMessage = isError ? "Engine error" : message;
     app.coreLineMode = "system";
   }
   if (isError) {
@@ -93,7 +93,7 @@ function renderWatchArena() {
   }
 
   if (app.error) {
-    refs.watchMatchLine.textContent = "Arena signal interrupted";
+    refs.watchMatchLine.textContent = "Engine unavailable";
   } else if (app.gameOver) {
     refs.watchMatchLine.textContent = `Match complete · ${app.result || "Game over"}`;
   } else if (app.watchPaused) {
@@ -213,8 +213,8 @@ function renderPlayerCards() {
     refs.bottomPlayerCard.classList.remove("engine-side", "human-side");
     refs.topPlayerName.innerHTML = `<strong>${title(topColour)} pieces</strong><small>BOARD EDITOR</small>`;
     refs.bottomPlayerName.innerHTML = `<strong>${title(bottomColour)} pieces</strong><small>BOARD EDITOR</small>`;
-    refs.topPlayerClock.textContent = app.editor.turn === topColour ? "to move" : "—";
-    refs.bottomPlayerClock.textContent = app.editor.turn === bottomColour ? "to move" : "—";
+    refs.topPlayerClock.textContent = app.editor.turn === topColour ? "to move" : "-";
+    refs.bottomPlayerClock.textContent = app.editor.turn === bottomColour ? "to move" : "-";
     refs.topPlayerCard.classList.toggle("active", app.editor.turn === topColour);
     refs.bottomPlayerCard.classList.toggle("active", app.editor.turn === bottomColour);
     refs.topPlayerCard.classList.remove("flagged");
@@ -229,8 +229,8 @@ function renderPlayerCards() {
     refs.bottomPlayerCard.classList.remove("engine-side", "human-side", "flagged");
     refs.topPlayerName.innerHTML = `<strong>${title(topColour)} pieces</strong><small>ANALYSIS BOARD</small>`;
     refs.bottomPlayerName.innerHTML = `<strong>${title(bottomColour)} pieces</strong><small>ANALYSIS BOARD</small>`;
-    refs.topPlayerClock.textContent = app.turn === topColour ? "to move" : "—";
-    refs.bottomPlayerClock.textContent = app.turn === bottomColour ? "to move" : "—";
+    refs.topPlayerClock.textContent = app.turn === topColour ? "to move" : "-";
+    refs.bottomPlayerClock.textContent = app.turn === bottomColour ? "to move" : "-";
     refs.topPlayerCard.classList.toggle("active", app.turn === topColour);
     refs.bottomPlayerCard.classList.toggle("active", app.turn === bottomColour);
     return;
@@ -429,7 +429,7 @@ function renderReviewPanel() {
   if (swing) {
     refs.reviewSwingButton.hidden = false;
     refs.reviewSwingButton.textContent =
-      `Turning point: ${swing.moveText} — ${swing.fromDisplay} to ${swing.toDisplay}`
+      `Turning point: ${swing.moveText}, ${swing.fromDisplay} to ${swing.toDisplay}`
       + ` (${swing.pawns.toFixed(1)} pawns)`;
   } else {
     refs.reviewSwingButton.hidden = true;
@@ -666,38 +666,38 @@ function resultPresentation(outcome, message) {
   const detail = message.detail || "Game complete";
   const presentations = {
     "human-win": {
-      label: "CORE FAILURE // VICTORY CONFIRMED",
-      title: "You prevailed",
-      detail: `${detail} / ${message.title}`,
+      label: "GAME COMPLETE",
+      title: "You win",
+      detail: `${message.title}: ${detail}`,
     },
     "sgurr-win": {
-      label: "SGURR // GAME CONCLUDED",
-      title: "Sgurr prevails",
-      detail: `${detail} / ${message.title}`,
+      label: "GAME COMPLETE",
+      title: "Sgurr wins",
+      detail: `${message.title}: ${detail}`,
     },
     "human-draw": {
-      label: "POSITION STABLE // EQUILIBRIUM",
-      title: "Neither yielded",
-      detail: `${detail} / Human and Core remain level`,
+      label: "GAME COMPLETE",
+      title: "Draw",
+      detail,
     },
     "watch-draw": {
-      label: "ARENA CONVERGENCE // NO VICTOR",
-      title: "Perfect equilibrium",
-      detail: `${detail} / Both cores resolve equally`,
+      label: "GAME COMPLETE",
+      title: "Draw",
+      detail,
     },
     "watch-white-win": {
-      label: "WHITE CORE // VICTORY CONFIRMED",
-      title: "White Core prevails",
-      detail: `${detail} / Sgurr White wins`,
+      label: "GAME COMPLETE",
+      title: "White wins",
+      detail,
     },
     "watch-black-win": {
-      label: "BLACK CORE // VICTORY CONFIRMED",
-      title: "Black Core prevails",
-      detail: `${detail} / Sgurr Black wins`,
+      label: "GAME COMPLETE",
+      title: "Black wins",
+      detail,
     },
   };
   return presentations[outcome] || {
-    label: "SGURR // GAME CONCLUDED",
+    label: "GAME COMPLETE",
     title: message.title,
     detail: message.detail,
   };
@@ -755,7 +755,7 @@ function renderEditor() {
   }
 
   refs.editorHeading.textContent = "Position Lab";
-  refs.editorPurpose.textContent = "Build or paste a position, then play it or ask Sgurr for a deep analysis.";
+  refs.editorPurpose.textContent = "Edit the board or paste a FEN, then play or analyse the position.";
   if (document.activeElement !== refs.editorFenInput && !app.busy) {
     refs.editorFenInput.value = composeEditorFen();
   }
@@ -811,7 +811,7 @@ function renderEditor() {
 function formatAnalysisCount(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) {
-    return "—";
+    return "-";
   }
   if (number >= 1_000_000) {
     return `${(number / 1_000_000).toFixed(number >= 10_000_000 ? 0 : 1)}m`;
@@ -901,13 +901,13 @@ function renderAnalysis() {
   refs.analysisCore.classList.toggle("ready", app.backendOk && app.engineExists);
   refs.analysisCore.classList.toggle("thinking", analysis.running);
   refs.analysisScore.textContent = selected?.display || "0.0";
-  refs.analysisBestMove.textContent = bestSan || (analysis.running ? "Calculating" : "—");
-  refs.analysisBestMoveUci.textContent = bestUci || "Completed depths will appear live";
-  refs.analysisDepth.textContent = selected?.depth ?? "—";
+  refs.analysisBestMove.textContent = bestSan || (analysis.running ? "Calculating" : "-");
+  refs.analysisBestMoveUci.textContent = bestUci || "Waiting for a completed depth";
+  refs.analysisDepth.textContent = selected?.depth ?? "-";
   refs.analysisNodes.textContent = formatAnalysisCount(selected?.nodes);
-  refs.analysisNps.textContent = selected?.nps ? `${formatAnalysisCount(selected.nps)}/s` : "—";
+  refs.analysisNps.textContent = selected?.nps ? `${formatAnalysisCount(selected.nps)}/s` : "-";
   refs.analysisTime.textContent = selected?.time_ms === null || selected?.time_ms === undefined
-    ? "—"
+    ? "-"
     : selected.time_ms >= 1_000
       ? `${(selected.time_ms / 1_000).toFixed(1)}s`
       : `${selected.time_ms}ms`;
@@ -954,7 +954,7 @@ function renderAnalysis() {
     ? "1 leader"
     : `${leaderRuns.length} leaders`;
   if (!leaderRuns.length) {
-    refs.analysisDecisionSummary.textContent = "Only changes in Sgurr's preferred move appear here.";
+    refs.analysisDecisionSummary.textContent = "This list shows each change in the preferred move.";
     const waiting = document.createElement("p");
     waiting.className = "analysis-depth-waiting";
     waiting.textContent = analysis.error ? analysis.error : "Waiting for Sgurr's first completed search depth";
@@ -1024,13 +1024,13 @@ function renderBlobMemory() {
   const favorite = favoriteMemoryOpening();
   const averagePly = Math.round(memory.totalPly / memory.games);
   const summary = [
-    `CORE MEMORY // ${memory.games} ENCOUNTER${memory.games === 1 ? "" : "S"}`,
+    `${memory.games} SAVED GAME${memory.games === 1 ? "" : "S"}`,
     `${memory.wins}W ${memory.losses}L ${memory.draws}D`,
     `AVG ${averagePly} PLY`,
     `LONGEST ${memory.longestPly} PLY`,
   ];
   if (favorite) {
-    summary.push(`FAV ${favorite.name}`);
+    summary.push(`MOST PLAYED ${favorite.name}`);
   }
   refs.menuMemory.textContent = summary.join(" / ");
   refs.menuMemory.hidden = false;

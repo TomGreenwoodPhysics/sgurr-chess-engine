@@ -186,16 +186,16 @@ function coreMoveLine(moveInfo, options = {}) {
 
   app.coreLineMode = "system";
   if (app.gameOver) {
-    return move.includes("#") ? `The line closes: ${move}` : `The position resolves: ${move}`;
+    return move.includes("#") ? `Checkmate: ${move}` : `Game complete: ${move}`;
   }
   if (move.includes("#")) {
-    return `The net tightens: ${move}`;
+    return `Checkmate: ${move}`;
   }
   if (move.includes("+")) {
-    return `King pressure rises: ${move}`;
+    return `Check: ${move}`;
   }
   if (move.includes("x")) {
-    return `Material shifts: ${move}`;
+    return `Capture: ${move}`;
   }
   return `${actor} played ${move}`;
 }
@@ -210,7 +210,7 @@ function coreIdleLine() {
   if (app.gameOver) {
     return app.coreMessage || (app.result ? `Game complete: ${app.result}` : "Game complete");
   }
-  return app.coreMessage || "Opponent core online";
+  return app.coreMessage || "Engine ready";
 }
 
 function coreLineText() {
@@ -292,7 +292,7 @@ function startThinkingTicker() {
     }
     depth = Math.max(1, depth);
     refs.evalMeta.textContent =
-      `thinking — depth ~${depth} / ~${formatNodesShort(nodes)} nodes / ${(elapsedMs / 1000).toFixed(1)}s`;
+      `thinking: depth ~${depth} / ~${formatNodesShort(nodes)} nodes / ${(elapsedMs / 1000).toFixed(1)}s`;
   }, 120);
 }
 

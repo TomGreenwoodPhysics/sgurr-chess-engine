@@ -84,7 +84,7 @@ function setError(error) {
   app.busy = false;
   clearPremoveQueueState();
   setThinkingState(false, { cool: false });
-  app.coreMessage = "Signal interrupted";
+  app.coreMessage = "Engine error";
   app.coreLineMode = "system";
   render();
 }
@@ -108,7 +108,7 @@ function applyEngineSelection() {
 
 function engineChoiceMessage(sel) {
   return `Opponent: ${sel.label}`
-    + (sel.available === false ? ` — ${sel.unavailable_reason || "unavailable"}` : "");
+    + (sel.available === false ? `: ${sel.unavailable_reason || "unavailable"}` : "");
 }
 
 // Pick an opponent outright rather than stepping to it. The gallery hands back
@@ -151,7 +151,7 @@ function renderEngineGallery() {
   if (!app.engines.length) {
     const empty = document.createElement("p");
     empty.className = "engine-empty";
-    empty.textContent = "Engine list unavailable — is the backend running?";
+    empty.textContent = "Engine list unavailable. Check that the backend is running.";
     gallery.appendChild(empty);
     return;
   }
@@ -203,7 +203,7 @@ function renderEngineGallery() {
     meter.className = "engine-meter";
     const rating = document.createElement("span");
     rating.className = "engine-rating-value";
-    rating.textContent = Number.isFinite(engine.rating) ? `~${engine.rating}` : "—";
+    rating.textContent = Number.isFinite(engine.rating) ? `~${engine.rating}` : "-";
     const track = document.createElement("span");
     track.className = "engine-meter-track";
     const fill = document.createElement("span");

@@ -951,8 +951,8 @@ export function initSearchNetwork() {
     refs.canvas.dataset.principalHitRadius = String(PRINCIPAL_HIT_RADIUS_PX);
     refs.canvas.dataset.standardHitRadius = String(STANDARD_HIT_RADIUS_PX);
     refs.empty.hidden = false;
-    refs.empty.querySelector("strong").textContent = "Load a trace to reveal the search";
-    refs.empty.querySelector("span").textContent = "Sgurr captures a wide live sample, then settles each depth around the decisions that mattered.";
+    refs.empty.querySelector("strong").textContent = "Run a search to draw the network";
+    refs.empty.querySelector("span").textContent = "The display retains a representative sample of nodes from each completed depth.";
     refs.eventTag.textContent = "READY";
     refs.eventText.textContent = message;
     clearState();
@@ -1265,7 +1265,7 @@ export function initSearchNetwork() {
     if (event.e === "pv") {
       const depth = Number(event.iterationDepth || event.depth || 0);
       const moves = Array.isArray(event.moves) ? event.moves.length : 0;
-      return ["SURVIVOR PATH", `Depth ${depth}'s current principal variation is visible through ${moves} searched plies.`];
+      return ["PRINCIPAL VARIATION", `Depth ${depth}'s current principal variation contains ${moves} searched plies.`];
     }
     if (event.e === "cutoff") return ["BETA CUTOFF", `${event.move} proves enough. The remaining siblings do not need to be searched.`];
     if (event.e === "activity") {
@@ -1292,9 +1292,9 @@ export function initSearchNetwork() {
     if (event.e === "finish") {
       const depth = Number(event.iterationDepth || event.depth || 0);
       if (depth < maxDepthRing) {
-        return [`DEPTH ${depth} COMPLETE`, `${event.best || "No move"} leads at ${event.score} centipawns. The ring has settled around its most consequential 120 nodes.`];
+        return [`DEPTH ${depth} COMPLETE`, `${event.best || "No move"} leads at ${event.score} centipawns. The display retains up to 120 representative nodes for this depth.`];
       }
-      return ["SEARCH COMPLETE", `${event.best || "No move"} survives at ${event.score} centipawns. Every depth now shows its consequential connected subtree.`];
+      return ["SEARCH COMPLETE", `${event.best || "No move"} is best at ${event.score} centipawns. Each depth now shows its retained connected subtree.`];
     }
     if (event.e === "search-limit") {
       return [
@@ -1303,11 +1303,11 @@ export function initSearchNetwork() {
       ];
     }
     if (event.e === "limit") return ["SAMPLE FULL", `This iteration's ${event.count}-node structural sample is full; live activity continues while Sgurr searches.`];
-    return ["SEARCH", "Sgurr is building the search web."];
+    return ["SEARCH", "Sgurr is adding positions to the network."];
   }
 
   function displayMove(move) {
-    if (!move || move === "0000") return "—";
+    if (!move || move === "0000") return "-";
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(move)) return move;
     const promotion = move[4] ? ` = ${move[4].toUpperCase()}` : "";
     return `${move.slice(0, 2)} → ${move.slice(2, 4)}${promotion}`;
@@ -1323,7 +1323,7 @@ export function initSearchNetwork() {
   function updateBestMove(changed = false) {
     if (!rootBest) {
       refs.best.dataset.state = "waiting";
-      refs.bestMove.textContent = "—";
+      refs.bestMove.textContent = "-";
       refs.bestScore.textContent = "Waiting for a root move";
       return;
     }
@@ -4240,7 +4240,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.state = "searching";
     setStreamState("live", `Live · starting depth 1/${requestedDepth}`);
     refs.eventTag.textContent = "LIVE NOW";
-    refs.eventText.textContent = "Every iterative-deepening pass will arrive here as Sgurr searches it.";
+    refs.eventText.textContent = "Each iterative-deepening pass will appear here as Sgurr completes it.";
     requestDraw();
   }
 
@@ -4346,7 +4346,7 @@ export function initSearchNetwork() {
       searchHorizon = 0;
       setStreamState("preparing", `Starting · 0/${message.depth}`);
       refs.eventTag.textContent = `SEARCH TO ${message.depth}`;
-      refs.eventText.textContent = "The network will begin at depth 1 and grow with every completed iteration.";
+      refs.eventText.textContent = "The network starts at depth 1 and updates after each completed iteration.";
       return;
     }
     if (message.type === "progress") {
@@ -4388,7 +4388,7 @@ export function initSearchNetwork() {
         if (runMode === "live") {
           setStreamState("live", `Live · depth ${event.iterationDepth}/${requestedDepth}`);
           refs.eventTag.textContent = `DEPTH ${event.iterationDepth} LIVE`;
-          refs.eventText.textContent = `Sgurr is now exploring iteration ${event.iterationDepth}; earlier positions remain in the web.`;
+          refs.eventText.textContent = `Sgurr is searching depth ${event.iterationDepth}; earlier positions remain in the network.`;
         }
         else {
           setStreamState("recording", `Recording · depth ${event.iterationDepth}/${requestedDepth}`);
@@ -4486,7 +4486,7 @@ export function initSearchNetwork() {
     refs.empty.hidden = false;
     refs.empty.querySelector("strong").textContent = `Starting depth 1 of ${depth}`;
     refs.empty.querySelector("span").textContent = runMode === "live"
-      ? "The live web will grow continuously through every iterative-deepening pass."
+      ? "The network will update through each iterative-deepening pass."
       : "Every depth will be recorded as one continuous, engine-speed search.";
     refs.eventTag.textContent = "STARTING";
     requestDraw();
@@ -4588,11 +4588,11 @@ export function initSearchNetwork() {
     if (hoverChanged) requestDraw();
     refs.tooltip.replaceChildren();
     const title = document.createElement("strong");
-    title.textContent = hit.principal ? `${node.move} · survivor` : node.move || "Root position";
+    title.textContent = hit.principal ? `${node.move} · principal variation` : node.move || "Root position";
     const detail = document.createElement("span");
     if (hit.principal) {
       const source = hit.traced ? "traced search node" : "completed-depth PV continuation";
-      detail.textContent = `Golden line · move ${hit.pvIndex} of ${hit.pvLength} · depth ring ${hit.position.ringIndex} · ${source}`;
+      detail.textContent = `Principal variation · move ${hit.pvIndex} of ${hit.pvLength} · depth ring ${hit.position.ringIndex} · ${source}`;
       refs.tooltip.dataset.kind = "principal";
     } else {
       const returnedScore = scoreForParent(node);

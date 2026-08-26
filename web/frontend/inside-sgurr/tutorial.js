@@ -7,7 +7,7 @@ const STEPS = Object.freeze([
     placement: "bottom",
     kicker: "Start here",
     title: "What NNUE does",
-    text: "NNUE is the small neural network Sgurr uses to score a position. Search calls it again and again; this page shows one call on its own.",
+    text: "NNUE is the neural network Sgurr uses to score a position. Search calls it at the end of each line. This page shows one evaluation without search.",
   },
   {
     key: "board",
@@ -15,7 +15,7 @@ const STEPS = Object.freeze([
     placement: "right",
     kicker: "01 / Input",
     title: "The board becomes numbers",
-    text: "The network does not see a picture. Every piece and square selects a stored row of numbers that was adjusted during training.",
+    text: "Each piece-square combination selects a row of weights learned during training. Those rows are the network's inputs.",
   },
   {
     key: "trace",
@@ -23,7 +23,7 @@ const STEPS = Object.freeze([
     placement: "right",
     kicker: "Follow one piece",
     title: "One piece feeds both views",
-    text: "Click a piece to trace it. Its row is added once from White's view and once from Black's mirrored view.",
+    text: "Select a piece to trace its two feature rows. One uses White's view of the board; the other uses Black's mirrored view.",
   },
   {
     key: "accumulators",
@@ -31,7 +31,7 @@ const STEPS = Object.freeze([
     placement: "left",
     kicker: "02 / Accumulators",
     title: "The rows are added together",
-    text: "The two panels each hold 384 totals. Every piece contributes to them. Larger, brighter lanes are carrying stronger values.",
+    text: "Each panel contains 384 accumulated values. Larger and brighter lanes have a greater effect in the current display mode.",
   },
   {
     key: "modes",
@@ -53,9 +53,9 @@ const STEPS = Object.freeze([
     key: "autopsy",
     selector: "#moveAutopsy",
     placement: "top",
-    kicker: "Move autopsy",
-    title: "Find the lanes that mattered",
-    text: "After a move, this list ranks the biggest changes for each side. Select a lane to see its exact arithmetic in the readout.",
+    kicker: "Move breakdown",
+    title: "Rank the largest lane changes",
+    text: "After a move, this list ranks the largest changes for each side. Select a lane to see its arithmetic in the readout.",
   },
   {
     key: "output",

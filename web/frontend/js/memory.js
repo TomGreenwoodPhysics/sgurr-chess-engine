@@ -61,14 +61,14 @@ function favoriteMemoryOpening() {
 
 function blobMemoryGreeting(side) {
   if (side === null || !app.memory.games) {
-    return side === null ? "Two cores enter the board." : "Opponent core online";
+    return side === null ? "Self-play ready" : "Engine ready";
   }
 
   const favorite = favoriteMemoryOpening();
   if (favorite?.count >= 2) {
-    return `You return. I remember our ${favorite.name}.`;
+    return `${favorite.name} has appeared in ${favorite.count} previous games.`;
   }
-  return `You return. Encounter ${app.memory.games + 1} begins.`;
+  return `Starting game ${app.memory.games + 1} in this browser.`;
 }
 
 function recordCompletedEncounter() {

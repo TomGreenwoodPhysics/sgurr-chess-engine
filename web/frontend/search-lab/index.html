@@ -21,14 +21,14 @@
         }
       })();
     </script>
-    <title>Inside Sgurr — Search Lab</title>
-    <meta name="description" content="Watch Sgurr build, challenge, and revise a chess move through iterative deepening, or stream a live search from the engine.">
+    <title>Inside Sgurr | Search Lab</title>
+    <meta name="description" content="Inspect Sgurr's search network, completed depths, candidate moves and pruning events.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#251a16">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
-    <meta property="og:title" content="Inside Sgurr — Search Lab">
-    <meta property="og:description" content="Step through a real Sgurr search, then watch the engine think live.">
+    <meta property="og:title" content="Inside Sgurr | Search Lab">
+    <meta property="og:description" content="Inspect a recorded Sgurr search or stream completed depths from the engine.">
     <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23251a16'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e2b147' stroke-width='3' opacity='.7'/><circle cx='32' cy='32' r='11' fill='%23c96f3a'/></svg>">
@@ -63,11 +63,10 @@
       <section class="lab-masthead" aria-labelledby="labTitle">
         <div>
           <p class="eyebrow">Search Lab</p>
-          <h1 id="labTitle">A move is not found.<br>It survives.</h1>
+          <h1 id="labTitle">Inspect a Sgurr search.</h1>
         </div>
-        <p>Sgurr repeatedly searches the same position more deeply. The apparent best move can change as
-          replies emerge, shortcuts reject whole branches, and quiet tactical continuations settle the
-          final score.<br>
+        <p>Sgurr searches the same position at increasing depths. Move ordering, pruning and quiescence
+          reduce the work, while the preferred move can change after each completed depth.<br>
           <button type="button" class="search-tour-trigger" id="searchTutorialButton">
             Search guide <span aria-hidden="true">?</span>
           </button>
@@ -119,7 +118,7 @@
                 </form>
               </details>
               <div class="network-depth-field" id="networkDepthField" hidden>
-                <label for="networkRunMode">Experience</label>
+                <label for="networkRunMode">Run mode</label>
                 <select id="networkRunMode">
                   <option value="live" selected>Watch the search live</option>
                   <option value="replay">Record, then replay</option>
@@ -132,8 +131,8 @@
                   <option value="12">12 · moderate</option>
                   <option value="14" selected>14 · deep</option>
                   <option value="16">16 · very deep</option>
-                  <option value="18">18 · extreme</option>
-                  <option value="20">20 · experimental</option>
+                  <option value="18">18 · slow</option>
+                  <option value="20">20 · very slow</option>
                 </select>
                 <small id="networkDepthHint">Higher depths can take much longer depending on the position.</small>
               </div>
@@ -191,7 +190,7 @@
             <div class="network-head">
               <div>
                 <p class="panel-label">Rings are search depth</p>
-                <h2>A real search, unfolding outward</h2>
+                <h2>Positions examined at each depth</h2>
               </div>
               <div class="network-stats" aria-live="polite">
                 <span class="network-time-stat">
@@ -220,23 +219,23 @@
               <p class="network-nav-hint">Scroll or pinch to zoom · drag to navigate</p>
               <div class="network-best" id="networkBest" data-state="waiting" aria-live="polite">
                 <span>Current best</span>
-                <strong id="networkBestMove">—</strong>
+                <strong id="networkBestMove">-</strong>
                 <small id="networkBestScore">Waiting for a root move</small>
               </div>
               <div class="network-empty" id="networkEmpty">
-                <strong>Load a trace to reveal the search</strong>
-                <span>Watch discoveries appear live, then settle around the positions that shaped Sgurr's decision.</span>
+                <strong>Run a search to draw the network</strong>
+                <span>Each node is a searched position. Each line is a move between positions.</span>
               </div>
               <div class="network-tooltip" id="networkTooltip" hidden></div>
             </div>
 
             <div class="network-legend" aria-label="Network legend">
-              <span><i class="legend-ring"></i> depth · echoes when complete</span>
-              <span><i class="legend-dot active"></i> consequential node</span>
+              <span><i class="legend-ring"></i> ring = search depth</span>
+              <span><i class="legend-dot active"></i> retained node</span>
               <span><i class="legend-dot evaluation"></i> brighter = stronger move</span>
               <span><i class="legend-line principal"></i> completed-depth PV</span>
-              <span><i class="legend-dot cutoff"></i> cutoff implosion</span>
-              <span><i class="legend-dot transposition"></i> transposition wormhole</span>
+              <span><i class="legend-dot cutoff"></i> beta cutoff</span>
+              <span><i class="legend-dot transposition"></i> transposition</span>
               <span><i class="legend-dot quiet"></i> quiescence</span>
             </div>
 
@@ -252,7 +251,7 @@
               <select id="networkSpeed">
                 <option value="realtime">Real time · recorded timing</option>
                 <option value="ultra">Ultra slow · inspect each step</option>
-                <option value="slow">Slow · cinematic</option>
+                <option value="slow">Slow · inspect events</option>
                 <option value="normal" selected>Normal · balanced</option>
                 <option value="fast">Fast · rapid scan</option>
                 <option value="very-fast">Very fast · whole search</option>
@@ -268,7 +267,7 @@
 
         <div class="iteration-strip">
           <div class="iteration-heading">
-            <div><p class="panel-label">Completed iterations</p><h2 id="iterationTitle">The verdict keeps moving</h2></div>
+            <div><p class="panel-label">Completed iterations</p><h2 id="iterationTitle">Best move by depth</h2></div>
             <p id="iterationCopy">Each dot is a fully completed depth. Unfinished work is discarded when the clock expires.</p>
           </div>
           <div class="iteration-chart" id="iterationChart" aria-label="Best move and white evaluation at each completed depth"></div>
@@ -277,8 +276,8 @@
 
       <section class="mechanics" aria-labelledby="mechanicsTitle">
         <div class="mechanics-heading">
-          <p class="eyebrow">What collapses the tree</p>
-          <h2 id="mechanicsTitle">Sgurr spends depth where doubt remains.</h2>
+          <p class="eyebrow">How the tree is reduced</p>
+          <h2 id="mechanicsTitle">Sgurr searches promising lines first.</h2>
         </div>
         <div class="mechanics-grid">
           <article><span>01</span><h3>Order the promising moves</h3><p>Transposition-table moves, good captures, killers, and learned history are tried early so a strong reply can set a useful bound.</p></article>
@@ -307,7 +306,7 @@
           <button type="button" id="searchTourSkip">Skip tutorial</button>
         </div>
         <p class="panel-label" id="searchTourKicker">Search guide</p>
-        <h2 id="searchTourTitle">Three ways to watch the search</h2>
+        <h2 id="searchTourTitle">Three views of the search</h2>
         <p id="searchTourText"></p>
         <div class="search-tour-progress" id="searchTourProgress" aria-hidden="true"></div>
         <div class="search-tour-actions">

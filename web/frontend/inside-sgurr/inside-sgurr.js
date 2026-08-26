@@ -319,13 +319,13 @@ function setBusy(nextBusy, { preserveFen = false } = {}) {
 }
 
 function formatSigned(value, decimals = 2) {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "-";
   const rounded = Math.abs(value) < 0.5 * 10 ** -decimals ? 0 : value;
   return `${rounded >= 0 ? "+" : "−"}${Math.abs(rounded).toFixed(decimals)}`;
 }
 
 function formatInteger(value) {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "-";
   return Math.trunc(value).toLocaleString("en-GB");
 }
 
@@ -410,7 +410,7 @@ function buildAutopsy() {
     autopsyLanes = { gain: [], loss: [] };
     refs.moveAutopsy.dataset.state = "idle";
     refs.autopsyTitle.textContent = "No move yet";
-    refs.autopsyNet.textContent = "—";
+    refs.autopsyNet.textContent = "-";
     renderAutopsyList();
     return;
   }
@@ -501,18 +501,18 @@ function renderAutopsyList() {
 function renderLane(details) {
   if (!details) {
     refs.laneTitle.textContent = "Select a lane";
-    refs.laneAddress.textContent = "—";
+    refs.laneAddress.textContent = "-";
     refs.laneMeter.style.width = "0%";
-    refs.laneRaw.textContent = "—";
-    refs.laneClipped.textContent = "—";
-    refs.laneDelta.textContent = "—";
-    refs.laneWeight.textContent = "—";
-    refs.laneProduct.textContent = "—";
+    refs.laneRaw.textContent = "-";
+    refs.laneClipped.textContent = "-";
+    refs.laneDelta.textContent = "-";
+    refs.laneWeight.textContent = "-";
+    refs.laneProduct.textContent = "-";
     refs.laneContributionLabel.textContent = "Output contribution";
-    refs.laneContribution.textContent = "—";
+    refs.laneContribution.textContent = "-";
     refs.laneEquation.dataset.state = "idle";
     refs.laneEquationFormula.textContent = "Select a lane";
-    refs.laneEquationResult.textContent = "—";
+    refs.laneEquationResult.textContent = "-";
     refs.laneEquationNote.textContent = "Raw accumulator values are clipped before the output weight is applied.";
     refs.laneNote.textContent = "Hover, tap or use the arrow keys on the display.";
     return;
@@ -567,13 +567,13 @@ function clearPieceInspection({ redraw = true } = {}) {
   visual.clearFocus();
   refs.pieceInspector.dataset.state = "idle";
   refs.pieceInspectorTitle.textContent = "Select a piece";
-  refs.pieceInspectorNote.textContent = "Click any piece to light the lanes its two feature rows drive.";
+  refs.pieceInspectorNote.textContent = "Select a piece to show the accumulator lanes affected by its two feature rows.";
   refs.clearPieceInspector.hidden = true;
   refs.replayFeatureTrace.hidden = true;
-  refs.whiteFeatureIndex.textContent = "W:—";
-  refs.blackFeatureIndex.textContent = "B:—";
-  refs.whiteFeatureSummary.textContent = "—";
-  refs.blackFeatureSummary.textContent = "—";
+  refs.whiteFeatureIndex.textContent = "W:-";
+  refs.blackFeatureIndex.textContent = "B:-";
+  refs.whiteFeatureSummary.textContent = "-";
+  refs.blackFeatureSummary.textContent = "-";
   if (redraw && wasInspecting) renderBoard();
 }
 
@@ -604,7 +604,7 @@ async function inspectPiece(piece) {
     });
     refs.whiteFeatureSummary.textContent = summariseWeights(message.whiteWeights);
     refs.blackFeatureSummary.textContent = summariseWeights(message.blackWeights);
-    refs.pieceInspectorNote.textContent = "The pulse follows this piece into both views, then marks its strongest lanes.";
+    refs.pieceInspectorNote.textContent = "The display traces this piece through both feature rows and marks their strongest lanes.";
     refs.replayFeatureTrace.hidden = false;
     refs.pieceInspector.dataset.state = "ready";
   } catch (error) {

@@ -60,34 +60,31 @@
       <section class="lab-masthead" aria-labelledby="hubTitle">
         <div>
           <p class="eyebrow">Inside Sgurr</p>
-          <h1 id="hubTitle">Two moving parts.</h1>
+          <h1 id="hubTitle">Search and evaluation.</h1>
         </div>
-        <p>Every move Sgurr plays comes from two systems working together. One decides which moves are
-          worth looking at. The other decides how good the resulting positions are. Neither is any use
-          on its own, and each has its own lab below.</p>
+        <p>Sgurr uses two systems for each move. Search chooses which lines to examine. Evaluation scores
+          the positions at the ends of those lines. The labs below show both systems using the current engine.</p>
       </section>
 
       <section class="hub-parts" aria-label="How Sgurr chooses a move">
         <article>
           <span>01 &middot; Search</span>
           <h3>Which moves to look at</h3>
-          <p>Sgurr cannot examine every move &mdash; the tree is far too large. It looks a few moves ahead,
-            then deeper, then deeper again, cutting away branches that cannot beat what it has already
-            found. The move it prefers can change as it goes.</p>
+          <p>The complete game tree is too large to examine. Sgurr searches progressively deeper and
+            stops examining branches that cannot improve the current result. Its preferred move can
+            change after each completed depth.</p>
         </article>
         <article>
           <span>02 &middot; Evaluation</span>
           <h3>How good a position is</h3>
-          <p>At the end of every line the search needs a number. Sgurr gets it from a small neural
-            network that reads the position &mdash; which piece sits on which square &mdash; and returns a
-            score in pawns.</p>
+          <p>At the end of each line, a small neural network scores the position from its piece-square
+            features. The result is reported in pawns from White's perspective.</p>
         </article>
         <article>
           <span>03 &middot; Together</span>
           <h3>One move</h3>
-          <p>The search asks the network about millions of positions per second, and the answers steer
-            where it looks next. A better network makes the search sharper; a deeper search makes the
-            network's judgement count for more.</p>
+          <p>Search calls the network millions of times per second. Those scores set bounds, order moves
+            and determine which branches need more work.</p>
         </article>
       </section>
 
@@ -95,10 +92,10 @@
         <a class="lab-choice-card" href="../search-lab/?mode=network">
           <span class="lab-choice-index">01 &middot; Search</span>
           <h2>Search Lab</h2>
-          <p>Watch a real search unfold: the move Sgurr prefers at each depth, and why it changes its mind.</p>
+          <p>Inspect the preferred move at each completed depth and see why it changes.</p>
           <ul>
-            <li>Search network, drawn from a recorded trace</li>
-            <li>Live engine search, streamed depth by depth</li>
+            <li>Search network built from an engine trace</li>
+            <li>Live engine output, streamed depth by depth</li>
             <li>Guided walkthrough of one position</li>
           </ul>
           <p class="lab-choice-go">Open the Search Lab <span aria-hidden="true">&rarr;</span></p>
@@ -106,11 +103,11 @@
         <a class="lab-choice-card" href="./evaluation.html">
           <span class="lab-choice-index">02 &middot; Evaluation</span>
           <h2>Evaluation Lab</h2>
-          <p>Run the exact Gen8 network in your browser and watch a position turn into a single number.</p>
+          <p>Run the Gen8 network in your browser and inspect how it scores a position.</p>
           <ul>
             <li>768 accumulator lanes, read from the shipped network</li>
-            <li>The lanes any piece or move drives, lit up</li>
-            <li>Before, change and after for every move</li>
+            <li>Trace a piece or move through its accumulator lanes</li>
+            <li>Compare accumulator values before and after a move</li>
           </ul>
           <p class="lab-choice-go">Open the Evaluation Lab <span aria-hidden="true">&rarr;</span></p>
         </a>

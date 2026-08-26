@@ -557,7 +557,7 @@ test("reads a piece's two feature rows out of the shipped network", async ({ pag
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", /playing|ready/);
   await expect(page.locator("#replayFeatureTrace")).toBeVisible();
   await expect(page.locator('[data-square="e2"]')).toHaveClass(/inspected/);
-  await expect(page.locator("#pieceInspectorNote")).toContainText("pulse follows");
+  await expect(page.locator("#pieceInspectorNote")).toContainText("traces this piece");
   await page.locator("#replayFeatureTrace").click();
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", "playing");
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", "ready", { timeout: 5000 });
@@ -687,7 +687,7 @@ test("does not fabricate NNUE activity when the model is unavailable", async ({ 
   await expect(page.locator("#modelStatus")).toHaveText("Evaluator unavailable");
   await expect(page.locator("#loadingTitle")).toHaveText("The evaluator did not open");
   await expect(page.locator("#retryModel")).toBeVisible();
-  await expect(page.locator("#nnueEval")).toHaveText("—");
+  await expect(page.locator("#nnueEval")).toHaveText("-");
 });
 
 test("offers a promotion choice in the NNUE position board", async ({ page }) => {
@@ -872,7 +872,7 @@ test("introduces the Search Lab once and lets the guide be reopened", async ({ p
   await expect(page.locator("#networkPanel")).toBeVisible();
   await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "modes");
   await expect(page.locator("#searchTourCount")).toHaveText("1 of 9");
-  await expect(page.locator("#searchTourTitle")).toHaveText("Three ways to watch the search");
+  await expect(page.locator("#searchTourTitle")).toHaveText("Three views of the search");
 
   await page.locator("#searchTourNext").click();
   await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "position");
@@ -1062,7 +1062,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   });
 
   await page.goto("/search-lab/");
-  await expect(page.locator("h1")).toContainText("A move is not found");
+  await expect(page.locator("h1")).toHaveText("Inspect a Sgurr search.");
   expect(await page.locator(".mode-tab").evaluateAll((tabs) => tabs.map((tab) => tab.id))).toEqual([
     "networkTab",
     "liveTab",
@@ -1336,7 +1336,7 @@ test("opens on an overview that explains the engine and offers both labs", async
   await expect(page.locator("#twoPartsTitle")).toHaveCount(0);
   await page.goto("/inside-sgurr/");
 
-  await expect(page.locator("#hubTitle")).toHaveText("Two moving parts.");
+  await expect(page.locator("#hubTitle")).toHaveText("Search and evaluation.");
   await expect(page.locator(".hub-parts article")).toHaveCount(3);
   await expect(page.locator(".hub-parts h3").first()).toHaveText("Which moves to look at");
   await expect(page.locator(".lab-choice-card")).toHaveCount(2);

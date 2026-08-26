@@ -27,12 +27,12 @@ function initIntro() {
   if (introMotionEnabled()) {
     spawnIntroMotes();
   }
-  refs.introState.textContent = "Something slumbers in the deep";
+  refs.introState.textContent = "Sgurr v8.2";
   refs.introCore.classList.add("dormant");
   refs.introCore.classList.remove("ready", "thinking");
   refs.introCoreTrigger.disabled = false;
   refs.wakeSgurrButton.disabled = false;
-  refs.wakeSgurrButton.textContent = "Disturb it";
+  refs.wakeSgurrButton.textContent = "Enter";
   refs.menuScreen.inert = true;
   refs.appShell.inert = true;
 }
@@ -194,7 +194,7 @@ function beginIntroNaming() {
   }
 
   refs.introScreen.dataset.state = "naming";
-  refs.introState.textContent = "Sgurr, Ancient of the Hollow Mountain";
+  refs.introState.textContent = "A chess engine built from scratch in C++";
   playSound("boss_reveal", { volume: 0.9 });
   app.intro.nameTimer = window.setTimeout(
     beginIntroHandoff,
@@ -303,12 +303,12 @@ function wakeSgurr() {
 
   app.intro.waking = true;
   refs.introScreen.dataset.state = "waking";
-  refs.introState.textContent = "It stirs";
+  refs.introState.textContent = "Starting Sgurr";
   refs.introCore.classList.remove("dormant");
   refs.introCore.classList.add("ready", "thinking");
   refs.introCoreTrigger.disabled = true;
   refs.wakeSgurrButton.disabled = true;
-  refs.wakeSgurrButton.textContent = "Too late";
+  refs.wakeSgurrButton.textContent = "Starting";
   unlockAudio();
   playSound("boss_rumble", { volume: 1.15 });
   dismissIntroCopy();
@@ -317,7 +317,7 @@ function wakeSgurr() {
     spawnDisturbanceDust();
     window.setTimeout(() => {
       if (app.intro.waking && !app.intro.complete) {
-        refs.introState.textContent = "You have disturbed it";
+        refs.introState.textContent = "Sgurr is ready";
       }
     }, 850);
   }

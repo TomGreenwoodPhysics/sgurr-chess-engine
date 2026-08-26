@@ -32,8 +32,8 @@
       }
     </script>
 
-    <title>Sgurr — a home-grown chess engine from the Scottish hills</title>
-    <meta name="description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <title>Sgurr | A home-grown chess engine from the Scottish hills</title>
+    <meta name="description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#0c0f15">
 
@@ -43,15 +43,15 @@
          what the stricter scrapers require. -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
-    <meta property="og:title" content="Sgurr — a home-grown chess engine from the Scottish hills">
-    <meta property="og:description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <meta property="og:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
+    <meta property="og:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
     <meta property="og:image" content="assets/intro/sgurr-social-card.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A vaulted stone chamber deep under the hills, a carved ring portal standing above a circular dais.">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Sgurr — a home-grown chess engine from the Scottish hills">
-    <meta name="twitter:description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
+    <meta name="twitter:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
+    <meta name="twitter:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
     <meta name="twitter:image" content="assets/intro/sgurr-social-card.jpg">
 
     <!-- The chamber backdrop is the first thing anyone sees, but it is reached
@@ -87,7 +87,7 @@
         id="introCoreTrigger"
         type="button"
         data-sound="none"
-        aria-label="Disturb the slumbering core"
+        aria-label="Open the Sgurr demo"
       >
         <span class="sgurr-core intro-core dormant" id="introCore" aria-hidden="true"></span>
       </button>
@@ -100,17 +100,17 @@
       <div class="intro-bosscard">
         <h1 id="introTitle">SGURR</h1>
         <div class="bosscard-rule" aria-hidden="true"></div>
-        <p class="bosscard-epithet">Ancient of the Hollow Mountain</p>
+        <p class="bosscard-epithet">A chess engine built from scratch in C++</p>
         <div class="bosscard-healthbar" aria-hidden="true">
           <span class="bosscard-health-fill"></span>
         </div>
       </div>
 
       <div class="intro-copy">
-        <p class="intro-eyebrow">Beneath the Scottish hills</p>
-        <p class="intro-state" id="introState" aria-live="polite">Something slumbers in the deep</p>
+        <p class="intro-eyebrow">From the Scottish Highlands</p>
+        <p class="intro-state" id="introState" aria-live="polite">Sgurr v8.2</p>
         <button class="intro-wake-button" id="wakeSgurrButton" type="button" data-sound="none">
-          Disturb it
+          Enter
         </button>
       </div>
       <div class="intro-transition-veil" aria-hidden="true"></div>
@@ -176,7 +176,7 @@
             </button>
           </div>
 
-          <p class="menu-section-label">Explore Sgurr</p>
+          <p class="menu-section-label">Tools</p>
           <div class="menu-tools-grid">
             <button type="button" class="menu-action-card position-lab-button" id="positionLabButton">
               <span class="menu-action-index" aria-hidden="true">04</span>
@@ -202,7 +202,7 @@
       <section class="board-area" aria-label="Sgurr chessboard">
         <div class="board-header">
           <div>
-            <p class="eyebrow">Local UCI demo</p>
+            <p class="eyebrow">UCI engine demo</p>
             <h1>Sgurr</h1>
           </div>
           <div class="status-pill" id="statusPill">Choose a side</div>
@@ -256,7 +256,7 @@
               </div>
               <span class="engine-dot sgurr-core header-core" id="engineDot" aria-hidden="true"></span>
             </div>
-            <p class="core-line" id="coreLine">Opponent core online</p>
+            <p class="core-line" id="coreLine">Engine ready</p>
           </div>
           <div class="watch-core-view" aria-label="Sgurr engine match">
             <div class="watch-arena-head">
@@ -372,7 +372,7 @@
           </div>
 
           <p class="review-move" id="reviewMove">Start position</p>
-          <p class="review-eval" id="reviewEval">&mdash;</p>
+          <p class="review-eval" id="reviewEval">-</p>
 
           <input
             class="review-scrub"
@@ -418,7 +418,7 @@
             <p class="eyebrow">Position tools</p>
             <h2 id="editorHeading">Position Lab</h2>
           </div>
-          <p class="editor-purpose" id="editorPurpose">Build or paste a position, then play it or ask Sgurr for a deep analysis.</p>
+          <p class="editor-purpose" id="editorPurpose">Edit the board or paste a FEN, then play or analyse the position.</p>
         </section>
 
         <div class="editor-body">
@@ -498,7 +498,7 @@
       <aside class="analysis-panel" id="analysisPanel" aria-label="Sgurr position analysis" hidden>
         <section class="analysis-hero">
           <div class="analysis-hero-copy">
-            <p class="eyebrow">Deep position analysis</p>
+            <p class="eyebrow">Position analysis</p>
             <h2 id="analysisEngineName">Sgurr v8.2</h2>
             <p id="analysisStatus" aria-live="polite">Preparing the position</p>
           </div>
@@ -510,22 +510,22 @@
 
         <section class="analysis-verdict">
           <div>
-            <p class="panel-label">Sgurr's verdict</p>
+            <p class="panel-label">Evaluation</p>
             <p class="analysis-score" id="analysisScore">0.0</p>
             <p class="analysis-perspective">White-relative evaluation</p>
           </div>
           <div class="analysis-best">
             <p class="panel-label">Best move</p>
             <p id="analysisBestMove">Waiting</p>
-            <small id="analysisBestMoveUci">Completed depths will appear live</small>
+            <small id="analysisBestMoveUci">Waiting for a completed depth</small>
           </div>
         </section>
 
         <section class="analysis-metrics" aria-label="Search metrics">
-          <div><span>Depth</span><strong id="analysisDepth">&mdash;</strong></div>
-          <div><span>Nodes</span><strong id="analysisNodes">&mdash;</strong></div>
-          <div><span>Speed</span><strong id="analysisNps">&mdash;</strong></div>
-          <div><span>Time</span><strong id="analysisTime">&mdash;</strong></div>
+          <div><span>Depth</span><strong id="analysisDepth">-</strong></div>
+          <div><span>Nodes</span><strong id="analysisNodes">-</strong></div>
+          <div><span>Speed</span><strong id="analysisNps">-</strong></div>
+          <div><span>Time</span><strong id="analysisTime">-</strong></div>
         </section>
 
         <section class="panel-block analysis-line-block">
@@ -547,8 +547,8 @@
         <section class="panel-block analysis-depth-block">
           <div class="analysis-section-heading">
             <div>
-              <p class="panel-label">Best-move evolution</p>
-              <p id="analysisDecisionSummary">Only changes in Sgurr's preferred move appear here.</p>
+              <p class="panel-label">Best move by depth</p>
+              <p id="analysisDecisionSummary">This list shows each change in the preferred move.</p>
             </div>
             <div class="analysis-depth-status">
               <span class="analysis-change-count" id="analysisChangeCount">0 leaders</span>
@@ -607,7 +607,7 @@
         <div class="modal-header">
           <div>
             <h2 id="timeModalTitle">Choose game mode</h2>
-            <p>Every mode plays on a real clock — Sgurr manages its own thinking time.</p>
+            <p>Every mode uses a real clock. Sgurr manages its own search time.</p>
           </div>
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>
@@ -687,7 +687,7 @@
 
           <div class="settings-reset-actions">
             <button type="button" id="clearPreferencesButton">Reset preferences</button>
-            <button type="button" id="clearMemoryButton">Forget encounters</button>
+            <button type="button" id="clearMemoryButton">Clear game history</button>
           </div>
         </div>
       </section>
@@ -698,7 +698,7 @@
         <div class="modal-header">
           <div>
             <h2 id="helpModalTitle">Controls</h2>
-            <p>Keyboard and mouse controls ported from the desktop GUI where Stage 1 supports them.</p>
+            <p>Keyboard and mouse shortcuts.</p>
           </div>
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>

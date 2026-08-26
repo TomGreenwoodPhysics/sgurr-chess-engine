@@ -6,7 +6,7 @@ const STEPS = Object.freeze([
     selector: ".mode-tabs",
     placement: "bottom",
     kicker: "Start here",
-    title: "Three ways to watch the search",
+    title: "Three views of the search",
     text: "Search network shows individual positions. Live engine shows completed depths. Guided walkthrough explains a recorded search one step at a time.",
   },
   {
@@ -14,7 +14,7 @@ const STEPS = Object.freeze([
     selector: ".position-panel",
     placement: "right",
     kicker: "Starting position",
-    title: "Every search begins here",
+    title: "Choose a position",
     text: "This is the position Sgurr must solve. Choose a preset or paste a FEN to change the board and the side to move.",
   },
   {
@@ -22,7 +22,7 @@ const STEPS = Object.freeze([
     selector: "#livePositionControls",
     placement: "right",
     kicker: "Search settings",
-    title: "Choose depth, then run Sgurr",
+    title: "Set the search depth",
     text: "A live run draws nodes as they arrive. A recorded run can be replayed afterwards. Higher depth means looking farther ahead and can take much longer.",
   },
   {
@@ -46,7 +46,7 @@ const STEPS = Object.freeze([
     selector: ".network-best",
     placement: "right",
     kicker: "Current leader",
-    title: "The best move can change",
+    title: "Current best move",
     text: "This shows the root move currently in front and its score. A deeper reply can overturn it, so early leaders are only provisional.",
   },
   {
@@ -63,14 +63,14 @@ const STEPS = Object.freeze([
     placement: "top",
     kicker: "Search log",
     title: "Why the picture just changed",
-    text: "This note names the latest search event and explains it in context, so the animation is not just decoration.",
+    text: "This note identifies the latest search event and explains why the display changed.",
   },
   {
     key: "controls",
     selector: ".network-controls",
     placement: "top",
     kicker: "Replay",
-    title: "Inspect the search at your pace",
+    title: "Replay a recorded search",
     text: "After a recorded run, play it back, change the speed or drag the timeline. Restart returns to the beginning without running the engine again.",
   },
 ]);
