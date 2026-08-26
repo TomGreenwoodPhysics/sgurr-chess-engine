@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Leave empty for same-origin production; set a full URL only for split hosting. -->
     <meta name="sgurr-api-base" content="">
+    <script>
+      // The stylesheet's :root is the wood palette, so without this the menu
+      // paints in Classic Wood for a frame before themes.js swaps it.
+      (function () {
+        try {
+          var key = localStorage.getItem("sgurrTheme");
+          if (key) document.documentElement.dataset.theme = key;
+          var cached = localStorage.getItem("sgurrThemeVars");
+          if (!cached) return;
+          var vars = JSON.parse(cached);
+          for (var name in vars) {
+            if (name.charAt(0) === "-") document.documentElement.style.setProperty(name, vars[name]);
+          }
+        } catch (error) {
+          /* private mode, or nothing saved yet: the default palette is fine */
+        }
+      })();
+    </script>
+    <script>
+      // Returning from a lab lands on ?view=menu. The intro markup ships in the
+      // document, so without this the cave paints for a frame before the module
+      // loads and tears it down again.
+      if (new URLSearchParams(location.search).get("view") === "menu") {
+        document.documentElement.dataset.view = "menu";
+      }
+    </script>
 
     <title>Sgurr — a home-grown chess engine from the Scottish hills</title>
     <meta name="description" content="Play Sgurr in your browser: a hand-built UCI chess engine with a neural evaluation. Pick a time control, wake the ancient of the hollow mountain, and see how you fare.">
@@ -136,14 +162,17 @@
             <button type="button" class="menu-action-card play-white" id="playWhiteButton">
               <span class="menu-action-index" aria-hidden="true">01</span>
               <span class="menu-action-copy"><strong>Play as White</strong></span>
+              <span class="sg-mark sg-mark-sm sg-mark-white menu-card-mark" aria-hidden="true"><i></i><i></i></span>
             </button>
             <button type="button" class="menu-action-card play-black" id="playBlackButton">
               <span class="menu-action-index" aria-hidden="true">02</span>
               <span class="menu-action-copy"><strong>Play as Black</strong></span>
+              <span class="sg-mark sg-mark-sm sg-mark-black menu-card-mark" aria-hidden="true"><i></i><i></i></span>
             </button>
             <button type="button" class="menu-action-card menu-watch-card" id="watchButton">
               <span class="menu-action-index" aria-hidden="true">03</span>
               <span class="menu-action-copy"><strong>Watch Sgurr vs itself</strong></span>
+              <span class="sg-mark sg-mark-sm sg-mark-duel menu-card-mark" aria-hidden="true"><i></i><i></i></span>
             </button>
           </div>
 
@@ -152,11 +181,12 @@
             <button type="button" class="menu-action-card position-lab-button" id="positionLabButton">
               <span class="menu-action-index" aria-hidden="true">04</span>
               <span class="menu-action-copy"><strong>Position Lab</strong></span>
+              <span class="sg-mark sg-mark-sm sg-mark-board menu-card-mark" aria-hidden="true"><i></i><i></i></span>
             </button>
             <a class="menu-action-card inside-sgurr-link" href="inside-sgurr/">
               <span class="menu-action-index" aria-hidden="true">05</span>
               <span class="menu-action-copy"><strong>Inside Sgurr</strong></span>
-              <span class="menu-cortex-mark" aria-hidden="true"><i></i></span>
+              <span class="sg-mark sg-mark-sm sg-mark-orbit menu-card-mark" aria-hidden="true"><i></i><i></i></span>
             </a>
           </div>
 
@@ -383,74 +413,86 @@
       </aside>
 
       <aside class="editor-panel" id="editorPanel" aria-label="Position Lab" hidden>
-        <div class="editor-column">
-          <section class="panel-block header-block editor-header-block">
-            <div>
-              <p class="eyebrow">Position tools</p>
-              <h2 id="editorHeading">Position Lab</h2>
-              <p class="editor-purpose" id="editorPurpose">Build or paste a position, then play it or ask Sgurr for a deep analysis.</p>
-            </div>
-          </section>
+        <section class="panel-block editor-masthead">
+          <div>
+            <p class="eyebrow">Position tools</p>
+            <h2 id="editorHeading">Position Lab</h2>
+          </div>
+          <p class="editor-purpose" id="editorPurpose">Build or paste a position, then play it or ask Sgurr for a deep analysis.</p>
+        </section>
 
-          <section class="panel-block editor-section editor-fen-block">
-            <div class="editor-section-heading">
-              <p class="panel-label">FEN</p>
-              <span>Paste or edit</span>
-            </div>
-            <textarea id="editorFenInput" rows="3" spellcheck="false" aria-label="Position FEN"></textarea>
-            <button id="editorLoadFenButton" type="button">Load FEN into board</button>
-          </section>
+        <div class="editor-body">
+          <div class="editor-column">
+            <section class="panel-block editor-section editor-pieces-block">
+              <div class="editor-section-heading">
+                <p class="panel-label">Pieces</p>
+                <span>Click or drag</span>
+              </div>
+              <div class="editor-palette" id="editorPalette"></div>
+              <p class="editor-hint">The palette toggles a brush. Right-click a square to delete.</p>
+            </section>
 
-          <section class="panel-block editor-section">
-            <p class="panel-label">Position actions</p>
-            <button id="editorPlayerButton" type="button">You play: White</button>
-            <button id="editorTurnButton" type="button">First move: White</button>
-            <div class="editor-primary-actions">
-              <button id="editorPlayButton" type="button">Play from here</button>
-              <button id="editorAnalyseButton" class="analysis-action preferred" type="button">Deep analysis</button>
-            </div>
-          </section>
+            <section class="panel-block editor-section">
+              <p class="panel-label">Board</p>
+              <div class="editor-grid">
+                <button id="editorStartButton" type="button">Start position</button>
+                <button id="editorClearButton" type="button">Clear board</button>
+              </div>
+            </section>
 
-          <section class="panel-block editor-section">
-            <p class="panel-label">Position</p>
-            <div class="editor-grid">
-              <button id="editorStartButton" type="button">Start position</button>
-              <button id="editorCopyFenButton" type="button">Copy FEN</button>
-              <button id="editorClearButton" type="button">Clear board</button>
-              <button id="editorCancelButton" type="button">Cancel (Esc)</button>
-            </div>
-          </section>
+            <section class="panel-block editor-section">
+              <p class="panel-label">Practice</p>
+              <div class="editor-grid" id="editorDrills"></div>
+            </section>
+          </div>
 
-          <section class="panel-block status-block editor-status-block">
-            <p class="panel-label">Status</p>
-            <p id="editorStatus">Position Lab ready</p>
-          </section>
+          <div class="editor-column">
+            <section class="panel-block editor-section editor-fen-block">
+              <div class="editor-section-heading">
+                <p class="panel-label">FEN</p>
+                <span>Paste or edit</span>
+              </div>
+              <textarea id="editorFenInput" rows="3" spellcheck="false" aria-label="Position FEN"></textarea>
+              <div class="editor-grid">
+                <button id="editorLoadFenButton" type="button">Load FEN</button>
+                <button id="editorCopyFenButton" type="button">Copy FEN</button>
+              </div>
+            </section>
 
-          <section class="side-actions editor-actions">
-            <button id="editorMainMenuButton" type="button">Main menu</button>
-            <button id="editorSettingsButton" type="button">Settings</button>
-            <button id="editorHelpButton" type="button">? Shortcuts</button>
-          </section>
+            <section class="panel-block editor-section">
+              <p class="panel-label">Sides</p>
+              <div class="editor-grid">
+                <button id="editorPlayerButton" type="button">You play: White</button>
+                <button id="editorTurnButton" type="button">First move: White</button>
+              </div>
+            </section>
+
+            <section class="panel-block editor-section">
+              <div class="editor-section-heading">
+                <p class="panel-label">Odds</p>
+              </div>
+              <button id="editorOddsRecipientButton" type="button">Odds for: You</button>
+              <div class="editor-grid" id="editorOdds"></div>
+            </section>
+          </div>
         </div>
 
-        <div class="editor-column">
-          <section class="panel-block editor-section editor-pieces-block">
-            <p class="panel-label">Pieces</p>
-            <div class="editor-palette" id="editorPalette"></div>
-            <p class="editor-hint">Palette toggles a brush. Click or drag pieces. Right-click deletes.</p>
-          </section>
+        <section class="panel-block status-block editor-statusbar">
+          <p class="panel-label">Status</p>
+          <p id="editorStatus">Position Lab ready</p>
+        </section>
 
-          <section class="panel-block editor-section">
-            <p class="panel-label">Practice</p>
-            <div class="editor-grid" id="editorDrills"></div>
-          </section>
+        <section class="editor-launch">
+          <button id="editorPlayButton" type="button">Play from here</button>
+          <button id="editorAnalyseButton" class="analysis-action preferred" type="button">Deep analysis</button>
+        </section>
 
-          <section class="panel-block editor-section">
-            <p class="panel-label">Odds</p>
-            <button id="editorOddsRecipientButton" type="button">Odds for: You</button>
-            <div class="editor-grid" id="editorOdds"></div>
-          </section>
-        </div>
+        <section class="side-actions editor-actions">
+          <button id="editorMainMenuButton" type="button">Main menu</button>
+          <button id="editorSettingsButton" type="button">Settings</button>
+          <button id="editorHelpButton" type="button">? Shortcuts</button>
+          <button id="editorCancelButton" type="button">Cancel (Esc)</button>
+        </section>
       </aside>
 
       <aside class="analysis-panel" id="analysisPanel" aria-label="Sgurr position analysis" hidden>
@@ -616,7 +658,7 @@
             <label class="settings-field master-volume-field">
               <span class="settings-field-heading">
                 <strong>Master volume</strong>
-                <output id="masterVolumeValue" for="masterVolumeInput">100%</output>
+                <output id="masterVolumeValue" for="masterVolumeInput">70%</output>
               </span>
               <input type="range" id="masterVolumeInput" min="0" max="1" step="0.05">
             </label>

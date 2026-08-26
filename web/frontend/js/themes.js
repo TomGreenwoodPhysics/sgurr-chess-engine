@@ -10,6 +10,8 @@ function applyTheme() {
   }
   document.documentElement.dataset.theme = app.themeKey;
   localStorage.setItem("sgurrTheme", app.themeKey);
+  // Lets the labs paint this palette before their first frame.
+  localStorage.setItem("sgurrThemeVars", JSON.stringify(theme.vars));
 }
 
 // Mirrors app.animationMode onto the body so CSS can suppress decorative

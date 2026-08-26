@@ -18,6 +18,9 @@ function applyTheme(nextTheme) {
   refs.theme.value = themeKey;
   refs.themeColour?.setAttribute("content", theme.vars["--bg"]);
   localStorage.setItem("sgurrTheme", themeKey);
+  // Cached so the inline head script can paint the chosen palette immediately
+  // on the next page, instead of flashing the stylesheet default first.
+  localStorage.setItem("sgurrThemeVars", JSON.stringify(theme.vars));
   document.dispatchEvent(new CustomEvent("sgurrthemechange", { detail: { themeKey } }));
 }
 
@@ -65,6 +68,35 @@ function initInterfaceSounds() {
   });
 }
 
+function cycleSelect(select, step) {
+  if (!select || !select.options.length) return;
+  const next = (select.selectedIndex + step + select.options.length) % select.options.length;
+  select.selectedIndex = next;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+// The labs answer the same keys as the main app: T cycles the theme, and where
+// a lab has a detail control, D cycles that.
+function initLabShortcuts() {
+  window.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.matches("input, textarea, select")) return;
+    const key = event.key.toLowerCase();
+    if (key === "t") {
+      event.preventDefault();
+      cycleSelect(refs.theme, event.shiftKey ? -1 : 1);
+      playInterfaceSound({ rate: 1.06, volume: 0.5 });
+    } else if (key === "d") {
+      const detail = document.querySelector("#labDetailSelect");
+      if (!detail) return;
+      event.preventDefault();
+      cycleSelect(detail, event.shiftKey ? -1 : 1);
+      playInterfaceSound({ rate: 1.02, volume: 0.5 });
+    }
+  });
+}
+
 function initLabPreferences() {
   for (const key of THEME_ORDER) {
     const option = document.createElement("option");
@@ -76,6 +108,7 @@ function initLabPreferences() {
 
   refs.theme.addEventListener("change", () => applyTheme(refs.theme.value));
   initInterfaceSounds();
+  initLabShortcuts();
 }
 
 export { initLabPreferences };

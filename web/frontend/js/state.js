@@ -262,7 +262,7 @@ const app = {
   autoFlipAsBlack: localStorage.getItem("sgurrAutoFlip") !== "false",
   showEngineInfo: localStorage.getItem("sgurrShowEngineInfo") !== "false",
   animationMode: localStorage.getItem("sgurrAnimationMode") === "Off" ? "Off" : "On",
-  masterVolume: Number(localStorage.getItem("sgurrMasterVolume") ?? "1"),
+  masterVolume: Number(localStorage.getItem("sgurrMasterVolume") ?? "0.7"),
   soundVolume: storedChannelVolume("sgurrSoundVolume", "sgurrSoundEnabled", 0.8),
   musicVolume: storedChannelVolume("sgurrMusicVolume", "sgurrMusicEnabled", 0.2),
   gameMusicVolume: storedChannelVolume("sgurrGameMusicVolume", "sgurrGameMusicEnabled", 0.35),
@@ -350,7 +350,7 @@ const app = {
 };
 
 if (!Number.isFinite(app.masterVolume)) {
-  app.masterVolume = 1;
+  app.masterVolume = 0.7;
 }
 app.masterVolume = Math.max(0, Math.min(1, app.masterVolume));
 if (!Number.isFinite(app.soundVolume)) {

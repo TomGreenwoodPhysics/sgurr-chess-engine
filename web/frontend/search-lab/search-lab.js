@@ -3,6 +3,7 @@ import { initDemoTooltips, setDemoReason } from "../js/demo-tooltip.js";
 import { readNdjson } from "../js/ndjson.js";
 import { initSearchNetwork } from "./network.js";
 import { initLabPreferences } from "./preferences.js";
+import { initSearchTutorial } from "./tutorial.js";
 
 const RUY_FEN = "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3";
 
@@ -297,6 +298,7 @@ let liveIterations = [];
 let liveCandidates = [];
 let customPosition = null;
 const searchNetwork = initSearchNetwork();
+const tutorial = initSearchTutorial(() => setMode("network"));
 let networkDepthLimit = 20;
 let publicDemo = false;
 let capabilitiesReady = false;
@@ -932,4 +934,5 @@ if (new URLSearchParams(window.location.search).get("mode") === "network") {
 } else {
   renderWalkthrough();
 }
+tutorial.maybeStart();
 loadCapabilities();

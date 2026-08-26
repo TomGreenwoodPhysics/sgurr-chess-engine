@@ -374,6 +374,8 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem("sgurrSoundEnabled", "false");
     localStorage.setItem("sgurrMusicEnabled", "false");
     localStorage.setItem("sgurrGameMusicEnabled", "false");
+    localStorage.setItem("sgurrNnueTutorialSeen", "1");
+    localStorage.setItem("sgurrSearchTutorialSeen", "1");
   });
 });
 
@@ -400,13 +402,38 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
 test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
 
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#nnueBoard .board-square")).toHaveCount(64);
   await expect(page.locator("#modelStatus")).toContainText("Gen8 v1 loaded");
   await expect(page.locator("#nnueEval")).toHaveText("+0.32");
-  await expect(page.locator(".stage-legend > span")).toHaveCount(3);
+  await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White");
+  await expect(page.locator("#nnueEvalDetail")).toContainText("no search");
+  const boardOpacity = await page.evaluate(() => ({
+    enabled: getComputedStyle(document.querySelector('[data-square="e2"]')).opacity,
+    disabled: getComputedStyle(document.querySelector('[data-square="e3"]')).opacity,
+  }));
+  expect(boardOpacity).toEqual({ enabled: "1", disabled: "1" });
+  await expect(page.locator("#laneEquation")).toHaveAttribute("data-state", "ready");
+  const laneMath = await page.evaluate(() => {
+    const signedNumber = (selector) => Number(document.querySelector(selector).textContent.replace("−", "-"));
+    const activation = Number(document.querySelector("#laneClipped").textContent.split("/")[0].trim());
+    return {
+      activation,
+      weight: signedNumber("#laneWeight"),
+      product: signedNumber("#laneProduct"),
+    };
+  });
+  expect(laneMath.activation * laneMath.weight).toBe(laneMath.product);
+  await expect(page.locator(".stage-legend > span")).toHaveCount(4);
+  const legendColours = () => page.locator(".stage-legend .key-dot").evaluateAll((keys) => (
+    keys.map((key) => getComputedStyle(key).color)
+  ));
+  for (const theme of ["neon", "modern", "wood", "highland", "ocean", "frost", "galaxy"]) {
+    await page.locator("#labThemeSelect").selectOption(theme);
+    expect(new Set(await legendColours()).size, `${theme} NNUE colours`).toBe(4);
+  }
   const boardGeometry = await page.evaluate(() => {
     const board = document.querySelector("#nnueBoard").getBoundingClientRect();
     const occupied = document.querySelector('[data-square="a8"]').getBoundingClientRect();
@@ -434,6 +461,16 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#weightRows")).toHaveText("4");
   await expect(page.locator("#laneOperations")).toHaveText("1,536");
   await expect(page.locator("#featureTrace")).toContainText("inputs W 12→28 · B 436→420");
+  await expect(page.locator("#moveAutopsy")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#autopsyTitle")).toHaveText("e2 → e4");
+  await expect(page.locator("#autopsyNet")).toHaveText("+0.21 eval");
+  await expect(page.locator("#autopsyList .autopsy-lane")).toHaveCount(5);
+  await page.locator("#autopsyList .autopsy-lane").first().click();
+  await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
+  await expect(page.locator("#laneEquation")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#laneEquationFormula")).toContainText("× 400 ÷ 16,320");
+  await page.locator('[data-autopsy-side="loss"]').click();
+  await expect(page.locator("#autopsyList .autopsy-lane")).toHaveCount(5);
   await expect(page.locator("#beforeState")).toBeEnabled();
   await expect(page.locator("#deltaState")).toBeEnabled();
 
@@ -441,7 +478,7 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#nnueEval")).toHaveText("+0.32");
   await page.locator("#deltaState").click();
   await expect(page.locator("#nnueEval")).toHaveText("+0.21");
-  await expect(page.locator(".eval-readout > span")).toHaveText("White evaluation change");
+  await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#undoPosition").click();
   await expect(page.locator("#nnueEval")).toHaveText("+0.32");
@@ -450,10 +487,63 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#undoPosition")).toBeDisabled();
 });
 
+test("introduces the NNUE evaluator once and lets the guide be reopened", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/evaluation.html");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+
+  await page.evaluate(() => localStorage.removeItem("sgurrNnueTutorialSeen"));
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("keepNnueTutorialSeen")) {
+      localStorage.removeItem("sgurrNnueTutorialSeen");
+    }
+  });
+  await page.reload();
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#nnueTour")).toBeVisible();
+  await expect(page.locator("#nnueTour")).toHaveAttribute("data-target", "model");
+  await expect(page.locator("#nnueTourCount")).toHaveText("1 of 8");
+  await expect(page.locator("#nnueTourTitle")).toHaveText("What NNUE does");
+
+  await page.locator("#nnueTourNext").click();
+  await expect(page.locator("#nnueTour")).toHaveAttribute("data-target", "board");
+  await expect(page.locator("#nnueTourTitle")).toHaveText("The board becomes numbers");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#nnueTour")).toHaveAttribute("data-target", "trace");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#nnueTour")).toHaveAttribute("data-target", "board");
+  await page.locator("#nnueTourSkip").click();
+  await expect(page.locator("#nnueTour")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("sgurrNnueTutorialSeen"))).toBe("1");
+
+  await page.evaluate(() => sessionStorage.setItem("keepNnueTutorialSeen", "1"));
+  await page.reload();
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#nnueTour")).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#nnueTutorialButton").click();
+  await expect(page.locator("#nnueTour")).toBeVisible();
+  const cardFits = await page.locator("#nnueTourCard").evaluate((card) => {
+    const bounds = card.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.top >= 0
+      && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+  });
+  expect(cardFits).toBe(true);
+  for (const target of ["board", "trace", "accumulators", "modes", "timeline", "autopsy", "output"]) {
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#nnueTour")).toHaveAttribute("data-target", target);
+  }
+  await expect(page.locator("#nnueTourNext")).toHaveText("Finish");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#nnueTour")).toBeHidden();
+  await expect(page.locator("#nnueTutorialButton")).toBeFocused();
+});
+
 test("reads a piece's two feature rows out of the shipped network", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await expect(page.locator("#pieceInspector")).toHaveAttribute("data-state", "idle");
@@ -464,8 +554,13 @@ test("reads a piece's two feature rows out of the shipped network", async ({ pag
   await expect(page.locator("#blackFeatureIndex")).toHaveText("B:436");
   await expect(page.locator("#whiteFeatureSummary")).toContainText("peak");
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-feature", "active");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", /playing|ready/);
+  await expect(page.locator("#replayFeatureTrace")).toBeVisible();
   await expect(page.locator('[data-square="e2"]')).toHaveClass(/inspected/);
-  await expect(page.locator("#pieceInspectorNote")).toContainText("pushes hardest");
+  await expect(page.locator("#pieceInspectorNote")).toContainText("pulse follows");
+  await page.locator("#replayFeatureTrace").click();
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", "playing");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", "ready", { timeout: 5000 });
 
   // A piece with no legal move of its own is still readable.
   await page.locator('[data-square="d8"]').click();
@@ -474,13 +569,14 @@ test("reads a piece's two feature rows out of the shipped network", async ({ pag
   await page.locator("#clearPieceInspector").click();
   await expect(page.locator("#pieceInspector")).toHaveAttribute("data-state", "idle");
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-feature", "idle");
+  await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-trace", "idle");
   await expect(page.locator('[data-square="d8"]')).not.toHaveClass(/inspected/);
 });
 
 test("switches the accumulator display between the four readings", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-display-mode", "contribution");
@@ -492,6 +588,8 @@ test("switches the accumulator display between the four readings", async ({ page
   await expect(page.locator('.display-mode-buttons [data-display-mode="contribution"]')).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#goldKeyText")).toHaveText("Held at 255");
   await expect(page.locator("#cyanKeyText")).toHaveText("Held at 0");
+  await expect(page.locator(".state-key-high")).toBeHidden();
+  await expect(page.locator(".state-key-low")).toBeHidden();
 
   await page.locator('.display-mode-buttons [data-display-mode="activation"]').click();
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-display-mode", "activation");
@@ -501,7 +599,7 @@ test("switches the accumulator display between the four readings", async ({ page
 test("fades the accumulator display between states instead of cutting", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#cortexCanvas")).toHaveAttribute("data-motion", "settled");
 
@@ -522,7 +620,7 @@ test("fades the accumulator display between states instead of cutting", async ({
 test("walks a move along the evaluation path and back to the current state", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await expect(page.locator("#stateTimeline")).toBeDisabled();
@@ -542,7 +640,7 @@ test("walks a move along the evaluation path and back to the current state", asy
 test("scrubs the state timeline through before, change and after", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await page.locator('[data-square="e2"]').click();
@@ -556,7 +654,7 @@ test("scrubs the state timeline through before, change and after", async ({ page
 
   await page.locator("#stateTimeline").fill("1");
   await expect(page.locator("#nnueEval")).toHaveText("+0.21");
-  await expect(page.locator(".eval-readout > span")).toHaveText("White evaluation change");
+  await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#afterState").click();
   await expect(page.locator("#stateTimeline")).toHaveValue("2");
@@ -566,19 +664,24 @@ test("keeps the NNUE chamber usable on a narrow screen", async ({ page }) => {
   test.setTimeout(30_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
 
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator('.display-mode-buttons [data-display-mode="clipped"]')).toBeVisible();
   await expect(page.locator("#beforeState")).toBeVisible();
   await expect(page.locator("#afterState")).toBeVisible();
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#moveAutopsy")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#autopsyList .autopsy-lane").first()).toBeVisible();
+  await expect(page.locator("#laneEquation")).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test("does not fabricate NNUE activity when the model is unavailable", async ({ page }) => {
   await installMockBackend(page, { nnueAvailable: false });
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
 
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "error");
   await expect(page.locator("#modelStatus")).toHaveText("Evaluator unavailable");
@@ -589,7 +692,7 @@ test("does not fabricate NNUE activity when the model is unavailable", async ({ 
 
 test("offers a promotion choice in the NNUE position board", async ({ page }) => {
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await page.locator("#nnueFenInput").fill(PROMOTION_FEN);
@@ -606,7 +709,7 @@ test("offers a promotion choice in the NNUE position board", async ({ page }) =>
 
 test("keeps rejected FEN text available for correction", async ({ page }) => {
   await installMockBackend(page);
-  await page.goto("/inside-sgurr/");
+  await page.goto("/inside-sgurr/evaluation.html");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
 
   await page.locator("#nnueFenInput").fill("bad fen");
@@ -623,6 +726,8 @@ test("uses volume sliders without duplicate audio toggles", async ({ page }) => 
 
   await expect(page.locator("#settingsModal")).toBeVisible();
   await expect(page.locator("#soundEnabledInput, #musicEnabledInput, #gameMusicEnabledInput")).toHaveCount(0);
+  await expect(page.locator("#masterVolumeInput")).toHaveValue("0.7");
+  await expect(page.locator("#masterVolumeValue")).toHaveText("70%");
   await page.locator("#masterVolumeInput").fill("0.55");
   await expect(page.locator("#masterVolumeValue")).toHaveText("55%");
   await page.locator("#musicVolumeInput").fill("0.25");
@@ -634,6 +739,69 @@ test("uses volume sliders without duplicate audio toggles", async ({ page }) => 
     oldMenuToggle: localStorage.getItem("sgurrMusicEnabled"),
   }));
   expect(stored).toEqual({ master: "0.55", menu: "0.25", oldMenuToggle: null });
+});
+
+test("unlocks procedural move audio when the intro is skipped", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+  await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "game");
+  await expect.poll(() => page.evaluate(async () => (
+    (await import("/js/state.js")).app.audioUnlocked
+  ))).toBe(true);
+
+  await page.evaluate(async () => {
+    const { app } = await import("/js/state.js");
+    window.__moveSoundStarts = 0;
+    const parameter = () => ({
+      value: 0,
+      setValueAtTime() {},
+      exponentialRampToValueAtTime() {},
+    });
+    const node = () => ({
+      connect(target) { return target; },
+      start() { window.__moveSoundStarts += 1; },
+      stop() {},
+    });
+    app.masterVolume = 1;
+    app.soundVolume = 1;
+    app.audioContext = {
+      state: "running",
+      currentTime: 0,
+      sampleRate: 8000,
+      destination: {},
+      resume: () => Promise.resolve(),
+      createGain: () => ({ ...node(), gain: parameter() }),
+      createOscillator: () => ({ ...node(), frequency: parameter(), type: "sine" }),
+      createBuffer: (_channels, length) => ({ getChannelData: () => new Float32Array(length) }),
+      createBufferSource: () => ({ ...node(), buffer: null }),
+      createBiquadFilter: () => ({ ...node(), frequency: parameter(), Q: parameter(), type: "lowpass" }),
+    };
+  });
+
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect.poll(() => page.evaluate(() => window.__moveSoundStarts)).toBeGreaterThanOrEqual(2);
+});
+
+test("returns from Inside Sgurr without a delayed blob flare", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("sgurrAnimationMode", "On");
+    const nativeTimeout = window.setTimeout.bind(window);
+    window.setTimeout = (callback, delay = 0, ...args) => nativeTimeout(
+      callback,
+      Number(delay) >= 15000 ? 30 : delay,
+      ...args,
+    );
+  });
+  await installMockBackend(page);
+  await page.goto("/inside-sgurr/");
+  await page.locator(".inside-brand").click();
+  await expect(page).toHaveURL(/\?view=menu$/);
+  await expect(page.locator("#menuCore")).toBeVisible();
+  await page.waitForTimeout(120);
+  await expect(page.locator("#menuCore")).not.toHaveClass(/surfacing/);
+  await expect(page.locator("#menuCore .core-surge")).toHaveCount(0);
 });
 
 test("shows the remaining mate distance", async ({ page }) => {
@@ -685,6 +853,58 @@ test("starts at v8.2 and cycles left through weaker engines", async ({ page }) =
   await expect(page.locator("#menuEngineButton")).toContainText("v8.1");
   await page.locator("#engineDownButton").click();
   await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+});
+
+test("introduces the Search Lab once and lets the guide be reopened", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.goto("/search-lab/");
+
+  await page.evaluate(() => localStorage.removeItem("sgurrSearchTutorialSeen"));
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("keepSearchTutorialSeen")) {
+      localStorage.removeItem("sgurrSearchTutorialSeen");
+    }
+  });
+  await page.reload();
+  await expect(page.locator("#searchTour")).toBeVisible();
+  await expect(page.locator("#networkTab")).toHaveClass(/active/);
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "modes");
+  await expect(page.locator("#searchTourCount")).toHaveText("1 of 9");
+  await expect(page.locator("#searchTourTitle")).toHaveText("Three ways to watch the search");
+
+  await page.locator("#searchTourNext").click();
+  await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "position");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "setup");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#searchTour")).toHaveAttribute("data-target", "position");
+  await page.locator("#searchTourSkip").click();
+  await expect(page.locator("#searchTour")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("sgurrSearchTutorialSeen"))).toBe("1");
+
+  await page.evaluate(() => sessionStorage.setItem("keepSearchTutorialSeen", "1"));
+  await page.reload();
+  await expect(page.locator("#searchTour")).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#searchTutorialButton").click();
+  await expect(page.locator("#searchTour")).toBeVisible();
+  const cardFits = await page.locator("#searchTourCard").evaluate((card) => {
+    const bounds = card.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.top >= 0
+      && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+  });
+  expect(cardFits).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  for (const target of ["position", "setup", "network", "stats", "best", "legend", "event", "controls"]) {
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#searchTour")).toHaveAttribute("data-target", target);
+  }
+  await expect(page.locator("#searchTourNext")).toHaveText("Finish");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#searchTour")).toBeHidden();
+  await expect(page.locator("#searchTutorialButton")).toBeFocused();
 });
 
 test("limits Search Network depth on the free demo", async ({ page }) => {
@@ -1108,28 +1328,212 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await expect(canvas).toHaveAttribute("data-engine-nodes-mode", "replay");
 });
 
-test("presents both labs as one destination with the engine explained", async ({ page }) => {
+test("opens on an overview that explains the engine and offers both labs", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
 
+  await page.goto("/inside-sgurr/evaluation.html");
+  await expect(page.locator("#twoPartsTitle")).toHaveCount(0);
   await page.goto("/inside-sgurr/");
-  await expect(page.locator("#twoPartsTitle")).toHaveText("Sgurr is two moving parts.");
-  await expect(page.locator(".two-parts-copy p").last()).toContainText("search");
-  await expect(page.locator(".two-parts-copy p").last()).toContainText("evaluation");
-  await expect(page.locator(".two-parts-list li")).toHaveCount(2);
-  await expect(page.locator('.two-parts-list li[data-current="true"] strong')).toHaveText("Evaluation");
+
+  await expect(page.locator("#hubTitle")).toHaveText("Two moving parts.");
+  await expect(page.locator(".hub-parts article")).toHaveCount(3);
+  await expect(page.locator(".hub-parts h3").first()).toHaveText("Which moves to look at");
+  await expect(page.locator(".lab-choice-card")).toHaveCount(2);
+  await expect(page.locator(".lab-choice-card h2").first()).toHaveText("Search Lab");
+  await expect(page.locator(".lab-choice-card h2").last()).toHaveText("Evaluation Lab");
+  await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Overview");
+
+  // The big cards are the way in, and each lab can reach the other.
+  await page.locator(".lab-choice-card").last().click();
+  await expect(page).toHaveURL(/\/inside-sgurr\/evaluation\.html$/);
   await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Evaluation Lab");
   await expect(page.locator(".inside-brand small")).toHaveText("EVALUATION LAB");
 
-  await page.locator('.lab-switch a:not([aria-current])').click();
+  await page.locator('.lab-switch a', { hasText: "Search Lab" }).click();
   await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
-  await expect(page.locator("#twoPartsTitle")).toHaveText("Sgurr is two moving parts.");
-  await expect(page.locator('.two-parts-list li[data-current="true"] strong')).toHaveText("Search");
   await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Search Lab");
   await expect(page.locator(".brand small")).toHaveText("SEARCH LAB");
 
-  await page.locator('.lab-switch a:not([aria-current])').click();
+  await page.locator('.lab-switch a', { hasText: "Overview" }).click();
   await expect(page).toHaveURL(/\/inside-sgurr\/$/);
+});
+
+test("keeps the dark pieces visible on every themed board", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await openMainMenu(page);
+
+  // Only the dark-piece-on-dark-square pairing is checked. White pieces sit on
+  // light squares at low contrast in every theme by design -- their dark
+  // outline carries them -- but a dark piece whose fill matches the square it
+  // stands on disappears, which is what happened to Neon Dark.
+  const worst = await page.evaluate(async () => {
+    const { THEMES, THEME_ORDER } = await import("/js/config.js");
+    const luminance = (hex) => {
+      const value = hex.replace("#", "");
+      const channels = [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16) / 255);
+      const linear = channels.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    };
+    const ratio = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    return THEME_ORDER.map((key) => ({
+      key,
+      ratio: ratio(THEMES[key].vars["--board-dark"], THEMES[key].vars["--piece-black"]),
+    }));
+  });
+
+  // Neon Dark is the one that regressed: its dark square and dark piece were
+  // within 1.01 of each other. How light a board should look is a design call,
+  // so this only guards against a piece being lost in its square.
+  for (const theme of worst) {
+    expect(theme.ratio, `${theme.key}: dark pieces vanish into the dark squares`).toBeGreaterThan(1.25);
+  }
+});
+
+test("marks every menu action with a mark from the same family", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+
+  await expect(page.locator(".menu-action-card .sg-mark")).toHaveCount(5);
+  await expect(page.locator(".inside-sgurr-link .sg-mark-orbit")).toHaveCount(1);
+  await expect(page.locator("#playWhiteButton .sg-mark-white")).toHaveCount(1);
+  await expect(page.locator("#playBlackButton .sg-mark-black")).toHaveCount(1);
+  await expect(page.locator("#watchButton .sg-mark-duel")).toHaveCount(1);
+  await expect(page.locator("#positionLabButton .sg-mark-board")).toHaveCount(1);
+
+  // Every mark is drawn, not an empty box.
+  const sized = await page.evaluate(() => [...document.querySelectorAll(".menu-action-card .sg-mark")]
+    .every((mark) => mark.getBoundingClientRect().width > 20));
+  expect(sized).toBe(true);
+});
+
+test("returns from a lab straight to the menu, with no intro frame", async ({ page }) => {
+  await installMockBackend(page);
+  // No modules at all: whatever shows is what the document and CSS decide, which
+  // is exactly what the visitor sees before the deferred scripts run.
+  await page.route("**/*.js", (route) => route.abort());
+
+  await page.goto("/?view=menu").catch(() => {});
+  expect(await page.evaluate(() => ({
+    intro: getComputedStyle(document.querySelector("#introScreen")).display,
+    menu: getComputedStyle(document.querySelector(".menu-screen")).opacity,
+  }))).toEqual({ intro: "none", menu: "1" });
+
+  // A plain visit still gets the full intro.
+  await page.goto("/").catch(() => {});
+  expect(await page.evaluate(() => ({
+    intro: getComputedStyle(document.querySelector("#introScreen")).display,
+    menu: getComputedStyle(document.querySelector(".menu-screen")).opacity,
+  }))).toEqual({ intro: "block", menu: "0" });
+});
+
+test("shows the longest theme name in full on every lab", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  await page.addInitScript(() => localStorage.setItem("sgurrTheme", "highland"));
+
+  for (const [url, ready] of [
+    ["/inside-sgurr/", ".lab-choice-card"],
+    ["/inside-sgurr/evaluation.html", "#insideShell"],
+    ["/search-lab/?mode=network", "#networkPanel"],
+  ]) {
+    await page.goto(url);
+    await expect(page.locator(ready).first()).toBeVisible();
+    const fit = await page.evaluate(() => {
+      const select = document.querySelector("#labThemeSelect");
+      const styles = getComputedStyle(select);
+      const probe = document.createElement("span");
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${styles.font};letter-spacing:${styles.letterSpacing}`;
+      probe.textContent = [...select.options].reduce((a, b) => (a.length >= b.textContent.length ? a : b.textContent), "");
+      document.body.appendChild(probe);
+      const needed = probe.getBoundingClientRect().width;
+      probe.remove();
+      // Leave room for the native dropdown arrow.
+      const usable = select.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight) - 18;
+      return { needed: Math.round(needed), usable: Math.round(usable) };
+    });
+    expect(fit.usable, `longest theme name fits on ${url}`).toBeGreaterThanOrEqual(fit.needed);
+  }
+});
+
+test("paints the saved theme before the lab scripts run", async ({ page }) => {
+  await installMockBackend(page);
+  // Seed a chosen palette the way picking a theme does.
+  await page.addInitScript(() => {
+    localStorage.setItem("sgurrTheme", "highland");
+    localStorage.setItem("sgurrThemeVars", JSON.stringify({ "--bg": "#1c1720", "--accent": "#bc7ec3" }));
+  });
+  // With every module blocked, only the inline head script can have run.
+  await page.route("**/*.js", (route) => route.abort());
+
+  for (const url of ["/inside-sgurr/", "/inside-sgurr/evaluation.html", "/search-lab/?mode=network"]) {
+    await page.goto(url);
+    const painted = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      bg: document.documentElement.style.getPropertyValue("--bg").trim(),
+    }));
+    expect(painted, `theme applied before scripts on ${url}`).toEqual({ theme: "highland", bg: "#1c1720" });
+  }
+});
+
+test("answers the theme and detail shortcuts on the labs", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+
+  await page.goto("/inside-sgurr/evaluation.html");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  const first = await page.evaluate(() => document.documentElement.dataset.theme);
+  await page.keyboard.press("t");
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+    .not.toBe(first);
+  const second = await page.evaluate(() => document.documentElement.dataset.theme);
+
+  // Typing a FEN must not cycle the theme.
+  await page.locator("#nnueFenInput").click();
+  await page.keyboard.press("t");
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(second);
+
+  await page.goto("/search-lab/?mode=network");
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  const detail = await page.locator("#labDetailSelect").inputValue();
+  await page.keyboard.press("d");
+  await expect.poll(() => page.locator("#labDetailSelect").inputValue()).not.toBe(detail);
+});
+
+test("keeps both labs on one skeleton so switching does not jump", async ({ page }) => {
+  test.setTimeout(30_000);
+  await installMockBackend(page);
+  const shape = async () => page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector).getBoundingClientRect();
+      return [Math.round(rect.top), Math.round(rect.left), Math.round(rect.width), Math.round(rect.height)];
+    };
+    const heading = document.querySelector(".lab-masthead h1").getBoundingClientRect();
+    return {
+      header: box("header"),
+      tabs: box(".lab-switch"),
+      masthead: box(".lab-masthead"),
+      // The headlines differ in length, but they bottom-align, so everything
+      // below the masthead starts at the same place on both labs.
+      headingBottom: Math.round(heading.bottom),
+    };
+  });
+
+  await page.goto("/inside-sgurr/evaluation.html");
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  const evaluation = await shape();
+
+  await page.goto("/search-lab/?mode=network");
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  const search = await shape();
+
+  expect(search).toEqual(evaluation);
 });
 
 test("returns from the microscope directly to the main menu", async ({ page }) => {
@@ -1137,7 +1541,7 @@ test("returns from the microscope directly to the main menu", async ({ page }) =
   await openMainMenu(page);
   await page.locator(".inside-sgurr-link").click();
   await expect(page).toHaveURL(/\/inside-sgurr\/$/);
-  await page.locator('.lab-switch a:not([aria-current])').click();
+  await page.locator(".lab-choice-card").first().click();
   await expect(page).toHaveURL(/\/search-lab\/\?mode=network$/);
   await expect(page.locator("#networkTab")).toHaveClass(/active/);
   await expect(page.locator("#networkPanel")).toBeVisible();
@@ -1392,4 +1796,3 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   await expect(page.locator(".side-panel")).not.toHaveClass(/review-mode/);
   await expect(page.locator("#resultModal")).toBeVisible();
 });
-

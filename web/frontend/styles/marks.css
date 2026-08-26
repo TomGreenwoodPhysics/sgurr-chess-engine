@@ -1,0 +1,152 @@
+/* Sgurr's mark family. One disc, many figures: same ground, border and glow on
+   every mark, so a menu card and a lab header read as the same hand. Insets are
+   percentages, so a mark scales by setting --mark-size alone. */
+
+.sg-mark {
+  --mark-size: 39px;
+  position: relative;
+  width: var(--mark-size);
+  height: var(--mark-size);
+  flex: 0 0 var(--mark-size);
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 28%);
+  border-radius: 50%;
+  background: var(--chamber, #070a11);
+  box-shadow:
+    inset 0 0 14px color-mix(in srgb, var(--cyan, #70d7ff), transparent 68%),
+    0 0 22px color-mix(in srgb, var(--accent), transparent 80%);
+}
+
+.sg-mark::before,
+.sg-mark::after,
+.sg-mark i {
+  content: "";
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--cyan, #70d7ff), transparent 60%);
+  border-radius: 50%;
+}
+
+.sg-mark-sm { --mark-size: 30px; }
+
+/* Inside Sgurr: the core, with two orbits crossing it. */
+.sg-mark-orbit {
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--cyan, #70d7ff), transparent 12%) 0 6%, color-mix(in srgb, var(--accent), transparent 52%) 7% 15%, transparent 17%),
+    var(--chamber, #070a11);
+}
+
+.sg-mark-orbit::before { inset: 12.8% 46.2% 12.8% 12.8%; border-right: 0; border-radius: 70% 22% 22% 70%; }
+.sg-mark-orbit::after { inset: 12.8% 12.8% 12.8% 46.2%; border-left: 0; border-radius: 22% 70% 70% 22%; }
+.sg-mark-orbit i:first-child { inset: -10.3% 20.5%; transform: rotate(54deg); border-color: color-mix(in srgb, var(--accent), transparent 58%); }
+.sg-mark-orbit i:last-child { inset: 20.5% -10.3%; transform: rotate(-28deg); border-color: color-mix(in srgb, var(--accent-2), transparent 60%); }
+
+/* Search: one root, and fronts opening outward a ply at a time. */
+.sg-mark-search {
+  background:
+    radial-gradient(circle at 32% 50%, color-mix(in srgb, var(--accent), transparent 8%) 0 9%, transparent 12%),
+    var(--chamber, #070a11);
+}
+
+.sg-mark-search::before,
+.sg-mark-search::after,
+.sg-mark-search i {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+.sg-mark-search::before { inset: 23%; border-right-color: color-mix(in srgb, var(--accent), transparent 34%); }
+.sg-mark-search::after { inset: 12.8%; border-right-color: color-mix(in srgb, var(--accent-2), transparent 44%); }
+.sg-mark-search i:first-child { inset: 2.6%; border-right-color: color-mix(in srgb, var(--cyan, #70d7ff), transparent 62%); }
+.sg-mark-search i:last-child { inset: 33%; border-right-color: color-mix(in srgb, var(--cyan, #70d7ff), transparent 30%); }
+
+/* Evaluation: two perspectives resolving to one score. */
+.sg-mark-eval::before { inset: 15% 49% 15% 15%; border-right: 0; border-radius: 72% 20% 20% 72%; }
+.sg-mark-eval::after { inset: 15% 15% 15% 49%; border-left: 0; border-radius: 20% 72% 72% 20%; }
+
+.sg-mark-eval i:first-child {
+  inset: 0;
+  width: 18%;
+  height: 18%;
+  margin: auto;
+  border: 0;
+  background: color-mix(in srgb, var(--cyan, #70d7ff), transparent 4%);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--cyan, #70d7ff), transparent 34%);
+}
+
+.sg-mark-eval i:last-child { inset: 5%; border-color: color-mix(in srgb, var(--accent), transparent 66%); }
+
+/* --- menu marks --------------------------------------------------------- */
+
+/* Playing a side: the stone you are given, lit from the same corner as the
+   pieces on the board. */
+.sg-mark-white::before,
+.sg-mark-black::before {
+  inset: 20%;
+  border: 0;
+}
+
+.sg-mark-white::before {
+  background: radial-gradient(circle at 34% 30%, #ffffff, var(--piece-white, #f2f6fc) 46%, color-mix(in srgb, var(--piece-white, #f2f6fc), #000 26%));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--piece-white, #f2f6fc), transparent 62%);
+}
+
+.sg-mark-black::before {
+  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--piece-black, #171c26), #fff 26%), var(--piece-black, #171c26) 58%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 52%);
+}
+
+.sg-mark-white::after,
+.sg-mark-black::after { inset: 8%; border-color: color-mix(in srgb, var(--accent), transparent 74%); }
+
+/* Sgurr against itself: two cores facing, sharing one boundary. */
+.sg-mark-duel::before,
+.sg-mark-duel::after {
+  inset: 22%;
+  width: 30%;
+  height: 56%;
+  border: 0;
+  border-radius: 50%;
+}
+
+.sg-mark-duel::before {
+  left: 14%;
+  background: radial-gradient(circle at 40% 34%, var(--accent), color-mix(in srgb, var(--accent), #000 52%));
+}
+
+.sg-mark-duel::after {
+  left: auto;
+  right: 14%;
+  background: radial-gradient(circle at 60% 34%, color-mix(in srgb, var(--cyan, #70d7ff), #000 18%), color-mix(in srgb, var(--cyan, #70d7ff), #000 66%));
+}
+
+.sg-mark-duel i:first-child {
+  inset: 12%;
+  border-color: color-mix(in srgb, var(--accent-2), transparent 62%);
+}
+
+.sg-mark-duel i:last-child { display: none; }
+
+/* Position Lab: a board, cut to the disc. */
+/* A square patch inside the disc, so it reads as a board and not a pie. */
+.sg-mark-board::before {
+  inset: 25%;
+  border: 0;
+  border-radius: 2px;
+  background:
+    conic-gradient(
+      color-mix(in srgb, var(--board-light, #f5d8aa), transparent 18%) 0 25%,
+      color-mix(in srgb, var(--board-dark, #975e39), transparent 12%) 0 50%,
+      color-mix(in srgb, var(--board-light, #f5d8aa), transparent 18%) 0 75%,
+      color-mix(in srgb, var(--board-dark, #975e39), transparent 12%) 0
+    );
+}
+
+.sg-mark-board::after {
+  inset: 25%;
+  border-radius: 2px;
+  border-color: color-mix(in srgb, var(--accent), transparent 46%);
+}
+
+.sg-mark-board i:first-child { inset: 13%; border-color: color-mix(in srgb, var(--accent), transparent 72%); }
+.sg-mark-board i:last-child { display: none; }

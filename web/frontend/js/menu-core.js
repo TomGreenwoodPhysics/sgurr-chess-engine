@@ -2,9 +2,8 @@ import { clampNumber } from "./utils.js";
 import { app, refs } from "./state.js";
 
 // Aesthetic life for every Sgurr core: the god-eye layer stack (depth,
-// cosmos, divinity, interior) injected into all of them, cursor attention
-// for the menu and post-game cores, and a rare "surfacing" idle beat on the
-// menu. Everything here is decorative and only runs while the in-app
+// cosmos, divinity, interior) injected into all of them, plus cursor attention
+// for the menu and post-game cores. Everything here is decorative and only runs while the in-app
 // Animations setting is on -- so users who turn it off, and the headless
 // smoke tests (animations off), get static, undisturbed cores.
 
@@ -109,11 +108,9 @@ function buildInterior(core) {
 
   const form = document.createElement("span");
   form.className = "core-form";
-  const surge = document.createElement("span");
-  surge.className = "core-surge";
 
   const fragment = document.createDocumentFragment();
-  fragment.append(embers, form, surge);
+  fragment.append(embers, form);
   core.appendChild(fragment);
 }
 
@@ -303,27 +300,6 @@ function onPointerMove(event) {
   }, 350 + Math.random() * 450);
 }
 
-// A rare idle beat: the ember flares and something rises to regard you, then
-// subsides. Randomised interval so it never feels scheduled.
-function scheduleSurface() {
-  const delay = 15000 + Math.random() * 15000;
-  window.setTimeout(() => {
-    const core = refs.menuCore;
-    if (core && app.mode === "menu" && motionOn() && !document.hidden) {
-      const surge = core.querySelector(".core-surge");
-      core.classList.add("surfacing");
-      // Drop the class only once the flare has fully eased out, so it never
-      // gets cut off mid-animation. Fall back to a timer if there's no surge.
-      if (surge) {
-        surge.addEventListener("animationend", () => core.classList.remove("surfacing"), { once: true });
-      } else {
-        window.setTimeout(() => core.classList.remove("surfacing"), 4200);
-      }
-    }
-    scheduleSurface();
-  }, delay);
-}
-
 export function initMenuCore() {
   const core = refs.menuCore;
   if (!core) {
@@ -371,5 +347,4 @@ export function initMenuCore() {
   window.addEventListener("pointermove", onPointerMove, { passive: true });
   window.addEventListener("pointerleave", resetRegard);
   window.addEventListener("blur", resetRegard);
-  scheduleSurface();
 }

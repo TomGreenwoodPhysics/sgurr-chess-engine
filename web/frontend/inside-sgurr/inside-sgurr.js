@@ -2,6 +2,7 @@ import { apiUrl, START_FEN } from "../js/config.js";
 import { initLabPreferences } from "../search-lab/preferences.js";
 import { CortexVisual } from "./cortex.js";
 import { EXPECTED_NETWORK, featureIndex, parseFen } from "./nnue-model.js";
+import { initNnueTutorial } from "./tutorial.js";
 
 const NETWORK_PATH = `/api/nnue/gen8/${EXPECTED_NETWORK.sha256}.nnue`;
 const POSITION_PRESETS = Object.freeze({
@@ -61,6 +62,7 @@ const refs = {
   pieceInspectorTitle: document.querySelector("#pieceInspectorTitle"),
   pieceInspectorNote: document.querySelector("#pieceInspectorNote"),
   clearPieceInspector: document.querySelector("#clearPieceInspector"),
+  replayFeatureTrace: document.querySelector("#replayFeatureTrace"),
   whiteFeatureIndex: document.querySelector("#whiteFeatureIndex"),
   whiteFeatureSummary: document.querySelector("#whiteFeatureSummary"),
   blackFeatureIndex: document.querySelector("#blackFeatureIndex"),
@@ -89,14 +91,26 @@ const refs = {
   weightRows: document.querySelector("#weightRows"),
   laneOperations: document.querySelector("#laneOperations"),
   featureTrace: document.querySelector("#featureTrace"),
+  moveAutopsy: document.querySelector("#moveAutopsy"),
+  autopsyTitle: document.querySelector("#autopsyTitle"),
+  autopsyNet: document.querySelector("#autopsyNet"),
+  autopsyTabs: [...document.querySelectorAll("[data-autopsy-side]")],
+  autopsyList: document.querySelector("#autopsyList"),
+  autopsyNote: document.querySelector("#autopsyNote"),
   laneTitle: document.querySelector("#laneTitle"),
   laneAddress: document.querySelector("#laneAddress"),
   laneMeter: document.querySelector("#laneMeter"),
   laneRaw: document.querySelector("#laneRaw"),
   laneClipped: document.querySelector("#laneClipped"),
   laneDelta: document.querySelector("#laneDelta"),
+  laneWeight: document.querySelector("#laneWeight"),
+  laneProduct: document.querySelector("#laneProduct"),
   laneContributionLabel: document.querySelector("#laneContributionLabel"),
   laneContribution: document.querySelector("#laneContribution"),
+  laneEquation: document.querySelector("#laneEquation"),
+  laneEquationFormula: document.querySelector("#laneEquationFormula"),
+  laneEquationResult: document.querySelector("#laneEquationResult"),
+  laneEquationNote: document.querySelector("#laneEquationNote"),
   laneNote: document.querySelector("#laneNote"),
   promotionDialog: document.querySelector("#promotionDialog"),
 };
@@ -117,11 +131,14 @@ let bootSequence = 0;
 let boardSquares = new Map();
 let inspectedSquare = null;
 let featureRequest = 0;
+let autopsySide = "gain";
+let autopsyLanes = { gain: [], loss: [] };
 
 const visual = new CortexVisual(refs.canvas, (details) => {
   if (details) selectedLane = { perspective: details.perspective, index: details.index };
   renderLane(details);
 });
+const tutorial = initNnueTutorial();
 
 function setDisplayMode(mode) {
   const details = DISPLAY_MODES[mode];
@@ -333,13 +350,13 @@ function renderEvaluation() {
   if (!snapshot) return;
   if (currentPhase === "delta" && transition.before) {
     const scoreDelta = transition.after.whiteRelative - transition.before.whiteRelative;
-    refs.evaluationLabel.textContent = "White evaluation change";
+    refs.evaluationLabel.textContent = "Static NNUE · White change";
     refs.evaluation.textContent = formatSigned(scoreDelta / 100);
-    refs.evaluationDetail.textContent = `${formatSigned(transition.before.whiteRelative / 100)} → ${formatSigned(transition.after.whiteRelative / 100)}`;
+    refs.evaluationDetail.textContent = `No search · ${formatSigned(transition.before.whiteRelative / 100)} → ${formatSigned(transition.after.whiteRelative / 100)}`;
   } else {
-    refs.evaluationLabel.textContent = "White evaluation";
+    refs.evaluationLabel.textContent = "Static NNUE · White";
     refs.evaluation.textContent = formatSigned(snapshot.whiteRelative / 100);
-    refs.evaluationDetail.textContent = `${snapshot.sideToMove === 0 ? "White" : "Black"} to move · raw ${formatInteger(snapshot.raw)}`;
+    refs.evaluationDetail.textContent = `${snapshot.sideToMove === 0 ? "White" : "Black"} to move · no search · raw ${formatInteger(snapshot.raw)}`;
   }
   refs.pieceCount.textContent = snapshot.pieces.length;
   refs.activeFeatures.textContent = `${snapshot.activeFeatures.length} × 2`;
@@ -375,6 +392,112 @@ function renderUpdate() {
   }
 }
 
+function laneAddress(perspective, index) {
+  return `${perspective === "white" ? "W" : "B"}:${String(index).padStart(3, "0")}`;
+}
+
+function describeTransition() {
+  if (!transition?.before) return "No move yet";
+  const { removed, added } = transition.edits;
+  const from = removed.find((piece) => added.some((next) => next.piece === piece.piece));
+  const to = from && added.find((piece) => piece.piece === from.piece);
+  if (from && to) return `${from.squareName} → ${to.squareName}`;
+  return transition.pieceSquareEdits === 1 ? "One-square edit" : `${transition.pieceSquareEdits}-square update`;
+}
+
+function buildAutopsy() {
+  if (!transition?.before) {
+    autopsyLanes = { gain: [], loss: [] };
+    refs.moveAutopsy.dataset.state = "idle";
+    refs.autopsyTitle.textContent = "No move yet";
+    refs.autopsyNet.textContent = "—";
+    renderAutopsyList();
+    return;
+  }
+
+  const beforeSign = transition.before.sideToMove === 0 ? 1 : -1;
+  const afterSign = transition.after.sideToMove === 0 ? 1 : -1;
+  const lanes = [];
+  for (const perspective of ["white", "black"]) {
+    const beforeContribution = perspective === "white"
+      ? transition.before.whiteContribution
+      : transition.before.blackContribution;
+    const afterContribution = perspective === "white"
+      ? transition.after.whiteContribution
+      : transition.after.blackContribution;
+    const beforeActivation = perspective === "white"
+      ? transition.before.whiteActivation
+      : transition.before.blackActivation;
+    const afterActivation = perspective === "white"
+      ? transition.after.whiteActivation
+      : transition.after.blackActivation;
+    for (let index = 0; index < 384; index += 1) {
+      const raw = afterContribution[index] * afterSign - beforeContribution[index] * beforeSign;
+      if (!raw) continue;
+      lanes.push({
+        perspective,
+        index,
+        raw,
+        centipawns: raw * 400 / (255 * 64),
+        beforeActivation: beforeActivation[index],
+        afterActivation: afterActivation[index],
+      });
+    }
+  }
+  autopsyLanes = {
+    gain: lanes.filter((lane) => lane.raw > 0).sort((a, b) => b.raw - a.raw).slice(0, 5),
+    loss: lanes.filter((lane) => lane.raw < 0).sort((a, b) => a.raw - b.raw).slice(0, 5),
+  };
+  const scoreDelta = transition.after.whiteRelative - transition.before.whiteRelative;
+  autopsySide = scoreDelta >= 0 ? "gain" : "loss";
+  refs.moveAutopsy.dataset.state = "ready";
+  refs.autopsyTitle.textContent = describeTransition();
+  refs.autopsyNet.textContent = `${formatSigned(scoreDelta / 100)} eval`;
+  refs.autopsyNote.textContent = "Click a lane to open its exact calculation.";
+  renderAutopsyList();
+}
+
+function renderAutopsyList() {
+  refs.moveAutopsy.dataset.side = autopsySide;
+  for (const button of refs.autopsyTabs) {
+    const active = button.dataset.autopsySide === autopsySide;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  refs.autopsyList.replaceChildren();
+  const lanes = autopsyLanes[autopsySide];
+  if (!lanes.length) {
+    const empty = document.createElement("p");
+    empty.textContent = transition?.before ? "No lanes moved the score this way." : "Make a move to isolate its largest lane changes.";
+    refs.autopsyList.appendChild(empty);
+    return;
+  }
+  const scale = Math.max(...lanes.map((lane) => Math.abs(lane.raw)), 1);
+  for (const lane of lanes) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "autopsy-lane";
+    button.dataset.perspective = lane.perspective;
+    button.dataset.index = String(lane.index);
+    button.style.setProperty("--autopsy-strength", `${Math.max(12, Math.abs(lane.raw) / scale * 100)}%`);
+    button.setAttribute(
+      "aria-label",
+      `${laneAddress(lane.perspective, lane.index)}, ${formatSigned(lane.centipawns)} centipawns`,
+    );
+
+    const address = document.createElement("code");
+    address.textContent = laneAddress(lane.perspective, lane.index);
+    const track = document.createElement("i");
+    track.setAttribute("aria-hidden", "true");
+    const value = document.createElement("strong");
+    value.textContent = `${formatSigned(lane.centipawns)} cp`;
+    const activation = document.createElement("small");
+    activation.textContent = `${lane.beforeActivation} → ${lane.afterActivation}`;
+    button.append(address, track, value, activation);
+    refs.autopsyList.appendChild(button);
+  }
+}
+
 function renderLane(details) {
   if (!details) {
     refs.laneTitle.textContent = "Select a lane";
@@ -383,8 +506,14 @@ function renderLane(details) {
     refs.laneRaw.textContent = "—";
     refs.laneClipped.textContent = "—";
     refs.laneDelta.textContent = "—";
+    refs.laneWeight.textContent = "—";
+    refs.laneProduct.textContent = "—";
     refs.laneContributionLabel.textContent = "Output contribution";
     refs.laneContribution.textContent = "—";
+    refs.laneEquation.dataset.state = "idle";
+    refs.laneEquationFormula.textContent = "Select a lane";
+    refs.laneEquationResult.textContent = "—";
+    refs.laneEquationNote.textContent = "Raw accumulator values are clipped before the output weight is applied.";
     refs.laneNote.textContent = "Hover, tap or use the arrow keys on the display.";
     return;
   }
@@ -395,8 +524,22 @@ function renderLane(details) {
   refs.laneRaw.textContent = formatInteger(details.raw);
   refs.laneClipped.textContent = `${details.clipped} / 255`;
   refs.laneDelta.textContent = `${details.delta >= 0 ? "+" : "−"}${formatInteger(Math.abs(details.delta))}`;
+  refs.laneWeight.textContent = formatSigned(details.weight, 0);
+  refs.laneProduct.textContent = formatSigned(details.product, 0);
   refs.laneContributionLabel.textContent = details.phase === "delta" ? "White output change" : "White contribution";
   refs.laneContribution.textContent = `${formatSigned(details.centipawns)} cp`;
+  refs.laneEquation.dataset.state = "ready";
+  if (details.equation.kind === "delta") {
+    const { before, after, scale, divisor } = details.equation;
+    refs.laneEquationFormula.textContent = `[(${after.activation} × ${formatSigned(after.signedWeight, 0)}) − (${before.activation} × ${formatSigned(before.signedWeight, 0)})] × ${scale} ÷ ${formatInteger(divisor)}`;
+    refs.laneEquationResult.textContent = `${formatSigned(details.centipawns)} cp`;
+    refs.laneEquationNote.textContent = `${formatSigned(after.product, 0)} − ${formatSigned(before.product, 0)} = ${formatSigned(details.contribution, 0)} before network scaling.`;
+  } else {
+    const { after, scale, divisor } = details.equation;
+    refs.laneEquationFormula.textContent = `${after.activation} × ${formatSigned(after.signedWeight, 0)} × ${scale} ÷ ${formatInteger(divisor)}`;
+    refs.laneEquationResult.textContent = `${formatSigned(details.centipawns)} cp`;
+    refs.laneEquationNote.textContent = `${formatInteger(after.raw)} clips to ${after.activation}; the signed weight is White-relative.`;
+  }
   refs.laneNote.textContent = details.phase === "delta"
     ? "The value includes the side-to-move output swap."
     : `This lane uses the ${details.outputHalf} output weights.`;
@@ -426,6 +569,7 @@ function clearPieceInspection({ redraw = true } = {}) {
   refs.pieceInspectorTitle.textContent = "Select a piece";
   refs.pieceInspectorNote.textContent = "Click any piece to light the lanes its two feature rows drive.";
   refs.clearPieceInspector.hidden = true;
+  refs.replayFeatureTrace.hidden = true;
   refs.whiteFeatureIndex.textContent = "W:—";
   refs.blackFeatureIndex.textContent = "B:—";
   refs.whiteFeatureSummary.textContent = "—";
@@ -443,6 +587,7 @@ async function inspectPiece(piece) {
   refs.pieceInspectorTitle.textContent = `${piece.label} on ${piece.squareName}`;
   refs.pieceInspectorNote.textContent = "Reading both feature rows from the network.";
   refs.clearPieceInspector.hidden = false;
+  refs.replayFeatureTrace.hidden = true;
   refs.whiteFeatureIndex.textContent = `W:${String(whiteIndex).padStart(3, "0")}`;
   refs.blackFeatureIndex.textContent = `B:${String(blackIndex).padStart(3, "0")}`;
   refs.whiteFeatureSummary.textContent = "reading row";
@@ -450,15 +595,23 @@ async function inspectPiece(piece) {
   try {
     const message = await requestWorker("feature", { whiteIndex, blackIndex });
     if (request !== featureRequest) return;
-    visual.setFocus(message.whiteWeights, message.blackWeights);
+    visual.setFeatureTrace({
+      piece,
+      whiteIndex,
+      blackIndex,
+      whiteWeights: message.whiteWeights,
+      blackWeights: message.blackWeights,
+    });
     refs.whiteFeatureSummary.textContent = summariseWeights(message.whiteWeights);
     refs.blackFeatureSummary.textContent = summariseWeights(message.blackWeights);
-    refs.pieceInspectorNote.textContent = "Lit lanes are the ones this piece pushes hardest.";
+    refs.pieceInspectorNote.textContent = "The pulse follows this piece into both views, then marks its strongest lanes.";
+    refs.replayFeatureTrace.hidden = false;
     refs.pieceInspector.dataset.state = "ready";
   } catch (error) {
     if (request !== featureRequest) return;
     refs.pieceInspector.dataset.state = "idle";
     refs.pieceInspectorNote.textContent = "That feature row could not be read.";
+    refs.replayFeatureTrace.hidden = true;
     refs.whiteFeatureSummary.textContent = "row unavailable";
     refs.blackFeatureSummary.textContent = "row unavailable";
   }
@@ -562,6 +715,7 @@ async function evaluate(beforeFen, afterFen, { replay = false } = {}) {
   refs.replay.disabled = !transition.before;
   refs.timeline.disabled = !transition.before;
   renderUpdate();
+  buildAutopsy();
   setPhase("after");
   if (replay && transition.before) replayTransition();
 }
@@ -739,6 +893,7 @@ async function boot() {
     refs.fenStatus.textContent = "Position loaded. Choose a move or select a lane.";
     busy = false;
     renderBoard();
+    tutorial.maybeStart();
   } catch (error) {
     if (sequence !== bootSequence) return;
     showBootError(error);
@@ -762,6 +917,25 @@ refs.timeline.addEventListener("input", () => {
   setPhase(PHASE_ORDER[Number(refs.timeline.value)] || "after");
 });
 refs.clearPieceInspector.addEventListener("click", () => clearPieceInspection());
+refs.replayFeatureTrace.addEventListener("click", () => visual.replayFeatureTrace());
+for (const button of refs.autopsyTabs) {
+  button.addEventListener("click", () => {
+    autopsySide = button.dataset.autopsySide;
+    renderAutopsyList();
+  });
+}
+refs.autopsyList.addEventListener("click", (event) => {
+  const button = event.target.closest(".autopsy-lane");
+  if (!button) return;
+  const target = {
+    perspective: button.dataset.perspective,
+    index: Number(button.dataset.index),
+  };
+  setDisplayMode("contribution");
+  setPhase("delta");
+  selectedLane = target;
+  visual.selectLane(target);
+});
 refs.beforeState.addEventListener("click", () => setPhase("before"));
 refs.deltaState.addEventListener("click", () => setPhase("delta"));
 refs.afterState.addEventListener("click", () => setPhase("after"));

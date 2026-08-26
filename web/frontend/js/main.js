@@ -1,4 +1,4 @@
-import { initAudio, playSound, syncGameMusic, syncMenuMusic } from "./audio.js";
+import { initAudio, playSound, syncGameMusic, syncMenuMusic, unlockAudio } from "./audio.js";
 import { copyAnalysisFen, selectAnalysisDepth, selectAnalysisPly, startPositionAnalysis, stepAnalysisPly, stopPositionAnalysis } from "./analysis.js";
 import { cancelDrag, cancelPromotion, handleBoardPointerMove, handleBoardPointerUp, hasPremoves, positionPromotionDialog } from "./board.js";
 import { currentTimeControl, syncClock } from "./clocks.js";
@@ -14,6 +14,9 @@ import { enterReview, exitReview, reviewEntries, reviewGoto, reviewIndexForPly, 
 import { app, refs } from "./state.js";
 import { applyAnimationMode, applyTheme, closeAllModals, cycleTheme, cycleTime, openModal, renderSettings, saveSettings } from "./themes.js";
 import { render, renderClockUi } from "./ui.js";
+
+document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
+document.addEventListener("keydown", unlockAudio, { capture: true, once: true });
 
 refs.introCoreTrigger.addEventListener("click", wakeSgurr);
 refs.wakeSgurrButton.addEventListener("click", wakeSgurr);
@@ -173,12 +176,14 @@ refs.clearPreferencesButton.addEventListener("click", () => {
   localStorage.removeItem("sgurrMusicVolume");
   localStorage.removeItem("sgurrGameMusicEnabled");
   localStorage.removeItem("sgurrGameMusicVolume");
+  localStorage.removeItem("sgurrNnueTutorialSeen");
+  localStorage.removeItem("sgurrSearchTutorialSeen");
   app.themeKey = "wood";
   app.timeIndex = 2;
   app.autoFlipAsBlack = true;
   app.showEngineInfo = true;
   app.animationMode = "On";
-  app.masterVolume = 1;
+  app.masterVolume = 0.7;
   app.soundVolume = 0.8;
   app.musicVolume = 0.2;
   app.gameMusicVolume = 0.35;
@@ -381,9 +386,12 @@ initAudio();
 initDemoTooltips();
 applyTheme();
 applyAnimationMode();
-initIntro();
+// Building the intro only to dismantle it costs a scene's worth of animation
+// at the exact moment the menu is coming up, so skip it outright.
 if (new URLSearchParams(window.location.search).get("view") === "menu") {
   finishIntro();
+} else {
+  initIntro();
 }
 initMenuCore();
 refs.movetimeSelect.value = currentTimeControl().key;

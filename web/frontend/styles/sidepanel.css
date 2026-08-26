@@ -25,11 +25,22 @@
   width: calc(var(--editor-column-width) * 2 + 12px);
   min-height: var(--play-height);
   height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible;
+  /* Even padding, so centring the panel centres what you can see in it. */
+  padding: 10px 0;
+}
+
+/* Build on the left, set up on the right, then act on the bar underneath.
+   The two columns size themselves, so neither is padded out to match the
+   other's height. */
+.editor-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
-  overflow: visible;
-  padding: 14px 0 10px;
 }
 
 .editor-column {

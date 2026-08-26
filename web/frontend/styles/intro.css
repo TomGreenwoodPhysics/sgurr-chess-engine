@@ -733,6 +733,14 @@
   transition: none;
 }
 
+/* Straight to the menu: hide the cave and lift the veil before the first
+   paint, so no frame of the intro is ever shown. The module then skips
+   building the intro scene at all. */
+:root[data-view="menu"] .intro-screen { display: none; }
+:root[data-view="menu"] body.intro-pending { overflow: auto; }
+:root[data-view="menu"] body.intro-pending .menu-screen { opacity: 1; pointer-events: auto; }
+:root[data-view="menu"] body.intro-pending .menu-title .menu-core { opacity: 1; }
+
 body.intro-pending {
   overflow: hidden;
 }

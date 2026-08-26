@@ -153,10 +153,18 @@ function evaluateFen(network, fen) {
 
   const whiteActivation = new Uint16Array(network.hidden);
   const blackActivation = new Uint16Array(network.hidden);
-  const whiteContribution = new Int32Array(network.hidden);
-  const blackContribution = new Int32Array(network.hidden);
   const whiteOutputOffset = position.sideToMove === 0 ? 0 : network.hidden;
   const blackOutputOffset = position.sideToMove === 1 ? 0 : network.hidden;
+  const whiteOutputWeights = network.outputWeights.slice(
+    whiteOutputOffset,
+    whiteOutputOffset + network.hidden,
+  );
+  const blackOutputWeights = network.outputWeights.slice(
+    blackOutputOffset,
+    blackOutputOffset + network.hidden,
+  );
+  const whiteContribution = new Int32Array(network.hidden);
+  const blackContribution = new Int32Array(network.hidden);
   let raw = network.outputBias;
   let clippedLow = 0;
   let clippedHigh = 0;
@@ -170,8 +178,8 @@ function evaluateFen(network, fen) {
     if (blackAccumulator[lane] <= 0) clippedLow += 1;
     if (whiteAccumulator[lane] >= network.qa) clippedHigh += 1;
     if (blackAccumulator[lane] >= network.qa) clippedHigh += 1;
-    whiteContribution[lane] = whiteValue * network.outputWeights[whiteOutputOffset + lane];
-    blackContribution[lane] = blackValue * network.outputWeights[blackOutputOffset + lane];
+    whiteContribution[lane] = whiteValue * whiteOutputWeights[lane];
+    blackContribution[lane] = blackValue * blackOutputWeights[lane];
     raw += whiteContribution[lane] + blackContribution[lane];
   }
 
@@ -189,6 +197,8 @@ function evaluateFen(network, fen) {
     blackAccumulator,
     whiteActivation,
     blackActivation,
+    whiteOutputWeights,
+    blackOutputWeights,
     whiteContribution,
     blackContribution,
     raw,

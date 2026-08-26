@@ -3,6 +3,24 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sgurr-api-base" content="">
+    <script>
+      // Applies the visitor's saved palette before first paint. Without this the
+      // page renders in the stylesheet's default theme for a frame, then swaps.
+      (function () {
+        try {
+          var key = localStorage.getItem("sgurrTheme");
+          if (key) document.documentElement.dataset.theme = key;
+          var cached = localStorage.getItem("sgurrThemeVars");
+          if (!cached) return;
+          var vars = JSON.parse(cached);
+          for (var name in vars) {
+            if (name.charAt(0) === "-") document.documentElement.style.setProperty(name, vars[name]);
+          }
+        } catch (error) {
+          /* private mode, or nothing saved yet: the default palette is fine */
+        }
+      })();
+    </script>
     <title>Inside Sgurr — Search Lab</title>
     <meta name="description" content="Watch Sgurr build, challenge, and revise a chess move through iterative deepening, or stream a live search from the engine.">
     <meta name="color-scheme" content="dark">
@@ -14,18 +32,19 @@
     <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23251a16'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e2b147' stroke-width='3' opacity='.7'/><circle cx='32' cy='32' r='11' fill='%23c96f3a'/></svg>">
-    <link rel="stylesheet" href="../styles/lab-shell.css">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../styles/lab-shell.css">
   </head>
-  <body>
+  <body class="lab-page">
     <header class="lab-header">
       <a class="brand" href="../?view=menu" aria-label="Back to Sgurr main menu">
-        <span class="brand-core" aria-hidden="true"></span>
+        <span class="sg-mark sg-mark-search" aria-hidden="true"><i></i><i></i></span>
         <span><strong>SGURR</strong><small>SEARCH LAB</small></span>
       </a>
       <nav class="lab-switch" aria-label="Choose a lab">
+          <a href="../inside-sgurr/">Overview</a>
           <a href="../search-lab/?mode=network" aria-current="page">Search Lab</a>
-          <a href="../inside-sgurr/">Evaluation Lab</a>
+          <a href="../inside-sgurr/evaluation.html">Evaluation Lab</a>
         </nav>
       <div class="lab-header-actions">
         <label class="lab-theme-control" for="labDetailSelect">
@@ -41,32 +60,18 @@
     </header>
 
     <main>
-      <section class="two-parts" aria-labelledby="twoPartsTitle">
-        <div class="two-parts-copy">
-          <p class="eyebrow">Inside Sgurr</p>
-          <h2 id="twoPartsTitle">Sgurr is two moving parts.</h2>
-          <p>Every move comes from two systems working together. The <strong>search</strong> decides which
-            moves are worth looking at and how deeply to follow them. The <strong>evaluation</strong> scores
-            the positions the search reaches. Neither is any use on its own.</p>
-        </div>
-        <ol class="two-parts-list">
-          <li data-current="true">
-            <span>01</span>
-            <div><strong>Search</strong><small>Which moves to look at, and how deep to go.</small></div>
-          </li>
-          <li data-current="false">
-            <span>02</span>
-            <div><strong>Evaluation</strong><small>How good a position is, read from the Gen8 network.</small></div>
-          </li>
-        </ol>
-      </section>
-
-      <section class="lab-intro" aria-labelledby="labTitle">
+      <section class="lab-masthead" aria-labelledby="labTitle">
         <div>
           <p class="eyebrow">Search Lab</p>
           <h1 id="labTitle">A move is not found.<br>It survives.</h1>
         </div>
-        <p class="intro-copy">Sgurr repeatedly searches the same position more deeply. The apparent best move can change as replies emerge, shortcuts reject whole branches, and quiet tactical continuations settle the final score.</p>
+        <p>Sgurr repeatedly searches the same position more deeply. The apparent best move can change as
+          replies emerge, shortcuts reject whole branches, and quiet tactical continuations settle the
+          final score.<br>
+          <button type="button" class="search-tour-trigger" id="searchTutorialButton">
+            Search guide <span aria-hidden="true">?</span>
+          </button>
+        </p>
       </section>
 
       <section class="microscope" aria-label="Sgurr search explorer">
@@ -285,6 +290,33 @@
     </main>
 
     <footer class="lab-footer"><span>SGURR v8.2 “Thearlaich”</span><span>Single-core C++20 · NNUE evaluation</span></footer>
+    <div class="search-tour" id="searchTour" hidden data-step="0" data-target="modes">
+      <div class="search-tour-focus" id="searchTourFocus" aria-hidden="true"></div>
+      <span class="search-tour-arrow" id="searchTourArrow" aria-hidden="true"></span>
+      <section
+        class="search-tour-card"
+        id="searchTourCard"
+        role="dialog"
+        aria-modal="true"
+        aria-live="polite"
+        aria-labelledby="searchTourTitle"
+        aria-describedby="searchTourText"
+      >
+        <div class="search-tour-topline">
+          <span id="searchTourCount">1 of 9</span>
+          <button type="button" id="searchTourSkip">Skip tutorial</button>
+        </div>
+        <p class="panel-label" id="searchTourKicker">Search guide</p>
+        <h2 id="searchTourTitle">Three ways to watch the search</h2>
+        <p id="searchTourText"></p>
+        <div class="search-tour-progress" id="searchTourProgress" aria-hidden="true"></div>
+        <div class="search-tour-actions">
+          <button type="button" id="searchTourBack">Back</button>
+          <button type="button" class="search-tour-next" id="searchTourNext">Next</button>
+        </div>
+        <small class="search-tour-keys">Use the arrow keys to move through the guide.</small>
+      </section>
+    </div>
     <script type="module" src="search-lab.js"></script>
   </body>
 </html>

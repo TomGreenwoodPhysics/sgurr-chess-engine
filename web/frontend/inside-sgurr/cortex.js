@@ -1,10 +1,14 @@
-const RAMP_STEPS = 64;
+const RAMP_STEPS = 32;
+const INTENSITY_STEPS = 24;
 const SETTLE_EPSILON = 0.003;
 // Time constants, in milliseconds, for the exponential easing. Roughly 3x these
 // numbers is how long a change takes to read as finished.
 const NODE_TAU = 88;
 const AMBIENT_TAU = 150;
 const CORE_TAU = 105;
+const FEATURE_TRACE_DURATION = 2200;
+const NNUE_SCALE = 400;
+const NNUE_DIVISOR = 255 * 64;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -44,15 +48,116 @@ function mixColour(from, to, amount) {
   ];
 }
 
-function buildRamp(negative, positive) {
-  const css = [];
-  const rgb = [];
-  for (let step = 0; step <= RAMP_STEPS; step += 1) {
-    const channels = mixColour(negative, positive, step / RAMP_STEPS).map(Math.round);
-    rgb.push(channels);
-    css.push(`rgb(${channels[0]}, ${channels[1]}, ${channels[2]})`);
+function rgbToHsl([red, green, blue]) {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const chroma = max - min;
+  if (!chroma) return [0, 0, lightness];
+  const saturation = lightness > 0.5 ? chroma / (2 - max - min) : chroma / (max + min);
+  let hue;
+  if (max === r) hue = (g - b) / chroma + (g < b ? 6 : 0);
+  else if (max === g) hue = (b - r) / chroma + 2;
+  else hue = (r - g) / chroma + 4;
+  return [hue * 60, saturation, lightness];
+}
+
+function hslToRgb([hue, saturation, lightness]) {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const sector = ((hue % 360) + 360) % 360 / 60;
+  const second = chroma * (1 - Math.abs((sector % 2) - 1));
+  const parts = sector < 1 ? [chroma, second, 0]
+    : sector < 2 ? [second, chroma, 0]
+      : sector < 3 ? [0, chroma, second]
+        : sector < 4 ? [0, second, chroma]
+          : sector < 5 ? [second, 0, chroma]
+            : [chroma, 0, second];
+  const lift = lightness - chroma / 2;
+  return parts.map((part) => clamp((part + lift) * 255, 0, 255));
+}
+
+function hueGap(a, b) {
+  const gap = Math.abs(((a - b) % 360 + 360) % 360);
+  return Math.min(gap, 360 - gap);
+}
+
+// Several themes set an accent that is all but the same hue as the cool pole,
+// which would leave "raises" and "lowers" looking identical. Fall back to the
+// theme's second accent when that happens, and only then.
+function warmBase(accent, accent2, cool) {
+  const coolHue = rgbToHsl(cool)[0];
+  return hueGap(rgbToHsl(accent)[0], coolHue) < 45 ? accent2 : accent;
+}
+
+// A third family for the lanes pinned at the ceiling, placed a third of the way
+// round the wheel from the warm pole, on whichever side is clear of the cool one.
+function crestHue(warm, cool) {
+  const warmHue = rgbToHsl(warm)[0];
+  const coolHue = rgbToHsl(cool)[0];
+  const options = [warmHue + 120, warmHue - 120];
+  return hueGap(options[0], coolHue) >= hueGap(options[1], coolHue) ? options[0] : options[1];
+}
+
+// Pushes a colour away from its own grey without moving its hue, so a theme's
+// accent reads as itself, only more so. Keeps the two poles far apart.
+function vivid(rgb, amount) {
+  const grey = (rgb[0] + rgb[1] + rgb[2]) / 3;
+  return rgb.map((channel) => clamp(grey + (channel - grey) * (1 + amount), 0, 255));
+}
+
+// A lane carries two numbers: which way it leans and how hard. The lean picks
+// the pole, the strength walks that pole from near-dark through its own colour
+// to a bright tint, so magnitude reads as colour and not only as size.
+function poleRamp(base, floor, crest) {
+  const stops = [];
+  for (let step = 0; step <= INTENSITY_STEPS; step += 1) {
+    const amount = step / INTENSITY_STEPS;
+    const channels = amount < 0.55
+      ? mixColour(floor, base, amount / 0.55)
+      : mixColour(base, crest, (amount - 0.55) / 0.45);
+    stops.push(channels.map(Math.round));
   }
-  return { css, rgb };
+  return stops;
+}
+
+function buildRamp(negative, positive) {
+  const dark = [10, 13, 22];
+  const warm = vivid(mixColour(positive, [255, 214, 236], 0.34), 0.5);
+  const cool = vivid(mixColour(negative, [206, 248, 255], 0.3), 0.35);
+  const negativeStops = poleRamp(vivid(negative, 0.25), mixColour(dark, negative, 0.28), cool);
+  const positiveStops = poleRamp(vivid(positive, 0.55), mixColour(dark, positive, 0.3), warm);
+  // A separate ring marks lanes pinned at the ceiling.
+  const crest = hslToRgb([crestHue(positive, negative), 0.58, 0.44]);
+
+  const table = () => {
+    const rows = [];
+    for (let lean = 0; lean <= RAMP_STEPS; lean += 1) {
+      const towardsPositive = lean / RAMP_STEPS;
+      const row = [];
+      for (let step = 0; step <= INTENSITY_STEPS; step += 1) {
+        const channels = mixColour(negativeStops[step], positiveStops[step], towardsPositive);
+        const [red, green, blue] = channels.map(Math.round);
+        row.push(`rgb(${red}, ${green}, ${blue})`);
+      }
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  // Lanes clipped to zero use a quieter fourth colour.
+  const [restR, restG, restB] = mixColour(mixColour(dark, negative, 0.55), [120, 110, 190], 0.34).map(Math.round);
+  const [crestR, crestG, crestB] = crest.map(Math.round);
+  const css = table();
+  return {
+    css,
+    warm: css[RAMP_STEPS][INTENSITY_STEPS],
+    cool: css[0][INTENSITY_STEPS],
+    crest: `rgb(${crestR}, ${crestG}, ${crestB})`,
+    dead: `rgb(${restR}, ${restG}, ${restB})`,
+  };
 }
 
 // Frame-rate independent easing: every value walks a fixed fraction of the
@@ -76,6 +181,40 @@ function formatEval(centipawns) {
   return `${rounded >= 0 ? "+" : "−"}${Math.abs(rounded).toFixed(2)}`;
 }
 
+function strongestWeights(values, count = 6) {
+  const ranked = Array.from(values, (value, index) => ({
+    index,
+    value,
+    strength: Math.abs(value),
+  }))
+    .sort((a, b) => b.strength - a.strength)
+    .slice(0, count);
+  const scale = Math.max(1, ranked[0]?.strength || 1);
+  return ranked.map((lane) => ({ ...lane, strength: lane.strength / scale }));
+}
+
+function cubicPoint(from, controlA, controlB, to, amount) {
+  const inverse = 1 - amount;
+  return {
+    x: inverse ** 3 * from.x
+      + 3 * inverse ** 2 * amount * controlA.x
+      + 3 * inverse * amount ** 2 * controlB.x
+      + amount ** 3 * to.x,
+    y: inverse ** 3 * from.y
+      + 3 * inverse ** 2 * amount * controlA.y
+      + 3 * inverse * amount ** 2 * controlB.y
+      + amount ** 3 * to.y,
+  };
+}
+
+function quadraticPoint(from, control, to, amount) {
+  const inverse = 1 - amount;
+  return {
+    x: inverse ** 2 * from.x + 2 * inverse * amount * control.x + amount ** 2 * to.x,
+    y: inverse ** 2 * from.y + 2 * inverse * amount * control.y + amount ** 2 * to.y,
+  };
+}
+
 class CortexVisual {
   constructor(canvas, onInspect) {
     this.canvas = canvas;
@@ -95,7 +234,10 @@ class CortexVisual {
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.inViewport = true;
     this.animateUntil = performance.now() + 8000;
-    this.grid = { cell: 10, top: 0, bottom: 0, whiteLeft: 0, blackLeft: 0 };
+    this.grid = { cell: 10, gridWidth: 0, gutter: 42, top: 0, bottom: 0, whiteLeft: 0, blackLeft: 0, inputY: 0 };
+    this.meshPath = null;
+    this.glowKey = "";
+    this.glowCache = null;
     this.contributionScale = 1;
     this.contributionDeltaScale = 1;
     this.deltaScale = 1;
@@ -105,12 +247,14 @@ class CortexVisual {
     this.nodePolarity = new Float32Array(768);
     this.nodeActivity = new Float32Array(768);
     this.nodeSaturation = new Float32Array(768);
+    this.nodeDead = new Float32Array(768);
+    this.latticeCache = null;
     this.focusWeight = new Float32Array(768);
     this.focusTarget = new Float32Array(768);
     this.focusOn = false;
     this.focusFade = 0;
-    this.scratch = { value: 0, intensity: 0, activity: 0, polarity: 0, saturation: 0 };
-    this.violetBlend = 0;
+    this.featureTrace = null;
+    this.scratch = { value: 0, intensity: 0, activity: 0, polarity: 0, saturation: 0, dead: 0 };
     this.corePolarity = 1;
     this.coreBoost = 0;
     this.motionPrimed = false;
@@ -121,6 +265,7 @@ class CortexVisual {
     this.canvas.dataset.anatomy = this.anatomyStage;
     this.canvas.dataset.motion = "settled";
     this.canvas.dataset.feature = "idle";
+    this.canvas.dataset.trace = "idle";
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
@@ -168,6 +313,7 @@ class CortexVisual {
     this.transition = transition;
     this.valueCache.clear();
     this.connectionCache = null;
+    this.latticeCache = null;
     const afterValues = [
       ...transition.after.whiteContribution,
       ...transition.after.blackContribution,
@@ -196,12 +342,15 @@ class CortexVisual {
     this.deltaScale = percentile(deltaValues);
     this.locked = null;
     this.hovered = null;
+    this.featureTrace = null;
+    this.canvas.dataset.trace = "idle";
     this.wake();
   }
 
   setPhase(phase) {
     this.phase = phase;
     this.connectionCache = null;
+    this.latticeCache = null;
     this.wake(2400);
   }
 
@@ -209,15 +358,16 @@ class CortexVisual {
     if (!["contribution", "change", "activation", "clipped"].includes(mode)) return;
     this.displayMode = mode;
     this.connectionCache = null;
+    this.latticeCache = null;
     this.canvas.dataset.displayMode = mode;
     this.wake(2400);
   }
 
-  rankConnections(palette) {
+  rankConnections() {
     const candidates = [];
     for (const perspective of ["white", "black"]) {
       for (let index = 0; index < 384; index += 1) {
-        const state = this.nodeState(perspective, index, palette);
+        const state = this.nodeState(perspective, index);
         candidates.push({ perspective, index, strength: state.intensity, positive: state.value >= 0 });
       }
     }
@@ -246,13 +396,48 @@ class CortexVisual {
     this.wake(2600);
   }
 
+  setFeatureTrace({ piece, whiteIndex, blackIndex, whiteWeights, blackWeights }) {
+    this.setFocus(whiteWeights, blackWeights);
+    this.featureTrace = {
+      piece,
+      whiteIndex,
+      blackIndex,
+      lanes: {
+        white: strongestWeights(whiteWeights),
+        black: strongestWeights(blackWeights),
+      },
+      started: performance.now(),
+    };
+    this.canvas.dataset.trace = this.reducedMotion ? "ready" : "playing";
+    this.wake(FEATURE_TRACE_DURATION + 400);
+  }
+
+  replayFeatureTrace() {
+    if (!this.featureTrace) return;
+    this.featureTrace.started = performance.now();
+    this.canvas.dataset.trace = this.reducedMotion ? "ready" : "playing";
+    this.wake(FEATURE_TRACE_DURATION + 400);
+  }
+
   focusChangedLanes() {
     if (!this.transition?.before) return;
     this.setFocus(this.transition.whiteDelta, this.transition.blackDelta);
   }
 
   clearFocus() {
+    this.featureTrace = null;
+    this.canvas.dataset.trace = "idle";
     this.setFocus(null, null);
+  }
+
+  selectLane(target) {
+    if (!target || !["white", "black"].includes(target.perspective)) return;
+    if (!Number.isInteger(target.index) || target.index < 0 || target.index >= 384) return;
+    this.locked = { perspective: target.perspective, index: target.index };
+    this.hovered = this.locked;
+    this.onInspect?.(this.laneDetails(this.locked));
+    this.wake(1600);
+    this.draw(performance.now());
   }
 
   setAnatomyStage(stage) {
@@ -320,6 +505,9 @@ class CortexVisual {
           moving = approach(this.nodePolarity, slot, target.polarity, nodeBlend) || moving;
           moving = approach(this.nodeActivity, slot, target.activity, nodeBlend) || moving;
           moving = approach(this.nodeSaturation, slot, target.saturation, nodeBlend) || moving;
+          const wasDead = this.nodeDead[slot] > 0.5;
+          moving = approach(this.nodeDead, slot, target.dead, nodeBlend) || moving;
+          if (wasDead !== (this.nodeDead[slot] > 0.5)) this.latticeCache = null;
         }
       }
       this.motionPrimed = true;
@@ -329,7 +517,6 @@ class CortexVisual {
       moving = approach(this.focusWeight, slot, this.focusTarget[slot], nodeBlend) || moving;
     }
     moving = approach(this, "focusFade", this.focusOn ? 1 : 0, ambientBlend) || moving;
-    moving = approach(this, "violetBlend", this.displayMode === "clipped" ? 1 : 0, ambientBlend) || moving;
     moving = approach(this, "coreBoost", this.anatomyStage === "output" ? 5 : 0, coreBlend) || moving;
     moving = approach(this, "corePolarity", this.evaluation() >= 0 ? 1 : -1, coreBlend) || moving;
     if (this.settled === moving) {
@@ -350,17 +537,21 @@ class CortexVisual {
   }
 
   colourRamp(palette) {
-    const key = `${palette.accent}|${palette.blue}|${palette.violet}|${this.violetBlend.toFixed(2)}`;
+    const key = `${palette.accent}|${palette.accent2}|${palette.blue}`;
     if (this.rampKey !== key) {
-      this.rampCache = buildRamp(
-        parseColour(palette.blue, [112, 215, 255]),
-        mixColour(
-          parseColour(palette.accent, [226, 177, 71]),
-          parseColour(palette.violet, [169, 140, 255]),
-          this.violetBlend,
-        ),
+      const cool = parseColour(palette.blue, [112, 215, 255]);
+      const warm = warmBase(
+        parseColour(palette.accent, [226, 177, 71]),
+        parseColour(palette.accent2, [201, 111, 58]),
+        cool,
       );
+      this.rampCache = buildRamp(cool, warm);
       this.rampKey = key;
+      const deck = this.canvas.closest(".cortex-deck");
+      deck?.style.setProperty("--nnue-warm", this.rampCache.warm);
+      deck?.style.setProperty("--nnue-cool", this.rampCache.cool);
+      deck?.style.setProperty("--nnue-crest", this.rampCache.crest);
+      deck?.style.setProperty("--nnue-dead", this.rampCache.dead);
     }
     return this.rampCache;
   }
@@ -369,12 +560,8 @@ class CortexVisual {
     return Math.round((clamp(polarity, -1, 1) + 1) * (RAMP_STEPS / 2));
   }
 
-  rampColour(ramp, polarity) {
-    return ramp.css[this.rampIndex(polarity)];
-  }
-
-  rampRgb(ramp, polarity) {
-    return ramp.rgb[this.rampIndex(polarity)];
+  rampColour(ramp, polarity, intensity = 1) {
+    return ramp.css[this.rampIndex(polarity)][Math.round(clamp(intensity, 0, 1) * INTENSITY_STEPS)];
   }
 
   palette() {
@@ -387,7 +574,6 @@ class CortexVisual {
       muted: "#91a4ba",
       edge: "#536981",
       blue: "#70d7ff",
-      violet: "#a98cff",
       void: "#070a11",
     };
   }
@@ -396,22 +582,33 @@ class CortexVisual {
   // panel and addresses run left to right, so a row is 16 consecutive lanes.
   // Cells stay square and the pair is centred in whatever space the stage has.
   computeLayout() {
-    const header = 46;
-    const footer = clamp(this.height * 0.19, 92, 150);
-    const usableHeight = Math.max(60, this.height - header - footer);
+    const header = 30;
+    // The pieces on the board are the network's inputs, so they get a band of
+    // their own above the accumulators instead of being left implied. It has to
+    // hold the input row, the strands and the panel labels without crowding.
+    const inputBand = clamp(this.height * 0.15, 78, 132);
+    const footer = clamp(this.height * 0.17, 86, 138);
+    const usableHeight = Math.max(60, this.height - header - inputBand - footer);
     const gutter = 42;
     const gap = clamp(this.width * 0.062, 40, 78);
     const panelWidth = (this.width - gutter * 2 - gap) / 2;
     const cell = Math.max(4, Math.min(panelWidth / 15, usableHeight / 23));
     const gridWidth = cell * 15;
     const left = gutter + (this.width - gutter * 2 - (gridWidth * 2 + gap)) / 2;
+    const top = header + inputBand + (usableHeight - cell * 23) / 2;
     this.grid = {
       cell,
-      top: header + (usableHeight - cell * 23) / 2,
-      bottom: header + (usableHeight - cell * 23) / 2 + cell * 23,
+      gridWidth,
+      gutter,
+      top,
+      bottom: top + cell * 23,
       whiteLeft: left,
       blackLeft: left + gridWidth + gap,
+      inputY: header + inputBand * 0.46,
     };
+    this.meshPath = null;
+    this.glowKey = "";
+    this.latticeCache = null;
   }
 
   point(perspective, index) {
@@ -477,6 +674,7 @@ class CortexVisual {
       out.activity = value === 0 ? 0 : 1;
       out.polarity = value >= 0 ? 1 : -1;
       out.saturation = 0;
+      out.dead = values.activation[index] === 0 ? 1 : 0;
       return out;
     }
     if (this.displayMode === "activation") {
@@ -486,6 +684,7 @@ class CortexVisual {
       out.activity = value > 0 ? 1 : 0;
       out.polarity = perspective === "white" ? 1 : -1;
       out.saturation = value >= 255 ? 1 : 0;
+      out.dead = value === 0 ? 1 : 0;
       return out;
     }
     if (this.displayMode === "clipped") {
@@ -497,6 +696,7 @@ class CortexVisual {
       out.activity = high || low ? 1 : 0;
       out.polarity = high ? 1 : -1;
       out.saturation = high ? 1 : 0;
+      out.dead = low ? 1 : 0;
       return out;
     }
     const value = values.signed[index];
@@ -508,40 +708,69 @@ class CortexVisual {
     out.activity = values.activation[index] > 0 || (this.phase === "delta" && value !== 0) ? 1 : 0;
     out.polarity = value >= 0 ? 1 : -1;
     out.saturation = values.activation[index] >= 255 ? 1 : 0;
+    out.dead = values.activation[index] === 0 ? 1 : 0;
     return out;
   }
 
-  nodeState(perspective, index, palette) {
+  nodeState(perspective, index) {
     const target = this.measureNode(perspective, index, this.valuesFor(perspective), this.scratch);
-    const warm = this.displayMode === "clipped" ? palette.violet : palette.accent;
     return {
       value: target.value,
       intensity: target.intensity,
-      active: target.activity > 0,
-      colour: target.polarity >= 0 ? warm : palette.blue,
-      saturated: target.saturation > 0,
     };
   }
 
   laneDetails(target) {
     const values = this.valuesFor(target.perspective);
     if (!values) return null;
+    const laneIn = (snapshot) => {
+      const white = target.perspective === "white";
+      const raw = white ? snapshot.whiteAccumulator[target.index] : snapshot.blackAccumulator[target.index];
+      const activation = white ? snapshot.whiteActivation[target.index] : snapshot.blackActivation[target.index];
+      const weight = white ? snapshot.whiteOutputWeights[target.index] : snapshot.blackOutputWeights[target.index];
+      const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
+      const signedWeight = weight * whiteSign;
+      const product = activation * signedWeight;
+      const sideToMoveHalf = white
+        ? snapshot.sideToMove === 0
+        : snapshot.sideToMove === 1;
+      return {
+        raw,
+        activation,
+        weight,
+        signedWeight,
+        product,
+        outputHalf: sideToMoveHalf ? "side to move" : "other side",
+      };
+    };
     const snapshot = this.phase === "before" && this.transition.before
       ? this.transition.before
       : this.transition.after;
-    const outputOffset = target.perspective === "white"
-      ? snapshot.sideToMove === 0 ? 0 : 384
-      : snapshot.sideToMove === 1 ? 0 : 384;
+    const shown = laneIn(snapshot);
     const contribution = values.signed[target.index];
+    const before = this.phase === "delta" && this.transition.before
+      ? laneIn(this.transition.before)
+      : null;
+    const after = this.phase === "delta" ? laneIn(this.transition.after) : shown;
     return {
       ...target,
       phase: this.phase,
-      raw: values.accumulator[target.index],
-      clipped: values.activation[target.index],
+      raw: shown.raw,
+      clipped: shown.activation,
       delta: values.delta[target.index],
+      weight: shown.weight,
+      signedWeight: shown.signedWeight,
+      product: shown.product,
       contribution,
-      outputHalf: outputOffset === 0 ? "side to move" : "other side",
-      centipawns: contribution * 400 / (255 * 64),
+      outputHalf: shown.outputHalf,
+      centipawns: contribution * NNUE_SCALE / NNUE_DIVISOR,
+      equation: {
+        kind: before ? "delta" : "lane",
+        before,
+        after,
+        scale: NNUE_SCALE,
+        divisor: NNUE_DIVISOR,
+      },
     };
   }
 
@@ -609,25 +838,245 @@ class CortexVisual {
     this.draw(performance.now());
   }
 
+  // The faint lattice behind each accumulator: it says these 384 values are one
+  // structured plane, not a scatter of dots. Static per layout, so build once.
+  ensureMesh() {
+    if (this.meshPath) return this.meshPath;
+    const mesh = new Path2D();
+    for (const perspective of ["white", "black"]) {
+      for (let row = 0; row < 24; row += 1) {
+        const from = this.point(perspective, row * 16);
+        const to = this.point(perspective, row * 16 + 15);
+        mesh.moveTo(from.x, from.y);
+        mesh.lineTo(to.x, to.y);
+      }
+      for (let column = 0; column < 16; column += 1) {
+        const from = this.point(perspective, column);
+        const to = this.point(perspective, 23 * 16 + column);
+        mesh.moveTo(from.x, from.y);
+        mesh.lineTo(to.x, to.y);
+      }
+    }
+    this.meshPath = mesh;
+    return mesh;
+  }
+
+  drawMesh(context, palette) {
+    context.save();
+    context.globalAlpha = 0.09;
+    context.strokeStyle = palette.edge;
+    context.lineWidth = 0.5;
+    context.stroke(this.ensureMesh());
+    context.restore();
+  }
+
+  // Where every input strand gathers before entering its accumulator.
+  collector(perspective) {
+    const left = perspective === "white" ? this.grid.whiteLeft : this.grid.blackLeft;
+    return { x: left + this.grid.gridWidth / 2, y: mix(this.grid.inputY, this.grid.top, 0.48) };
+  }
+
+  // Two gradients that change with the layout, not with every frame.
+  collectorGlows(context, palette) {
+    const key = `${palette.blue}|${Math.round(this.grid.top)}|${Math.round(this.grid.whiteLeft)}`;
+    if (this.glowKey === key && this.glowCache) return this.glowCache;
+    this.glowCache = ["white", "black"].map((perspective) => {
+      const target = this.collector(perspective);
+      const glow = context.createRadialGradient(target.x, target.y, 0, target.x, target.y, 11);
+      glow.addColorStop(0, `${palette.blue}55`);
+      glow.addColorStop(1, `${palette.blue}00`);
+      return glow;
+    });
+    this.glowKey = key;
+    return this.glowCache;
+  }
+
+  // One node per piece on the board. Each selects a row in both accumulators,
+  // so each fans two strands down into the two collectors.
+  drawInputs(context, palette, time) {
+    if (!this.transition) return;
+    const snapshot = this.phase === "before" && this.transition.before
+      ? this.transition.before
+      : this.transition.after;
+    const features = snapshot.activeFeatures;
+    if (!features || !features.length) return;
+    const span = this.width - this.grid.gutter * 2;
+    const step = span / Math.max(1, features.length - 1);
+    const y = this.grid.inputY;
+    const white = this.collector("white");
+    const black = this.collector("black");
+
+    context.save();
+    context.lineWidth = 0.6;
+    for (let index = 0; index < features.length; index += 1) {
+      const x = this.grid.gutter + index * step;
+      const light = features[index].colour === 0;
+      context.globalAlpha = 0.15;
+      context.strokeStyle = light ? palette.accent : palette.blue;
+      for (const target of [white, black]) {
+        context.beginPath();
+        context.moveTo(x, y + 4);
+        context.bezierCurveTo(x, y + (target.y - y) * 0.7, target.x, y + (target.y - y) * 0.5, target.x, target.y);
+        context.stroke();
+      }
+    }
+
+    const glows = this.collectorGlows(context, palette);
+    context.globalAlpha = 1;
+    for (let side = 0; side < 2; side += 1) {
+      const target = side === 0 ? white : black;
+      context.fillStyle = glows[side];
+      context.beginPath();
+      context.arc(target.x, target.y, 11, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    context.lineWidth = 1;
+    for (let index = 0; index < features.length; index += 1) {
+      const x = this.grid.gutter + index * step;
+      const light = features[index].colour === 0;
+      const breathe = this.reducedMotion ? 0 : Math.sin(time / 1100 + index * 0.5) * 0.4;
+      context.globalAlpha = 0.9;
+      context.fillStyle = light ? palette.text : palette.void;
+      context.strokeStyle = light ? palette.accent : palette.blue;
+      context.beginPath();
+      context.arc(x, y, 3 + breathe, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+    }
+    context.restore();
+  }
+
+  drawSignalTrace(context, palette, time) {
+    if (!this.featureTrace || !this.transition) return;
+    const snapshot = this.phase === "before" && this.transition.before
+      ? this.transition.before
+      : this.transition.after;
+    const featureSlot = snapshot.activeFeatures.findIndex((feature) => (
+      feature.squareName === this.featureTrace.piece.squareName
+      && feature.piece === this.featureTrace.piece.piece
+    ));
+    if (featureSlot < 0) return;
+
+    const features = snapshot.activeFeatures;
+    const span = this.width - this.grid.gutter * 2;
+    const step = span / Math.max(1, features.length - 1);
+    const source = {
+      x: this.grid.gutter + featureSlot * step,
+      y: this.grid.inputY,
+    };
+    const elapsed = this.reducedMotion
+      ? FEATURE_TRACE_DURATION
+      : Math.max(0, time - this.featureTrace.started);
+    const inputProgress = clamp(elapsed / 650, 0, 1);
+    const laneProgress = clamp((elapsed - 420) / 980, 0, 1);
+    const outputProgress = clamp((elapsed - 1250) / 650, 0, 1);
+    const outputFade = 1 - clamp((elapsed - 1850) / 350, 0, 1);
+    const ramp = this.colourRamp(palette);
+
+    if (elapsed >= FEATURE_TRACE_DURATION && this.canvas.dataset.trace === "playing") {
+      this.canvas.dataset.trace = "ready";
+    }
+
+    context.save();
+    context.lineCap = "round";
+    context.shadowBlur = 8;
+    context.strokeStyle = palette.text;
+    context.shadowColor = palette.text;
+    context.globalAlpha = 0.72;
+    context.lineWidth = 1.2;
+    context.beginPath();
+    context.arc(source.x, source.y, 7.5, 0, Math.PI * 2);
+    context.stroke();
+
+    for (const perspective of ["white", "black"]) {
+      const collector = this.collector(perspective);
+      const bendA = { x: source.x, y: mix(source.y, collector.y, 0.68) };
+      const bendB = { x: collector.x, y: mix(source.y, collector.y, 0.5) };
+      const sideColour = perspective === "white" ? ramp.warm : ramp.cool;
+      context.shadowColor = sideColour;
+      context.strokeStyle = sideColour;
+      context.globalAlpha = 0.38;
+      context.lineWidth = 1.25;
+      context.beginPath();
+      context.moveTo(source.x, source.y + 5);
+      context.bezierCurveTo(bendA.x, bendA.y, bendB.x, bendB.y, collector.x, collector.y);
+      context.stroke();
+
+      if (elapsed < FEATURE_TRACE_DURATION) {
+        const pulse = cubicPoint(source, bendA, bendB, collector, inputProgress);
+        context.globalAlpha = 0.95;
+        context.fillStyle = sideColour;
+        context.shadowBlur = 14;
+        context.beginPath();
+        context.arc(pulse.x, pulse.y, 2.7, 0, Math.PI * 2);
+        context.fill();
+      }
+
+      for (const lane of this.featureTrace.lanes[perspective]) {
+        const target = this.point(perspective, lane.index);
+        const control = {
+          x: collector.x,
+          y: mix(collector.y, target.y, 0.58),
+        };
+        const colour = lane.value >= 0 ? ramp.warm : ramp.cool;
+        context.strokeStyle = colour;
+        context.shadowColor = colour;
+        context.shadowBlur = 5;
+        context.globalAlpha = 0.09 + lane.strength * 0.25;
+        context.lineWidth = 0.65 + lane.strength * 0.55;
+        context.beginPath();
+        context.moveTo(collector.x, collector.y);
+        context.quadraticCurveTo(control.x, control.y, target.x, target.y);
+        context.stroke();
+
+        if (elapsed >= 420 && elapsed < FEATURE_TRACE_DURATION) {
+          const pulse = quadraticPoint(collector, control, target, laneProgress);
+          context.globalAlpha = 0.5 + lane.strength * 0.45;
+          context.fillStyle = colour;
+          context.shadowBlur = 10;
+          context.beginPath();
+          context.arc(pulse.x, pulse.y, 1.6 + lane.strength, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+    }
+
+    if (outputProgress > 0 && outputFade > 0) {
+      const core = this.coreCentre();
+      context.strokeStyle = ramp.warm;
+      context.shadowColor = ramp.cool;
+      context.shadowBlur = 18;
+      context.globalAlpha = outputFade * 0.72;
+      context.lineWidth = 1.1;
+      context.beginPath();
+      context.arc(core.x, core.y, 34 + outputProgress * 18, 0, Math.PI * 2);
+      context.stroke();
+    }
+    context.restore();
+  }
+
   drawOutputConnections(context, palette) {
     if (!this.transition || this.displayMode !== "contribution") return;
-    this.connectionCache ||= this.rankConnections(palette);
+    this.connectionCache ||= this.rankConnections();
+    const ramp = this.colourRamp(palette);
     const core = this.coreCentre();
     const anatomyBoost = this.anatomyStage === "output" ? 0.3 : 0.18;
     context.save();
     context.lineWidth = 0.75;
     for (const item of this.connectionCache) {
       const point = this.point(item.perspective, item.index);
+      // Each accumulator's links gather at a waist below its grid before running
+      // into the core, so the two halves read as two cables into one output.
+      const waist = {
+        x: mix(this.collector(item.perspective).x, core.x, 0.45),
+        y: mix(this.grid.bottom, core.y, 0.55),
+      };
       context.globalAlpha = clamp(item.strength, 0.04, 1) * anatomyBoost;
-      context.strokeStyle = item.positive ? palette.accent : palette.blue;
+      context.strokeStyle = item.positive ? ramp.warm : ramp.cool;
       context.beginPath();
       context.moveTo(point.x, point.y);
-      context.quadraticCurveTo(
-        mix(point.x, core.x, 0.56),
-        point.y + (core.y - point.y) * 0.34,
-        core.x,
-        core.y,
-      );
+      context.bezierCurveTo(point.x, mix(point.y, waist.y, 0.6), waist.x, waist.y, core.x, core.y);
       context.stroke();
     }
     context.restore();
@@ -700,7 +1149,7 @@ class CortexVisual {
           ? compact ? "WHITE VIEW" : "WHITE VIEW · BOARD AS ENTERED"
           : compact ? "BLACK VIEW" : "BLACK VIEW · RANKS MIRRORED",
         first.x - 12,
-        first.y - 22,
+        first.y - 13,
       );
       context.globalAlpha = 0.13;
       context.strokeStyle = palette.edge;
@@ -718,6 +1167,23 @@ class CortexVisual {
     context.restore();
   }
 
+  ensureLattice() {
+    if (this.latticeCache) return this.latticeCache;
+    const dead = new Path2D();
+    const live = new Path2D();
+    for (const perspective of ["white", "black"]) {
+      const base = perspective === "white" ? 0 : 384;
+      for (let index = 0; index < 384; index += 1) {
+        const point = this.point(perspective, index);
+        const target = this.nodeDead[base + index] > 0.5 ? dead : live;
+        target.moveTo(point.x + 1.15, point.y);
+        target.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
+      }
+    }
+    this.latticeCache = { dead, live };
+    return this.latticeCache;
+  }
+
   drawCells(context, palette, time) {
     if (!this.transition) return;
     const ramp = this.colourRamp(palette);
@@ -725,18 +1191,15 @@ class CortexVisual {
     const front = this.igniteFront(time);
     context.save();
 
-    // The dormant lattice, so the shape of both accumulators is always readable.
+    // The dormant lattice, split so a lane held at zero looks different from a
+    // lane that simply carries little. Rebuilt with the data, not every frame.
+    const lattice = this.ensureLattice();
+    context.fillStyle = ramp.dead;
+    context.globalAlpha = 0.5;
+    context.fill(lattice.dead);
     context.fillStyle = palette.edge;
     context.globalAlpha = 0.09;
-    context.beginPath();
-    for (const perspective of ["white", "black"]) {
-      for (let index = 0; index < 384; index += 1) {
-        const point = this.point(perspective, index);
-        context.moveTo(point.x + 1.15, point.y);
-        context.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
-      }
-    }
-    context.fill();
+    context.fill(lattice.live);
 
     for (const perspective of ["white", "black"]) {
       const base = perspective === "white" ? 0 : 384;
@@ -755,7 +1218,8 @@ class CortexVisual {
         const point = this.point(perspective, index);
         const ambient = this.reducedMotion ? 0 : Math.sin(time / 900 + index * 0.19) * 0.08;
         const radius = 1.15 + intensity * 2.45 * emphasis + ambient + wave * 2.4;
-        const colour = this.rampColour(ramp, this.nodePolarity[slot]);
+        const saturation = this.nodeSaturation[slot];
+        const colour = this.rampColour(ramp, this.nodePolarity[slot], intensity * emphasis);
         context.globalAlpha = clamp((0.16 + intensity * 0.78) * activity * emphasis + wave * 0.5, 0, 1);
         context.fillStyle = colour;
         if (intensity * emphasis > 0.62 || wave > 0.3) {
@@ -767,10 +1231,9 @@ class CortexVisual {
         context.beginPath();
         context.arc(point.x, point.y, radius, 0, Math.PI * 2);
         context.fill();
-        const saturation = this.nodeSaturation[slot];
         if (saturation > 0.01) {
-          context.globalAlpha = 0.52 * saturation;
-          context.strokeStyle = palette.violet;
+          context.globalAlpha = 0.5 * saturation;
+          context.strokeStyle = ramp.crest;
           context.lineWidth = 0.7;
           context.stroke();
         }
@@ -819,9 +1282,12 @@ class CortexVisual {
     context.fillStyle = background;
     context.fillRect(0, 0, this.width, this.height);
 
+    this.drawMesh(context, palette);
     this.drawPanels(context, palette);
+    this.drawInputs(context, palette, time);
     this.drawOutputConnections(context, palette);
     this.drawCells(context, palette, time);
+    this.drawSignalTrace(context, palette, time);
     this.drawCore(context, palette, time);
   }
 }

@@ -487,8 +487,7 @@
 }
 
 .sgurr-core .core-embers,
-.sgurr-core .core-form,
-.sgurr-core .core-surge {
+.sgurr-core .core-form {
   position: absolute;
   pointer-events: none;
   border-radius: 50%;
@@ -566,41 +565,6 @@
   70% {
     opacity: 0.05;
     transform: translate(2%, 3%) scale(0.98) rotate(-3deg);
-  }
-}
-
-/* Surfacing: on a rare idle beat the veil parts, the ember flares and
-   something rises to regard you, then subsides (class toggled by JS). */
-.sgurr-core .core-surge {
-  inset: calc(var(--core-size) * 0.06);
-  background: radial-gradient(circle at 56% 60%, color-mix(in srgb, var(--accent), var(--text) 26%) 0 5%, color-mix(in srgb, var(--accent), transparent 32%) 15%, color-mix(in srgb, var(--accent-2), transparent 68%) 30%, transparent 52%);
-  opacity: 0;
-  mix-blend-mode: screen;
-}
-
-/* A slow swell that eases all the way back to nothing -- fill-mode `both`
-   holds the final transparent frame, so it subsides smoothly instead of
-   cutting off when the class is removed. */
-.menu-core.surfacing .core-surge {
-  animation: core-surge-flare 4s cubic-bezier(0.32, 0, 0.3, 1) both;
-}
-
-@keyframes core-surge-flare {
-  0% {
-    opacity: 0;
-    transform: scale(0.7);
-  }
-  30% {
-    opacity: 0.72;
-    transform: scale(1);
-  }
-  56% {
-    opacity: 0.46;
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.2);
   }
 }
 
@@ -1024,7 +988,6 @@
    hint, matching motionOn() in menu-core.js. */
 body.animations-off .sgurr-core .core-ember,
 body.animations-off .sgurr-core .core-form,
-body.animations-off .sgurr-core .core-surge,
 body.animations-off .sgurr-core .core-nebula,
 body.animations-off .sgurr-core .core-mottle,
 body.animations-off .sgurr-core .core-mottle-fine,

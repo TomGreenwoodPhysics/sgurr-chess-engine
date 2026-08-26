@@ -410,7 +410,7 @@
 .menu-action-card {
   position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 10px;
   overflow: hidden;
@@ -493,9 +493,7 @@ a.menu-action-card:focus-visible {
 }
 
 .menu-tools-grid .inside-sgurr-link {
-  grid-column: 1 / -1;
-  grid-template-columns: 30px minmax(0, 1fr) 54px;
-  min-height: 54px;
+  min-height: 58px;
   border: 1px solid color-mix(in srgb, var(--accent), var(--edge) 54%);
   color: var(--text);
   background:
@@ -514,70 +512,16 @@ a.menu-action-card:focus-visible {
     var(--surface-2);
 }
 
-.menu-cortex-mark {
-  position: relative;
-  width: 44px;
-  height: 28px;
+.menu-card-mark {
   justify-self: end;
-  border: 1px solid color-mix(in srgb, var(--accent), transparent 48%);
-  border-radius: 58% 44% 49% 53%;
-  box-shadow: inset 0 0 12px color-mix(in srgb, var(--accent), transparent 78%);
+  opacity: 0.82;
+  transition: opacity 150ms ease, transform 150ms ease;
 }
 
-.menu-cortex-mark::before,
-.menu-cortex-mark::after {
-  content: "";
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 17px;
-  border: 1px solid color-mix(in srgb, var(--accent-2), transparent 57%);
-}
-
-.menu-cortex-mark::before {
-  left: 3px;
-  border-right: 0;
-  border-radius: 70% 25% 25% 70%;
-}
-
-.menu-cortex-mark::after {
-  right: 3px;
-  border-left: 0;
-  border-radius: 25% 70% 70% 25%;
-}
-
-.menu-cortex-mark i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-  transform: translate(-50%, -50%);
-}
-
-.play-white {
-  border-color: color-mix(in srgb, var(--white-eval), var(--edge) 28%);
-  background:
-    linear-gradient(115deg, transparent 35%, color-mix(in srgb, var(--accent), transparent 80%)),
-    var(--white-eval);
-  color: #17131a;
-}
-
-.play-black {
-  border-color: color-mix(in srgb, var(--text), transparent 76%);
-  background:
-    linear-gradient(115deg, color-mix(in srgb, var(--text), transparent 94%), transparent 58%),
-    color-mix(in srgb, var(--black-eval), #000 8%);
-  color: var(--text);
-}
-
-.menu-watch-card {
-  background:
-    linear-gradient(100deg, color-mix(in srgb, var(--accent-2), transparent 90%), transparent 46%),
-    var(--surface-2);
+.menu-action-card:hover:not(:disabled):not([aria-disabled="true"]) .menu-card-mark,
+.menu-action-card:focus-visible .menu-card-mark {
+  opacity: 1;
+  transform: scale(1.05);
 }
 
 .menu-status {
@@ -715,7 +659,7 @@ a.menu-action-card:focus-visible {
   }
 
   .menu-tools-grid .inside-sgurr-link {
-    min-height: 42px;
+    min-height: 38px;
   }
 
   .menu-status {
@@ -781,7 +725,7 @@ a.menu-action-card:focus-visible {
   }
 
   .menu-tools-grid .inside-sgurr-link {
-    min-height: 42px;
+    min-height: 38px;
   }
 }
 

@@ -69,6 +69,21 @@
   grid-template-columns: var(--play-width) calc(var(--editor-column-width) * 2 + 12px);
 }
 
+/* The shell's top padding centres the play column, but in the lab the panel is
+   the taller half, so that padding pushed the footer off the bottom. Pad evenly
+   here and let the two halves centre on each other instead. */
+.app-shell[data-mode="editor"] {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+/* Whichever half is taller sets the row height and the other sits in the middle
+   of it, leaving the panel the same distance above and below the board. */
+.app-shell[data-mode="editor"] .board-area,
+.app-shell[data-mode="editor"] .editor-panel {
+  align-self: center;
+}
+
 .app-shell[data-mode="analysis"] {
   width: min(calc(var(--play-width) + var(--analysis-width) + 18px), calc(100vw - 28px));
   grid-template-columns: var(--play-width) var(--analysis-width);

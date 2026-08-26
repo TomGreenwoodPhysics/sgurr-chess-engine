@@ -3,10 +3,6 @@
   gap: 10px;
 }
 
-.editor-header-block {
-  min-height: 92px;
-}
-
 .editor-purpose {
   margin: 5px 0 0;
   color: var(--muted);
@@ -34,7 +30,7 @@
 
 .editor-fen-block textarea {
   width: 100%;
-  min-height: 72px;
+  min-height: 64px;
   resize: vertical;
   border: 1px solid var(--edge);
   border-radius: 7px;
@@ -49,27 +45,53 @@
   outline-offset: 1px;
 }
 
-.editor-primary-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.editor-primary-actions button.preferred {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent), var(--surface) 76%);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--accent), transparent 85%);
-}
-
-.editor-header-block {
+/* The masthead states what the lab is for on one line rather than a block. */
+.editor-masthead {
+  min-height: 0;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
   border-color: color-mix(in srgb, var(--accent), var(--edge) 35%);
   background:
     radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--accent), transparent 74%), transparent 38%),
     var(--surface);
 }
 
-.editor-status-block {
-  min-height: 98px;
+.editor-masthead h2 { margin: 3px 0 0; }
+.editor-masthead .editor-purpose { max-width: 46ch; margin: 0; text-align: right; }
+
+/* One line, so the state of the board is always in the same place. */
+.editor-statusbar {
+  min-height: 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.editor-statusbar .panel-label { margin: 0; flex: 0 0 auto; }
+.editor-statusbar p:last-child { margin: 0; min-width: 0; color: var(--text); font-size: 0.82rem; }
+
+/* The two things you came here to do, given the full width. */
+.editor-launch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.editor-launch button {
+  min-height: 52px;
+  font-size: 0.94rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.editor-launch button.preferred {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), var(--surface) 76%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent), transparent 85%);
 }
 
 .editor-grid {
@@ -109,4 +131,27 @@
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+/* Long labels ("Two-pawn odds", "You play: White") must not break mid-phrase
+   inside their halves of the grid. */
+.editor-grid button,
+.editor-section > button {
+  min-height: 40px;
+  padding: 0 9px;
+  font-size: 0.8rem;
+  text-wrap: balance;
+}
+
+/* Leaving the lab sits with the other ways out, so the row holds four. */
+.editor-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.editor-actions button {
+  min-height: 46px;
+  padding: 0 8px;
+  font-size: 0.88rem;
+  white-space: nowrap;
 }

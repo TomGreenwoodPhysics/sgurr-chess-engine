@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="sgurr-api-base" content="">
+    <script>
+      // Applies the visitor's saved palette before first paint. Without this the
+      // page renders in the stylesheet's default theme for a frame, then swaps.
+      (function () {
+        try {
+          var key = localStorage.getItem("sgurrTheme");
+          if (key) document.documentElement.dataset.theme = key;
+          var cached = localStorage.getItem("sgurrThemeVars");
+          if (!cached) return;
+          var vars = JSON.parse(cached);
+          for (var name in vars) {
+            if (name.charAt(0) === "-") document.documentElement.style.setProperty(name, vars[name]);
+          }
+        } catch (error) {
+          /* private mode, or nothing saved yet: the default palette is fine */
+        }
+      })();
+    </script>
+    <title>Inside Sgurr — Evaluation Lab</title>
+    <meta name="description" content="See how Sgurr's Gen8 NNUE turns a chess position into an evaluation.">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#251a16">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Sgurr">
+    <meta property="og:title" content="Inside Sgurr — Evaluation Lab">
+    <meta property="og:description" content="Sgurr's Gen8 NNUE accumulators and output, read from the shipped network file.">
+    <meta property="og:image" content="../assets/intro/sgurr-social-card.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23070a11'/><path d='M30 11C17 11 10 21 12 33c1 8 7 15 16 18V13m6-2c13 0 20 10 18 22-1 8-7 15-16 18V13' fill='none' stroke='%23e2b147' stroke-width='3'/><circle cx='32' cy='32' r='5' fill='%2370d7ff'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../styles/lab-shell.css">
+  </head>
+  <body class="lab-page">
+    <header class="inside-header">
+      <a class="inside-brand" href="../?view=menu" aria-label="Back to Sgurr main menu">
+        <span class="sg-mark sg-mark-eval" aria-hidden="true"><i></i><i></i></span>
+        <span><strong>SGURR</strong><small>EVALUATION LAB</small></span>
+      </a>
+      <nav class="lab-switch" aria-label="Choose a lab">
+          <a href="./">Overview</a>
+          <a href="../search-lab/?mode=network">Search Lab</a>
+          <a href="./evaluation.html" aria-current="page">Evaluation Lab</a>
+        </nav>
+      <div class="inside-header-actions">
+        <label class="theme-control" for="labThemeSelect">
+          <span>Theme</span>
+          <select id="labThemeSelect" aria-label="Choose site theme"></select>
+        </label>
+        <button type="button" class="header-link nnue-tour-trigger" id="nnueTutorialButton">
+          <span aria-hidden="true">?</span> NNUE guide
+        </button>
+        <a class="header-link" href="../?view=menu">Play Sgurr <span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="lab-masthead" aria-labelledby="insideTitle">
+        <div>
+          <p class="eyebrow">Evaluation Lab</p>
+          <h1 id="insideTitle">Inside Sgurr's evaluation.</h1>
+        </div>
+        <p>This page runs the Gen8 network shipped with Sgurr v8.2 without search. Make a move to
+          see its two accumulators change and feed the score.</p>
+      </section>
+
+      <section class="inside-shell" id="insideShell" data-state="loading" aria-label="Sgurr NNUE evaluator">
+        <aside class="position-deck deck">
+          <div class="deck-heading">
+            <div>
+              <p class="deck-kicker">01 / Input</p>
+              <h2>Chess position</h2>
+            </div>
+            <span class="turn-badge" id="positionTurn">White to move</span>
+          </div>
+
+          <label class="field-label" for="positionPreset">Position</label>
+          <select class="field-control" id="positionPreset">
+            <option value="start">Starting position</option>
+            <option value="ruy">Ruy Lopez</option>
+            <option value="kiwipete">Kiwipete</option>
+            <option value="custom" hidden>Current position</option>
+          </select>
+
+          <div class="nnue-board" id="nnueBoard" aria-label="Interactive chessboard"></div>
+          <p class="board-status" id="boardStatus" aria-live="polite">Choose a legal move to update the network.</p>
+
+          <section class="piece-inspector" id="pieceInspector" data-state="idle" aria-labelledby="pieceInspectorTitle">
+            <div class="piece-inspector-heading">
+              <div>
+                <p class="deck-kicker">Signal trace</p>
+                <h3 id="pieceInspectorTitle">Select a piece</h3>
+              </div>
+              <div class="piece-inspector-actions">
+                <button type="button" id="replayFeatureTrace" hidden>Replay trace</button>
+                <button type="button" id="clearPieceInspector" aria-label="Clear piece inspection" hidden>&times;</button>
+              </div>
+            </div>
+            <div class="piece-feature-data" id="pieceFeatureData">
+              <div><span>White view</span><strong id="whiteFeatureIndex">W:&mdash;</strong><small id="whiteFeatureSummary">&mdash;</small></div>
+              <div><span>Black view</span><strong id="blackFeatureIndex">B:&mdash;</strong><small id="blackFeatureSummary">&mdash;</small></div>
+            </div>
+            <p class="piece-inspector-note" id="pieceInspectorNote">Click any piece to light the lanes its two feature rows drive.</p>
+          </section>
+
+          <form class="fen-form" id="nnueFenForm" novalidate>
+            <label class="field-label" for="nnueFenInput">FEN</label>
+            <textarea class="field-control" id="nnueFenInput" rows="3" spellcheck="false" aria-describedby="fenStatus"></textarea>
+            <div class="position-actions">
+              <button type="submit" class="primary-button">Load position</button>
+              <button type="button" id="undoPosition" disabled>Undo</button>
+            </div>
+            <small id="fenStatus">The backend checks the FEN and returns its legal moves.</small>
+          </form>
+        </aside>
+
+        <section class="cortex-deck deck">
+          <div class="cortex-toolbar">
+            <div>
+              <p class="deck-kicker">02 / Accumulators</p>
+              <h2>NNUE accumulators</h2>
+            </div>
+            <div class="display-mode-buttons" role="group" aria-label="Choose the lane values to display">
+              <button type="button" class="active" data-display-mode="contribution" aria-pressed="true">Contribution</button>
+              <button type="button" data-display-mode="change" aria-pressed="false">Move change</button>
+              <button type="button" data-display-mode="activation" aria-pressed="false">Activation</button>
+              <button type="button" data-display-mode="clipped" aria-pressed="false">Clipped</button>
+            </div>
+          </div>
+
+          <div class="model-line" aria-live="polite">
+            <span class="model-signal" id="modelSignal" data-state="loading" aria-hidden="true"></span>
+            <span id="modelStatus">Loading Gen8 evaluator</span>
+            <code>768 &rarr; 384 &times; 2 &rarr; 1</code>
+          </div>
+
+          <div class="cortex-stage">
+            <canvas
+              id="cortexCanvas"
+              tabindex="0"
+              role="img"
+              aria-label="Sgurr's 768 exact NNUE accumulator lanes, as two 16 by 24 grids. Use arrow keys to inspect a lane."
+            ></canvas>
+            <div class="stage-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="cortex-loading" id="cortexLoading" role="status" aria-live="polite">
+              <span class="loading-brain" aria-hidden="true"><i></i></span>
+              <strong id="loadingTitle">Opening the evaluator</strong>
+              <small id="loadingDetail">Verifying the shipped Gen8 network</small>
+              <button type="button" id="retryModel" hidden>Retry</button>
+            </div>
+          </div>
+
+          <p class="stage-legend">
+            <span><i class="key-dot key-warm"></i><b id="goldKeyText">Raises White's score</b></span>
+            <span><i class="key-dot key-cool"></i><b id="cyanKeyText">Lowers White's score</b></span>
+            <span class="state-key state-key-high"><i class="key-dot key-hot"></i><b>Held at 255</b></span>
+            <span class="state-key state-key-low"><i class="key-dot key-dead"></i><b>Held at 0</b></span>
+            <em id="displayModeNote">Colour shows whether each lane raises or lowers White's score.</em>
+          </p>
+
+          <div class="state-rail" aria-label="Accumulator state timeline">
+            <div class="state-track">
+              <input type="range" id="stateTimeline" min="0" max="2" step="1" value="2" disabled aria-label="Move through before, change and after states" aria-valuetext="After">
+              <div class="state-buttons" role="group" aria-label="Choose accumulator state">
+                <button type="button" id="beforeState" disabled aria-pressed="false"><small>Before</small><strong>Previous</strong></button>
+                <button type="button" id="deltaState" disabled aria-pressed="false"><small>Delta</small><strong>Change</strong></button>
+                <button type="button" class="active" id="afterState" aria-pressed="true"><small>After</small><strong>Current</strong></button>
+              </div>
+            </div>
+            <button type="button" class="replay-button" id="replayTransition" disabled aria-label="Replay the move through the network">&#8635; <span>Replay move</span></button>
+          </div>
+
+          <section class="move-autopsy" id="moveAutopsy" data-state="idle" aria-labelledby="autopsyTitle">
+            <div class="autopsy-heading">
+              <div><p class="deck-kicker">Move autopsy</p><h3 id="autopsyTitle">No move yet</h3></div>
+              <div class="autopsy-tabs" role="group" aria-label="Choose evaluation direction">
+                <button type="button" class="active" data-autopsy-side="gain" aria-pressed="true">For White</button>
+                <button type="button" data-autopsy-side="loss" aria-pressed="false">For Black</button>
+              </div>
+              <span id="autopsyNet">&mdash;</span>
+            </div>
+            <div class="autopsy-list" id="autopsyList">
+              <p>Make a move to isolate its largest lane changes.</p>
+            </div>
+            <p class="autopsy-note" id="autopsyNote">Changes are measured in White-relative centipawns.</p>
+          </section>
+        </section>
+
+        <aside class="readout-deck deck">
+          <div class="deck-heading">
+            <div>
+              <p class="deck-kicker">03 / Output</p>
+              <h2>Readout</h2>
+            </div>
+            <span class="network-version">GEN8</span>
+          </div>
+
+          <section class="eval-readout" aria-live="polite" title="One network pass. No moves have been searched.">
+            <span>Static NNUE · White</span>
+            <strong id="nnueEval">—</strong>
+            <small id="nnueEvalDetail">No search · awaiting evaluator</small>
+          </section>
+
+          <section class="flow-diagram" aria-label="NNUE architecture">
+            <div><strong id="pieceCount">—</strong><small>pieces</small></div>
+            <i aria-hidden="true"></i>
+            <div><strong>768</strong><small>inputs</small></div>
+            <i aria-hidden="true"></i>
+            <div class="flow-split"><strong>384 + 384</strong><small>accumulator lanes</small></div>
+            <i aria-hidden="true"></i>
+            <div><strong>1</strong><small>score</small></div>
+          </section>
+
+          <section class="metrics-grid" aria-label="Network state">
+            <div><span>Active features</span><strong id="activeFeatures">—</strong></div>
+            <div><span>Zero clipped</span><strong id="clippedLow">—</strong></div>
+            <div><span>Saturated</span><strong id="clippedHigh">—</strong></div>
+            <div><span>Raw output</span><strong id="rawOutput">—</strong></div>
+          </section>
+
+          <section class="update-readout">
+            <div class="section-heading">
+              <div><p class="deck-kicker">Position update</p><h3 id="updateTitle">Full refresh</h3></div>
+              <span id="changedLanes">768 lanes</span>
+            </div>
+            <div class="update-path">
+              <div><strong id="pieceEdits">—</strong><small>piece-square edits</small></div>
+              <i aria-hidden="true"></i>
+              <div><strong id="weightRows">—</strong><small>weight rows</small></div>
+              <i aria-hidden="true"></i>
+              <div><strong id="laneOperations">—</strong><small>lane operations</small></div>
+            </div>
+            <p class="feature-trace" id="featureTrace">Awaiting a position</p>
+          </section>
+
+          <section class="lane-inspector">
+            <div class="section-heading">
+              <div><p class="deck-kicker">Selected lane</p><h3 id="laneTitle">Select a lane</h3></div>
+              <span id="laneAddress">—</span>
+            </div>
+            <div class="lane-meter"><i id="laneMeter"></i></div>
+            <dl>
+              <div><dt>Raw accumulator</dt><dd id="laneRaw">—</dd></div>
+              <div><dt>Clipped ReLU</dt><dd id="laneClipped">—</dd></div>
+              <div><dt>Move delta</dt><dd id="laneDelta">—</dd></div>
+              <div><dt>Output weight</dt><dd id="laneWeight">—</dd></div>
+              <div><dt>White-relative term</dt><dd id="laneProduct">—</dd></div>
+              <div><dt id="laneContributionLabel">Output contribution</dt><dd id="laneContribution">—</dd></div>
+            </dl>
+            <div class="lane-equation" id="laneEquation" data-state="idle" aria-live="polite">
+              <span>Exact lane equation</span>
+              <code id="laneEquationFormula">Select a lane</code>
+              <strong id="laneEquationResult">&mdash;</strong>
+              <small id="laneEquationNote">Raw accumulator values are clipped before the output weight is applied.</small>
+            </div>
+            <p id="laneNote">Hover, tap or use the arrow keys on the display.</p>
+          </section>
+        </aside>
+      </section>
+
+      <section class="under-hood" aria-labelledby="underHoodTitle">
+        <div>
+          <p class="eyebrow">How it works</p>
+          <h2 id="underHoodTitle">From board to score.</h2>
+        </div>
+        <div class="under-hood-grid">
+          <article><span>01</span><h3>Board features</h3><p>Each piece and square selects one row from a 768-row table.</p></article>
+          <article><span>02</span><h3>Two views</h3><p>The selected rows are added into two 384-value arrays. Black's view mirrors the board vertically.</p></article>
+          <article><span>03</span><h3>Clipping</h3><p>Values below 0 become 0. Values above 255 become 255.</p></article>
+          <article><span>04</span><h3>Output</h3><p>The two arrays use separate output weights. Their order follows the side to move.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="inside-footer">
+      <span>SGURR v8.2 “Thearlaich”</span>
+      <span>Gen8 NNUE · integer inference · 592,160-byte network</span>
+    </footer>
+
+    <dialog class="promotion-dialog" id="promotionDialog" aria-labelledby="promotionTitle">
+      <form method="dialog">
+        <p class="deck-kicker">Complete the move</p>
+        <h2 id="promotionTitle">Promote pawn</h2>
+        <div class="promotion-options">
+          <button type="submit" value="q"><span class="promotion-piece" data-piece="q">♕</span><strong>Queen</strong></button>
+          <button type="submit" value="r"><span class="promotion-piece" data-piece="r">♖</span><strong>Rook</strong></button>
+          <button type="submit" value="b"><span class="promotion-piece" data-piece="b">♗</span><strong>Bishop</strong></button>
+          <button type="submit" value="n"><span class="promotion-piece" data-piece="n">♘</span><strong>Knight</strong></button>
+        </div>
+        <button type="submit" class="promotion-cancel" value="cancel">Cancel</button>
+      </form>
+    </dialog>
+    <div class="nnue-tour" id="nnueTour" hidden data-step="0" data-target="model">
+      <div class="nnue-tour-focus" id="nnueTourFocus" aria-hidden="true"></div>
+      <span class="nnue-tour-arrow" id="nnueTourArrow" aria-hidden="true"></span>
+      <section
+        class="nnue-tour-card"
+        id="nnueTourCard"
+        role="dialog"
+        aria-modal="true"
+        aria-live="polite"
+        aria-labelledby="nnueTourTitle"
+        aria-describedby="nnueTourText"
+      >
+        <div class="nnue-tour-topline">
+          <span id="nnueTourCount">1 of 8</span>
+          <button type="button" id="nnueTourSkip">Skip tutorial</button>
+        </div>
+        <p class="deck-kicker" id="nnueTourKicker">NNUE guide</p>
+        <h2 id="nnueTourTitle">What NNUE does</h2>
+        <p id="nnueTourText"></p>
+        <div class="nnue-tour-progress" id="nnueTourProgress" aria-hidden="true"></div>
+        <div class="nnue-tour-actions">
+          <button type="button" id="nnueTourBack">Back</button>
+          <button type="button" class="primary-button" id="nnueTourNext">Next</button>
+        </div>
+        <small class="nnue-tour-keys">Use the arrow keys to move through the guide.</small>
+      </section>
+    </div>
+    <script type="module" src="inside-sgurr.js"></script>
+  </body>
+</html>
