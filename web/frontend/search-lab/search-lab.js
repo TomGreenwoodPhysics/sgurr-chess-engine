@@ -290,7 +290,7 @@ function populatePositionSelect() {
   refs.positionSelect.replaceChildren(fragment);
 }
 
-let mode = "walkthrough";
+let mode = "network";
 let walkthroughIndex = 0;
 let playTimer = null;
 let liveController = null;
@@ -929,10 +929,7 @@ populatePositionSelect();
 initDemoTooltips();
 initLabPreferences();
 setPosition(POSITIONS.ruy);
-if (new URLSearchParams(window.location.search).get("mode") === "network") {
-  setMode("network");
-} else {
-  renderWalkthrough();
-}
+const requestedMode = new URLSearchParams(window.location.search).get("mode");
+setMode(requestedMode === "live" || requestedMode === "walkthrough" ? requestedMode : "network");
 tutorial.maybeStart();
 loadCapabilities();

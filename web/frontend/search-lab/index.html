@@ -86,11 +86,11 @@
       <section class="microscope" aria-label="Sgurr search explorer">
         <div class="mode-bar">
           <div class="mode-tabs" aria-label="Microscope mode">
-            <button type="button" class="mode-tab" id="networkTab" aria-pressed="false">Search network</button>
+            <button type="button" class="mode-tab active" id="networkTab" aria-pressed="true">Search network</button>
             <button type="button" class="mode-tab" id="liveTab" aria-pressed="false">Live engine</button>
-            <button type="button" class="mode-tab active" id="walkthroughTab" aria-pressed="true">Guided walkthrough</button>
+            <button type="button" class="mode-tab" id="walkthroughTab" aria-pressed="false">Guided walkthrough</button>
           </div>
-          <p class="mode-note" id="modeNote">Recorded from Sgurr v8.2 · exact completed-depth output</p>
+          <p class="mode-note" id="modeNote">Live engine trace · depths 1–14 · no prerecorded motion</p>
         </div>
 
         <div class="explorer-layout">
@@ -105,7 +105,7 @@
             <div class="chessboard" id="chessboard" role="img" aria-label="Ruy Lopez position after 3.Bb5"></div>
             <p class="position-line" id="positionLine">1. e4 e5 2. Nf3 Nc6 3. Bb5</p>
 
-            <div class="live-position-controls" id="livePositionControls" hidden>
+            <div class="live-position-controls" id="livePositionControls">
               <label for="positionSelect">Choose a position</label>
               <select id="positionSelect" aria-label="Choose one of 61 chess positions"></select>
               <details class="custom-fen" id="customFenPanel">
@@ -127,7 +127,7 @@
                   <small id="customFenStatus">The board and side to move will update before you search.</small>
                 </form>
               </details>
-              <div class="network-depth-field" id="networkDepthField" hidden>
+              <div class="network-depth-field" id="networkDepthField">
                 <label for="networkRunMode">Run mode</label>
                 <select id="networkRunMode">
                   <option value="live" selected>Watch the search live</option>
@@ -150,7 +150,7 @@
             </div>
           </aside>
 
-          <div class="search-panel">
+          <div class="search-panel" hidden>
             <div class="metrics" aria-live="polite">
               <div><span>Depth</span><strong id="depthValue">1</strong><small>plies</small></div>
               <div><span>Nodes</span><strong id="nodesValue">60</strong><small id="npsValue">60k nps</small></div>
@@ -179,7 +179,7 @@
               <p id="explanationText">Depth 1 is only a first draft. A full-window search puts 1…a6 in front after 60 nodes.</p>
             </div>
 
-            <div class="walkthrough-controls" id="walkthroughControls">
+            <div class="walkthrough-controls" id="walkthroughControls" hidden>
               <button type="button" id="previousStep" aria-label="Previous step">←</button>
               <button type="button" class="play-button" id="playWalkthrough">Play</button>
               <button type="button" id="nextStep" aria-label="Next step">→</button>
@@ -196,7 +196,7 @@
             </div>
           </div>
 
-          <div class="network-panel" id="networkPanel" hidden>
+          <div class="network-panel" id="networkPanel">
             <div class="network-head">
               <div>
                 <p class="panel-label">Rings are search depth</p>
@@ -275,7 +275,7 @@
           </div>
         </div>
 
-        <div class="iteration-strip">
+        <div class="iteration-strip" hidden>
           <div class="iteration-heading">
             <div><p class="panel-label">Completed iterations</p><h2 id="iterationTitle">Best move by depth</h2></div>
             <p id="iterationCopy">Each dot is a fully completed depth. Unfinished work is discarded when the clock expires.</p>

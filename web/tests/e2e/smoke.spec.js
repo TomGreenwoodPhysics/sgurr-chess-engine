@@ -887,6 +887,9 @@ test("introduces the Search Lab once and lets the guide be reopened", async ({ p
   await page.evaluate(() => sessionStorage.setItem("keepSearchTutorialSeen", "1"));
   await page.reload();
   await expect(page.locator("#searchTour")).toBeHidden();
+  await expect(page.locator("#networkTab")).toHaveClass(/active/);
+  await expect(page.locator("#networkPanel")).toBeVisible();
+  await expect(page.locator("#walkthroughControls")).toBeHidden();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator("#searchTutorialButton").click();
   await expect(page.locator("#searchTour")).toBeVisible();
@@ -1082,6 +1085,12 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await expect(page.locator("#positionSelect optgroup")).toHaveCount(4);
   await expect(page.locator("#positionSelect option")).toHaveCount(61);
   await expect(page.locator("#leaderValue")).toHaveText("a6");
+
+  // The lab now lands on the search network, so the walkthrough has to be
+  // opened before its steps can be driven.
+  await page.locator("#walkthroughTab").click();
+  await expect(page.locator("#walkthroughControls")).toBeVisible();
+  await expect(page.locator("#depthValue")).toHaveText("1");
 
   await page.locator("#nextStep").click();
   await expect(page.locator("#depthValue")).toHaveText("2");
