@@ -410,6 +410,16 @@
   gap: 18px;
 }
 
+.settings-source-link {
+  justify-self: center;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-underline-offset: 3px;
+}
+
+.settings-source-link:hover { color: var(--text); }
+
 .settings-section {
   display: grid;
   gap: 10px;

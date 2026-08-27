@@ -35,6 +35,16 @@
   width: min(1540px, calc(100% - 44px));
 }
 
+.lab-page .inside-footer a,
+.lab-page .lab-footer a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor, transparent 58%);
+  text-underline-offset: 3px;
+}
+
+.lab-page .inside-footer a:hover,
+.lab-page .lab-footer a:hover { color: var(--text); }
+
 /* --- lab switcher ------------------------------------------------------ */
 
 .lab-switch {

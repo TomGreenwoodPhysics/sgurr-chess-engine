@@ -41,7 +41,8 @@ with distributions containing the SVGs.
 
 | Sgurr file | Provenance | Status |
 | --- | --- | --- |
-| `web/frontend/assets/intro/sgurr-cave-chamber.{png,webp}` | Sgurr intro source artwork and browser-ready background. | `PROJECT-ASSET` |
+| `docs/assets/sgurr-cave-chamber-source.png` | Sgurr intro source artwork. | `PROJECT-ASSET` |
+| `web/frontend/assets/intro/sgurr-cave-chamber.webp` | Browser-ready background derived from the source artwork. | `PROJECT-ASSET` |
 | `web/frontend/assets/intro/sgurr-social-card.jpg` | Social preview derived from the intro artwork. | `PROJECT-ASSET` |
 
 The PNG is retained as the high-resolution source; browsers receive the WebP

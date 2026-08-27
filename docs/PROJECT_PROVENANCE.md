@@ -1,57 +1,30 @@
-# Sgurr Project Provenance
+# Project provenance
 
-This record documents the evidence currently present in the repository. It is
-intended to make a future commercial release review reproducible. The owner
-attestation at the end must be completed before a public commercial release.
+Original Sgurr source code, documentation, model files and project assets are
+copyright Tom Greenwood under the terms in [`../LICENSE`](../LICENSE).
 
-## Original Project Work
+## Repository records
 
-| Area | Repository evidence | Recorded status |
-| --- | --- | --- |
-| Sgurr engine | `sgurr_cpp/main.cpp` emits `id author Tom`; engine sources live under `sgurr_cpp/`. | Project-created; owner confirmation required. |
-| Web application | Backend and browser implementation live under `web/` and were developed specifically for Sgurr. | Project-created; owner confirmation required. |
-| Desktop GUI | The pygame desktop client was the design and behaviour reference for the web application. Superseded by `web/` and archived at the `archive/desktop-gui-final` tag. | Project-created; owner confirmation required. |
-| Sgurr v4 NNUE/data | `data/v4.0/manifest.json` records 6,000,204 self-play positions, generation settings, shard hashes, and archive hash. | Self-play provenance recorded; owner confirmation required. |
-| Opening positions | `testing/book_gen.py` generates balanced random legal openings; `testing/README.md` documents the process. | Repository-generated; owner confirmation required. |
-| Intro artwork | Source artwork and web derivatives live under `web/frontend/assets/intro/` with recorded release hashes. | Bundled project asset; release hash recorded. |
+| Area | Record |
+| --- | --- |
+| C++ engine | Sources are in `sgurr_cpp/`; the UCI identity is defined in `sgurr_cpp/main.cpp`. |
+| Web application | The FastAPI backend and browser frontend are in `web/`. |
+| Training pipeline | Training, export and verification code is in `nnue/` and `pipeline.py`. |
+| Self-play data | Versioned manifests and training logs are in `data/`. |
+| Opening positions | `testing/book_gen.py` generates balanced legal openings. |
+| Intro artwork | The source image is `docs/assets/sgurr-cave-chamber-source.png`; web derivatives are in `web/frontend/assets/intro/`. |
 
-The asset and dependency records are maintained separately in
-`THIRD_PARTY_ASSETS.md` and `THIRD_PARTY_NOTICES.md`.
+## Shipped network
 
-## Model Release Record
+[`../nets/README.md`](../nets/README.md) records the SHA-256, dataset manifest,
+training configuration, labeller and source commit for `gen8.nnue`. The model
+was trained from Sgurr self-play data. No external game database or model
+weights entered the training pipeline.
 
-The record for the currently shipped network is
-[`../nets/README.md`](../nets/README.md), `gen8.nnue`, with its SHA-256,
-dataset manifest, training configuration, labeller and source commit.
+## Third-party material
 
-For every shipped NNUE file:
-
-1. Record the exact filename and SHA-256 hash.
-2. Link it to the dataset manifest, training configuration, and source commit.
-3. Retain the self-play shard/archive hashes and the generating engine build.
-4. Confirm that no externally sourced game database or model weights entered
-   the training pipeline unless their licence and provenance are documented.
-5. Keep the signed release record outside the repository as well as in the
-   release archive.
-
-## Owner Attestation
-
-Before commercial release, the owner should sign and date a copy of this
-checklist:
-
-- I confirm that I own, or have written permission to commercialise, the
-  original Sgurr engine, frontend, backend, desktop GUI, and model artefacts.
-- I have reviewed contributor history and obtained any required assignments or
-  permissions.
-- I have verified the shipped model against its recorded hash and provenance.
-- I have included all required third-party notices and licence texts.
-- I have excluded legacy or experimental assets whose provenance is not clear.
-- I have reviewed the product name, logo, domain, privacy disclosures, terms of
-  use, and any consumer-law obligations for the intended markets.
-- I understand that a hosted website and a downloadable backend/desktop bundle
-  have different third-party software distribution obligations.
-
-Owner: ______________________________
-
-Signature: ___________________________  Date: __________________
+Third-party software and media retain their own terms. They are listed in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+[`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md), with dependency licence texts
+under `web/licenses/`.
 

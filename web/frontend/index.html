@@ -36,23 +36,23 @@
     <meta name="description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#0c0f15">
+    <link rel="canonical" href="https://sgurr-chess-engine.onrender.com/">
 
-    <!-- Social cards. og:image paths are relative, which the major scrapers
-         resolve against the page URL; if Sgurr ever gets a fixed public
-         domain, make these absolute -- that is what the spec asks for and
-         what the stricter scrapers require. -->
+    <!-- Social cards use the public URL so link previews can fetch them. -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Sgurr">
+    <meta property="og:url" content="https://sgurr-chess-engine.onrender.com/">
     <meta property="og:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
     <meta property="og:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
-    <meta property="og:image" content="assets/intro/sgurr-social-card.jpg">
+    <meta property="og:image" content="https://sgurr-chess-engine.onrender.com/assets/intro/sgurr-social-card.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A vaulted stone chamber deep under the hills, a carved ring portal standing above a circular dais.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
     <meta name="twitter:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
-    <meta name="twitter:image" content="assets/intro/sgurr-social-card.jpg">
+    <meta name="twitter:image" content="https://sgurr-chess-engine.onrender.com/assets/intro/sgurr-social-card.jpg">
+    <meta name="twitter:image:alt" content="Sgurr chess engine">
 
     <!-- The chamber backdrop is the first thing anyone sees, but it is reached
          from CSS, so without this hint the browser cannot start fetching it
@@ -689,6 +689,7 @@
             <button type="button" id="clearPreferencesButton">Reset preferences</button>
             <button type="button" id="clearMemoryButton">Clear game history</button>
           </div>
+          <a class="settings-source-link" href="https://github.com/TomGreenwoodPhysics/sgurr-chess-engine" target="_blank" rel="noopener noreferrer">Source code</a>
         </div>
       </section>
     </div>

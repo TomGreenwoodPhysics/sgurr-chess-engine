@@ -2,6 +2,14 @@
 
 [![CI](https://github.com/TomGreenwoodPhysics/sgurr-chess-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/TomGreenwoodPhysics/sgurr-chess-engine/actions/workflows/ci.yml)
 
+**[Play online](https://sgurr-chess-engine.onrender.com/)** ·
+**[Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/)** ·
+**[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
+
+The hosted demo runs the real Sgurr v8.2 C++ engine. It uses Render's free
+tier, so the first visit after a period of inactivity may take about 30 seconds
+to start.
+
 A UCI chess engine in C++20 with an NNUE evaluation trained on its own
 self-play games. The current release, **v8.2 "Thearlaich"**, is internally
 calibrated at an estimated **3012** on a CCRL-Blitz-anchored scale, measured
@@ -15,14 +23,16 @@ the engine is its own teacher. External engines appear only as rating anchors,
 never in the training loop.
 
 <p align="center">
-  <img src="docs/assets/search-network.gif" width="620"
-       alt="A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold">
+  <a href="https://sgurr-chess-engine.onrender.com/search-lab/">
+    <img src="docs/assets/search-network.gif" width="620"
+         alt="A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold">
+  </a>
 </p>
 
 The engine also draws its own search. That is a real depth-14 trace at the
 speed it happened, not an illustration of one: the search itself takes about
 two seconds and the rest is the network settling.
-[See it work](#see-it-work).
+[Open the Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/).
 
 ---
 
@@ -203,20 +213,24 @@ expected, and that mistake cost an entire generation.
 validates chess state with `python-chess`, serves the frontend and an allowlist
 of media, and exposes a small JSON API. The frontend uses plain ES modules and
 CSS with no build step and no npm runtime dependency. Every
-canonical release from the classical evaluation to v8.2 is selectable as an
-opponent, with its measured rating shown. See [web/README.md](web/README.md).
+canonical release from the classical evaluation to v8.2 can be selected
+locally. v8.2 carries its current measured rating; older ratings are translated
+onto the same scale using v8.2 as the bridge. The hosted demo runs v8.2 only.
+See [web/README.md](web/README.md).
 
 ---
 
 ## See it work
 
-`web/frontend/inside-sgurr/` loads the shipped Gen8 network in a browser worker,
+[The Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)
+loads the shipped Gen8 network in a browser worker,
 verifies its SHA-256, and reproduces the engine's quantised integer forward
 pass. An interactive board drives two exact 384-lane accumulators that can be
 viewed as a cortex or unfolded into their circuit layout, with before, delta,
 and after states for every move.
 
-`web/frontend/search-lab/` draws a real search as a radial web, the animation
+[The Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/) draws a
+real search as a radial web, the animation
 at the top of this page. The centre is the root position and each ring outward
 is one ply deeper. What it renders is the engine's own diagnostic trace, not an
 animation built to resemble one.
@@ -491,10 +505,10 @@ clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
 Web tests, from the repository root:
 
 ```bash
-python -m unittest discover -s web/backend -p "test_*.py"   # -> 27 tests, OK
+python -m unittest discover -s web/backend -p "test_*.py"
 
 cd web && npm ci && npx playwright install chromium
-npx playwright test                                         # -> 9 passed
+npx playwright test
 ```
 
 Strength changes are decided by SPRT at 8+0.08 against the previous accepted

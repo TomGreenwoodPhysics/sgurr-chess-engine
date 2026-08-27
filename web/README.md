@@ -2,14 +2,16 @@
 
 Sgurr Web is a browser chess experience backed by the Sgurr UCI engine.
 Every canonical release from the classical evaluation up to v8.2 is
-selectable as an opponent, newest first, and v8.2 is the default. FastAPI
+selectable locally, newest first, and v8.2 is the default. The hosted demo runs
+v8.2 only. FastAPI
 validates chess state, owns the engine process, serves the production
 frontend and allowlisted media, and exposes a small JSON API. The same
 frontend can also run from VS Code Live Server during development.
 
 The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`; its
-ratings are the pool-2026-07-B Ordo solve copied from
-`../benchmarks/ledger.md`, so adding a version there puts it in the picker.
+v8.2 rating comes from the controlled pool-2026-08-D solve. Older releases are
+translated onto that scale using v8.2 as the bridge. Adding an engine there
+puts it in the picker.
 
 ## Structure
 
@@ -25,8 +27,8 @@ web/
     search-lab/            guided search walkthrough + live depth stream
     inside-sgurr/           exact browser-side Gen8 accumulator explorer
     styles.css             @import manifest; ordering IS the cascade
-    styles/                12 CSS partials (base, intro, menu, board, core, ...)
-    js/                    19 native ES modules; main.js is the entry point
+    styles/                CSS partials for the main interface
+    js/                    native ES modules; main.js is the entry point
     assets/                web-owned images and Chessnut pieces
   licenses/                Python dependency licence texts
   tests/e2e/               deterministic Playwright smoke tests
@@ -174,6 +176,10 @@ process supervision, request logging, and request limits.
 
 ### Free hosted demo
 
+The public demo is available at
+<https://sgurr-chess-engine.onrender.com/>. Render's free tier sleeps after
+inactivity, so the first request may take about 30 seconds.
+
 The root `Dockerfile` builds scalar Linux versions of v8.2 and the trace
 engine, verifies the committed NNUE, and runs one Uvicorn worker:
 
@@ -187,9 +193,9 @@ search at a time, caps engine and Search Network work, and disables continuous
 self-play. Historical opponents and deeper Search Network choices remain
 visible as local-only options. Normal local development is unchanged.
 
-The root `render.yaml` defines a free Frankfurt Web Service using this image,
-the `/ready` health check, and deployment after CI passes. Create a Blueprint
-from the repository in Render; no environment variables are required.
+The root `render.yaml` defines the free Frankfurt Web Service, its `/ready`
+health check, and deployment after CI passes. No environment variables are
+required.
 
 ## 6. Tests
 
@@ -211,11 +217,12 @@ conda activate sgurr-web
 python -m unittest discover -s web\backend -p "test_*.py"
 ```
 
-The browser suite covers the intro/menu handoff, both human sides, board
-orientation, human/engine exchange, self-play, board editor entry, Inside
-Sgurr's exact NNUE output, public-demo controls, and missing-engine behaviour. Backend tests cover draw rules,
-production configuration, request limits, concurrency, and rate limiting. CI
-also builds the Linux container and exercises the real engine and trace paths.
+The browser suite covers play from both sides, position editing and analysis,
+game review, audio, responsive layouts, the Search and Evaluation Labs, both
+tutorials, public-demo controls, and missing-engine behaviour. Backend tests
+cover draw rules, production configuration, request limits, concurrency, and
+rate limiting. CI also builds the Linux container and exercises the real
+engine and trace paths.
 
 ## Release And Licensing Records
 
@@ -226,8 +233,8 @@ records with every release:
   the explicit list of excluded legacy sounds;
 - [`../docs/THIRD_PARTY_NOTICES.md`](../docs/THIRD_PARTY_NOTICES.md): software licences
   and the `python-chess` distribution caveat;
-- [`../docs/PROJECT_PROVENANCE.md`](../docs/PROJECT_PROVENANCE.md): engine, NNUE, and
-  project ownership evidence plus the owner attestation;
+- [`../docs/PROJECT_PROVENANCE.md`](../docs/PROJECT_PROVENANCE.md): engine, NNUE and
+  project provenance records;
 - [`../LICENSE`](../LICENSE): terms for original Sgurr materials.
 
 This documentation is release preparation, not legal advice. A hosted service
@@ -286,12 +293,12 @@ visibly alive after each bounded structural-node sample is full.
   procedural interaction sounds;
 - eval rail/trend, move list, material, captures, draw rules, and themed result
   sequences;
-- a standalone Search Microscope with a real v8.2 walkthrough, an optional live
+- a Search Lab with a real v8.2 walkthrough, an optional live
   completed-depth stream, and a glowing radial search web whose depth-from-root
   rings, timestamped traveling light, cutoffs, and transposition chords come
   from real engine events;
-- an Inside Sgurr view that verifies and evaluates the shipped Gen8 network in
-  a browser worker, then exposes both 384-lane accumulators as cortex, circuit,
+- an Evaluation Lab that verifies and evaluates the shipped Gen8 network in a
+  browser worker, then exposes both 384-lane accumulators as cortex, circuit,
   and move-delta views;
 - responsive backend recovery without refreshing the browser.
 
