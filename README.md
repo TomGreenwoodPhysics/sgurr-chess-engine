@@ -6,93 +6,188 @@
 **[Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/)** ·
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
-The hosted demo runs the real Sgurr v8.2 C++ engine. It uses Render's free
-tier, so the first visit after a period of inactivity may take about 30 seconds
-to start.
+Sgurr is a C++20 UCI chess engine with an NNUE trained on its own self-play
+games. The current release is **v8.2 "Thearlaich"**, measured at an estimated
+**3012** on a CCRL-Blitz-anchored scale.
 
-A UCI chess engine in C++20 with an NNUE evaluation trained on its own
-self-play games. The current release, **v8.2 "Thearlaich"**, is internally
-calibrated at an estimated **3012** on a CCRL-Blitz-anchored scale, measured
-over a 9,890-game gauntlet against five engine families.
-
-The whole evaluation pipeline is built in this repository end to end: the
-self-play data generator, the PyTorch trainer, the quantisation scheme, the
-network file format, and the AVX-512 inference that reads it. Each generation
-of the network is trained on positions labelled by the previous generation, so
-the engine is its own teacher. External engines appear only as rating anchors,
-never in the training loop.
+The hosted site runs the real Sgurr executable. It is on Render's free tier,
+so the first visit after a quiet period can take 30 to 60 seconds to start.
 
 <p align="center">
   <a href="https://sgurr-chess-engine.onrender.com/search-lab/">
     <img src="docs/assets/search-network.gif" width="620"
-         alt="A depth-14 search building outward ring by ring, with cutoffs flaring red and the surviving principal variation drawn in gold">
+         alt="A depth-14 Sgurr search building outward ring by ring, with cutoffs in red and the principal variation in gold">
   </a>
 </p>
 
-The engine also draws its own search. That is a real depth-14 trace at the
-speed it happened, not an illustration of one: the search itself takes about
-two seconds and the rest is the network settling.
-[Open the Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/).
+That is a real depth-14 search trace played back at the speed it happened.
+The engine searches for about two seconds, then the graph is left to settle.
 
----
+Sgurr started as a way for me to learn what sits inside a chess engine. It now
+includes the engine, its training pipeline, match and rating tools, and a web
+application that exposes the parts normally hidden behind `bestmove`.
+
+## Try it
+
+### Play Sgurr
+
+[The main site](https://sgurr-chess-engine.onrender.com/) lets you play the
+current engine, build a position, analyse it and review a finished game. The
+local version can also load every release from the classical evaluation to
+v8.2.
+
+### Search Lab
+
+[The Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/) draws the
+tree while Sgurr searches. The centre is the root position and each ring is one
+ply deeper. Red marks a cutoff, violet marks a transposition-table hit, and the
+gold path is the principal variation from the last completed iteration.
+
+![A completed depth-14 search of the Kiwipete midgame position, with the principal variation running from the centre to the fourteenth ring](docs/assets/search-network.jpg)
+
+This is a depth-14 search of the Kiwipete test position. Sgurr chose 1.Bxa6 at
+−0.51 after searching 1,332,421 nodes in 745 ms. The settled graph draws 1,494
+of them.
+
+Drawing every node would be slow and unreadable. The trace keeps a bounded
+sample at each depth and favours nodes that raised alpha, caused a cutoff or
+reached the principal variation. The Search Lab also includes a guided tour
+for readers who have not met alpha-beta search before.
+
+### Evaluation Lab
+
+[The Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)
+loads the shipped Gen8 network in a browser worker and verifies its SHA-256.
+It then reproduces the engine's quantised integer forward pass exactly.
+
+<p align="center">
+  <a href="https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html">
+    <img src="docs/assets/nnue-evaluation.gif" width="620"
+         alt="Sgurr's two NNUE accumulators responding to a move, with active lanes shown in pink and blue">
+  </a>
+</p>
+
+The board drives both 384-lane accumulators. A move can be inspected before,
+during and after its incremental update. Individual pieces can be followed
+from their feature rows through the clipped activation and into the final
+score. There is a short first-run tutorial for people without a machine
+learning background.
+
+## How Sgurr works
+
+### Search
+
+The engine uses bitboards and magic-bitboard sliders. A structure built at each
+node carries the king square, checker count, pin mask and check mask. That lets
+move legality be answered directly without making and unmaking every candidate.
+
+Search is iterative deepening over negamax, alpha-beta and principal variation
+search. It includes aspiration windows, a transposition table, null-move
+pruning, late move reductions, reverse futility pruning, late move pruning,
+razoring, singular and check extensions, quiescence search, static exchange
+evaluation, killers, butterfly history, continuation history and best-move
+stability time management.
+
+The singular-extension search is isolated from the normal tree. It cannot use
+a transposition-table cutoff, null move or transposition-table store while a
+move is excluded.
+
+Every search feature added since v4.0 has a compile-time switch. One feature
+can be removed and tested without maintaining a separate source branch.
+
+### Evaluation
+
+The shipped network has a `768 → 384 → 1` perspective architecture. Its
+accumulators update incrementally through make and unmake, and inference stays
+integer-quantised from the network file to the returned score.
+
+The engine selects AVX-512, AVX2 or scalar inference at runtime. All three
+paths produce bit-identical output. Every accumulator update checks the
+position's Zobrist key first and rebuilds from the board if the state does not
+match. A missed update can lose time, but it cannot quietly corrupt the score.
+
+A hand-written evaluation remains as a fallback when no network loads. It uses
+tapered material and piece-square tables, pawn structure, king safety, mobility
+and a bare-king mop-up term. It is roughly 630 Elo weaker than the NNUE, but it
+is still useful as a readable reference.
+
+### Training
+
+The training loop is built in this repository. Sgurr generates self-play
+positions, labels them with the previous network generation, trains a new
+network, exports the quantised file and tests it in games. External engines are
+used as rating anchors only. They never provide training positions or labels.
+
+One resumable command runs a generation.
+
+```bash
+python pipeline.py configs/pipeline_gen8.json
+python pipeline.py configs/pipeline_gen8.json --status
+```
+
+The stages cover parallel datagen, dataset freezing, training, building,
+candidate selection, SPRT, pool calibration and the results ledger. Each stage
+checkpoints, and datasets, weights and ledger rows are append-only.
+
+The data generator writes fixed 32-byte records into separate worker shards.
+A stopped process can leave a partial tail, which the loader ignores by
+rounding down to the last complete record.
+
+### Web application
+
+FastAPI serves the frontend and owns a persistent UCI process. It validates
+positions and moves with `python-chess`, sends search commands to Sgurr, parses
+the UCI information stream and returns the updated state to the browser.
+
+The frontend uses native ES modules and CSS with no build step. Search traces
+run through a separate diagnostic engine process, so opening the Search Lab
+does not interrupt a game. Production media is served through a filename
+allowlist rather than mounting the repository asset directory.
+
+[web/README.md](web/README.md) documents the API, production settings and the
+split-frontend development setup.
 
 ## Strength
 
-Measured under controlled conditions matching CCRL's published requirements on
-hash, book, pondering and thread count:
+Sgurr v8.2 was measured under controlled conditions matching CCRL's published
+requirements for hash, book, pondering and thread count.
 
 | engine | rating | pool | games |
 |---|---|---|---|
-| **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **~±25** systematic | pool-2026-08-D | 9,890 |
+| **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **about ±25** systematic | pool-2026-08-D | 9,890 |
 
-That figure is a self-calibrated estimate, not an official rating. Sgurr has
-never been submitted to CCRL and does not appear on any published list. Ratings
-come from a gauntlet against a fixed pool of open-source engines with published
-CCRL Blitz ratings, solved with Ordo anchored to those values, so the absolute
-scale is only as good as the anchors.
+This is an internal estimate, not an official CCRL rating. Sgurr has not been
+submitted to CCRL and does not appear on its published lists. The value comes
+from an Ordo solve against five open-source engine families with published
+CCRL Blitz ratings.
 
-Solved against five engine families spanning 3056 to 3312, all of which
-bracket v8.2 from above. Each anchor solved separately gives 4ku 3004 ±8,
-Bit-Genie 3036 ±8, Monolith 3001 ±10, Drofa 2986 ±11, Mantissa 3034 ±10: a
-**50 Elo spread**, which is where the ±25 comes from. That spread is real
-rather than sampling noise, since the intervals do not overlap.
+The small error bar measures sampling noise. The larger one reflects the fact
+that the anchors do not transfer perfectly to another machine and time control.
+Solved separately, they place Sgurr at 3004, 3036, 3001, 2986 and 3034. More
+games would narrow the first uncertainty, but not the 50 Elo spread between
+those answers.
 
-**Why sampling error and systematic uncertainty differ by 4x.** Enough games
-accumulate to place v8.2 against each anchor *separately*, and the anchors do
-not agree with each other. On the old pool they disagreed by 90 Elo; on the
-new one, by 50. Neither spread is sampling noise, and no number of games
-reduces it. It is what happens when ratings measured under CCRL's conditions
-are transferred to a different machine and time control. So the ±6 counts
-coin-flip noise only, and the honest figure for the absolute number is ±25.
+The current figure replaced an earlier estimate of 3058. The engine did not
+change. The measurement did. The old setup left hash sizes uncontrolled, used
+an opening book filtered by Sgurr's own evaluation and included two opponents
+that forfeited many games on illegal promotion moves. The full correction is
+recorded in [Methodology section 9](docs/METHODOLOGY.md#9-measuring-the-measurement-v82-at-3012-not-3058).
 
-The cause of the residual 50 Elo is **not established**. Draw rate does not
-predict it (−0.01), nor does opponent strength (−0.35); mean game length is
-suggestive (+0.84) but rests on five opponents and is not significant.
-
-**Version-to-version gaps do not carry that uncertainty**, because they are
-measured inside one solve against one pool. Each generational gap
-independently reproduces the direct SPRT between those versions: v4.0's net
-change measured +54 in the pool against +55.5 ±17.0 in a 1,194-game SPRT.
-
-This number replaces an earlier 3058. The engine did not change; the
-measurement did. Three faults in the old setup were found and fixed, one of
-which was two pool engines forfeiting a fifth of their games on an illegal
-move. [docs/METHODOLOGY.md §9](docs/METHODOLOGY.md) has the full account,
-including a conclusion that had to be withdrawn.
+Version-to-version gaps are more reliable than the absolute number because
+they are solved inside the same pool. The direct SPRTs agree with those gaps.
+For example, v4.0 gained 54 Elo in the pool and 55.5 ±17.0 in its direct match.
 
 <details>
-<summary><strong>The earlier ladder</strong>, every released version on the previous pool</summary>
+<summary><strong>Earlier release ladder</strong></summary>
 
-Every version below was measured on the previous pool, before the conditions
-above were controlled. Those rows are internally consistent with each other
-and the version-to-version *gaps* remain valid, being measured inside one
-solve. **The absolute level is not.** v8.2 appears in both, at 3058 on this
-scale and 3012 under control, so the whole ladder sits roughly 45 Elo high.
-Re-measuring the older versions is owed and has not been done.
+These versions were measured on the earlier pool before all conditions were
+controlled. Their ordering and internal gaps remain useful, but their absolute
+ratings sit roughly 45 Elo too high. Re-measuring every old release is still
+owed.
 
-| engine | rating (pool-2026-07-B, uncontrolled conditions) |
+| engine | earlier pool rating |
 |---|---|
-| Sgurr v8.2 "Thearlaich" | 3058 ±7 *(superseded by 3012 above)* |
+| Sgurr v8.2 "Thearlaich" | 3058 ±7 |
 | Sgurr v8.1 "Thearlaich" | 3027 ±11 |
 | Sgurr v8.0 "Thearlaich" | 3006 ±11 |
 | Sgurr v7.0 "Ghreadaidh" | 2903 ±6 |
@@ -103,323 +198,74 @@ Re-measuring the older versions is owed and has not been done.
 | Sgurr v3.1 "Blackpeak" | 2541 ±27 |
 | Sgurr v2.0 "Notches" | 2467 ±34 |
 | Sgurr v1.0 "Fox" | 2386 ±34 |
-| Sgurr classical (HCE) | 2377 ±35 |
-
-Every row is solved from games. None is estimated.
-
-The old pool had also saturated: v8.2 scored **50.8%** against its strongest
-member and 86-97% against five of eight, so it could not resolve a v8.3. Every
-engine in pool-2026-08-D sits at or above v8.2's level, which is what the
-replacement was for.
-
-Anchors were re-sourced from the live CCRL list on 2026-07-15 after an audit
-found the previous set inflated by a mean of ~31 Elo; every row above is from
-one consistent solve. v7.0 onward were measured on a Ryzen 7 7800X3D, v6.0 and
-earlier on an i5-9400F: a single Ordo solve places them on one scale, but
-cross-hardware absolute gaps carry that caveat. The version-to-version SPRTs,
-run on one machine, do not.
-
-**v3.1 sits below v3.0** despite a positive interim SPRT at 8+0.08. Its flat
-soft time limit loses at the pool's 10+0.1. v4.0 replaced it with best-move
-stability scaling, which measures positive at both controls.
+| Sgurr classical | 2377 ±35 |
 
 </details>
 
----
+## What the measurements changed
 
-## What's in it
+Some of the most useful results were the ones that proved an assumption wrong.
+
+Training loss does not select strong networks on this data. Five networks
+trained on the same positions ranked almost backwards when loss was compared
+with games. The best loss gained 2 Elo and the worst gained 9. Candidates are
+therefore selected by games rather than loss.
+
+Training is not reproducible at the Elo level either. Two runs with the same
+data and recipe but different random seeds scored +13.7 ±10.3 over 3,000 games.
+Small network gains can be seed luck, so changes below roughly 25 Elo need
+several seeds or much stronger evidence.
+
+Speed work is checked with a deterministic fixed-depth benchmark. If two builds
+search the same nodes in the same order, their output fingerprints match. That
+is how the AVX inference, PGO build and data-layout changes were shown to alter
+speed without changing search behaviour.
+
+Negative results stay in the repository. v3.1 rates below v3.0. Eight king
+buckets reduced training loss but measured −10.7 ±16 Elo, so the plain network
+shipped. A ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
+
+[docs/METHODOLOGY.md](docs/METHODOLOGY.md) has the complete account, including
+the findings that were later withdrawn.
+
+## Repository layout
 
 ```text
-sgurr_cpp/     the engine: bitboard movegen, search, NNUE inference, datagen
-nnue/          the trainer: PyTorch model, quantisation, .nnue export, verifiers
-nets/          the shipped network, with its release record and SHA-256
-pipeline.py    one resumable command from self-play data to a ledger row
-configs/       per-generation pipeline configs
-testing/       match runner, SPRT harness, SPSA tuner, opening-book generator
-benchmarks/    rating pool, CCRL anchors, results ledger, registered predictions
-data/          dataset manifests, shard checksums and training logs per version
-web/           FastAPI backend + zero-build browser frontend
-sgurr_python/  earlier pure-Python engine, kept as a readable reference
+sgurr_cpp/     C++ engine, search, NNUE inference and datagen
+nnue/          PyTorch trainer, quantisation, export and verification
+nets/          shipped network, release record and SHA-256
+pipeline.py    resumable command for a full network generation
+configs/       generation-specific pipeline settings
+testing/       matches, SPRT, SPSA and opening-book tools
+benchmarks/    rating pools, anchors, predictions and results ledger
+data/          dataset manifests, checksums and training logs
+web/           FastAPI backend and browser frontend
+sgurr_python/  earlier Python engine kept as a readable reference
 tools/         calibration and datagen launchers
-docs/          methodology, dev log, changelog, roadmap, provenance, notices
+docs/          methodology, engineering log, roadmap and notices
 ```
 
-### Engine
+## Build and run
 
-Bitboards with magic-bitboard sliders. Legality is decided without
-make/unmake: a per-node structure carries the king square, checker count, pin
-mask and check mask, so each move is answered in O(1). Incremental Zobrist
-hashing verified against full recomputation. Full static exchange evaluation
-with x-ray resolution and a king-legality rule, plus a threshold-only variant
-with early exit.
-
-Search is iterative deepening with aspiration windows over negamax /
-alpha-beta / PVS, with: a runtime-sized transposition table, null-move pruning,
-late move reductions adjusted by history, reverse futility pruning, late move
-pruning, razoring, singular extensions, check extensions, an improving flag
-feeding both the RFP margin and the LMP quiet budget, quiescence search with
-delta and SEE pruning, killers, butterfly history with malus, continuation
-history, a good/bad capture split by SEE, and soft/hard time management with
-best-move-stability scaling.
-
-Singular extensions are implemented with the excluded-move search properly
-isolated: no TT cutoff, no null move, and no TT store while a move is excluded.
-
-Every feature added since v4.0 carries a compile-time toggle (`SGR_RFP`,
-`SGR_LMP`, `SGR_IMPROVING`, `SGR_HISTLMR`, `SGR_SINGULAR`, `SGR_HMALUS`,
-`SGR_CONTHIST`, `SGR_BMSTAB`), so any one can be A/B tested from a single
-source tree without a branch.
-
-### Evaluation
-
-The shipped evaluation is a `768 → 384 → 1` perspective network,
-integer-quantised throughout, with accumulators updated incrementally through
-make and unmake. Inference dispatches to AVX-512, AVX2 or scalar depending on
-the build target, and all three produce bit-identical output: so the vector
-paths are a speed change and never a numeric one. Every accumulator hook checks
-the position's Zobrist key before touching anything and falls back to a full
-rebuild on a mismatch, so a missed update can cost speed but not correctness.
-
-A hand-crafted evaluation remains in the tree and is used when no network
-loads: tapered material and piece-square tables, pawn structure with a cache,
-king safety, mobility, and a mop-up term for bare-king endings. It is roughly
-630 Elo weaker than the NNUE and exists as a fallback and a reference.
-
-### Training pipeline
-
-One resumable command produces a network generation:
-
-```bash
-python pipeline.py configs/pipeline_gen8.json           # run or resume
-python pipeline.py configs/pipeline_gen8.json --status  # stage progress
-```
-
-The stages are parallel self-play **datagen** with balance-filtered openings →
-**freeze** into a versioned dataset with a per-shard manifest and checksums →
-**train** → **build** → **select** the best variant by games → **SPRT** against
-the previous generation → pool **calibrate** with Ordo → append to the
-**ledger**. Every stage checkpoints, so the pipeline survives interruption.
-Datasets, weights and ledger rows are append-only.
-
-The generator writes 32-byte records, is resumable and shard-tagged so parallel
-workers never collide, and is safe to kill: loaders floor to whole records, so
-a torn tail is ignored. Labeller builds must be compiled with `-DSGR_RFP=0`:
-reverse futility pruning returns an unsearched score where a searched one is
-expected, and that mistake cost an entire generation.
-
-### Web application
-
-`web/` serves the engine in a browser. FastAPI owns one persistent UCI process,
-validates chess state with `python-chess`, serves the frontend and an allowlist
-of media, and exposes a small JSON API. The frontend uses plain ES modules and
-CSS with no build step and no npm runtime dependency. Every
-canonical release from the classical evaluation to v8.2 can be selected
-locally. v8.2 carries its current measured rating; older ratings are translated
-onto the same scale using v8.2 as the bridge. The hosted demo runs v8.2 only.
-See [web/README.md](web/README.md).
-
----
-
-## See it work
-
-[The Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)
-loads the shipped Gen8 network in a browser worker,
-verifies its SHA-256, and reproduces the engine's quantised integer forward
-pass. An interactive board drives two exact 384-lane accumulators that can be
-viewed as a cortex or unfolded into their circuit layout, with before, delta,
-and after states for every move.
-
-[The Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/) draws a
-real search as a radial web, the animation
-at the top of this page. The centre is the root position and each ring outward
-is one ply deeper. What it renders is the engine's own diagnostic trace, not an
-animation built to resemble one.
-
-![The same search once it has finished: the completed network with its
-principal variation running from the centre out to the fourteenth
-ring](docs/assets/search-network.jpg)
-
-That is the same trace once it settles, a depth-14 search of the Ruy Lopez
-after 3.Bb5. Sgurr chose 1...a6 at −0.32, searching 5,248,685 nodes in a little
-over two seconds. Only 1,578 of them are drawn.
-
-The interface shows both numbers because the gap between them is the point.
-Five million nodes could not be drawn and would not be worth looking at if they
-could, so the trace keeps a bounded sample at each depth, weighted towards the
-nodes that changed the search: the ones that raised alpha, caused a cutoff, or
-ended up on the principal variation. Red marks a cutoff, violet a
-transposition-table hit, and brightness follows how close a node's score came
-to the best in its group. The gold path is the principal variation from the
-last completed iteration, which is not the same as saying the engine knew those
-moves from the start.
-
-### Making it smooth
-
-The first version stuttered whenever the view moved. I spent a while optimising
-things that turned out not to matter (culling off-screen nodes, replacing
-repeated scans over the node set with a single pass) and it barely helped.
-
-Profiling the running page instead of reading it showed why. Drawing cost under
-2 ms a frame and the browser reported no long tasks at all, so JavaScript was
-never the constraint. The stalls were in how the renderer handled its canvas
-surfaces:
-
-* A cache of pre-rendered tiles was evicting the tiles it was drawing, so they
-  were rebuilt on the next frame, indefinitely. The tile count sat at its cap
-  while the build counter climbed without bound, and every rebuild re-uploaded
-  a multi-megabyte bitmap.
-* The pass that sharpens the picture when a gesture ends cleared the sharp
-  image before rebuilding it, so every mouse-up fell back to a blurred
-  stand-in and snapped back. The code described that swap as atomic.
-* The renderer had no frame rate of its own. It drew whenever
-  `requestAnimationFrame` fired, which is 60 fps only when the browser is
-  vsync-locked. Where it is not, it was drawing several hundred times a second
-  for a display that could not show it.
-
-Deleting the tile cache was the fix rather than tuning it. Navigation reuses
-the detail image already on screen instead of substituting a coarser one, which
-is both steadier to look at and cheaper to draw. Frames longer than 32 ms
-during a zoom fell from 12 to 7 at full detail, and the worst frame after
-releasing a drag went from 268 ms to 4 ms.
-
-The cost here is rasterising large canvas surfaces rather than running
-JavaScript, and not every machine has the same budget for that, so a Detail
-setting in the header trades render resolution, bloom, effects and node count
-for speed. `?profile=1` turns on a frame profiler that reports the browser's
-real frame cadence, any long tasks, and the cost of each drawing phase.
-
-### Running it
-
-The network reads from a diagnostic engine build, which is separate from the
-one that plays games:
-
-```bash
-cd sgurr_cpp && ./build.sh -t     # -> sgr_trace.exe
-python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000
-```
-
-Then open <http://127.0.0.1:8000/search-lab/>. The trace runs in its own
-process, so opening it cannot stall a game already in progress. Engine paths,
-the split-frontend setup and the API are in [web/README.md](web/README.md).
-
----
-
-## How it's measured
-
-A chess engine is a good way to be wrong in public. Sgurr plays at roughly
-3012, but the more useful claim is that the number is defensible: everything
-here is measured, including the parts that did not work.
-
-Nothing here is selected on training loss, because on this data loss is worse
-than uninformative about strength. Across five instances trained on identical
-data the ranking inverted completely: the variant with the best loss (0.00471)
-measured +2 Elo, and the variant with the worst (0.00661) measured +9. Only
-games decide, and that rule exists because the alternative was tried.
-
-The noise floor is measured rather than assumed. Two networks trained on
-identical data with an identical recipe, differing only in random seed, score
-+13.7 ±10.3 against each other over 3,000 games, so training is not
-reproducible at the Elo level. That figure had been taken for zero over the
-project's whole history. Measuring it retracted several published results,
-including a width finding that had already been recommended for the next
-generation. Anything below roughly ±25 Elo on a network change is now
-indistinguishable from seed luck unless several seeds are trained per
-configuration.
-
-Speed-only work is proved rather than argued. `bench` searches a fixed position
-list to a fixed depth with no clock and no randomness, so its node counts are a
-fingerprint of *what* the engine searches. A change claimed to be speed-only
-has to leave that fingerprint byte-identical:
-
-```bash
-diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
-```
-
-The AVX-512 inference, the PGO build and nine separate data-layout
-optimisations were all validated that way, without playing a game. If the
-fingerprint moves, the change altered behaviour and the speedup was not free.
-CI now asserts it on every push.
-
-Results that went the wrong way stay in the tree. v3.1 rates below v3.0 and the
-ladder above says so. Eight king buckets measured −10.7 ±16 against the
-plain 768→384 control despite 12% lower loss, so the control shipped. A
-ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
-[docs/METHODOLOGY.md](docs/METHODOLOGY.md) is largely a record of conclusions
-that had to be withdrawn.
-
-Predictions are registered before the games are played, with a stated
-falsification band.
-[benchmarks/v81_speed_prediction.md](benchmarks/v81_speed_prediction.md) was
-written before a single v8.1 game: +18 to +19 Elo, roughly 55% confidence of
-landing in [+10, +27], and a table saying in advance what each outcome would
-mean. It landed inside the band, which appeared to confirm the ~70-Elo-per-
-doubling NPS conversion this project had been valuing speed work with.
-
-Then v8.2 broke it. Node-identical to v8.1 and 15.4% faster, the same rule put
-it at 3041, a gain of +14.5. The gauntlet says +31.5, an implied ~131 per
-doubling. Solving each anchor independently gives +29, +21, +31 and +28, so the
-rating solver is not the explanation. v8.1's agreement now reads as
-coincidence, and the conversion is no longer used to predict anything here.
-
-Where to read further:
-
-* [docs/METHODOLOGY.md](docs/METHODOLOGY.md) records what was learned rather
-  than what happened, including the results that had to be withdrawn. It is the
-  most useful file here.
-* [benchmarks/ledger.md](benchmarks/ledger.md) is the append-only record of
-  every rating ever measured, with game counts and caveats.
-* [docs/CHANGELOG.md](docs/CHANGELOG.md) covers the released versions with
-  error bars, and [docs/DEVLOG.md](docs/DEVLOG.md) is the dated engineering log.
-* [docs/ROADMAP.md](docs/ROADMAP.md) sets out what is next and why.
-* [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md) has the toolchain notes, the PGO
-  recipe and the fingerprint check.
-
----
-
-## Tech stack
-
-| layer | stack |
-|---|---|
-| engine | C++20, clang from MSYS2 `clang64`, PGO + ThinLTO release build |
-| inference | hand-written AVX-512 / AVX2 paths with a scalar fallback |
-| trainer | Python 3.12, PyTorch, NumPy |
-| tournaments and rating | fastchess, Ordo, plus an in-repo Python SPRT harness |
-| web backend | FastAPI, Uvicorn, python-chess |
-| web frontend | native ES modules and CSS, no build step |
-| browser tests | Playwright |
-| desktop GUI | pygame, python-chess |
-
----
-
-## Building and running
-
-`build.sh` in `sgurr_cpp/` runs the documented recipes and then checks that the
-resulting binary actually starts:
+The supported Windows build uses the MSYS2 `clang64` shell.
 
 ```bash
 cd sgurr_cpp
-./build.sh                     # development build   -> sgr.exe
-./build.sh -r                  # release build       -> sgr.exe  (PGO + ThinLTO)
-./build.sh -d                  # data generator      -> datagen.exe
+./build.sh                     # development build
+./build.sh -r                  # PGO and ThinLTO release build
+./build.sh -d                  # data generator
+./build.sh -t                  # search trace build
 ```
 
-The release build is worth **+11.3% NPS** over plain `-O3 -march=native`,
-measured over 12 interleaved runs, with an identical search fingerprint.
+The release build is 11.3% faster than plain `-O3 -march=native` over 12
+interleaved runs and keeps the same search fingerprint. `build.sh` also checks
+that the new executable can start. This catches Windows Smart App Control
+blocking a freshly linked unsigned binary before it silently forfeits a match.
 
-The verification step is not decoration. Smart App Control on the development
-machine intermittently refuses to start freshly linked unsigned binaries, and
-an engine that cannot start does not crash a match: it forfeits every game and
-still produces a complete, plausible-looking result. `build.sh` relinks until
-the binary runs, and both `testing/sprt.py` and `pipeline.py` verify every
-engine before playing.
-
-Building by hand needs a C++20 compiler; [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md)
-has the toolchain notes, the full PGO recipe and the data generator.
-
-Run it:
+Run the engine over UCI.
 
 ```bash
-SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe    # bare launch defaults to UCI
+SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe
 ```
 
 ```text
@@ -429,148 +275,128 @@ position startpos moves e2e4 e7e5
 go movetime 1000
 ```
 
-Without `SGR_EVALFILE` the engine falls back to the hand-crafted evaluation and
-says so on stdout, so a missing network is visible rather than silent.
+Without `SGR_EVALFILE`, Sgurr loads the hand-written evaluation and reports the
+fallback on standard output.
 
-The engine advertises 48 UCI options: `Hash`, `Clear Hash`, `Move Overhead`,
-`Threads`, and 44 search parameters: every margin, divisor and threshold in
-the search, exposed so they can be tuned. None of them has been swept yet.
+The engine exposes 48 UCI options. Four cover hash, hash clearing, move overhead
+and threads. The other 44 expose search margins, divisors and thresholds for
+tuning. Search is intentionally single-threaded because the rating work uses a
+single-core scale.
 
-`Threads` is pinned at 1. The engine is single-threaded on purpose: the rating
-scale used here is single-core, so a parallel search would measure exactly zero.
-
----
-
-## Reproducing the benchmark and the tests
-
-Expected output is given for each command so a mismatch is obvious.
-
-**Note on networks.** Trained `.nnue` files are build artefacts of the training
-pipeline and are gitignored, with one exception: `nets/gen8.nnue`, the network
-shipped in v8.0, v8.1 and v8.2, is committed so that a clone can reproduce the
-release fingerprint. Its release record and SHA-256 are in
-[nets/README.md](nets/README.md). With no network at all the engine falls back
-to the hand-crafted evaluation and says so on stdout, so both fingerprints are
-given below.
+To run the web application locally, build the release and trace executables,
+then install the backend requirements and start Uvicorn.
 
 ```bash
-cd sgurr_cpp
+python -m pip install -r web/backend/requirements.txt
+python -m uvicorn web.backend.main:app --host 127.0.0.1 --port 8000
+```
 
-# Deterministic search fingerprint: 19 positions at depth 11.
+Open <http://127.0.0.1:8000/>. Platform-specific paths and environment
+variables are covered in [web/README.md](web/README.md).
+
+## Tests and reproducibility
+
+From `sgurr_cpp/`, the main engine checks are straightforward.
+
+```bash
 SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe bench
-#   -> nodes 3601424        (the shipped v8.2 fingerprint)
-
 ./sgr.exe bench
-#   -> nodes 4616415        (hand-crafted eval, i.e. no network present)
-
-# Move generation, unmake, and null-move hash/eval restoration.
 ./sgr.exe test
-#   -> perft(1..4) = 20 / 400 / 8902 / 197281
-#   -> "after unmake eval = 0", "null restored hash = yes", "... eval = yes"
-
-# Static exchange evaluation against hand-verified tactical cases.
 ./sgr.exe seetest
-#   -> SEE: 9/9 passed
 ```
 
-The `nodes` total is the fingerprint. Within one toolchain it is identical
-across the dev build, the PGO release build, and the AVX-512, AVX2 and scalar
-inference paths, which is what makes those a speed change rather than a
-behaviour change.
+The expected MSYS2 clang fingerprints are 3,601,424 nodes with Gen8 and
+4,616,415 with the hand-written evaluation. Move generation reaches perft 4 at
+197,281 nodes, and the static exchange suite contains nine hand-checked cases.
 
-The two totals above are from clang on MSYS2 `clang64`. **They are not portable
-across standard libraries.** `order_moves` sorts with `std::sort`, which is not
-stable, so equal-scoring moves come out in whatever order the implementation
-happens to produce; libc++ and libstdc++ disagree, and a different order is a
-different search. The same source builds to 3457351 nodes under libstdc++ on
-Linux. CI therefore asserts determinism and vectorised/scalar agreement, both
-of which hold anywhere, rather than a constant copied off one machine. This
-costs the instrument nothing in practice, because speed-only work is verified
-by diffing two builds from the same toolchain.
+The fingerprint is toolchain-local. `std::sort` may order equal-scoring moves
+differently between standard libraries, which changes the tree without
+changing legal behaviour. CI checks determinism and scalar/vector agreement on
+each platform rather than comparing Linux against a Windows node total.
 
-The bit-exactness gate compares engine inference against the trainer's own
-forward pass across every special move type and thousands of random game
-chains. It is built by `pipeline.py` rather than `build.sh`, so compile it
-directly:
+The NNUE self-check compares engine inference with the trainer's forward pass
+across special moves and random game chains. The shipped network currently
+passes 4,516 checks with no failures. Its release hash is recorded in
+[nets/README.md](nets/README.md).
 
-```bash
-clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
-  nnue_selfcheck.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
-  -o nnue_selfcheck.exe
-./nnue_selfcheck.exe ../nets/gen8.nnue
-#   -> loaded ../nets/gen8.nnue active=1 simd=avx512 buckets=1
-#   -> checks=4516 fails=0 evalsum=-142859 -> PASS
-```
-
-Web tests, from the repository root:
+Run the backend and browser suites from the repository root.
 
 ```bash
 python -m unittest discover -s web/backend -p "test_*.py"
 
-cd web && npm ci && npx playwright install chromium
+cd web
+npm ci
+npx playwright install chromium
 npx playwright test
 ```
 
-Strength changes are decided by SPRT at 8+0.08 against the previous accepted
-version; releases are calibrated against the pool at 10+0.1. Every rating is
-reported with an interval. [testing/README.md](testing/README.md) covers the
-match runner, the SPRT harness and the opening book.
+Strength changes use SPRT at 8+0.08 against the previous accepted version.
+Release calibration uses the fixed pool at 10+0.1. Every result is reported
+with an interval. [testing/README.md](testing/README.md) explains the match
+runner, opening book and decision bounds.
 
----
+## Tech stack
 
-## Releases
+| part | tools |
+|---|---|
+| engine | C++20, clang, PGO and ThinLTO |
+| inference | hand-written AVX-512 and AVX2 with a scalar fallback |
+| training | Python 3.12, PyTorch and NumPy |
+| rating | fastchess, Ordo and an in-repo SPRT harness |
+| web backend | FastAPI, Uvicorn and python-chess |
+| web frontend | native ES modules and CSS |
+| browser tests | Playwright |
+
+## Recent releases
 
 Versions are named after Sgùrr peaks in ascending height. Version numbers are
-canonical; peak names are codenames.
+canonical and the peak names are codenames.
 
-| version | codename | peak | summary |
-|---|---|---|---|
-| v1.0 | Fox | Sgùrr a' Mhadaidh | first NNUE (gen1): parity with the classical eval |
-| v2.0 | Notches | Sgùrr nan Eag | gen2 NNUE: +77.7 ±37.4 vs v1.0 (300 games, 8+0.08) |
-| v3.0 | Blackpeak | Sgùrr Dubh Mòr | gen3 NNUE: +119.8 ±26.3 vs v2.0 (618 games, SPRT) |
-| v3.1 | Blackpeak | Sgùrr Dubh Mòr | search-only: soft/hard time management. Calibrated **below v3.0**: the flat soft limit loses at 10+0.1. Superseded in v4.0 |
-| v4.0 | MacKenzie | Sgùrr MhicChoinnich | gen5 NNUE (768→384, first architecture change): +55.5 ±17.0 vs the gen3 engine (1,194 games, SPRT), plus history malus and best-move-stability time management |
-| v5.0 | Gillean | Sgùrr nan Gillean | search-only on the gen5 net: reverse futility pruning (+176.4 ±15 self-play, factorial) and LMP. The gen6 net measured flat and was not shipped |
-| v6.0 | Banachdaich | Sgùrr na Banachdaich | search refinement package: improving flag, history-adjusted LMR, singular extensions. +57.3 ±17.0 vs v5.0 (1,139 games, SPRT); first version above the old pool's ceiling |
-| v7.0 | Ghreadaidh | Sgùrr a'Ghreadaidh | gen7 NNUE, the first clean RFP-free datagen regen: +44.4 ±18.8 vs v6.0 against gen6's +6 wash: the labels really were the bottleneck. AVX-512/int16 inference landed here, ~+22% NPS and bit-identical |
-| v8.0 | Thearlaich | Sgùrr Thearlaich | gen8 NNUE on 55.9M clean positions: **+126.5 ±26.6 vs v7.0**, the largest single-cycle gain in the project. King buckets were tested on the same data and measured flat (−10.7 ±16, despite 12% lower loss), so the shipped net is the plain 768→384 |
-| v8.1 | Thearlaich | Sgùrr Thearlaich | speed-only on the gen8 net: PGO + ThinLTO and nine node-identical optimisations, ~20% NPS. **+21.2 ±8.7 vs v8.0** self-play and **+20.9 pooled**: the two agree to 0.3 Elo. Same net, same search, same moves |
-| v8.2 | Thearlaich | Sgùrr Thearlaich | speed-only again: TT entry packed 24→16 bytes and a lazy move picker, **+15.4% NPS**, node-identical to v8.1. **+31.5 vs v8.1** against +14.5 predicted. The ten-item v9.0 search batch measured −1.0 ±21.1 and was held back |
+| version | change | measured result |
+|---|---|---|
+| v8.0 "Thearlaich" | Gen8 NNUE trained on 55.9 million clean positions | +126.5 ±26.6 against v7.0 |
+| v8.1 "Thearlaich" | PGO, ThinLTO and nine node-identical optimisations | about 20% faster and +21.2 ±8.7 against v8.0 |
+| v8.2 "Thearlaich" | packed transposition entries and a lazy move picker | 15.4% faster and +31.5 against v8.1 in the pool |
 
-Ratings for each row are in the [Strength](#strength) section above and in
-[benchmarks/ledger.md](benchmarks/ledger.md) with full game counts.
+The complete history, including the releases that lost strength, is in
+[docs/CHANGELOG.md](docs/CHANGELOG.md).
 
----
+## Further reading
 
-## Legacy Python engine
+- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) contains the main findings and the
+  conclusions that had to be withdrawn.
+- [benchmarks/ledger.md](benchmarks/ledger.md) is the append-only results record
+  with game counts and caveats.
+- [docs/DEVLOG.md](docs/DEVLOG.md) is the dated engineering log.
+- [docs/ROADMAP.md](docs/ROADMAP.md) records what is next and why.
+- [sgurr_cpp/BUILD.md](sgurr_cpp/BUILD.md) covers the compiler, PGO recipe and
+  fingerprint checks.
+- [web/README.md](web/README.md) covers local and hosted web deployments.
 
-An earlier self-contained implementation with its own board representation,
-move generation, FEN parsing, Zobrist hashing, evaluation and search. It runs
-in UCI mode or as an interactive terminal program.
+## Earlier Python engine
+
+The first Sgurr implementation has its own board representation, move
+generation, FEN parser, hashing, evaluation and search. It can run as a UCI
+engine or as a small terminal program.
 
 ```bash
 python -m sgurr_python.sgurr_engine uci
-python -m sgurr_python.sgurr_engine       # interactive
+python -m sgurr_python.sgurr_engine
 ```
 
-Interactive commands: `display`, `moves`, `best`, `go 5`, `move e2e4`, `new`,
-`quit`. Default maximum depth is 8.
-
-Benchmarked against Stockfish limited to 1500 Elo at 0.50 s/move, it scored
-~49.6% over 1000 games. It is kept as a readable reference, not as a strength
-target.
-
----
+It scored about 49.6% over 1,000 games against Stockfish limited to 1500 Elo at
+0.50 seconds per move. I have kept it because it is much easier to read than
+the current engine, not because it is a strength target.
 
 ## The name
 
-Sgùrr is Gaelic for a rocky mountain peak. The engine name is plain-ASCII
-`Sgurr` and the binary is `sgr`. It was called Ruk before that, and Bitfish
-before that.
+Sgùrr is Gaelic for a rocky mountain peak. The engine name uses the plain ASCII
+`Sgurr`, and the binary is `sgr`. It was called Ruk before that (I did not know
+RukChess was already the name of a strong engine), and Bitfish before that.
 
 ## Licence
 
-Original Sgurr material is proprietary, see [LICENSE](LICENSE). You are free
-to read, build, run and evaluate it. Third-party software and assets keep their
-own terms, inventoried in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)
+Original Sgurr material is proprietary under [LICENSE](LICENSE). You may read,
+build, run and evaluate it. Third-party software and assets keep their own
+terms, recorded in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)
 and [docs/THIRD_PARTY_ASSETS.md](docs/THIRD_PARTY_ASSETS.md).
