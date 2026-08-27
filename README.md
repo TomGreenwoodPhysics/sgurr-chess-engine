@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/TomGreenwoodPhysics/sgurr-chess-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/TomGreenwoodPhysics/sgurr-chess-engine/actions/workflows/ci.yml)
 
-**[Play online](https://sgurr-chess-engine.onrender.com/)** ·
+**[Play Sgurr online](https://sgurr-chess-engine.onrender.com/)** ·
 **[Search Lab](https://sgurr-chess-engine.onrender.com/search-lab/)** ·
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
@@ -63,7 +63,7 @@ It then reproduces the engine's quantised integer forward pass exactly.
 <p align="center">
   <a href="https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html">
     <img src="docs/assets/nnue-evaluation.gif" width="620"
-         alt="Sgurr's two NNUE accumulators responding to a move, with active lanes shown in pink and blue">
+         alt="Sgurr's two NNUE accumulators responding to a move, with active lanes shown in gold and cyan">
   </a>
 </p>
 
