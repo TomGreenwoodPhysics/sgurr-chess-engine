@@ -30,6 +30,10 @@
   font-family: var(--font-interface);
 }
 
+:root[data-theme="frost"] {
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; }
 
 html { min-width: 320px; background: var(--bg); scroll-behavior: smooth; }

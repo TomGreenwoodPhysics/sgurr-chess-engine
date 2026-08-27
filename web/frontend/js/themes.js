@@ -9,6 +9,9 @@ function applyTheme() {
     document.documentElement.style.setProperty(name, value);
   }
   document.documentElement.dataset.theme = app.themeKey;
+  // Keeps the browser chrome in step with the palette; the labs do the same
+  // in their own preferences module.
+  refs.themeColour?.setAttribute("content", theme.vars["--bg"]);
   localStorage.setItem("sgurrTheme", app.themeKey);
   // Lets the labs paint this palette before their first frame.
   localStorage.setItem("sgurrThemeVars", JSON.stringify(theme.vars));

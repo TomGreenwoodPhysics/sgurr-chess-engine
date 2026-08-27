@@ -92,6 +92,7 @@ const refs = {
   promotionChoices: document.querySelector("#promotionChoices"),
   themeModal: document.querySelector("#themeModal"),
   themeGallery: document.querySelector("#themeGallery"),
+  themeColour: document.querySelector('meta[name="theme-color"]'),
   reviewBlock: document.querySelector("#reviewBlock"),
   reviewMove: document.querySelector("#reviewMove"),
   reviewEval: document.querySelector("#reviewEval"),
