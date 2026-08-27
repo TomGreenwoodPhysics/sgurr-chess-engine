@@ -1,7 +1,7 @@
 # Asset Provenance And Distribution Review
 
 This manifest covers visual and audio assets used by the Sgurr web application
-as of 13 July 2026. Keep it with release records and update it whenever an
+as of 27 August 2026. Keep it with release records and update it whenever an
 asset is added, replaced, or modified.
 
 The linked source pages and their displayed licence labels were rechecked on
@@ -15,9 +15,7 @@ terms.** The former non-commercial Cardinal pieces have been removed from the
 web application, and ordinary UI/game cues are now generated procedurally.
 
 This is an asset inventory, not legal advice or a certification of the full
-repository. Ten legacy MP3s remain under `assets/sounds/` for the desktop and
-historical project. Their provenance is unverified, but the web application
-does not reference them and the web backend does not serve them.
+repository.
 
 Status meanings:
 
@@ -82,22 +80,6 @@ Attribution is not required, but source details are retained.
 The production server uses a filename allowlist for these files. It does not
 mount the repository-level asset directory as a public static tree.
 
-## Excluded Legacy Audio
-
-The source and licence of these files are not recorded. They must not be
-included in a commercial web package or exposed by a production server:
-
-- `assets/sounds/button.mp3`
-- `assets/sounds/capture.mp3`
-- `assets/sounds/castle.mp3`
-- `assets/sounds/game-end.mp3`
-- `assets/sounds/game-start.mp3`
-- `assets/sounds/illegal.mp3`
-- `assets/sounds/move-check.mp3`
-- `assets/sounds/move-opponent.mp3`
-- `assets/sounds/move-self.mp3`
-- `assets/sounds/promote.mp3`
-
 ## Release Checklist
 
 - Include this manifest, `THIRD_PARTY_NOTICES.md`, and every adjacent asset
@@ -105,6 +87,6 @@ included in a commercial web package or exposed by a production server:
 - Archive source downloads and the intro source artwork.
 - Verify release files against `web/ASSET_CHECKSUMS.sha256`.
 - Build the release from an explicit allowlist; do not publish the repository
-  root or the excluded legacy audio directory.
+  root.
 - Verify that the browser requests Chessnut SVGs and only allowlisted audio.
 - Re-run backend and browser tests after any asset replacement.

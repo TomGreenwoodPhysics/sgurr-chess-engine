@@ -65,8 +65,8 @@ package metadata are retained in `web/licenses/`.
 `python-chess` is a metadata package whose implementation dependency is the
 `chess` package. Both identify as GPL-3.0-or-later. A hosted service normally
 runs these packages on infrastructure controlled by the operator. If the
-backend, a bundled Python environment, a desktop package, or a container is
-given to customers, obtain an appropriate distribution-compliance review and
+backend, a bundled Python environment, or a container is given to customers,
+obtain an appropriate distribution-compliance review and
 provide the corresponding GPL materials and notices. Do not describe the
 packaged backend as wholly proprietary without resolving this point.
 
@@ -86,10 +86,9 @@ Their exact versions and integrity hashes are in `web/package-lock.json`.
 
 ## Scope Boundary
 
-This notice does not certify every optional desktop, training, benchmarking,
-or research dependency in the repository. Audit those separately before
-shipping a desktop application or development toolkit. The commercial web
-release should contain only the frontend, the allowlisted web media, the
-backend runtime, the Sgurr binary/model selected for production, and the
-applicable notices.
+This notice does not certify every training, benchmarking, or research
+dependency in the repository. Audit those separately before shipping a
+development toolkit. The commercial web release should contain only the
+frontend, the allowlisted web media, the backend runtime, the Sgurr
+binary/model selected for production, and the applicable notices.
 

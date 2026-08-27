@@ -76,9 +76,9 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertTrue(path.is_file())
         self.assertEqual(path.name, "clock-warning.ogg")
 
-    def test_web_audio_allowlist_blocks_unverified_legacy_file(self) -> None:
+    def test_web_audio_allowlist_blocks_unknown_file(self) -> None:
         with self.assertRaises(HTTPException) as raised:
-            web_asset_path("sounds", "button.mp3")
+            web_asset_path("sounds", "unknown.mp3")
 
         self.assertEqual(raised.exception.status_code, 404)
 
