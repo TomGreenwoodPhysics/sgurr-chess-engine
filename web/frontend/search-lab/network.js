@@ -1298,7 +1298,7 @@ export function initSearchNetwork() {
     }
     if (event.e === "search-limit") {
       return [
-        "NODE LIMIT REACHED",
+        event.reason === "time" ? "SEARCH TIME LIMIT" : "NODE LIMIT REACHED",
         `The demo stopped after depth ${event.depth} completed. The final iteration may be partial.`,
       ];
     }
@@ -4413,6 +4413,7 @@ export function initSearchNetwork() {
           targetDepth: requestedDepth,
           nodes: Number(message.nodes) || 0,
           best: message.bestmove,
+          reason: message.stoppedEarly ? "time" : "nodes",
         };
         if (runMode === "live") applyLiveEvent(terminal);
         else events.push(terminal);
@@ -4439,6 +4440,40 @@ export function initSearchNetwork() {
     if (message.type === "error") throw new Error(message.detail || "Trace failed");
   }
 
+  // Live mode applies events as they arrive, so the horizon is current. Replay
+  // records them for playback and applies none of them yet, so the depth has to
+  // be read back out of what was recorded.
+  function depthReached(runMode) {
+    if (runMode === "live") return searchHorizon;
+    return events.reduce(
+      (deepest, event) => (event.e === "finish"
+        ? Math.max(deepest, Number(event.iterationDepth || event.depth || 0))
+        : deepest),
+      0,
+    );
+  }
+
+  // The demo stops a long search once its time limit is reached, and that stop
+  // arrives as an error after most of the network has already been drawn.
+  // Throwing there would replace a nearly complete picture with an
+  // "unavailable" panel, so a stop that follows at least one completed
+  // iteration is finished as a capped search, the way the node limit already
+  // is. A stop with nothing drawn is still a genuine failure and still throws.
+  function completionFromStop(message, requestedDepth, runMode) {
+    if (message?.type !== "error") return message;
+    const depth = depthReached(runMode);
+    if (depth < 1) return message;
+    return {
+      type: "complete",
+      events: "bounded",
+      target_depth: requestedDepth,
+      depth,
+      nodes: engineNodesSearched,
+      limited: true,
+      stoppedEarly: true,
+    };
+  }
+
   async function readStream(response, requestedDepth, runMode) {
     const reader = response.body?.getReader();
     if (!reader) throw new Error("This browser cannot read the trace stream");
@@ -4454,9 +4489,15 @@ export function initSearchNetwork() {
       buffer = lines.pop() || "";
       for (const line of lines) {
         if (!line.trim()) continue;
-        const message = JSON.parse(line);
+        const parsed = JSON.parse(line);
+        // Drain the queue before deciding how the search ended, so a stop is
+        // credited with every depth that actually arrived rather than only
+        // those applied by the time its message was read.
+        if (runMode === "live" && (parsed.type === "complete" || parsed.type === "error")) {
+          await flushPendingLiveEvents();
+        }
+        const message = completionFromStop(parsed, requestedDepth, runMode);
         if (message.type === "complete") completion = message;
-        if (runMode === "live" && message.type === "complete") await flushPendingLiveEvents();
         captureMessage(message, requestedDepth, runMode);
         if (runMode === "live" && !document.hidden && performance.now() - processingSliceStartedAt >= LIVE_EVENT_SLICE_MS) {
           await new Promise((resolve) => window.requestAnimationFrame(resolve));
@@ -4466,9 +4507,12 @@ export function initSearchNetwork() {
       if (done) break;
     }
     if (buffer.trim()) {
-      const message = JSON.parse(buffer);
+      const parsed = JSON.parse(buffer);
+      if (runMode === "live" && (parsed.type === "complete" || parsed.type === "error")) {
+        await flushPendingLiveEvents();
+      }
+      const message = completionFromStop(parsed, requestedDepth, runMode);
       if (message.type === "complete") completion = message;
-      if (runMode === "live" && message.type === "complete") await flushPendingLiveEvents();
       captureMessage(message, requestedDepth, runMode);
     }
     if (runMode === "live") await flushPendingLiveEvents();
@@ -4507,6 +4551,8 @@ export function initSearchNetwork() {
       const completion = await readStream(response, depth, runMode);
       const achievedDepth = Number(completion?.depth) || depth;
       const limited = Boolean(completion?.limited);
+      const limitTag = completion?.stoppedEarly ? "SEARCH TIME LIMIT" : "NODE LIMIT REACHED";
+      const limitPhrase = completion?.stoppedEarly ? "the demo's time limit" : "the demo's node limit";
       const finishEvent = [...events].reverse().find((event) => event.e === "finish");
       const elapsedMs = Number(finishEvent?.t_us) / 1000;
       const timing = Number.isFinite(elapsedMs) ? ` The complete search took ${elapsedMs < 100 ? elapsedMs.toFixed(1) : Math.round(elapsedMs)} ms.` : "";
@@ -4519,15 +4565,15 @@ export function initSearchNetwork() {
           limited ? "ready" : "complete",
           limited ? `Capped · depth ${achievedDepth}/${depth}` : "Recorded · replay ready",
         );
-        refs.eventTag.textContent = limited ? "NODE LIMIT REACHED" : "TRACE READY";
+        refs.eventTag.textContent = limited ? limitTag : "TRACE READY";
         refs.eventText.textContent = limited
-          ? `${layoutNodes.size} real positions were recorded before the demo limit. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
+          ? `${layoutNodes.size} real positions were recorded before ${limitPhrase}. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
           : `${layoutNodes.size} real positions across depths 1–${depth} are ready. Depth 0 begins at the root and each orbit moves outward.${timing}`;
         if (!reducedMotion.matches) play();
       } else {
-        refs.eventTag.textContent = limited ? "NODE LIMIT REACHED" : "SEARCH COMPLETE";
+        refs.eventTag.textContent = limited ? limitTag : "SEARCH COMPLETE";
         refs.eventText.textContent = limited
-          ? `${layoutNodes.size} positions appeared before the demo limit. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
+          ? `${layoutNodes.size} positions appeared before ${limitPhrase}. Depth ${achievedDepth} completed; the final iteration may be partial.${timing}`
           : `${layoutNodes.size} positions appeared live.${timing} The same trace is now available to replay slowly.`;
       }
       return true;
