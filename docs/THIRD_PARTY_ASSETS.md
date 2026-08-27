@@ -47,6 +47,14 @@ The PNG is retained as the high-resolution source; browsers receive the WebP
 background and JPEG social card. No bundled font is used by the frontend; its
 CSS uses system font stacks.
 
+## README Captures
+
+| Sgurr file | Provenance | Status |
+| --- | --- | --- |
+| `docs/assets/search-network.gif` | Recorded from Sgurr's Search Lab. | `PROJECT-ASSET` |
+| `docs/assets/search-network.jpg` | Depth-14 Kiwipete trace captured from Sgurr's Search Lab. | `PROJECT-ASSET` |
+| `docs/assets/nnue-evaluation.gif` | Recorded from Sgurr's Evaluation Lab using the shipped Gen8 network. | `PROJECT-ASSET` |
+
 ## Project-Created Audio
 
 The following ordinary cues are synthesized at runtime in
