@@ -108,6 +108,12 @@ function quality() {
 const PROFILE = new URLSearchParams(window.location.search).get("profile") === "1"
   || readStored("sgurrProfile") === "1";
 const LIVE_STRUCTURE_REFRESH_MS = Object.freeze({ sparse: 66, dense: 100, detail: 150 });
+// Frames arrive at the display's interval rather than the cap above, and
+// jitter either side of it. Strain is measured against a frame that has
+// clearly been missed, not one that is merely late, so ordinary jitter on
+// a machine that is keeping up does not stretch the interval.
+const LIVE_REBUILD_STRAIN_FLOOR_MS = 25;
+const LIVE_REBUILD_MAX_STRAIN = 3;
 const EFFECT_BUDGETS = Object.freeze({
   full: Object.freeze({ pulses: 90, bursts: 50, cutoffs: 32, wormholes: 18, leaders: 4, activity: 120 }),
   balanced: Object.freeze({ pulses: 48, bursts: 28, cutoffs: 18, wormholes: 10, leaders: 3, activity: 72 }),
@@ -361,6 +367,7 @@ export function initSearchNetwork() {
   let framePressure = 0.72;
   let lastFrameTimestamp = null;
   let lastDrawnAt = null;
+  let frameIntervalMs = MIN_FRAME_INTERVAL_MS;
   let countersDirty = true;
   let countersUpdatedAt = -Infinity;
 
@@ -3514,9 +3521,16 @@ export function initSearchNetwork() {
     if (interactionMode) return Infinity;
     const dense = visibleNodes.size >= DENSE_NODE_THRESHOLD;
     if (liveStreaming || timer !== null) {
-      if (detail) return LIVE_STRUCTURE_REFRESH_MS.detail;
-      const interval = dense ? LIVE_STRUCTURE_REFRESH_MS.dense : LIVE_STRUCTURE_REFRESH_MS.sparse;
-      refs.canvas.dataset.structuralRate = dense ? "10fps" : "15fps";
+      // While the tree is still growing, repainting it saturates the GPU: one
+      // rebuild's raster outlasts the frame that asked for it, so the fixed
+      // cadence drops frames rather than meeting them. Stretch the interval by
+      // how far the frame rate has actually fallen. A machine keeping up stays
+      // at the full rate; one that cannot rebuilds less often than it stutters.
+      const strain = clamp(frameIntervalMs / LIVE_REBUILD_STRAIN_FLOOR_MS, 1, LIVE_REBUILD_MAX_STRAIN);
+      if (detail) return LIVE_STRUCTURE_REFRESH_MS.detail * strain;
+      const base = dense ? LIVE_STRUCTURE_REFRESH_MS.dense : LIVE_STRUCTURE_REFRESH_MS.sparse;
+      const interval = base * strain;
+      refs.canvas.dataset.structuralRate = `${Math.round(1000 / interval)}fps`;
       return interval;
     }
     if (now < staticSceneAnimateUntil) return dense ? (detail ? 125 : 78) : 48;
@@ -3548,10 +3562,14 @@ export function initSearchNetwork() {
       || liveStructureCanvas.height !== Math.round(height * ratio);
     const liveRefreshInterval = structuralRefreshInterval(now);
     const liveRefreshDue = now - liveStructureBuiltAt >= liveRefreshInterval;
+    // The world and the live structure share one refresh interval, so they fall
+    // due on the same frame and rasterise two full scenes into it. Holding the
+    // live layer back when the world has just been rebuilt staggers them onto
+    // alternate frames; neither is drawn less often than before.
     if (!liveStructureReady
       || liveDimensionsChanged
       || (!interactionMode && liveResolutionChanged)
-      || (liveStructureDirty && liveRefreshDue)) {
+      || (liveStructureDirty && liveRefreshDue && !rebuiltWorldThisFrame)) {
       rebuildLiveStructureScene(now, width, height, ratio, palette);
     }
 
@@ -3971,6 +3989,12 @@ export function initSearchNetwork() {
     if (lastDrawnAt !== null && now - lastDrawnAt < MIN_FRAME_INTERVAL_MS) {
       scheduleNextDraw(MIN_FRAME_INTERVAL_MS - (now - lastDrawnAt));
       return;
+    }
+    if (lastDrawnAt !== null) {
+      // Averaged rather than latched to the worst frame: the structural backoff
+      // should answer a machine that has been behind for a while, not a single
+      // slow frame, which every run has a few of whatever its size.
+      frameIntervalMs = frameIntervalMs * 0.8 + (now - lastDrawnAt) * 0.2;
     }
     lastDrawnAt = now;
     pulses = pulses.filter((pulse) => now - pulse.startedAt <= pulse.duration);

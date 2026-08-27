@@ -1203,7 +1203,9 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await expect(canvas).toHaveAttribute("data-effect-budget", /^(full|balanced|protected)$/);
   await expect(canvas).toHaveAttribute("data-effect-budget-policy", "adaptive-transients-only");
   await expect(canvas).toHaveAttribute("data-live-animation-policy", "continuous-60fps-overlay");
-  await expect(canvas).toHaveAttribute("data-structural-rate", /^(10fps|15fps)$/);
+  // The structural rate now eases down while the machine is behind, so the
+  // exact value depends on the hardware running the suite.
+  await expect(canvas).toHaveAttribute("data-structural-rate", /^\d+fps$/);
   await expect(canvas).toHaveAttribute("data-survivor-design", "celestial-filament");
   await expect(canvas).toHaveAttribute("data-survivor-envelope", "amber-white-core");
   await expect(canvas).toHaveAttribute("data-survivor-particles", "2");
