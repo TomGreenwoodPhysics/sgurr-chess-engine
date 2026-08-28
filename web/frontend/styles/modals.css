@@ -240,6 +240,38 @@
   width: min(900px, 100%);
 }
 
+.demo-limits-box {
+  width: min(720px, 100%);
+}
+
+.demo-limits-copy {
+  display: grid;
+  gap: 13px;
+  color: color-mix(in srgb, var(--text), var(--muted) 18%);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.demo-limits-copy p,
+.demo-limits-copy ul {
+  margin: 0;
+}
+
+.demo-limits-copy p:first-child {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.demo-limits-copy ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 1.25rem;
+}
+
+.demo-limits-copy li::marker {
+  color: var(--accent);
+}
+
 .modal-header {
   display: flex;
   align-items: start;

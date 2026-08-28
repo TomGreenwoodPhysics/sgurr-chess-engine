@@ -389,6 +389,7 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "wood");
   await expect(page.locator("#menuScreen")).toBeVisible();
+  await expect(page.locator("#demoLimitsButton")).toBeHidden();
   await expect(page.locator("#playWhiteButton")).toBeEnabled();
   await expect(page.locator("#playBlackButton")).toBeEnabled();
   await expect(page.locator("#watchButton")).toBeEnabled();
@@ -826,6 +827,20 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await page.locator("#engineDownButton").hover({ force: true });
   await expect(page.locator("#demoTooltip")).toBeVisible();
   await expect(page.locator("#demoTooltip")).toContainText("v8.2 only");
+
+  await expect(page.locator("#demoLimitsButton")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#demoLimitsButton")).toBeInViewport();
+  await page.locator("#demoLimitsButton").click();
+  await expect(page.locator("#demoLimitsModal")).toBeVisible();
+  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v8.2 C++ engine");
+  await expect(page.locator("#demoLimitsModal li")).toHaveCount(7);
+  await expect(page.locator("#demoLimitsModal")).toContainText("1.5 million nodes");
+  await expect(page.locator("#demoLimitsModal .modal-box")).toBeInViewport();
+  await page.locator("#demoLimitsModal [data-close-modal]").click();
+  await expect(page.locator("#demoLimitsModal")).toBeHidden();
+  await expect(page.locator("#demoLimitsButton")).toBeFocused();
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.locator("#menuEngineButton").click();
   const localOnly = page.locator('.engine-card[aria-disabled="true"]');

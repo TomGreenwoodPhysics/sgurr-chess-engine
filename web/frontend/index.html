@@ -119,6 +119,7 @@
     <section class="menu-screen" id="menuScreen" aria-label="Sgurr main menu">
       <div class="menu-actions">
         <button class="ghost-button" type="button" id="menuSettingsButton">Settings</button>
+        <button class="ghost-button" type="button" id="demoLimitsButton" hidden>Hosted demo limits</button>
         <button class="ghost-button square-button" type="button" id="menuHelpButton" aria-label="Help and shortcuts">?</button>
       </div>
 
@@ -718,6 +719,35 @@
           <div><strong>L</strong><span>Open Position Lab at the FEN field</span></div>
           <div><strong>?</strong><span>Show this help</span></div>
           <div><strong>Esc</strong><span>Close overlays or promotion chooser</span></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="demoLimitsModal" hidden>
+      <section class="modal-box demo-limits-box" role="dialog" aria-modal="true" aria-labelledby="demoLimitsTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="demoLimitsTitle">About the hosted demo</h2>
+            <p>What runs here and what is kept for the local version.</p>
+          </div>
+          <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
+        </div>
+
+        <div class="demo-limits-copy">
+          <p>This is the real Sgurr v8.2 C++ engine, not a static or prerecorded version of the site. The Evaluation Lab also runs the shipped Gen8 NNUE directly in your browser.</p>
+          <p>I host the demo on Render's free tier. If nobody has visited for a while, the server goes to sleep and the first visit can take 30 to 60 seconds to start. Once it is awake, the site should respond normally.</p>
+          <p>I have put a few limits in place so that one visitor cannot occupy the whole server.</p>
+          <ul>
+            <li>The hosted site runs Sgurr v8.2 only. The older releases shown in the engine picker are available when the project is run locally.</li>
+            <li>Sgurr can think for up to two seconds when playing a move.</li>
+            <li>Live analysis traces can run for up to five seconds.</li>
+            <li>Search Network searches are limited to depth 12, 1.5 million nodes and 30 seconds. If a search reaches a limit, the completed part of the network is kept on screen.</li>
+            <li>Continuous Sgurr-versus-Sgurr play is disabled.</li>
+            <li>The server accepts two engine jobs at once, with no more than one Search Network trace running at a time.</li>
+            <li>The whole demo shares a limit of 30 move searches and six analysis or Search Network requests per minute.</li>
+          </ul>
+          <p>Most visitors will never notice these limits. If several people use the engine at once, you may briefly see an “Engine busy” or rate-limit message. Waiting a moment and trying again should be enough.</p>
+          <p>These are limits of the free hosted demo, not limits of Sgurr itself. Running the project locally gives you every engine version you have built, continuous self-play, Search Network depths up to 20, longer game searches and no shared-server rate limit.</p>
         </div>
       </section>
     </div>

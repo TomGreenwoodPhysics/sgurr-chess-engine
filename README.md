@@ -13,6 +13,44 @@ games. The current release is **v8.2 "Thearlaich"**, measured at an estimated
 The hosted site runs the real Sgurr executable. It is on Render's free tier,
 so the first visit after a quiet period can take 30 to 60 seconds to start.
 
+<details>
+<summary><strong>About the hosted demo</strong></summary>
+
+This is the real Sgurr v8.2 C++ engine, not a static or prerecorded version of
+the site. The Evaluation Lab also runs the shipped Gen8 NNUE directly in your
+browser.
+
+I host the demo on Render's free tier. If nobody has visited for a while, the
+server goes to sleep and the first visit can take 30 to 60 seconds to start.
+Once it is awake, the site should respond normally.
+
+I have put a few limits in place so that one visitor cannot occupy the whole
+server.
+
+- The hosted site runs Sgurr v8.2 only. The older releases shown in the engine
+  picker are available when the project is run locally.
+- Sgurr can think for up to two seconds when playing a move.
+- Live analysis traces can run for up to five seconds.
+- Search Network searches are limited to depth 12, 1.5 million nodes and 30
+  seconds. If a search reaches a limit, the completed part of the network is
+  kept on screen.
+- Continuous Sgurr-versus-Sgurr play is disabled.
+- The server accepts two engine jobs at once, with no more than one Search
+  Network trace running at a time.
+- The whole demo shares a limit of 30 move searches and six analysis or Search
+  Network requests per minute.
+
+Most visitors will never notice these limits. If several people use the engine
+at once, you may briefly see an “Engine busy” or rate-limit message. Waiting a
+moment and trying again should be enough.
+
+These are limits of the free hosted demo, not limits of Sgurr itself. Running
+the project locally gives you every engine version you have built, continuous
+self-play, Search Network depths up to 20, longer game searches and no
+shared-server rate limit.
+
+</details>
+
 <p align="center">
   <a href="https://sgurr-chess-engine.onrender.com/search-lab/">
     <img src="docs/assets/search-network.gif" width="620"

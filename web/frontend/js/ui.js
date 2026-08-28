@@ -1052,6 +1052,7 @@ function engineCodename(label) {
 
 function renderMenu() {
   refs.menuScreen.hidden = app.mode !== "menu";
+  refs.demoLimitsButton.hidden = !app.publicDemo;
   refs.menuTimeButton.textContent = currentTimeControl().label;
   refs.menuThemeButton.textContent = THEMES[app.themeKey]?.label || THEMES.wood.label;
   const engineLabel = app.engineLabel || 'Sgurr v8.2 "Thearlaich"';

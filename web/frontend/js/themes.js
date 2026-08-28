@@ -58,6 +58,7 @@ function userModals() {
     refs.engineModal,
     refs.settingsModal,
     refs.helpModal,
+    refs.demoLimitsModal,
   ];
 }
 

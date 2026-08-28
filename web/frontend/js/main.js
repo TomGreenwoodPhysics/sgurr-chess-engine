@@ -43,6 +43,7 @@ refs.menuEngineButton.addEventListener("click", () => {
   openModal(refs.engineModal);
 });
 refs.menuSettingsButton.addEventListener("click", () => openModal(refs.settingsModal));
+refs.demoLimitsButton.addEventListener("click", () => openModal(refs.demoLimitsModal));
 refs.menuHelpButton.addEventListener("click", () => openModal(refs.helpModal));
 refs.positionLabButton.addEventListener("click", () => enterPositionLab());
 refs.focusModeButton.addEventListener("click", () => toggleFocusMode());
