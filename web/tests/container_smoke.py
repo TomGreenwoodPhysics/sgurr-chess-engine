@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -73,22 +75,46 @@ assert available == ["v8.2"]
 
 with post(
     "/api/search-trace",
-    {"fen": START_FEN, "engine": "v8.2", "movetime_ms": 1_500},
+    {"fen": START_FEN, "engine": "v8.2", "movetime_ms": 2_000},
 ) as trace:
     assert json.loads(trace.readline())["type"] == "started"
+
+    overlap_result = {}
+
+    def run_overlapping_search():
+        try:
+            with post(
+                "/api/engine-move",
+                {"fen": START_FEN, "moves": [], "movetime_ms": 2_000},
+            ) as response:
+                overlap_result["move"] = json.load(response)
+        except Exception as exc:
+            overlap_result["error"] = exc
+
+    overlap = threading.Thread(target=run_overlapping_search, daemon=True)
+    overlap.start()
+    time.sleep(0.25)
+
     try:
         with post(
             "/api/engine-move",
             {"fen": START_FEN, "moves": [], "movetime_ms": 50},
         ):
-            raise AssertionError("overlapping search was accepted")
+            raise AssertionError("third concurrent search was accepted")
     except HTTPError as exc:
         assert exc.code == 429
+
     trace_events = [json.loads(line) for line in trace if line.strip()]
     assert any(event["type"] == "complete" for event in trace_events)
     iterations = [event for event in trace_events if event["type"] == "iteration"]
     assert len(iterations[-1]["pv_san"]) >= 2
     assert len(iterations[-1]["pv_fens"]) == len(iterations[-1]["pv_san"]) + 1
+
+    overlap.join(timeout=10)
+    assert not overlap.is_alive()
+    if "error" in overlap_result:
+        raise overlap_result["error"]
+    assert overlap_result["move"]["last_move"]["by"] == "engine"
 
 with post(
     "/api/engine-move",
