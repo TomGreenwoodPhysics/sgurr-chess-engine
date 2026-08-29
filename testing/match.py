@@ -12,19 +12,18 @@ Or override:
   python3 match.py ./engines/sgr_gen1.exe ./engines/baselines/sgr_base.exe --games 200
 """
 
-# ---------------------------------------------------------------------------
+# Default match settings
 ENGINE_A = "../engines/sgr_gen1.exe"
 ENGINE_A_NET = "../nets/gen1.nnue"
 
 ENGINE_B = "../engines/baselines/sgr_base.exe"
 ENGINE_B_NET = ""
 
-NO_NET_PATH = "../nets/__no_net__.nnue"          # intentionally absent
-GAMES = 2                                      # total games, colour-swapped pairs
-TC = "8+0.08"                                  # base+increment, or "mt=0.1"
-BOOK = "book.epd"                              # EPD/FEN per line. "" = startpos
+NO_NET_PATH = "../nets/__no_net__.nnue"          # Intentionally absent
+GAMES = 2                                      # Total games in colour-swapped pairs
+TC = "8+0.08"                                  # Base plus increment, or "mt=0.1"
+BOOK = "book.epd"                              # One EPD or FEN per line
 CONCURRENCY = 6
-# ---------------------------------------------------------------------------
 
 import argparse
 import math
@@ -60,8 +59,7 @@ class Engine:
 
         env = dict(os.environ)
 
-        # SGR_EVALFILE selects the eval: a real net path for NNUE, or a
-        # missing path so an NNUE-capable binary falls back to HCE.
+        # Use a real net for NNUE or a missing path to force the HCE fallback.
         if spec.net_path is not None:
             env["SGR_EVALFILE"] = spec.net_path
 
@@ -222,8 +220,8 @@ class Tally:
         self.name_a = name_a
 
     def record_pair(self, ra, rb_white):
-        # ra = A's score as white
-        # rb_white = white's score in game 2, where B was white
+        # ra is A's score as White.
+        # rb_white is B's score as White in the second game.
         a2 = 1.0 - rb_white
 
         with self.lock:

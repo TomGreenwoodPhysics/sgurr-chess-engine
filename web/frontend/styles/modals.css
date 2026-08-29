@@ -228,10 +228,8 @@
   padding: 22px;
 }
 
-/* openModal() focuses the box itself so screen readers announce the dialog
-   title before its controls. That focus is always programmatic -- never the
-   result of a Tab -- so the ring would be noise. Individual controls inside
-   keep their own focus styling. */
+/* Programmatic dialog focus announces the title first. Hide its focus ring
+   while retaining focus styles for controls. */
 .modal-box:focus {
   outline: none;
 }
@@ -308,9 +306,7 @@
   box-shadow: 0 0 0 2px rgba(220, 178, 91, 0.2);
 }
 
-/* The opponent ladder. Two columns rather than the theme gallery's four:
-   each card carries a name, a spec line and a rating meter, so it needs the
-   width to stay readable. */
+/* Use two columns so opponent cards have enough room for their metadata. */
 .engine-gallery {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

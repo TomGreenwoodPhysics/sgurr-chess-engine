@@ -96,10 +96,7 @@ function formatNodesShort(value) {
   return String(Math.round(value));
 }
 
-// Live search readout while Sgurr thinks. The backend answers with the final
-// depth/nodes only, so the ticking values are extrapolated from the previous
-// search's speed (nodes from measured NPS; depth from iterative-deepening
-// growth, ~2.2x time per ply) and snap to the real figures on arrival.
+// Estimate live nodes and depth from the previous search until final values arrive.
 function formatClock(seconds) {
   const safe = Math.max(0, seconds);
   const minutes = Math.floor(safe / 60);

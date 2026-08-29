@@ -13,48 +13,20 @@
 #include <string>
 #include <vector>
 
-// Advertised engine identity, in ONE place.
-//
-// The UCI `id name` line is the only channel by which a GUI, a tournament
-// runner, or a PGN header learns which engine it is talking to, so a stale
-// value here silently mislabels every game record it touches. It has been
-// stale before: the string read "Sgurr 7.0" for the whole of v8.0's life,
-// including the 3,329-game calibration that produced the 3006 rating.
-//
-// Overridable at build time (-DSGR_VERSION=\"8.1\") like the other build
-// switches, so a release build can stamp itself without a source edit.
+// Build-time override for the version reported through UCI.
 #ifndef SGR_VERSION
 #define SGR_VERSION "8.2"
 #endif
 constexpr const char* ENGINE_NAME = "Sgurr";
 constexpr const char* ENGINE_AUTHOR = "Tom";
 
-// Runtime UCI options.
-//
-// Until now the engine advertised NONE, which is a standards gap (a GUI cannot
-// even set Hash) and the reason no search parameter in this project has ever
-// been tuned -- every margin and threshold is a compile-time constant. These
-// are the standard housekeeping options; the tunable search parameters follow
-// in a later change.
-//
-// `Threads` is declared with min == max == 1 rather than omitted. The engine is
-// single-threaded by design (the rating scale here is single-core, so parallel
-// search would measure exactly zero), and declaring it honestly tells a GUI
-// that the option exists and is pinned, rather than leaving it to guess.
+// Runtime UCI options. Threads is advertised but fixed at one.
 int g_move_overhead_ms = static_cast<int>(MOVE_OVERHEAD_MS);
 
-std::vector<std::string> split(const std::string& text);   // defined below
+std::vector<std::string> split(const std::string& text);   // Defined below.
 
-// The tunable search parameters, as UCI options.
-//
-// ONE table drives both `uci` output and `setoption`, so an option cannot be
-// advertised without being settable, or settable without being advertised --
-// the standard way this goes wrong, and a silent one, since a GUI or tuner
-// would just see its value ignored.
-//
-// Ranges are deliberately generous. SPSA should be free to walk somewhere
-// surprising; these bounds exist to stop a typo producing a nonsense engine,
-// not to encode an opinion about where the optimum is.
+// One table defines both advertised and accepted search options.
+// Wide bounds allow tuning while rejecting clearly invalid values.
 struct Tunable {
     const char* name;
     int SearchParams::* member;
@@ -63,7 +35,7 @@ struct Tunable {
 };
 
 const Tunable TUNABLES[] = {
-    // pruning
+    // Pruning
     {"RfpMargin",             &SearchParams::rfp_margin,               20,     400},
     {"RfpMaxDepth",           &SearchParams::rfp_max_depth,             1,      12},
     {"LmpMaxDepth",           &SearchParams::lmp_max_depth,             1,       8},
@@ -72,26 +44,23 @@ const Tunable TUNABLES[] = {
     {"LmpCount3",             &SearchParams::lmp_count_3,               3,      60},
     {"FutilityMargin1",       &SearchParams::futility_margin_1,        20,     500},
     {"FutilityMargin2",       &SearchParams::futility_margin_2,        40,     900},
-    // reductions
+    // Reductions
     {"NullMoveReduction",     &SearchParams::null_move_reduction,       1,       5},
     {"LmrMinDepth",           &SearchParams::lmr_min_depth,             2,       8},
     {"LmrFullDepthMoves",     &SearchParams::lmr_full_depth_moves,      1,       8},
     {"LmrDivX100",            &SearchParams::lmr_div_x100,            100,     600},
-    // Range spans four orders of magnitude on purpose. The old 400'000 default
-    // was inert (see the distribution recorded in search.hpp) and the useful
-    // region turned out to be two decades below where the original bound even
-    // started. A tuner cannot find a scaling error it is fenced out of.
+    // Keep a wide range because useful history scaling varies greatly.
     {"HistLmrDiv",            &SearchParams::histlmr_div,              16, 2'000'000},
     {"HistLmrMax",            &SearchParams::histlmr_max,               0,       6},
-    // extensions
+    // Extensions
     {"SingularMinDepth",      &SearchParams::singular_min_depth,        4,      16},
     {"SingularTtDepthSlack",  &SearchParams::singular_tt_depth_slack,   0,       8},
     {"SingularMargin",        &SearchParams::singular_margin,           1,      20},
     {"CheckExtMaxDepth",      &SearchParams::check_ext_max_depth,       0,      16},
-    // windows
+    // Windows
     {"AspirationWindow",      &SearchParams::aspiration_window,        10,     300},
     {"DeltaMargin",           &SearchParams::delta_margin,             50,     600},
-    // v9.0 batch
+    // Version 9 additions
     {"IirMinDepth",           &SearchParams::iir_min_depth,             2,      10},
     {"IirReduction",          &SearchParams::iir_reduction,             1,       3},
     {"NmpDepthDiv",           &SearchParams::nmp_depth_div,             2,      12},
@@ -110,12 +79,11 @@ const Tunable TUNABLES[] = {
     {"CapHistMax",            &SearchParams::caphist_max,              16,    2000},
     {"EvalScaleStart",        &SearchParams::evalscale_start,           0,      90},
     {"EvalScaleMinPct",       &SearchParams::evalscale_min_pct,        10,     100},
-    // time management -- see the warning in search.hpp before tuning these
+    // Time management. See the warning in search.hpp before tuning these.
     {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
 };
 
-// bm_stability_x100 is an array, so it cannot be reached by a plain
-// pointer-to-member; these are handled by index alongside the table above.
+// Array-backed stability options are handled by index.
 const char* const BM_STABILITY_NAMES[BM_STABILITY_COUNT] = {
     "BmStability0", "BmStability1", "BmStability2", "BmStability3", "BmStability4"
 };
@@ -145,8 +113,7 @@ void print_uci_options(const Engine& engine) {
     (void)engine;
 }
 
-// Parse `setoption name <words...> value <words...>`. The name may contain
-// spaces ("Clear Hash"), so it is everything between `name` and `value`.
+// Parse setoption names and values that may contain spaces.
 void handle_setoption(const std::string& command, Engine& engine) {
     std::vector<std::string> parts = split(command);
 
@@ -177,11 +144,7 @@ void handle_setoption(const std::string& command, Engine& engine) {
     if (name == "Hash") {
         int asked = as_int(DEFAULT_HASH_MB);
         engine.resize_hash(asked);
-        // Report what was ACTUALLY allocated, not what was asked for. The entry
-        // count is rounded down to a power of two so the probe can index with a
-        // mask, which can cost up to a third of the request (256 MB -> 192 MB).
-        // Silently honouring a different size than the user set is exactly the
-        // kind of thing that later gets mistaken for a measurement.
+        // Report the allocated power-of-two table size.
         double actual_mb = double(engine.tt_size * sizeof(TTEntry)) / (1024.0 * 1024.0);
         std::cerr << "info string Hash " << asked << " MB requested -> "
                   << std::fixed << std::setprecision(2) << actual_mb
@@ -191,16 +154,13 @@ void handle_setoption(const std::string& command, Engine& engine) {
     } else if (name == "Move Overhead") {
         g_move_overhead_ms = std::max(0, as_int(g_move_overhead_ms));
     } else if (name == "Threads") {
-        // Accepted and pinned at 1; see the note above.
+        // Accepted but fixed at one.
     } else {
         for (const Tunable& t : TUNABLES) {
             if (name == t.name) {
                 int v = std::clamp(as_int(params.*(t.member)), t.min, t.max);
                 params.*(t.member) = v;
-                // Cheap, and unconditional on purpose: some parameters feed
-                // precomputed tables (LmrDivX100 -> the LMR table), and
-                // rebuilding only "when needed" is how derived state silently
-                // goes stale.
+                // Rebuild tables derived from tunable parameters.
                 refresh_derived_params();
                 return;
             }
@@ -323,10 +283,7 @@ std::optional<long long> parse_go_value(const std::string& command, const std::s
     return std::nullopt;
 }
 
-// A move's time allowance, in seconds. `hard` is the deadline at which the
-// search is aborted mid-iteration; `soft`, when present, is the point past
-// which no new iterative-deepening pass is started. Fixed `movetime` uses the
-// whole allotment (no soft limit); a clock-based budget carries both.
+// Time allowance in seconds. Hard aborts the search and soft stops new iterations.
 struct TimeBudget {
     double hard;
     std::optional<double> soft;
@@ -337,12 +294,12 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
         return TimeBudget{ *movetime / 1000.0, std::nullopt };
     }
 
-    // Clock-based allocation from wtime/btime/winc/binc/movestogo.
+    // Allocate from the active clock, increment and moves to go.
     bool white = board.side_to_move == WHITE;
     auto time_left = parse_go_value(command, white ? "wtime" : "btime");
 
     if (!time_left.has_value()) {
-        return std::nullopt;   // no clock given: fixed-depth search
+        return std::nullopt;   // No clock means a fixed-depth search.
     }
 
     long long inc = parse_go_value(command, white ? "winc" : "binc").value_or(0);
@@ -352,23 +309,19 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
         mtg = 1;
     }
 
-    // Hold back a margin for GUI/network latency so the move is transmitted
-    // before the flag falls, then budget one slice of the remaining time plus
-    // half the increment, never more than half the clock, with a safety floor.
+    // Reserve transmission overhead and cap the move at half the clock.
     long long usable = std::max(1LL, *time_left - g_move_overhead_ms);
     long long hard = usable / mtg + inc / 2;
     hard = std::min(hard, usable / 2);
     hard = std::max(hard, 10LL);
 
-    // Stop starting fresh iterations partway through the budget: the final
-    // pass then completes instead of being aborted, unused, at the hard limit.
+    // Stop new iterations early enough for the final pass to finish.
     long long soft = std::max(10LL, static_cast<long long>(hard * (params.soft_time_fraction_x100 / 100.0)));
 
     return TimeBudget{ hard / 1000.0, soft / 1000.0 };
 }
 
-// Defined below, next to the position list it walks. Declared here so `bench`
-// also works as a command inside a live UCI session, not just as an argv mode.
+// Declared here so bench works inside a live UCI session.
 constexpr int BENCH_DEPTH = 11;
 int run_bench(int depth);
 
@@ -404,16 +357,12 @@ void uci_loop() {
             std::optional<double> soft_limit =
                 budget.has_value() ? budget->soft : std::nullopt;
 
-            // With a clock, movetime, or a node budget, depth is bounded by that
-            // limit rather than the default cap.
+            // Let time or node limits bound an otherwise uncapped depth.
             int depth = requested_depth.value_or(
                 (budget.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
             );
 
-            // Clamp what the GUI asked for. Anything past MAX_PLY - 1 is
-            // meaningless -- the ply guard in negamax stops the search there
-            // anyway -- and leaving it unbounded means a `go depth 200` writes
-            // a depth the packed TT entry cannot represent.
+            // Keep requested depth within the search and TT limits.
             depth = std::clamp(depth, 1, MAX_PLY - 1);
 
             SearchResult result = engine.search_best_move(
@@ -430,8 +379,7 @@ void uci_loop() {
                 std::cout << "bestmove 0000\n";
             }
         } else if (command == "bench" || command.rfind("bench ", 0) == 0) {
-            // Optional depth: "bench 13". Anything unparseable falls back to
-            // the default rather than aborting a live session.
+            // Accept an optional depth and fall back on invalid input.
             int depth = BENCH_DEPTH;
             std::vector<std::string> parts = split(command);
 
@@ -514,9 +462,8 @@ void test_mode() {
 }
 
 int run_see_tests() {
-    // Each case: FEN, the capturing move in UCI form, and the hand-verified
-    // SEE value (centipawns, from the side-to-move's perspective). Values use
-    // the canonical scale P=100 N=320 B=330 R=500 Q=900.
+    // Each case provides a FEN, capture and hand-checked SEE score.
+    // Scores use P=100 N=320 B=330 R=500 Q=900.
     struct SeeCase {
         const char* fen;
         const char* uci;
@@ -581,49 +528,19 @@ int run_see_tests() {
     return passed == static_cast<int>(cases.size()) ? 0 : 1;
 }
 
-// ---------------------------------------------------------------------------
-// bench: a fixed-depth search over a fixed set of positions.
-//
-// The search is fully deterministic -- no randomness, no clock (a fixed-depth
-// search passes no time limit, so time_is_up() never fires), and every
-// heuristic is cleared before each position. So the per-position node counts
-// and their total are a FINGERPRINT of the engine's search behaviour.
-//
-// That is what makes this the project's cheapest verification tool. A change
-// meant to be speed-only -- build flags, data layout, SIMD, a refactor --
-// must leave the fingerprint byte-identical. If it moves, the change altered
-// WHAT is searched rather than only how fast, and the speedup is not free.
-// METHODOLOGY.md 7 already requires node-identical A/B binaries before they
-// are trusted; this makes that check one command instead of a procedure.
-//
-// The fingerprint goes to stdout and everything non-deterministic (wall time,
-// NPS, net path, SIMD path) goes to stderr, so
-//
-//     diff <(old.exe bench 2>/dev/null) <(new.exe bench 2>/dev/null)
-//
-// compares exactly the deterministic part and nothing else.
-//
-// Heuristics are cleared before EVERY position rather than once at the start,
-// so each entry is independent: reordering or adding positions cannot shift
-// another position's count, and a divergence names the position that caused
-// it instead of every position after it.
-//
-// The node counts also depend on the loaded network -- a different net is a
-// different evaluation and therefore a different tree. That is a feature: it
-// means an accidental net mismatch shows up as a fingerprint difference
-// rather than passing silently, which is the failure that cost this project
-// ~430 Elo once already.
-//
-// BENCH_DEPTH is declared above uci_loop, where the `bench` command needs it.
+// Fixed-depth benchmark over deterministic positions.
+// Per-position heuristic resets keep node counts independent and reproducible.
+// Deterministic output goes to stdout while timing goes to stderr.
+// Node counts also identify accidental network changes.
 
 const char* const BENCH_FENS[] = {
-    // openings
+    // Openings
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
     "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R w KQkq - 0 6",
     "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6",
 
-    // middlegames
+    // Middlegames
     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
     "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
     "4rrk1/pp1n3p/3q2pQ/2p1pb2/2PP4/2P3N1/P2B2PP/4RRK1 b - - 7 19",
@@ -631,11 +548,11 @@ const char* const BENCH_FENS[] = {
     "r2q1rk1/1b1nbppp/p3pn2/1p6/3P4/1BN1PN2/PP2QPPP/R1BR2K1 w - - 0 12",
     "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
 
-    // capture-rich, to exercise quiescence and SEE
+    // Capture-rich positions for quiescence and SEE
     "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
     "3r1rk1/p3qppp/2bb4/2p5/3p4/1P2P3/PBQN1PPP/2R2RK1 w - - 0 1",
 
-    // endgames
+    // Endgames
     "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
     "8/8/1P6/5pr1/8/4R3/7k/2K5 w - - 0 1",
     "6k1/6p1/6Pp/ppp5/3pn2P/1P3K2/1PP2P2/3N4 b - - 0 1",
@@ -655,17 +572,15 @@ int run_bench(int depth) {
               << " positions " << count << "\n";
 
     long long total_nodes = 0;
-    double search_seconds = 0.0;   // search time only, excluding the TT clears
+    double search_seconds = 0.0;   // Search time excluding TT clears.
 
     for (int i = 0; i < count; ++i) {
         Board board(BENCH_FENS[i]);
 
-        // Independence: no TT entry, killer, history or continuation-history
-        // score may carry over from the previous position.
+        // Prevent search state from carrying between positions.
         engine.clear_for_new_game();
 
-        // The search writes UCI "info" lines to stdout; keep them out of the
-        // fingerprint.
+        // Keep UCI info lines out of the fingerprint.
         std::cout.setstate(std::ios::failbit);
         SearchResult result = engine.search_best_move(board, depth);
         std::cout.clear();
@@ -696,12 +611,9 @@ int run_bench(int depth) {
 }
 
 int main(int argc, char* argv[]) {
-    // Load an NNUE network if one is available; otherwise use the hand-crafted
-    // evaluation.
+    // Use NNUE when a network is configured, otherwise use the handcrafted eval.
     {
-        // $SGR_EVALFILE overrides the compile-time default (-DSGR_DEFAULT_NET),
-        // which is empty unless set at build time. An HCE build therefore never
-        // picks up a stray net, whatever the working directory.
+        // SGR_EVALFILE overrides the compile-time network path.
 #ifndef SGR_DEFAULT_NET
 #define SGR_DEFAULT_NET ""
 #endif
@@ -717,9 +629,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Bare launch = UCI, like every standard engine, so GUIs and tournament
-    // runners (fastchess/cutechess) work without arguments. The old bare-launch
-    // test mode moved behind an explicit "test" argument.
+    // A bare launch starts the UCI loop.
     if (argc <= 1 || std::string(argv[1]) == "uci") {
         uci_loop();
     } else if (argc > 1 && std::string(argv[1]) == "test") {
@@ -768,8 +678,7 @@ int main(int argc, char* argv[]) {
         std::cout << "nodes: " << result.nodes << "\n";
         std::cout << "time: " << result.time_taken << "s\n";
     } else {
-        // Unknown argument: behave like a normal engine rather than surprising
-        // a GUI that passed something unexpected.
+        // Fall back to UCI for unknown arguments.
         uci_loop();
     }
 

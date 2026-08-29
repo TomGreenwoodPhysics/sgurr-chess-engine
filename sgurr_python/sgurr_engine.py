@@ -20,9 +20,9 @@ MAX_DEPTH = 8
 MAX_PLY = 128
 NULL_MOVE_REDUCTION = 2
 
-# LMR: start reducing after this many legal moves have been searched
+# Start LMR after this many legal moves.
 LMR_FULL_DEPTH_MOVES = 2
-# LMR: only reduce at this depth or higher
+# Minimum depth for LMR.
 LMR_MIN_DEPTH = 3
 
 TT_EXACT = 0
@@ -31,29 +31,27 @@ TT_UPPER = 2
 
 MAX_TT_SIZE = 1_000_000
 
-# check the clock more often so searches do not overshoot badly
+# Check the clock often enough to limit overruns.
 TIME_CHECK_INTERVAL = 512
 
-# Extend forcing check lines slightly to reduce quick mate blindness.
+# Extend forcing checks to reduce short mate blindness.
 CHECK_EXTENSION_MAX_DEPTH = 4
 
 
-# Futility pruning margins, indexed by remaining depth (1 or 2).
-# If static eval + margin <= alpha we skip the node.
+# Futility margins indexed by remaining depth.
+# Skip when the static evaluation plus margin cannot reach alpha.
 
 FUTILITY_MARGIN = [0, 150, 300]
 
 
-# Aspiration window: initial half-width around the previous score.
-# If the search fails high or low we widen to a full [-INF, INF]
-# window and re-search.
+# Initial aspiration half-width around the previous score.
+# A fail-high or fail-low triggers a full-window search.
 
 ASPIRATION_WINDOW = 50
 
 
-# Delta pruning in quiescence search.
-# Skip a capture entirely if stand_pat + captured_value + DELTA_MARGIN
-# still can't raise alpha.  Avoids wasting time on hopeless captures.
+# Quiescence delta margin.
+# Skip captures that cannot raise alpha even with this margin.
 
 DELTA_MARGIN = 200
 
@@ -86,7 +84,7 @@ def move_key(move: Move) -> tuple[int, int, int | None, bool, bool]:
     )
 
 
-# Maximum material value of any single piece (used for delta pruning)
+# Largest piece value used by delta pruning.
 _MAX_PIECE_VALUE = max(PIECE_VALUE.values())
 
 
@@ -120,9 +118,7 @@ class Engine:
         self.stop_search = False
         self.killer_moves = [[None, None] for _ in range(MAX_PLY)]
 
-        # fallback move: with strict time checks, the search can occasionally
-        # time out before completing depth 1.  In that case we must still return
-        # a legal move rather than None.
+        # Keep a legal fallback if depth one times out.
         legal_moves = board.generate_legal_moves()
         best_move = None
 
@@ -136,8 +132,7 @@ class Engine:
 
         for depth in range(1, max_depth + 1):
 
-            # Aspiration windows: narrow search around previous score.
-            # On the very first iteration use a full window.
+            # Search near the previous score after the first iteration.
 
             if depth == 1 or completed_depth == 0:
                 score, move = self.negamax_root(board, depth, -INF, INF)
@@ -146,7 +141,7 @@ class Engine:
                 beta = best_score + ASPIRATION_WINDOW
                 score, move = self.negamax_root(board, depth, alpha, beta)
 
-                # Failed low or high: re-search with full window
+                # Repeat a failed aspiration search with a full window.
                 if not self.stop_search and (score <= alpha or score >= beta):
                     score, move = self.negamax_root(board, depth, -INF, INF)
 
@@ -359,8 +354,7 @@ class Engine:
         us = board.side_to_move
         in_check_node = board.in_check(us)
 
-        # If the side to move is in check at the horizon, search one more
-        # normal ply. There is no legal stand-pat evaluation while in check.
+        # Search one more normal ply when the horizon position is in check.
         if depth <= 0:
             if in_check_node and ply < MAX_PLY - 1:
                 depth = 1
@@ -368,9 +362,7 @@ class Engine:
                 return self.quiescence(board, alpha, beta, ply)
 
 
-        # Futility pruning: at shallow depths, if the static eval is so far
-        # below alpha that no single move can realistically recover, skip to
-        # quiescence.  Only when not in check and not a PV node.
+        # Use futility pruning at shallow non-PV nodes outside check.
 
         if (
             depth <= 2
@@ -452,7 +444,7 @@ class Engine:
                     ply + 1,
                 )
 
-                # If the reduced search beat alpha, do a full re-search
+                # Repeat an alpha-raising reduced search at full depth.
                 if score > alpha and not self.stop_search:
                     score = -self.negamax(board, next_depth, -beta, -alpha, ply + 1)
             else:
@@ -506,7 +498,7 @@ class Engine:
 
         us = board.side_to_move
 
-        # In check, standing pat is illegal. Search all legal evasions.
+        # In check, search every legal evasion instead of standing pat.
         if board.in_check(us):
             moves = self.generate_moves(board)
             moves = self.order_moves(board, moves, None, ply)
@@ -543,8 +535,7 @@ class Engine:
             return beta
 
 
-        # Delta pruning: if even capturing the most valuable piece imaginable
-        # plus a safety margin cannot raise alpha, give up immediately.
+        # Stop if no possible capture can raise alpha after the delta margin.
 
         if stand_pat + _MAX_PIECE_VALUE + DELTA_MARGIN < alpha:
             return alpha
@@ -560,8 +551,7 @@ class Engine:
         us = board.side_to_move
 
         for move in moves:
-            # Per-move delta pruning: skip if this specific capture can't
-            # possibly raise alpha even with the safety margin.
+            # Skip captures that cannot raise alpha after the delta margin.
             captured_piece = board.piece_at(move.to_sq)
             if captured_piece is not None:
                 captured_value = PIECE_VALUE[captured_piece]

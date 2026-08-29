@@ -9,8 +9,7 @@
   }
 }
 
-/* The human's version of the absorb pop: the whole player card takes a
-   gentler flash sized for a wide text plate rather than a small core. */
+/* Use a gentler capture flash for the wider human player card. */
 .card-absorb-flash {
   animation: card-absorb-flash 0.45s ease-out;
 }
@@ -40,18 +39,13 @@
   50% { opacity: 1; }
 }
 
-/* ------------------------------------------------------------------ */
-/* Intro enhancements: staggered title reveal, drifting dust motes, a  */
-/* breathing halo behind the seal, and a burst + ring spin-up on wake. */
-/* All gated on data-motion="on" so reduced-motion users see none.     */
-/* ------------------------------------------------------------------ */
+/* Intro effects only run when motion is enabled. */
 
 .intro-bosscard h1 .intro-letter {
   display: inline-block;
 }
 
-/* Letters stay hidden until the naming phase declares the boss. With motion
-   off the letters are simply always visible and the card fades as a whole. */
+/* Hide letters until the title phase. Without motion, show them throughout. */
 .intro-screen[data-motion="on"] .intro-bosscard h1 .intro-letter {
   opacity: 0;
 }
@@ -163,7 +157,7 @@
   }
 }
 
-/* The seal spins up as the core wakes and keeps racing through the naming. */
+/* Spin the seal through the wake and title phases. */
 .intro-screen[data-state="waking"] .intro-seal-ring.ring-one,
 .intro-screen[data-state="naming"] .intro-seal-ring.ring-one {
   animation: intro-seal-turn 3.2s linear infinite;

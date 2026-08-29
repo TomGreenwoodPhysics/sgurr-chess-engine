@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sgurr-api-base" content="">
     <script>
-      // Applies the visitor's saved palette before first paint. Without this the
-      // page renders in the stylesheet's default theme for a frame, then swaps.
+      // Apply the saved palette before first paint.
       (function () {
         try {
           var key = localStorage.getItem("sgurrTheme");
@@ -18,7 +17,7 @@
             if (name.charAt(0) === "-") document.documentElement.style.setProperty(name, vars[name]);
           }
         } catch (error) {
-          /* private mode, or nothing saved yet: the default palette is fine */
+          /* Keep the default palette if storage is blocked or cached data is invalid. */
         }
       })();
     </script>

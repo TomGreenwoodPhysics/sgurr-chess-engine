@@ -1,10 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-rem Repository root, resolved from this script's own location (tools\..) so
-rem a clone anywhere works. pushd/popd normalises the "..", which a bare
-rem %~dp0.. does not -- the unnormalised form breaks the tasklist and
-rem PowerShell -LiteralPath checks below.
+rem Resolve and normalise the repository root so clones work anywhere.
 pushd "%~dp0.."
 set "ROOT=%CD%"
 popd
@@ -14,9 +11,8 @@ echo ============================================================
 echo Pausing Sgurr gen7 clean-data generation
 echo ============================================================
 
-rem Stop only datagen.exe processes whose command line references gen7_raw.
-rem datagen.cpp explicitly supports hard kills: complete records remain valid,
-rem and a possible sub-32-byte torn tail is repaired (with backup) next start.
+rem Stop only datagen.exe processes writing to gen7_raw.
+rem A hard kill preserves complete records and repairs any partial tail next run.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference = 'Stop';" ^
   "$procs = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'datagen.exe' -and $_.CommandLine -like '*gen7_raw*' });" ^

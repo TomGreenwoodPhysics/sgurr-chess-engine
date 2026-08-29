@@ -1,18 +1,14 @@
 import { clampNumber } from "./utils.js";
 import { app, refs } from "./state.js";
 
-// Aesthetic life for every Sgurr core: the god-eye layer stack (depth,
-// cosmos, divinity, interior) injected into all of them, plus cursor attention
-// for the menu and post-game cores. Everything here is decorative and only runs while the in-app
-// Animations setting is on -- so users who turn it off, and the headless
-// smoke tests (animations off), get static, undisturbed cores.
+// Add decorative layers to every core and cursor tracking to menu and result cores.
+// These effects are disabled when animations are off.
 
 function motionOn() {
   return app.animationMode !== "Off";
 }
 
-// Structural depth: a static volumetric light/shadow layer that makes the
-// orb read as a lit sphere. Purely decorative.
+// Add static lighting that gives the core depth.
 function buildDepth(core) {
   if (!core || core.querySelector(".core-depth")) {
     return;
@@ -22,9 +18,7 @@ function buildDepth(core) {
   core.appendChild(depth);
 }
 
-// A slow cosmos inside the glass: nebula clouds, dim aurora ribbons, two
-// counter-turning fields of soft mottled cells, and a twinkling starfield.
-// Screen-blended luminous internal structure.
+// Add the nebula, aurora, mottling, and stars inside the core.
 function buildCosmos(core) {
   if (!core || core.querySelector(".core-nebula")) {
     return;
@@ -52,8 +46,7 @@ function buildCosmos(core) {
     stars.appendChild(star);
   }
 
-  // The pupil rides above every luminous layer, so the cosmos can never
-  // wash it out.
+  // Keep the pupil above the light layers.
   const pupil = document.createElement("span");
   pupil.className = "core-pupil";
 
@@ -62,9 +55,7 @@ function buildCosmos(core) {
   core.appendChild(fragment);
 }
 
-// The apparatus of godhead: a breathing presence behind everything, wheeling
-// shafts of corona light, a brilliant eclipse arc precessing around the rim,
-// and paired halo ripples. All peripheral -- the eye itself is untouched.
+// Add the corona, eclipse arc, and halo behind the core.
 function buildDivinity(core) {
   if (!core || core.querySelector(".core-presence")) {
     return;
@@ -85,8 +76,7 @@ function buildDivinity(core) {
   core.appendChild(fragment);
 }
 
-// Inject the interior child layers once. They paint above the molten face and
-// below the outer ring, so the motes and the half-seen form float in the glass.
+// Insert interior layers between the face and outer ring.
 function buildInterior(core) {
   if (!core || core.querySelector(".core-embers")) {
     return;
@@ -114,14 +104,8 @@ function buildInterior(core) {
   core.appendChild(fragment);
 }
 
-// The pupil's attention model, shared by every gazing core -- the menu hero
-// core and the post-game result cores; in-game cores keep their status role
-// and do not gaze. Mostly an eye ignores the cursor and keeps to its idle
-// wander. Now and then a settled cursor happens to catch its interest, and
-// while interested it genuinely follows -- a lagged, smooth pursuit -- until
-// the interest decays and it drifts back to its own thoughts. Waving the
-// cursor over an orb, though, reliably wins its attention. Dilation stays
-// faint throughout: a flicker of engagement, not a display.
+// Menu and result cores may track a still cursor or respond to a wave.
+// In-game cores do not use this behaviour.
 const gazes = [];
 const cursor = { x: 0, y: 0 };
 let settleTimer = 0;
@@ -135,7 +119,7 @@ function buildPupil(core) {
   core.appendChild(pupil);
 }
 
-// Give a core an eye and enrol it in the attention model.
+// Register a core with the attention model.
 function watchCursor(core) {
   if (!core) {
     return;
@@ -170,8 +154,7 @@ function clearPupilGazes() {
   }
 }
 
-// While interested, the pupil looks where the cursor is; the CSS transition
-// turns per-move updates into a smooth, slightly trailing pursuit.
+// CSS transitions smooth the pupil's cursor tracking.
 function followCursor(gaze, rect) {
   const bounds = rect || gaze.core.getBoundingClientRect();
   if (!bounds.width) {
@@ -180,8 +163,7 @@ function followCursor(gaze, rect) {
   const dx = cursor.x - (bounds.left + bounds.width / 2);
   const dy = cursor.y - (bounds.top + bounds.height / 2);
   const dist = Math.hypot(dx, dy) || 1;
-  // Deflection (in % of the pupil's own size) grows as the cursor closes
-  // in, capped well short of the rim: it looks, it does not strain.
+  // Increase pupil deflection as the cursor approaches, capped within the rim.
   const reach = clampNumber(1.6 - dist / (bounds.width * 2.2), 0.35, 1) * 20;
   setPupilGaze(gaze, (dx / dist) * reach, (dy / dist) * reach);
 }
@@ -204,9 +186,7 @@ function beginInterest(gaze, rect) {
   gaze.release = window.setTimeout(() => endInterest(gaze), 4500 + Math.random() * 5500);
 }
 
-// Per-move update for one eye: faint dilation, pursuit while interested,
-// wave detection while idle. Hidden cores (their screen is not showing)
-// are skipped entirely.
+// Update tracking, dilation, and wave detection for a visible eye.
 function updateGaze(gaze, now) {
   const rect = gaze.core.getBoundingClientRect();
   gaze.seen = rect.width > 0;
@@ -218,9 +198,7 @@ function updateGaze(gaze, now) {
     cursor.y - (rect.top + rect.height / 2),
   ) / (rect.width / 2);
 
-  // Dilation is faint -- a flicker of engagement, not a display: the merest
-  // widening while it follows, the merest narrowing when the cursor is
-  // right on top of it.
+  // Slightly dilate while tracking and contract at very close range.
   const pupilScale = distance < 1.2 ? 0.97 : gaze.state === "interested" ? 1.02 : 1;
   gaze.core.style.setProperty("--pupil-scale", String(pupilScale));
 
@@ -229,9 +207,7 @@ function updateGaze(gaze, now) {
     return;
   }
 
-  // Waving the cursor over an orb reliably wins its attention: enough path
-  // length traced near the core within a second, with little net travel --
-  // back-and-forth, not a fly-by -- reads as a wave.
+  // Treat substantial nearby back-and-forth movement as a wave.
   if (distance < 1.3) {
     const last = gaze.trail[gaze.trail.length - 1];
     gaze.trail.push({ x: cursor.x, y: cursor.y, t: now, d: last ? Math.hypot(cursor.x - last.x, cursor.y - last.y) : 0 });
@@ -241,9 +217,7 @@ function updateGaze(gaze, now) {
     const waved = gaze.trail.reduce((sum, sample) => sum + sample.d, 0);
     const first = gaze.trail[0];
     const net = Math.hypot(cursor.x - first.x, cursor.y - first.y);
-    // Thresholds sized so a pass across the orb, or a there-and-back to a
-    // button beyond it, cannot qualify: only a sustained wave can trace
-    // this much low-net path this close to the core inside a second.
+    // Require sustained low-net movement so a single pass cannot trigger a wave.
     if (waved > rect.width * 1.4 && net < waved * 0.45) {
       beginInterest(gaze, rect);
     }
@@ -258,8 +232,7 @@ function resetRegard() {
   clearPupilGazes();
 }
 
-// The menu heart leans a little toward the cursor (the CSS transition
-// supplies the lag), and every visible gazing eye gets its per-move update.
+// Lean the menu heart toward the cursor and update visible eyes.
 function onPointerMove(event) {
   if (!motionOn()) {
     return;
@@ -268,9 +241,7 @@ function onPointerMove(event) {
   cursor.y = event.clientY;
   const now = performance.now();
 
-  // Held still until the intro is over: the handoff measures where the menu
-  // core sits in order to land the intro core exactly on it, and a lean the
-  // player had already provoked would put the two orbs out of register.
+  // Hold the menu core still until the intro handoff finishes.
   const menuCore = refs.menuCore;
   if (menuCore && app.mode === "menu" && app.intro.complete) {
     const rect = menuCore.getBoundingClientRect();
@@ -287,8 +258,7 @@ function onPointerMove(event) {
     updateGaze(gaze, now);
   }
 
-  // When the cursor settles somewhere, each visible idle eye has only a
-  // small chance of happening to find it interesting.
+  // Give each idle eye a small chance to notice a stationary cursor.
   window.clearTimeout(settleTimer);
   settleTimer = window.setTimeout(() => {
     const settledAt = performance.now();
@@ -307,9 +277,7 @@ export function initMenuCore() {
   }
   const cores = document.querySelectorAll(".sgurr-core");
 
-  // Every core scales its god-eye geometry from --core-size; keep it in
-  // step with the rendered size (responsive breakpoints, per-outcome result
-  // sizes, the board-relative mate core) regardless of the motion setting.
+  // Keep each core's geometry matched to its rendered size.
   const sizer = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const width = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
@@ -320,26 +288,20 @@ export function initMenuCore() {
   });
   cores.forEach((el) => sizer.observe(el));
 
-  // Each core lives at its own random point in the shared animation cycles,
-  // so no two eyes ever pulse, churn or wander in lockstep -- most visible in
-  // watch mode, where several are on screen at once.
+  // Randomise animation phases so visible cores do not move in sync.
   cores.forEach((el) => {
     el.style.setProperty("--core-phase", `-${(Math.random() * 60).toFixed(1)}s`);
   });
 
   if (motionOn()) {
-    // Every blob is the menu blob: structural depth, the internal cosmos
-    // (with its pupil) and the peripheral divinity on all of them, plus the
-    // living interior of motes and half-seen forms.
+    // Add depth, interior, pupil, and halo layers to every core.
     cores.forEach((el) => {
       buildDepth(el);
       buildCosmos(el);
       buildDivinity(el);
       buildInterior(el);
     });
-    // The gazing eyes: the menu hero core and the post-game result cores.
-    // In-game cores keep their status role and do not gaze; the intro core
-    // keeps its pupil (from the cosmos) but slumbers on, unenrolled.
+    // Enable gaze only for menu and result cores.
     watchCursor(core);
     watchCursor(document.querySelector(".result-core-main"));
     watchCursor(document.querySelector(".result-core-secondary"));

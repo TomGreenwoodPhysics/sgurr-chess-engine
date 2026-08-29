@@ -41,9 +41,7 @@ from pathlib import Path
 
 DEFAULT_TIMEOUT = 20.0
 
-# Shown whenever the operating system refuses to start the binary at all. The
-# rebuild advice is the actual remedy: a blocked binary stays blocked, but a
-# fresh link is usually allowed, and once a binary has run it keeps running.
+# Rebuilding is usually the only remedy when the OS blocks a binary.
 _BLOCKED_HINT = (
     "The OS refused to start this file. On this machine that is usually Smart "
     "App Control, which is ENFORCED and intermittently blocks freshly linked "
@@ -102,20 +100,8 @@ def verify_engine(path, timeout: float = DEFAULT_TIMEOUT,
 def _try_handshake(p: Path, timeout: float) -> str:
     """One launch-and-handshake attempt. See verify_engine for the retry policy."""
 
-    # A real UCI handshake, not a batch write.
-    #
-    # Two things here are load-bearing, and both were learned the hard way when
-    # this check declared three healthy pool engines broken:
-    #
-    #  1. Launch with NO arguments and keep stdin OPEN. Writing the whole
-    #     handshake and closing the pipe looks equivalent and is not: Blunder
-    #     7.4/7.6/8.0 print their banner and exit without ever sending uciok
-    #     once stdin is at EOF, while playing perfectly under fastchess, which
-    #     holds the pipe open. Passing "uci" as argv is also Sgurr-specific.
-    #  2. errors="replace". Engines print banners in whatever encoding they
-    #     like, and one stray byte (0x90, in Blunder's) otherwise raises inside
-    #     subprocess's reader THREAD -- killing the reader, losing the
-    #     handshake, and surfacing as a bogus timeout on a healthy engine.
+    # Keep stdin open during the handshake because some engines exit at EOF.
+    # Replace invalid banner bytes so the reader cannot fail before uciok.
     try:
         proc = subprocess.Popen(
             [str(p)],
@@ -128,7 +114,7 @@ def _try_handshake(p: Path, timeout: float) -> str:
             bufsize=1,
         )
     except (OSError, ValueError) as exc:
-        # PermissionError / OSError is what a security-policy block surfaces as.
+        # Security-policy blocks surface as OS errors.
         raise EngineUnusable(f"{p}: could not be started ({exc}).\n{_BLOCKED_HINT}") from None
 
     collected: list[str] = []
@@ -137,7 +123,7 @@ def _try_handshake(p: Path, timeout: float) -> str:
         try:
             for line in proc.stdout:                       # type: ignore[union-attr]
                 collected.append(line)
-        except Exception:                                  # pipe closed under us
+        except Exception:                                  # Pipe closed while reading
             pass
 
     reader = threading.Thread(target=_reader, daemon=True)
@@ -150,7 +136,7 @@ def _try_handshake(p: Path, timeout: float) -> str:
         while time.monotonic() < deadline:
             if _seen(token):
                 return True
-            if proc.poll() is not None:                    # died before answering
+            if proc.poll() is not None:                    # Died before answering
                 return _seen(token)
             time.sleep(0.02)
         return _seen(token)
@@ -163,7 +149,7 @@ def _try_handshake(p: Path, timeout: float) -> str:
             _await("readyok", deadline)
         proc.stdin.write("quit\n"); proc.stdin.flush()     # type: ignore[union-attr]
     except (BrokenPipeError, OSError):
-        pass                                               # died mid-handshake
+        pass                                               # Died during the handshake
 
     try:
         proc.wait(timeout=5)

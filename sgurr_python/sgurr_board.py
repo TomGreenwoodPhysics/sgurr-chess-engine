@@ -114,46 +114,43 @@ OPENING_BISHOP_DEVELOPMENT_BONUS = 5
 OPENING_CASTLED_BONUS = 25
 
 
-# Pawn structure / passed pawn evaluation constants
+# Pawn evaluation constants
 
-# Bonus for a passed pawn, indexed by rank (0-7). Rank 0/7 unused.
-# White passed pawn on rank 6 (one step from queening) is very valuable.
+# Passed-pawn bonus by rank. Ranks 0 and 7 are unused.
 PASSED_PAWN_BONUS = [0, 10, 15, 25, 40, 65, 100, 0]
 
-# Penalty for a doubled pawn (two pawns on same file)
+# Penalty for doubled pawns on one file.
 DOUBLED_PAWN_PENALTY = 20
 
-# Penalty for an isolated pawn (no friendly pawns on adjacent files)
+# Penalty for a pawn without friendly pawns on adjacent files.
 ISOLATED_PAWN_PENALTY = 15
 
-# Penalty for a backward pawn (can't be supported by friendly pawns,
-# square in front controlled by enemy pawn)
+# Penalty for an unsupported pawn blocked by enemy pawn control.
 BACKWARD_PAWN_PENALTY = 15
 
 
-# King safety evaluation constants
+# King safety constants
 
-# Penalty per attacker aimed at the squares around the king
+# Penalty per attacker in the king zone.
 KING_ATTACKER_PENALTY = 28
 
-# Penalty per open or semi-open file adjacent to the king
+# Penalty per open or semi-open file beside the king.
 KING_OPEN_FILE_PENALTY = 22
 
 
-# Mobility evaluation constants
+# Mobility constants
 
-# Bonus per legal move available to bishops
+# Bonus per legal bishop move.
 BISHOP_MOBILITY_BONUS = 3
 
-# Bonus per legal move available to rooks
+# Bonus per legal rook move.
 ROOK_MOBILITY_BONUS = 2
 
-# Bonus per legal move available to queens
+# Bonus per legal queen move.
 QUEEN_MOBILITY_BONUS = 1
 
 
-# Precomputed file masks (each entry is a 64-bit mask of all squares
-# on a given file, indexed 0=A .. 7=H)
+# Precomputed 64-bit masks for files A through H.
 
 FILE_MASKS: list[int] = []
 for _f in range(8):
@@ -162,8 +159,7 @@ for _f in range(8):
         _mask |= 1 << (_r * 8 + _f)
     FILE_MASKS.append(_mask)
 
-# Precomputed adjacent-file masks (union of the one or two files
-# immediately to the left/right of file f)
+# Precomputed masks for the files beside each file.
 ADJACENT_FILE_MASKS: list[int] = []
 for _f in range(8):
     _adj = 0
@@ -974,21 +970,11 @@ class Board:
         )
 
 
-    # Pawn structure evaluation
+    # Pawn structure
 
     def evaluate_pawn_structure_for_colour(self, colour: int) -> int:
-        # returns a score where positive is good for `colour`
-        #
-        # evaluates:
-        # - passed pawn bonuses
-        # - doubled pawn penalties
-        # - isolated pawn penalties
-        # - backward pawn penalties
-        #
-        # a pawn is treated as backward if:
-        # - the square directly in front of it is attacked by an enemy pawn
-        # - no friendly pawn on an adjacent file can support it from the same
-        #   rank or behind it
+        # Return passed, doubled, isolated, and backward pawn terms for colour.
+        # A backward pawn is unsupported and blocked by enemy pawn control.
 
         if colour == WHITE:
             own_pawns = self.bitboards[WP]
@@ -1013,7 +999,7 @@ class Board:
             f = file_of(sq)
             r = rank_of(sq)
 
-            # passed pawn: no enemy pawn on this file or adjacent files ahead
+            # Passed pawns have no enemy pawn ahead on nearby files.
             ahead_mask = 0
 
             if colour == WHITE:
@@ -1029,7 +1015,7 @@ class Board:
             if not (enemy_pawns & ahead_mask):
                 score += PASSED_PAWN_BONUS[passed_bonus_index(r)]
 
-            # doubled pawn: penalise each pawn that has another friendly pawn behind it
+            # Penalise pawns with a friendly pawn behind them.
             behind_mask = 0
 
             if colour == WHITE:
@@ -1043,12 +1029,11 @@ class Board:
             if own_pawns & behind_mask:
                 score -= DOUBLED_PAWN_PENALTY
 
-            # isolated pawn: no friendly pawn on either adjacent file
+            # Isolated pawns have no friendly pawn on an adjacent file.
             if not (own_pawns & ADJACENT_FILE_MASKS[f]):
                 score -= ISOLATED_PAWN_PENALTY
 
-            # backward pawn: the front square is attacked by an enemy pawn and
-            # no adjacent friendly pawn can support from the same rank or behind
+            # Backward pawns cannot advance or gain support from a nearby file.
             front_sq = sq + forward
 
             if on_board(front_sq):
@@ -1079,7 +1064,7 @@ class Board:
         )
 
 
-    # King safety evaluation
+    # King safety
 
     def evaluate_king_safety_for_colour(self, colour: int) -> int:
         """
@@ -1096,7 +1081,7 @@ class Board:
         occ = self.occupancy()
         score = 0
 
-        # Count enemy attackers aimed at each square in the king zone
+        # Count attacks on the king zone.
         king_zone = self.king_attacks(king_sq)
         zone_copy = king_zone | bit(king_sq)
 
@@ -1109,17 +1094,17 @@ class Board:
 
         score -= attacker_count * KING_ATTACKER_PENALTY
 
-        # Pawn shield / open file penalty
+        # Pawn shield and open-file penalties
         king_file = file_of(king_sq)
         own_pawns = self.bitboards[WP if colour == WHITE else BP]
 
         for f in range(max(0, king_file - 1), min(8, king_file + 2)):
             pawns_on_file = own_pawns & FILE_MASKS[f]
             if not pawns_on_file:
-                # Fully open file - bigger penalty
+                # Fully open files receive the larger penalty.
                 score -= KING_OPEN_FILE_PENALTY
             else:
-                # Semi-open: check if pawn is far from king (rank distance > 2)
+                # Penalise a semi-open file when its pawn is far from the king.
                 pawn_bb = pawns_on_file
                 while pawn_bb:
                     psq, pawn_bb = pop_lsb(pawn_bb)
@@ -1137,7 +1122,7 @@ class Board:
         )
 
 
-    # Piece mobility evaluation
+    # Piece mobility
 
     def evaluate_mobility_for_colour(self, colour: int) -> int:
         """
@@ -1187,11 +1172,7 @@ class Board:
     # Main evaluation
 
     def evaluate_fast(self) -> int:
-        # cheap evaluation for quiescence search
-        #
-        # quiescence calls evaluation thousands of times per move. Keeping this
-        # to material + piece-square tables avoids repeatedly recalculating the
-        # expensive king safety and mobility terms.
+        # Keep quiescence evaluation to material and piece-square tables.
         score = 0
 
         for piece, bb in enumerate(self.bitboards):
@@ -1216,11 +1197,10 @@ class Board:
         return self.evaluate_fast()
 
     def evaluate(self) -> int:
-        # full evaluation for normal leaf/static evaluations
+        # Full evaluation for normal leaf and static evaluations.
         score = self.evaluate_fast()
 
-        # evaluate_fast returns side-to-move relative; convert back to
-        # white-relative before adding the other white-relative terms.
+        # Convert evaluate_fast from side-to-move to White's perspective.
         if self.side_to_move == BLACK:
             score = -score
 

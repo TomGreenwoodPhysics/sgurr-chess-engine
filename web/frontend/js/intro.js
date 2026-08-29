@@ -2,9 +2,7 @@ import { playSound, syncMenuMusic, unlockAudio } from "./audio.js";
 import { INTRO_BLACKOUT_DURATION_MS, INTRO_HANDOFF_DURATION_MS, INTRO_NAME_DURATION_MS, INTRO_REVEAL_DURATION_MS, INTRO_WAKE_DURATION_MS } from "./config.js";
 import { app, refs } from "./state.js";
 
-// Deliberately keyed on the in-app Animations setting alone, not the OS
-// prefers-reduced-motion hint: the intro is the site's signature and plays by
-// default. Setting Animations to Off is the escape hatch.
+// Use only the in-app setting. The intro plays by default regardless of the OS preference.
 function introMotionEnabled() {
   return app.animationMode !== "Off";
 }
@@ -76,7 +74,7 @@ function spawnIntroMotes() {
   refs.introScreen.appendChild(fragment);
 }
 
-// Rock dust shaken loose from the chamber roof when the sleeper is disturbed.
+// Create falling dust when the core is disturbed.
 function spawnDisturbanceDust() {
   if (!refs.introScreen) {
     return;
@@ -103,11 +101,8 @@ function spawnDisturbanceDust() {
   }, 2400);
 }
 
-// The prompt arrives on a delayed CSS animation, and a running animation
-// outranks ordinary declarations -- so if the player disturbs the core before
-// the arrival has finished, the naming state's fade-out is simply ignored and
-// the prompt ends up sitting across the boss card. Replace the arrival with an
-// explicit fade from wherever it had got to.
+// Replace the delayed CSS animation with a fade from its current state.
+// This keeps early interaction from leaving the prompt over the title card.
 function dismissIntroCopy() {
   const copy = refs.introCopy;
   if (!copy || typeof copy.getAnimations !== "function") {
@@ -125,8 +120,7 @@ function dismissIntroCopy() {
   if (typeof copy.animate !== "function") {
     return;
   }
-  // Held forwards: every later intro state wants this prompt gone, so the
-  // final frame is exactly where the state rules would have left it.
+  // Keep the prompt hidden for all later intro states.
   copy.animate(
     [
       { opacity, transform },
@@ -136,11 +130,8 @@ function dismissIntroCopy() {
   );
 }
 
-// Put the menu core at the same point in the shared idle cycles as the intro
-// core. Both orbs are on screen together through the reveal dissolve, and two
-// independently-phased cores breathe, churn and ripple out of step -- which is
-// what makes the handoff read as a jump rather than as one continuous
-// creature. Safe to do here: the menu core is still hidden behind the veil.
+// Synchronise the intro and menu core phases for a seamless handoff.
+// The menu core is still hidden here.
 function syncMenuCorePhase() {
   const phase = refs.introCore?.style.getPropertyValue("--core-phase");
   if (phase) {
@@ -186,8 +177,7 @@ function finishIntro() {
   syncMenuMusic({ force: true });
 }
 
-// The boss name card: the chamber holds still while the title, epithet and
-// health bar declare what the player has woken.
+// Show the title card while the chamber pauses.
 function beginIntroNaming() {
   if (app.intro.complete || !app.intro.waking) {
     return;
@@ -242,18 +232,13 @@ function beginIntroMenuHandoff() {
     return;
   }
 
-  // Centres, not edges: the trigger is still carrying the wake animation's
-  // swell, and a centred scale leaves the centre where it was.
+  // Measure from the centre while the wake scale is still active.
   const dx = (target.left + target.width / 2) - (source.left + source.width / 2);
   const dy = (target.top + target.height / 2) - (source.top + source.height / 2);
   const scale = targetWidth / sourceWidth;
 
-  // The trigger stays in flow and only its transform moves. Its resting frame
-  // is the CSS `translate(-50%, -50%)` plus whatever swell the wake animation
-  // is still holding -- measured, rather than assumed, by comparing the drawn
-  // box with the laid-out one. Starting the script animation from there is
-  // what stops the core snapping back to its unswollen size as the CSS
-  // animation hands over.
+  // Derive the starting scale from the rendered and layout boxes.
+  // This prevents a jump when the CSS animation hands off.
   const restScale = source.width / sourceWidth;
   const frame = (x, y, zoom) =>
     `translate(${(x - sourceWidth / 2).toFixed(2)}px, ${(y - sourceHeight / 2).toFixed(2)}px) scale(${zoom.toFixed(4)})`;

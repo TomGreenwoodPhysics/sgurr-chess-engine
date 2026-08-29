@@ -1,6 +1,4 @@
-/* Sgurr's mark family. One disc, many figures: same ground, border and glow on
-   every mark, so a menu card and a lab header read as the same hand. Insets are
-   percentages, so a mark scales by setting --mark-size alone. */
+/* Shared styling for Sgurr marks. Change the size variable to scale them. */
 
 .sg-mark {
   --mark-size: 39px;
@@ -28,7 +26,7 @@
 
 .sg-mark-sm { --mark-size: 30px; }
 
-/* Inside Sgurr: the core, with two orbits crossing it. */
+/* Inside Sgurr uses a core crossed by two orbits. */
 .sg-mark-orbit {
   background:
     radial-gradient(circle, color-mix(in srgb, var(--cyan, #70d7ff), transparent 12%) 0 6%, color-mix(in srgb, var(--accent), transparent 52%) 7% 15%, transparent 17%),
@@ -40,7 +38,7 @@
 .sg-mark-orbit i:first-child { inset: -10.3% 20.5%; transform: rotate(54deg); border-color: color-mix(in srgb, var(--accent), transparent 58%); }
 .sg-mark-orbit i:last-child { inset: 20.5% -10.3%; transform: rotate(-28deg); border-color: color-mix(in srgb, var(--accent-2), transparent 60%); }
 
-/* Search: one root, and fronts opening outward a ply at a time. */
+/* Search uses a root with branches opening one ply at a time. */
 .sg-mark-search {
   background:
     radial-gradient(circle at 32% 50%, color-mix(in srgb, var(--accent), transparent 8%) 0 9%, transparent 12%),
@@ -60,7 +58,7 @@
 .sg-mark-search i:first-child { inset: 2.6%; border-right-color: color-mix(in srgb, var(--cyan, #70d7ff), transparent 62%); }
 .sg-mark-search i:last-child { inset: 33%; border-right-color: color-mix(in srgb, var(--cyan, #70d7ff), transparent 30%); }
 
-/* Evaluation: two perspectives resolving to one score. */
+/* Evaluation shows two perspectives resolving to one score. */
 .sg-mark-eval::before { inset: 15% 49% 15% 15%; border-right: 0; border-radius: 72% 20% 20% 72%; }
 .sg-mark-eval::after { inset: 15% 15% 15% 49%; border-left: 0; border-radius: 20% 72% 72% 20%; }
 
@@ -76,10 +74,9 @@
 
 .sg-mark-eval i:last-child { inset: 5%; border-color: color-mix(in srgb, var(--accent), transparent 66%); }
 
-/* --- menu marks --------------------------------------------------------- */
+/* Menu marks */
 
-/* Playing a side: the stone you are given, lit from the same corner as the
-   pieces on the board. */
+/* Side selection uses a lit chess piece. */
 .sg-mark-white::before,
 .sg-mark-black::before {
   inset: 20%;
@@ -99,7 +96,7 @@
 .sg-mark-white::after,
 .sg-mark-black::after { inset: 8%; border-color: color-mix(in srgb, var(--accent), transparent 74%); }
 
-/* Sgurr against itself: two cores facing, sharing one boundary. */
+/* Self-play uses two facing cores within one boundary. */
 .sg-mark-duel::before,
 .sg-mark-duel::after {
   inset: 22%;
@@ -127,8 +124,7 @@
 
 .sg-mark-duel i:last-child { display: none; }
 
-/* Position Lab: a board, cut to the disc. */
-/* A square patch inside the disc, so it reads as a board and not a pie. */
+/* Position Lab uses a square board clipped to the disc. */
 .sg-mark-board::before {
   inset: 25%;
   border: 0;

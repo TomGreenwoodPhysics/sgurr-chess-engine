@@ -5,49 +5,37 @@
 
 class Board;
 
-// NNUE evaluation: (768 -> HL) x2 -> 1 perspective network.
+// NNUE evaluation with 768 inputs per perspective and one hidden layer.
+// Both perspectives share feature weights. The output uses clipped ReLU and
+// returns a side-to-move-relative score.
 //
-// 768 inputs per perspective = 2 colours x 6 piece types x 64 squares. The two
-// accumulators (white / black point of view) share the feature-transformer
-// weights. The output layer reads [stm accumulator, other accumulator] through
-// a clipped ReLU (clamp to [0, QA]) and scales the dot product to centipawns.
-//
-// Quantisation (integer arithmetic throughout):
-//   feature weights/biases : int16, scaled by QA
-//   output weights         : int16, scaled by QB
-//   output bias            : int32, scaled by QA*QB
+// Integer quantisation
+//   feature weights and biases  int16 scaled by QA
+//   output weights              int16 scaled by QB
+//   output bias                 int32 scaled by QA*QB
 //   eval_cp = (sum + out_bias) * SCALE / (QA * QB)
-// The trainer has to match this architecture, activation and scaling.
 //
-// Network file format (little-endian):
+// Little-endian network format
 //   char   magic[4] = "RUKN"
 //   uint32 version  = 1 (classic) or 2 (king-bucketed)
 //   uint32 input    = 768 (v1) or buckets*768 (v2)
 //   uint32 hl       = HL
 //   uint32 qa, qb, scale
-//   uint8  bucket_map[64]          (v2 ONLY: relative own-king sq -> bucket;
-//                                   single source of truth, written by the
-//                                   trainer and read back here)
-//   int16  ft_weight[input * hl]   (feature-major: ft_weight[feature*hl + k])
+//   uint8  bucket_map[64]          (v2 only, relative own-king square to bucket)
+//   int16  ft_weight[input * hl]   (feature-major order)
 //   int16  ft_bias[hl]
 //   int16  out_weight[2 * hl]      ([0..hl) = stm side, [hl..2hl) = other side)
 //   int32  out_bias
 //
-// v2 king buckets: each perspective's features shift by
-// bucket_map[rel_own_king]*768, so the net learns king-placement-specific
-// weights. A king move across a bucket boundary invalidates that side's
-// accumulator; the engine handles it with the existing stale->refresh path.
+// Version 2 shifts each perspective's features by its own king bucket.
+// Crossing a bucket boundary invalidates that accumulator.
 
-struct UndoInfo;   // defined in board.hpp
+struct UndoInfo;   // Defined in board.hpp.
 
 namespace nnue {
 
 constexpr int INPUT = 768;
-// Hidden-layer width. Overridable at build time with -DSGR_HL=<n> so a
-// different width can be built without touching the default. Must match the
-// trainer's --hl (nnue_tools.HL) for the net that is loaded, or nnue::load
-// rejects it as an architecture mismatch. 384 since v4.0 (gen5); 256 nets
-// (gen1-gen4) need -DSGR_HL=256.
+// Hidden-layer width. SGR_HL can override it for older networks.
 #ifndef SGR_HL
 #define SGR_HL 384
 #endif
@@ -56,46 +44,31 @@ constexpr int QA    = 255;
 constexpr int QB    = 64;
 constexpr int SCALE = 400;
 
-// AVX2 int16 inference. Default on (like the search toggles); build with
-// -DSGR_SIMD=0 to fall back to the scalar int32 path. The two produce
-// bit-identical evals -- SIMD is purely faster (~+21% NPS) -- so this is a
-// speed switch with no effect on move choice. Requires AVX2 (any -march=native
-// build on modern x86). See nnue.cpp for the safety proof and guards.
+// Enable bit-identical AVX2 int16 inference. Set SGR_SIMD=0 for scalar int32.
 #ifndef SGR_SIMD
 #define SGR_SIMD 1
 #endif
 
-// Load a network file. Returns false on failure, in which case the engine
-// keeps using the hand-crafted evaluation.
+// Load a network. Failure leaves the handcrafted evaluation active.
 bool load(const std::string& path);
 
 // Whether a network is loaded and NNUE evaluation should be used.
 bool active();
 
-// Which inference path this binary was compiled with: "avx512", "avx2", or
-// "scalar". Printed at startup/selfcheck so the active path is observable
-// rather than assumed (this project has been bitten by silent build-config
-// differences before).
+// Return the compiled inference path name.
 const char* simd_kind();
 
-// King-bucket count of the LOADED net: 1 for classic v1 nets, >1 for v2
-// bucketed nets (the map itself is read from the net file). Also printed at
-// startup for the same observability reason.
+// Return the loaded network's king-bucket count.
 int buckets();
 
-// Side-relative evaluation in centipawns (positive = good for side to move).
+// Side-relative evaluation in centipawns.
 int evaluate(const Board& board);
 
 // Pre-scaling integer output (sum + out_bias), used by nnue_selfcheck.
 long long evaluate_raw(const Board& board);
 
-// Incremental accumulator maintenance. refresh() rebuilds both accumulators
-// from scratch; the engine calls it once at the search root, after which
-// make_move / unmake_move apply per-move feature deltas (on_make / on_unmake).
-// Null moves change no pieces, so they only retag the accumulators with the
-// new key (note_hash). Each hook checks the stored Zobrist key before touching
-// anything and evaluate() falls back to a full refresh on any mismatch, so a
-// missed update can only cost speed, not a wrong score.
+// Maintain accumulators across moves. Key mismatches trigger a full refresh.
+// Null moves only retag the accumulator hash.
 void refresh(const Board& board);
 void on_make(const UndoInfo& undo, std::uint64_t new_hash);
 void on_unmake(const UndoInfo& undo, std::uint64_t post_hash);

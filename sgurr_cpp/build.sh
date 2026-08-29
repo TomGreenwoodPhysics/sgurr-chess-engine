@@ -1,23 +1,9 @@
 #!/usr/bin/env bash
+# Build Sgurr and verify that the resulting binary starts.
+# Smart App Control can reject a newly linked unsigned binary, so a failed
+# verification triggers another link with a new file hash.
 #
-# Build Sgurr and prove the binary actually runs before handing it back.
-#
-# Why the verify step exists
-# --------------------------
-# Smart App Control is ENFORCED on this machine and intermittently refuses to
-# start freshly linked unsigned binaries -- observed at roughly 2 in 6 builds.
-# The block lands on the file, not the code: two byte-identical binaries under
-# different names, one blocked and one not. It has no exclusion mechanism, and
-# disabling it is a ONE-WAY switch (Windows cannot re-enable it without an OS
-# reset), so the supported remedy is simply to link again and re-check.
-#
-# Verdicts are sticky in the useful direction: once a binary starts, it keeps
-# starting. So verifying once at build time is sufficient, and it is the
-# cheapest possible place to catch the problem -- the alternative is finding
-# out hours into a gauntlet, where a non-spawning engine forfeits every game
-# and still produces a complete, plausible-looking result.
-#
-# Usage:
+# Usage
 #   ./build.sh                        # dev build      -> sgr.exe
 #   ./build.sh -r                     # release build  -> sgr.exe  (PGO+ThinLTO)
 #   ./build.sh -o sgr_test.exe        # choose the output name
@@ -53,28 +39,19 @@ done
 
 case "$mode" in
     datagen) src="$DATAGEN_SRC"; [ -n "$out" ] || out=datagen.exe
-             # Labeller builds MUST disable RFP: it returns a raw static eval
-             # where a searched score is expected, which poisoned gen6 entirely.
+             # Labeller builds disable RFP because labels require searched scores.
              extra="$extra -DSGR_RFP=0" ;;
     trace)   src="$ENGINE_SRC"; [ -n "$out" ] || out=sgr_trace.exe
-             # Bounded diagnostic stream for the web Search Network. This is
-             # intentionally a separate binary: stdout tracing is not free
-             # and must never change the release engine's playing conditions.
-             # Capture a wider diagnostic pool; the browser distils this to a
-             # connected 120-node consequential subtree after each iteration.
+             # Separate trace build for the web Search Network.
+             # The browser reduces this pool to a connected 120-node subtree.
              extra="$extra -DSGR_TRACE_SEARCH=1 -DSGR_TRACE_NODE_LIMIT=1200" ;;
     *)       src="$ENGINE_SRC";  [ -n "$out" ] || out=sgr.exe ;;
 esac
 
 cd "$(dirname "$0")" || exit 1
 
-# Verify a binary actually starts. Deliberately net-independent: the engine
-# falls back to the hand-crafted eval with no network, so this works without
-# SGR_EVALFILE being set.
-#
-# The liveness signal differs by target. datagen is NOT a UCI engine -- it
-# takes positional arguments and prints a usage line when given none -- so
-# probing it with a UCI handshake reports a perfectly good build as broken.
+# Verify startup without requiring SGR_EVALFILE.
+# Datagen uses its usage message as the liveness signal because it is not UCI.
 verify() {
     if [ "$mode" = datagen ]; then
         "./$1" 2>&1 | grep -q '^usage: datagen'
@@ -83,8 +60,7 @@ verify() {
     fi
 }
 
-# Link, then check. On refusal, link again: a fresh link gets a new PE
-# timestamp and therefore a new hash, which is normally allowed through.
+# Relink rejected binaries to give them a new hash.
 link_and_verify() {
     local attempt=1
     while [ "$attempt" -le "$MAX_LINK_ATTEMPTS" ]; do
@@ -121,7 +97,7 @@ EOF
 echo "build.sh: $mode -> $out"
 
 if [ "$mode" = release ]; then
-    # 1. instrumented  2. profile  3. merge  4. optimised. See BUILD.md.
+    # Instrument, profile, merge and optimise. See BUILD.md.
     rm -rf pgo && mkdir -p pgo
     echo "  [1/4] instrumented build"
     # shellcheck disable=SC2086

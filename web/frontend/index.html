@@ -3,11 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Leave empty for same-origin production; set a full URL only for split hosting. -->
+    <!-- Leave empty for same-origin hosting. Use a full URL for split hosting. -->
     <meta name="sgurr-api-base" content="">
     <script>
-      // The stylesheet's :root is the wood palette, so without this the menu
-      // paints in Classic Wood for a frame before themes.js swaps it.
+      // Apply the saved theme before the first paint.
       (function () {
         try {
           var key = localStorage.getItem("sgurrTheme");
@@ -19,14 +18,12 @@
             if (name.charAt(0) === "-") document.documentElement.style.setProperty(name, vars[name]);
           }
         } catch (error) {
-          /* private mode, or nothing saved yet: the default palette is fine */
+          /* Use the default palette when storage is unavailable or empty. */
         }
       })();
     </script>
     <script>
-      // Returning from a lab lands on ?view=menu. The intro markup ships in the
-      // document, so without this the cave paints for a frame before the module
-      // loads and tears it down again.
+      // Skip the intro frame when returning from a lab.
       if (new URLSearchParams(location.search).get("view") === "menu") {
         document.documentElement.dataset.view = "menu";
       }
@@ -54,9 +51,7 @@
     <meta name="twitter:image" content="https://sgurr-chess-engine.onrender.com/assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:image:alt" content="Sgurr chess engine">
 
-    <!-- The chamber backdrop is the first thing anyone sees, but it is reached
-         from CSS, so without this hint the browser cannot start fetching it
-         until styles.css and its @imports have parsed. -->
+    <!-- Preload the CSS background used for the first frame. -->
     <link rel="preload" as="image" href="assets/intro/sgurr-cave-chamber.webp" type="image/webp" fetchpriority="high">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23251a16'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e2b147' stroke-width='3' opacity='0.55'/><circle cx='32' cy='32' r='13' fill='%23e2b147'/></svg>">
     <link rel="stylesheet" href="styles.css">
@@ -132,9 +127,7 @@
       <section class="menu-card">
         <div class="menu-accent-line"></div>
 
-        <!-- Only the controls scroll. The accent line and the memory strip stay
-             direct children of the card because both are positioned outside its
-             padding box, and a scroll container would clip them. -->
+        <!-- Keep fixed accents outside the scrolling controls so they are not clipped. -->
         <div class="menu-card-scroll">
           <p class="menu-section-label">Game mode</p>
           <div class="selector-row large-selector">

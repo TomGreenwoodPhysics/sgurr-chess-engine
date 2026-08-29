@@ -554,8 +554,7 @@ select.field-control {
 
 #cortexCanvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; cursor: crosshair; }
 
-/* Depth at the edges of the chamber. Composited by the browser, so it costs the
-   canvas nothing per frame. */
+/* Add edge depth without extra canvas work per frame. */
 .cortex-stage::after {
   content: "";
   position: absolute;
@@ -586,8 +585,7 @@ select.field-control {
 }
 
 .inside-shell[data-state="ready"] .cortex-loading { opacity: 0; visibility: hidden; pointer-events: none; }
-/* visibility: hidden does not stop a running animation, and this one animates
-   filter: brightness, so it repaints for the life of the page. */
+/* Stop the hidden filter animation to avoid background repaints. */
 .inside-shell[data-state="ready"] .loading-brain { animation: none; }
 .cortex-loading strong { margin-top: 8px; font: 650 1.12rem var(--font-display); }
 .cortex-loading small { color: #8391a5; font: 600 0.62rem var(--font-data); }

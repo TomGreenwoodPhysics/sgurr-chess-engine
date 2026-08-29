@@ -31,7 +31,7 @@ try:
         SgurrUciEngine,
         UciInfo,
     )
-except ImportError:  # Allows `uvicorn main:app` from web/backend.
+except ImportError:  # Supports `uvicorn main:app` from web/backend.
     from sgurr_uci import (  # type: ignore
         EngineCrashedError,
         EngineStartupError,
@@ -73,10 +73,9 @@ def bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 
 PUBLIC_DEMO = env_flag("SGURR_PUBLIC_DEMO")
-# --- selectable opponents -------------------------------------------------
-# The demo offers several engines; the frontend lists them via /api/engines and
-# names one per move (falling back to the first, the default). SGURR_ENGINE_EXE
-# still overrides the default's binary, preserving the old single-engine setup.
+# Selectable opponents
+# The frontend lists these engines and sends an ID with each move.
+# SGURR_ENGINE_EXE still overrides the default binary.
 CPP_DIR = REPO_ROOT / "sgurr_cpp"
 NETS_DIR = REPO_ROOT / "nets"
 _trace_engine_override = os.environ.get("SGURR_TRACE_ENGINE_EXE")
@@ -88,37 +87,17 @@ TRACE_ENGINE_PATH = (
 if not TRACE_ENGINE_PATH.is_absolute():
     TRACE_ENGINE_PATH = REPO_ROOT / TRACE_ENGINE_PATH
 TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
-# Every canonical release, newest first (index 0 is the default, and what
-# SGURR_ENGINE_EXE overrides). v8.2 is measured on the current scale. Older
-# releases use the v8.2 bridge: old rating + (3012.1 - 3058.5), rounded to the
-# nearest Elo. These are estimates rather than official CCRL ratings.
-# Note v3.1 rates BELOW v3.0: it was a search-only release whose flat soft
-# time limit lost at the pool TC. That is real, measured, and left visible.
-# `rating` is the structured form of the number the subtitle carries; the
-# subtitle itself is derived from `tech` + `rating` below so the figure lives
-# in exactly one place. The frontend uses `rating` to sort and display the
-# ladder, so a version added here shows up in the opponent picker for free.
+# Canonical releases appear newest first, with index 0 as the default.
+# Older ratings use old rating + (3012.1 - 3058.5), rounded to the nearest Elo.
+# They are estimates rather than official CCRL ratings.
+# v3.1 ranks below v3.0 because its flat soft limit lost games at the pool TC.
+# `rating` supplies both the subtitle and the frontend ladder.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
-        # v8.2 is v8.1 with a packed TT entry and a lazy move picker: same net,
-        # same search, same moves, ~15% faster.
-        #
-        # Measured 2026-08-05: 3058.5 +/-6.5 over an 11,144-game pool gauntlet,
-        # +31.5 vs v8.1 in the same Ordo solve.
-        #
-        # This page carried 3041 for a day, marked INFERRED: v8.1's 3026.7 plus
-        # 70*log2(1.1543) = +14.5 for a +15.43% NPS gain. The games say +31.5.
-        # The rule under-predicted by 17 Elo, and the label is the only reason
-        # that is a footnote rather than a wrong number shipped as a fact.
-        #
-        # Corrected 2026-08-10: 3058 -> 3012. The engine did not change, the
-        # measurement did. The old calibration left Hash unset (engines ran at
-        # 8-128 MB where CCRL requires one shared value), used a book filtered
-        # by Sgurr's own eval, and included two engines forfeiting ~20% of
-        # their games on an illegal uppercase promotion. Re-measured against
-        # five families under controlled conditions: 3012.1 +/-5.8 over 9,890
-        # games, systematic ~+/-25. See METHODOLOGY 9.
-        #
+        # v8.2 keeps the v8.1 net and search but is about 15% faster.
+        # Controlled recalibration measured 3012.1 +/-5.8 over 9,890 games.
+        # This corrected a 3058 result affected by inconsistent hash sizes,
+        # a filtered book, and promotion forfeits. See METHODOLOGY section 9.
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
@@ -127,11 +106,8 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "rating": 3012,
     },
     {
-        # Measured 2026-08-03: 3026.7 +/-11.1 over a 3,456-game pool gauntlet,
-        # +20.9 vs v8.0 in the same Ordo solve, against +21.2 +/-8.7 in
-        # self-play. It held the 3006 floor until then rather than displaying
-        # the prediction, since an unmeasured number on a public page is what
-        # this project's methodology exists to prevent.
+        # The 2026-08-03 pool gauntlet measured a 20.9 Elo gain over v8.0.
+        # Self-play measured a similar 21.2 +/-8.7 gain.
         "id": "v8.1",
         "exe": CPP_DIR / "sgr_v8_1.exe",
         "net": NETS_DIR / "gen8.nnue",
@@ -212,7 +188,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "rating": 2341,
     },
     {
-        # No net by design: this IS the hand-crafted eval.
+        # This version intentionally uses hand-crafted evaluation.
         "id": "classical",
         "exe": CPP_DIR / "Ruk_hce.exe",
         "net": None,
@@ -231,12 +207,11 @@ for _spec in ENGINE_SPECS:
     _spec["exe"] = Path(_spec["exe"]).resolve()
     if _spec.get("net") is not None:
         _spec["net"] = Path(_spec["net"]).resolve()
-    # Single source of truth for the rating: the displayed subtitle is built
-    # from it rather than repeating the number as free text.
+    # Build the subtitle from the stored rating to avoid duplicating it.
     _spec["subtitle"] = f"{_spec['tech']} · ~{_spec['rating']}"
 
 DEFAULT_ENGINE_ID = str(ENGINE_SPECS[0]["id"])
-# Back-compat aliases: /health and the engine-path exposure describe the default.
+# Compatibility aliases for the default engine.
 ENGINE_PATH = ENGINE_SPECS[0]["exe"]
 ENGINE_NET_PATH = ENGINE_SPECS[0]["net"]
 ENGINE_LABEL = str(ENGINE_SPECS[0]["label"])
@@ -511,8 +486,8 @@ PIECE_NAMES = {
 }
 
 
-# One UCI engine per spec (lazy: each subprocess starts on its first search).
-# `engine` stays an alias for the default so existing code paths keep working.
+# Each subprocess starts with its first search.
+# `engine` remains an alias for the default.
 ENGINES: dict[str, dict[str, object]] = {
     str(spec["id"]): {
         "engine": SgurrUciEngine(
@@ -773,8 +748,7 @@ def board_from_history(
 ) -> chess.Board:
     current = board_from_fen(fen)
 
-    # Keep the engine-move endpoint useful for one-off FEN analysis when no
-    # game history was supplied. Web games always include start_fen and moves.
+    # Allow one-off FEN analysis without game history.
     if start_fen is None and not moves:
         return current
 
@@ -1066,8 +1040,7 @@ def engine_timeout_for(request: EngineMoveRequest, board: chess.Board) -> float:
         active_ms = request.wtime_ms if board.turn == chess.WHITE else request.btime_ms
         inc_ms = request.winc_ms if board.turn == chess.WHITE else request.binc_ms
         slice_ms = max(50.0, (active_ms or 0) / max(1, request.movestogo) + inc_ms / 2)
-        # UCI clock searches can be longer than fixed demo searches, but keep
-        # the web request bounded so a wedged engine does not hang the UI.
+        # Bound clock searches so a stalled engine cannot hang the UI.
         return max(ENGINE_STARTUP_TIMEOUT, min(45.0, slice_ms / 1000.0 + ENGINE_TIMEOUT_PADDING))
 
     movetime_ms = request.movetime_ms or DEFAULT_MOVETIME_MS
@@ -1488,9 +1461,7 @@ def search_network(request: SearchNetworkRequest) -> StreamingResponse:
 
     def run_search() -> None:
         try:
-            # Strict deep searches grow exponentially and intentionally have no
-            # movetime cap. Give the advanced presets room to finish while
-            # retaining a hard ceiling for a stalled diagnostic process.
+            # Give deep searches time to finish but cap stalled processes.
             timeout_seconds = (
                 float(DEMO_NETWORK_TIMEOUT_SECONDS)
                 if PUBLIC_DEMO

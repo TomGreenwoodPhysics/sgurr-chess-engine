@@ -7,7 +7,7 @@ def unpack(rec):
     occ = struct.unpack_from("<Q", rec, 0)[0]
     nibbles = rec[8:24]
     stm, score, result = struct.unpack_from("<BhB", rec, 24)
-    # reconstruct board
+    # Reconstruct the board.
     bd = list("." * 64)
     i = 0
     bb = occ
@@ -44,19 +44,19 @@ import random
 random.seed(0)
 idxs = list(range(n))
 random.shuffle(idxs)
-for k in idxs[:400]:                       # validate a random 400 of them
+for k in idxs[:400]:                       # Validate a random sample of 400
     bd, stm, score, result = unpack(data[k*32:k*32+32])
     res_counts[result] = res_counts.get(result,0)+1
     score_min = min(score_min, score); score_max = max(score_max, score)
-    # sanity: exactly one king each, valid result/stm, score in cap
+    # Check kings, metadata, and score bounds.
     if bd.count("K") != 1 or bd.count("k") != 1: bad += 1; continue
     if result not in (0,1,2) or stm not in (0,1): bad += 1; continue
     if abs(score) >= 2000: bad += 1; continue
-    # the position must parse and be legal for chesslite
+    # The position must parse and be legal in chesslite.
     try:
         p = cl.Position.from_fen(to_fen(bd, stm))
-        _ = cl.legal_moves(p)               # must not throw
-        # side to move should not have the *opponent* already in check (illegal)
+        _ = cl.legal_moves(p)               # Must not raise
+        # The side to move cannot already be checking its opponent.
         opp_white = (stm == 1)
         if cl.attacked(p.bd, cl.king_sq(p.bd, opp_white), not opp_white):
             bad += 1; continue

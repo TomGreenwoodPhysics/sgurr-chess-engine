@@ -23,16 +23,15 @@
   border: 1px solid var(--core-border);
   border-radius: 46% 54% 42% 58% / 52% 41% 59% 48%;
   background:
-    /* warm wisps, dimmer and deeper in the murk */
+    /* Dim warm wisps. */
     radial-gradient(ellipse at 30% 72%, color-mix(in srgb, var(--accent), transparent 83%) 0 16%, transparent 36%),
     radial-gradient(ellipse at 72% 30%, color-mix(in srgb, var(--accent-2), transparent 85%) 0 14%, transparent 32%),
     radial-gradient(28% 10% at 60% 82%, color-mix(in srgb, var(--accent), transparent 88%) 0 55%, transparent 100%),
-    /* dust motes migrating around the band */
+    /* Moving dust. */
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g fill='%23ffdf9e' opacity='.9'><circle cx='8' cy='50' r='.5' opacity='.45'/><circle cx='15' cy='25' r='.4' opacity='.4'/><circle cx='30' cy='8' r='.35' opacity='.35'/><circle cx='70' cy='7' r='.5' opacity='.45'/><circle cx='90' cy='28' r='.4' opacity='.4'/><circle cx='93' cy='60' r='.55' opacity='.5'/><circle cx='80' cy='88' r='.4' opacity='.4'/><circle cx='45' cy='94' r='.35' opacity='.35'/><circle cx='20' cy='80' r='.45' opacity='.4'/></g></svg>"),
-    /* faint warm halo just outside the inner face -- soft-edged, so it reads
-       as light bleeding from the eye rather than a drawn ring */
+    /* Soft inner halo. */
     radial-gradient(circle at 50% 50%, transparent 0 37%, color-mix(in srgb, var(--accent), transparent 78%) 40% 41%, transparent 45%),
-    /* Fresnel: the silhouette falls away into deep dark glass */
+    /* Darken the glass toward the silhouette. */
     radial-gradient(circle at 48% 50%, transparent 0 62%, color-mix(in srgb, var(--black-eval), #000 22%) 83%, #000 100%),
     conic-gradient(from 28deg, color-mix(in srgb, var(--black-eval), var(--accent) 15%), color-mix(in srgb, var(--black-eval), var(--accent-2) 13%), color-mix(in srgb, var(--black-eval), var(--accent) 8%), color-mix(in srgb, var(--black-eval), #000 22%), color-mix(in srgb, var(--black-eval), var(--accent) 12%), color-mix(in srgb, var(--black-eval), var(--accent) 15%)),
     color-mix(in srgb, var(--black-eval), #000 42%);
@@ -47,18 +46,15 @@
   place-items: center;
   filter: saturate(1.35) contrast(1.08) brightness(0.96);
   box-shadow:
-    /* rim hairline */
+    /* Thin rim. */
     inset 0 0 0 calc(var(--core-size) * 0.004) color-mix(in srgb, var(--text), transparent 62%),
-    /* iris band: one warm glow just inside the rim grading smoothly through
-       shadow to a faint cool inner edge -- a continuous iris rather than
-       concentric stripes */
+    /* Blend the iris glow smoothly into the inner edge. */
     inset 0 0 calc(var(--core-size) * 0.035) calc(var(--core-size) * 0.018) color-mix(in srgb, var(--accent), transparent 56%),
     inset 0 0 calc(var(--core-size) * 0.07) calc(var(--core-size) * 0.05) color-mix(in srgb, #000, transparent 40%),
     inset 0 0 calc(var(--core-size) * 0.05) calc(var(--core-size) * 0.085) color-mix(in srgb, var(--accent-2), transparent 82%),
-    /* inner darkening for depth */
+    /* Inner shading for depth. */
     inset 0 calc(var(--core-size) * -0.085) calc(var(--core-size) * 0.14) color-mix(in srgb, #000, transparent 55%),
-    /* outer glow: the state-driven aura keeps mood/status legible on every
-       core, plus a wide fixed two-tone bloom */
+    /* Combine the status aura with a fixed two-tone glow. */
     0 0 var(--core-aura-size) color-mix(in srgb, var(--accent), transparent var(--core-aura-fade)),
     0 0 calc(var(--core-size) * 0.16) color-mix(in srgb, var(--accent-2), transparent 78%);
   transition:
@@ -77,8 +73,7 @@
   animation:
     boss-core-pulse 9.5s ease-in-out infinite,
     boss-core-churn 23s ease-in-out infinite;
-  /* --core-phase (set per core by JS) starts every eye at its own point in
-     the shared cycles, so multiple cores never move in lockstep. */
+  /* Offset each core's animation phase to prevent synchronised motion. */
   animation-delay: var(--core-phase, 0s);
 }
 
@@ -95,30 +90,24 @@
     inset 520ms ease;
 }
 
-/* The face: deep translucent glass. A molten heart wanders with its glow
-   echo, two spark fields drift in parallax, and the pupil's under-shadow
-   passes across between them. The state inner-glow keeps status legible. */
+/* Layer the heart, sparks, shadow, and status glow within the glass. */
 .sgurr-core::before {
   inset: 11%;
   border-radius: 55% 45% 49% 51% / 45% 58% 42% 55%;
   background-color: color-mix(in srgb, var(--black-eval), #000 40%);
   background-image:
-    /* broad soft sheen across the upper glass -- no hard catchlight, so it
-       never resolves into a glossy eye */
+    /* Soft upper sheen. */
     radial-gradient(56% 40% at 40% 33%, color-mix(in srgb, var(--accent), transparent 80%) 0 34%, transparent 100%),
     radial-gradient(16% 7% at 30% 37%, color-mix(in srgb, var(--text), transparent 90%) 0 60%, transparent 100%),
-    /* the pupil's under-shadow: a dark drifting mass beneath the true pupil
-       (the .core-pupil child, painted above the cosmos light); on its own it
-       carries the pupil for reduced-motion users, who get no child layers */
+    /* Provide a pupil shadow beneath the light layers and a static pupil when motion is off. */
     radial-gradient(36% 32% at 50% 50%, color-mix(in srgb, #000, transparent 16%) 0 55%, color-mix(in srgb, #000, transparent 44%) 74%, transparent 90%),
-    /* near spark field */
+    /* Near sparks. */
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='b'><feGaussianBlur stdDeviation='0.6'/></filter></defs><g filter='url(%23b)' fill='%23ffd98f'><circle cx='39' cy='57' r='1.5' opacity='.25'/><circle cx='63' cy='41' r='1.2' opacity='.2'/><circle cx='55' cy='71' r='1.1' opacity='.18'/></g><g fill='%23ffe9b8'><circle cx='38' cy='58' r='.85' opacity='.85'/><circle cx='62' cy='40' r='.6' opacity='.7'/><circle cx='55' cy='70' r='.5' opacity='.6'/><circle cx='70' cy='57' r='.75' opacity='.7'/><circle cx='45' cy='38' r='.45' opacity='.55'/><circle cx='30' cy='47' r='.4' opacity='.5'/><circle cx='66' cy='72' r='.35' opacity='.45'/><circle cx='52' cy='51' r='.3' opacity='.4'/><path d='M35.8 58 h4.4 M38 55.8 v4.4' stroke='%23ffe9b8' stroke-width='.22' opacity='.6' fill='none'/><path d='M60.4 40 h3.2 M62 38.4 v3.2' stroke='%23ffe9b8' stroke-width='.18' opacity='.45' fill='none'/></g></svg>"),
-    /* far spark field: smaller, dimmer, drifting the other way */
+    /* Smaller far sparks move in the opposite direction. */
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='d'><feGaussianBlur stdDeviation='0.5'/></filter></defs><g filter='url(%23d)' fill='%23f0c684'><circle cx='26' cy='60' r='.45' opacity='.4'/><circle cx='47' cy='27' r='.35' opacity='.35'/><circle cx='58' cy='62' r='.4' opacity='.38'/><circle cx='72' cy='36' r='.3' opacity='.3'/><circle cx='36' cy='30' r='.3' opacity='.3'/><circle cx='64' cy='80' r='.35' opacity='.32'/><circle cx='24' cy='42' r='.25' opacity='.28'/><circle cx='78' cy='64' r='.28' opacity='.28'/><circle cx='48' cy='86' r='.3' opacity='.3'/></g></svg>"),
-    /* the heart's glow echo: a faint halo that travels with it */
+    /* Halo that follows the heart. */
     radial-gradient(circle at 56% 60%, transparent 0 22%, color-mix(in srgb, var(--accent), transparent 85%) 26% 28%, transparent 33%),
-    /* the ember heart: a small contained glow sunk deep in dark glass,
-       most of it shadow so the light feels withheld */
+    /* Small ember within the dark glass. */
     radial-gradient(circle at 56% 60%, color-mix(in srgb, var(--accent), var(--text) 12%) 0 3%, var(--accent) 9%, color-mix(in srgb, var(--accent), var(--black-eval) 40%) 21%, color-mix(in srgb, var(--black-eval), var(--accent) 26%) 40%, color-mix(in srgb, var(--black-eval), #000 26%) 64%, color-mix(in srgb, #000, var(--black-eval) 35%) 85%, #000 100%);
   background-size:
     100% 100%, 100% 100%, 130% 130%, 106% 106%,
@@ -128,12 +117,10 @@
     50% 50%, 50% 50%, 50% 50%;
   background-repeat: no-repeat;
   box-shadow:
-    /* accent-tinted hairline, kept dim so the disc edge never reads as a
-       bright white circle */
+    /* Dim accent edge. */
     inset 0 0 0 calc(var(--core-size) * 0.005) color-mix(in srgb, var(--accent), color-mix(in srgb, var(--text), transparent 40%) 46%),
     inset 0 0 calc(var(--core-size) * 0.02) calc(var(--core-size) * 0.012) color-mix(in srgb, #000, transparent 52%),
-    /* a soft luminous inner shell, blurred wide so it grades into the glass
-       instead of striping it */
+    /* Soft inner glow. */
     inset 0 0 calc(var(--core-size) * 0.03) calc(var(--core-size) * 0.05) color-mix(in srgb, var(--accent), transparent 84%),
     inset 0 0 calc(var(--core-size) * 0.06) calc(var(--core-size) * 0.1) color-mix(in srgb, #000, transparent 74%),
     inset 0 calc(var(--core-size) * -0.05) calc(var(--core-size) * 0.08) rgba(0, 0, 0, 0.44),
@@ -326,19 +313,9 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* The hero cores (intro and main menu) share the base god-eye look;    */
-/* only their scale, heavier border and slightly stronger presence      */
-/* differ. `--core-size` is kept in step with the rendered size of      */
-/* every core by a ResizeObserver in js/menu-core.js.                   */
-/*                                                                      */
-/* Size these from --menu-core-size, NOT from --core-size. The observer */
-/* writes --core-size back as an inline style, so sizing off it would   */
-/* close a loop: inline --core-size pins the width, the width then      */
-/* stops responding to breakpoint changes in --menu-core-size, the      */
-/* observer never fires again, and the core stays frozen at whatever it */
-/* first measured. --core-size is an output here, never an input.       */
-/* ------------------------------------------------------------------ */
+/* Hero cores share the base style at a larger scale.
+   Size them from --menu-core-size. JavaScript writes --core-size from the rendered
+   size, so using it as an input would freeze responsive updates. */
 .menu-title .menu-core,
 .intro-core {
   --core-size: var(--menu-core-size);
@@ -353,8 +330,7 @@
   border-width: 2px;
 }
 
-/* Not a heartbeat: a slow, deep swell and subside, like something vast
-   drawing breath in the dark and letting it go. */
+/* Use a slow breathing scale rather than a heartbeat. */
 @keyframes boss-core-pulse {
   0%,
   100% {
@@ -375,8 +351,7 @@
   }
 }
 
-/* The wisps, dust and murk migrate around the dark setting, each on
-   its own path. */
+/* Move the wisps, dust, and shading independently. */
 @keyframes boss-core-churn {
   0%,
   100% {
@@ -396,8 +371,7 @@
   }
 }
 
-/* Inside the glass: the heart wanders with its echo, the spark fields
-   drift in parallax, and the dark shape crosses the interior. */
+/* Move the heart, sparks, and shadow independently. */
 @keyframes boss-face-churn {
   0%,
   100% {
@@ -417,9 +391,7 @@
   }
 }
 
-/* Occultation: the face dims well down as the veil crosses, so the heart
-   withdraws into the murk before slowly resurfacing. Out of phase with
-   everything else. */
+/* Dim the face as the veil crosses. */
 @keyframes boss-face-glimmer {
   0%,
   100% {
@@ -436,9 +408,7 @@
   }
 }
 
-/* The inner mass drifts to face a direction and holds there -- a slow,
-   unsettling regard -- then rarely and briefly narrows, like a lid passing
-   over something that is watching. */
+/* Move and briefly narrow the inner shadow to suggest a gaze. */
 @keyframes boss-pupil-drift {
   0%,
   22%,
@@ -468,17 +438,10 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Menu-core additions: interior life and a watchful idle. The child    */
-/* layers are injected by js/menu-core.js and paint above the molten    */
-/* face (::before) and below the outer ring (::after). All menu-only    */
-/* and only present when motion is enabled.                             */
-/* ------------------------------------------------------------------ */
+/* Animated core layers */
+/* JavaScript inserts these between the face and outer ring when motion is enabled. */
 
-/* The heart leans a touch toward the cursor, with lag -- a slow regard.
-   Declared here (after the base .sgurr-core) so this transition wins for
-   the menu core; boss-core-pulse animates `scale`, not `transform`, so
-   the two never fight. */
+/* Use transform for cursor lean. The pulse uses scale, so both effects compose. */
 .menu-core {
   transform: translateX(-50%) translate(var(--regard-x, 0px), var(--regard-y, 0px));
   transition:
@@ -493,7 +456,7 @@
   border-radius: 50%;
 }
 
-/* Embers: faint motes rising through the glass and winking out. */
+/* Raise and fade ember motes. */
 .sgurr-core .core-embers {
   inset: calc(var(--core-size) * 0.13);
   overflow: hidden;
@@ -533,8 +496,7 @@
   }
 }
 
-/* A form that almost resolves: a soft shape surfacing from the murk and
-   sinking again before it can be read. Never legible. */
+/* Briefly surface an indistinct shape in the glass. */
 .sgurr-core .core-form {
   inset: calc(var(--core-size) * 0.2);
   background:
@@ -568,9 +530,7 @@
   }
 }
 
-/* Volumetric depth: a soft warm sheen from the upper-left and a gathered
-   shadow lower-right make the orb read as a lit sphere rather than flat
-   concentric rings. Static, so it survives reduced-motion. */
+/* Use static light and shadow to keep depth when motion is off. */
 .sgurr-core .core-depth {
   position: absolute;
   inset: calc(var(--core-size) * 0.03);
@@ -582,12 +542,9 @@
   opacity: 0.92;
 }
 
-/* A slow cosmos deep in the glass. All three layers are screen-blended, so
-   they add luminous internal structure to the heart rather than occluding
-   it, and each drifts / pulses on its own long period so the interior never
-   settles or repeats. */
+/* Screen-blend the moving interior layers so they add light without hiding the heart. */
 
-/* Nebula: coloured clouds that swirl and pulse in vibrancy. */
+/* Swirl and pulse the nebula. */
 .sgurr-core .core-nebula {
   position: absolute;
   inset: calc(var(--core-size) * 0.12);
@@ -606,9 +563,7 @@
   animation-delay: var(--core-phase, 0s);
 }
 
-/* Mottle: soft luminous cells (a blurred SVG mask over a vibrant accent
-   wash) drifting through the glass -- internal structure with no hard
-   edges, like light moving through something alive. */
+/* Drift soft masked cells through the glass. */
 .sgurr-core .core-mottle {
   position: absolute;
   inset: calc(var(--core-size) * 0.12);
@@ -624,7 +579,7 @@
   animation-delay: var(--core-phase, 0s);
 }
 
-/* Starfield: points that twinkle, the whole field wheeling slowly. */
+/* Rotate and twinkle the starfield. */
 .sgurr-core .core-stars {
   position: absolute;
   inset: calc(var(--core-size) * 0.12);
@@ -666,8 +621,7 @@
   }
 }
 
-/* Aurora: broad, dim ribbons of colour that wash through the interior on
-   long periods -- barely-there vibrancy that never resolves into a shape. */
+/* Move dim aurora ribbons through the interior. */
 .sgurr-core .core-aurora {
   position: absolute;
   inset: calc(var(--core-size) * 0.13);
@@ -708,8 +662,7 @@
   }
 }
 
-/* Finer mottle: a second, smaller field of cells turning the other way --
-   dimmer, cooler and slower, so it reads as depth behind the first. */
+/* Move a finer, cooler mottled layer in the opposite direction. */
 .sgurr-core .core-mottle-fine {
   position: absolute;
   inset: calc(var(--core-size) * 0.17);
@@ -780,15 +733,8 @@
   }
 }
 
-/* The pupil proper: a near-black mass floating ABOVE the interior light,
-   so no layer of the cosmos can wash it out. It wanders the face slowly,
-   holds its regard, and moves again. Present on any core the JS gives an
-   eye to (hero cores and the post-game result cores).
-
-   The regard (JS-driven on gazing cores): pursuit toward what it has
-   noticed and faint proximity dilation ride the `translate`/`scale`
-   properties, which compose beneath the wander keyframes' `transform`,
-   so the idle drift never fights the gaze. */
+/* Keep the pupil above the light layers. JavaScript gaze uses translate and scale
+   while idle movement uses transform, allowing both to compose. */
 .sgurr-core .core-pupil {
   position: absolute;
   left: 30%;
@@ -836,17 +782,9 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Divinity: the apparatus of godhead around both hero cores. A vast    */
-/* near-invisible radiance breathing behind everything, soft shafts of  */
-/* light wheeling almost too slowly to see, a brilliant eclipse arc     */
-/* precessing around the rim, and rare halo ripples that bloom outward  */
-/* and dissolve. Everything is dim, slow and behind or at the rim, so   */
-/* the eye itself stays untouched -- the god is in the periphery.        */
-/* ------------------------------------------------------------------ */
+/* Add slow, dim light effects around the hero cores without covering them. */
 
-/* Presence: the room is lit by it. A huge, extremely faint radiance
-   that swells and subsides like something breathing behind reality. */
+/* Pulse a faint background glow. */
 .sgurr-core .core-presence {
   position: absolute;
   inset: calc(var(--core-size) * -0.6);
@@ -871,9 +809,7 @@
   }
 }
 
-/* Corona: shafts of light radiating from behind the orb -- two angular
-   frequencies superimposed so the rays never read as a regular fan --
-   wheeling so slowly the motion is felt rather than seen. */
+/* Slowly rotate overlapping corona rays. */
 .sgurr-core .core-corona {
   position: absolute;
   inset: calc(var(--core-size) * -0.42);
@@ -909,8 +845,7 @@
   }
 }
 
-/* Eclipse: a thin brilliant arc at the rim, as if an enormous light
-   were hidden directly behind the orb, precessing around it. */
+/* Rotate a narrow eclipse arc around the rim. */
 .sgurr-core .core-eclipse {
   position: absolute;
   inset: calc(var(--core-size) * -0.06);
@@ -944,9 +879,7 @@
   }
 }
 
-/* Aureole: every so often a halo blooms off the orb, expands and
-   dissolves -- a ripple through whatever the orb hangs in. Two rings on
-   the same period, half out of phase. */
+/* Expand and fade two offset halo rings. */
 .sgurr-core .core-aureole {
   position: absolute;
   inset: calc(var(--core-size) * -0.04);
@@ -984,8 +917,7 @@
   }
 }
 
-/* Driven by the in-app Animations setting rather than the OS reduced-motion
-   hint, matching motionOn() in menu-core.js. */
+/* Follow the in-app animation setting used by menu-core.js. */
 body.animations-off .sgurr-core .core-ember,
 body.animations-off .sgurr-core .core-form,
 body.animations-off .sgurr-core .core-nebula,

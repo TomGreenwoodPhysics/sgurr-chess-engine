@@ -45,7 +45,7 @@
   outline-offset: 1px;
 }
 
-/* The masthead states what the lab is for on one line rather than a block. */
+/* Keep the lab description on one line. */
 .editor-masthead {
   min-height: 0;
   padding: 12px 16px;
@@ -62,7 +62,7 @@
 .editor-masthead h2 { margin: 3px 0 0; }
 .editor-masthead .editor-purpose { max-width: 46ch; margin: 0; text-align: right; }
 
-/* One line, so the state of the board is always in the same place. */
+/* Keep the board status on one line. */
 .editor-statusbar {
   min-height: 0;
   padding: 10px 16px;
@@ -74,7 +74,7 @@
 .editor-statusbar .panel-label { margin: 0; flex: 0 0 auto; }
 .editor-statusbar p:last-child { margin: 0; min-width: 0; color: var(--text); font-size: 0.82rem; }
 
-/* The two things you came here to do, given the full width. */
+/* Give the two primary actions full width. */
 .editor-launch {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -133,8 +133,7 @@
   line-height: 1.35;
 }
 
-/* Long labels ("Two-pawn odds", "You play: White") must not break mid-phrase
-   inside their halves of the grid. */
+/* Keep long option labels intact within each grid cell. */
 .editor-grid button,
 .editor-section > button {
   min-height: 40px;
@@ -143,7 +142,7 @@
   text-wrap: balance;
 }
 
-/* Leaving the lab sits with the other ways out, so the row holds four. */
+/* Place the exit action with the other navigation links. */
 .editor-actions {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;

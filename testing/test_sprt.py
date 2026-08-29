@@ -62,15 +62,13 @@ class TestEloWithCi(unittest.TestCase):
         self.assertAlmostEqual(elo, 0.0, places=9)
 
     def test_all_draws_is_zero_elo_with_no_uncertainty(self):
-        # Every game landing on exactly the mean leaves no variance to
-        # propagate, so the interval must collapse rather than divide by zero.
+        # Zero variance should collapse the interval without dividing by zero.
         elo, ci = sprt.elo_with_ci(0, 100, 0)
         self.assertAlmostEqual(elo, 0.0, places=9)
         self.assertAlmostEqual(ci, 0.0, places=9)
 
     def test_matches_the_analytic_elo_formula(self):
-        # elo = -400 * log10((1 - x) / x). At a 75% score that is
-        # 400 * log10(3) = 190.8485..., independently derivable.
+        # A 75% score gives 400 * log10(3), or about 190.8485 Elo.
         for w, d, l, expected in [
             (75, 0, 25, 400 * math.log10(3)),
             (60, 0, 40, -400 * math.log10(40 / 60)),
@@ -81,28 +79,24 @@ class TestEloWithCi(unittest.TestCase):
                 self.assertAlmostEqual(elo, expected, places=9)
 
     def test_draws_count_as_half_a_point(self):
-        # 60/0/40 and 50/20/30 are both a 60% score, so they must rate the
-        # same. If draws were ever dropped or double counted, these diverge.
+        # Equal scores must give equal ratings regardless of the draw count.
         self.assertAlmostEqual(sprt.elo_with_ci(60, 0, 40)[0],
                                sprt.elo_with_ci(50, 20, 30)[0], places=9)
 
     def test_is_antisymmetric(self):
-        # Swapping wins and losses is the same match seen from the other side.
+        # Swapping wins and losses changes only the rating sign.
         for w, d, l in [(70, 10, 20), (55, 30, 15), (99, 0, 1)]:
             with self.subTest(w=w, d=d, l=l):
                 self.assertAlmostEqual(sprt.elo_with_ci(w, d, l)[0],
                                        -sprt.elo_with_ci(l, d, w)[0], places=9)
 
     def test_clamps_instead_of_diverging_at_a_perfect_score(self):
-        # log10(0) is -inf. A whitewash must report a large finite number, or
-        # a single lopsided early batch takes the whole run's output with it.
+        # A whitewash must remain finite despite log10(0).
         self.assertEqual(sprt.elo_with_ci(10, 0, 0), (800.0, 0.0))
         self.assertEqual(sprt.elo_with_ci(0, 0, 10), (-800.0, 0.0))
 
     def test_interval_shrinks_as_one_over_root_n(self):
-        # Quadrupling the sample at a fixed score ratio should roughly halve
-        # the interval. This is the property every "N games buys +/-X Elo"
-        # claim in the ledger rests on.
+        # Quadrupling a fixed score ratio should roughly halve the interval.
         _, ci_1x = sprt.elo_with_ci(300, 400, 300)
         _, ci_4x = sprt.elo_with_ci(1200, 1600, 1200)
         self.assertAlmostEqual(ci_1x / ci_4x, 2.0, delta=0.05)
@@ -119,17 +113,14 @@ class TestSprtLlr(unittest.TestCase):
         self.assertEqual(sprt.sprt_llr(0, 0, 0, 0, 5), 0.0)
 
     def test_an_even_score_argues_for_h0(self):
-        # With elo0=0 and elo1=5, a dead-even result is evidence for "not an
-        # improvement". A positive LLR here would mean the test drifts toward
-        # accepting changes that did nothing, which is the expensive direction.
+        # A dead-even result should favour no improvement for elo0=0 and elo1=5.
         self.assertLess(sprt.sprt_llr(500, 0, 500, 0, 5), 0.0)
 
     def test_a_dominant_score_argues_for_h1(self):
         self.assertGreater(sprt.sprt_llr(700, 0, 300, 0, 5), 0.0)
 
     def test_evidence_accumulates_with_sample_size(self):
-        # Same score ratio, ten times the games: the LLR must grow, or the
-        # test could never reach a bound and would run forever.
+        # The same score ratio should produce a larger LLR with more games.
         small = sprt.sprt_llr(60, 0, 40, 0, 5)
         large = sprt.sprt_llr(600, 0, 400, 0, 5)
         self.assertGreater(large, small)
@@ -140,9 +131,7 @@ class TestSprtLlr(unittest.TestCase):
         self.assertEqual(llrs, sorted(llrs))
 
     def test_a_wider_alternative_resolves_a_large_gain_faster(self):
-        # testing/README.md: "for a large expected jump (e.g. NNUE), widening
-        # to elo0=0 elo1=10 resolves faster". A 60% score is ~+70 Elo, well
-        # past every bound below, so the LLR should climb as elo1 moves out.
+        # A clear gain should resolve faster with a wider alternative bound.
         llrs = [sprt.sprt_llr(600, 0, 400, 0, e1) for e1 in (5, 10, 20, 40)]
         self.assertEqual(llrs, sorted(llrs))
         self.assertGreater(llrs[1], llrs[0])
@@ -176,9 +165,7 @@ class TestDecisionRule(unittest.TestCase):
         self.assertIn("H0", t.decided)
 
     def test_will_not_decide_before_min_games(self):
-        # The guard that exists because an early lopsided batch can cross a
-        # bound on a handful of games. 8 pairs is 16 games, under the 40 here,
-        # and every one is a win, so only the guard can be holding it back.
+        # The minimum-game guard must hold even after 16 straight wins.
         t = tally(min_games=40)
         decided = feed(t, [(1.0, 1.0)] * 8)
         self.assertFalse(decided)
@@ -193,8 +180,7 @@ class TestDecisionRule(unittest.TestCase):
         self.assertIsNotNone(t.decided)
 
     def test_an_even_run_stays_undecided(self):
-        # 200 games of exact parity sits between the bounds. If this decided,
-        # the harness would be manufacturing verdicts out of noise.
+        # Exact parity after 200 games should remain between the bounds.
         t = tally(min_games=16)
         self.assertFalse(feed(t, [(1.0, 0.0)] * 100))
         self.assertIsNone(t.decided)
@@ -207,9 +193,7 @@ class TestDecisionRule(unittest.TestCase):
         self.assertEqual(t.decided, first)
 
     def test_abort_stops_the_run_without_a_verdict(self):
-        # A dead engine must not leave a scoreline behind. `decided` is what
-        # the worker loops poll, so it has to become truthy to unblock them,
-        # but it must not read as an accepted hypothesis.
+        # An engine failure must stop workers without accepting either hypothesis.
         t = tally()
         t.abort("engine died")
         self.assertEqual(t.aborted, "engine died")
@@ -235,8 +219,7 @@ class TestTimeControlParsing(unittest.TestCase):
         self.assertEqual(sprt.parse_tc("60"), (60000, 0))
 
     def test_the_projects_two_standard_controls(self):
-        # 8+0.08 is the SPRT control, 10+0.1 the pool control. Both appear in
-        # the ledger next to every measured number.
+        # Cover the SPRT and pool time-control formats used by the ledger.
         self.assertEqual(sprt.parse_tc("8+0.08"), (8000, 80))
         self.assertEqual(sprt.parse_tc("10+0.1"), (10000, 100))
 
@@ -262,7 +245,7 @@ class TestOpeningBook(unittest.TestCase):
         self.assertEqual(entries[0][0], "fen")
 
     def test_a_missing_book_falls_back_to_the_start_position(self):
-        # Rather than producing an empty job queue and a match of zero games.
+        # An empty book should still provide the starting position.
         self.assertEqual(sprt.load_book("does_not_exist.epd"), [("moves", [])])
         self.assertEqual(sprt.load_book(None), [("moves", [])])
 
@@ -270,8 +253,7 @@ class TestOpeningBook(unittest.TestCase):
         self.assertEqual(self.book("\n# only comments\n"), [("moves", [])])
 
     def test_epd_is_padded_to_a_full_fen(self):
-        # EPD carries four fields; the engine is sent a six-field FEN, so the
-        # halfmove and fullmove counters have to be supplied.
+        # Expand a four-field EPD with the two FEN move counters.
         fen, moves = sprt.opening_for(
             ("fen", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"))
         self.assertEqual(fen.split()[-2:], ["0", "1"])

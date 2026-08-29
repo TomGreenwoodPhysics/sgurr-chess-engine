@@ -56,9 +56,7 @@ sys.path.insert(0, str(ROOT / "testing"))
 from engine_check import verify_all, EngineUnusable   # noqa: E402
 
 
-# --------------------------------------------------------------------------
-# engine option discovery
-# --------------------------------------------------------------------------
+# Engine option discovery
 
 OPTION_RE = re.compile(
     r"^option name (?P<name>.+?) type spin default (?P<default>-?\d+) "
@@ -96,9 +94,7 @@ def read_spin_options(exe: Path, timeout: float = 20.0) -> dict:
     return out
 
 
-# --------------------------------------------------------------------------
-# the tuner
-# --------------------------------------------------------------------------
+# Tuner
 
 class Spsa:
     def __init__(self, cfg: dict, cfg_path: Path):
@@ -119,19 +115,17 @@ class Spsa:
         self.games_per_iter = int(cfg.get("games_per_iter", 8))
         self.iterations = int(cfg.get("iterations", 3000))
 
-        # Standard SPSA decay exponents. These are the values the literature
-        # settled on and there is no reason to be creative here.
+        # Standard SPSA decay exponents.
         self.alpha = float(cfg.get("alpha", 0.602))
         self.gamma = float(cfg.get("gamma", 0.101))
-        # A dampens the early steps so a wild first gradient cannot throw the
-        # parameters across their whole range; 10% of the run is conventional.
+        # Use the first 10% of the run to damp early steps.
         self.A = float(cfg.get("A", 0.1 * self.iterations))
 
         self.available = read_spin_options(self.exe)
         self.params = self._build_params()
         self.state = self._load_state()
 
-    # ---- parameter setup -------------------------------------------------
+    # Parameter setup
     def _build_params(self) -> list:
         params = []
         for entry in self.cfg["params"]:
@@ -144,27 +138,15 @@ class Spsa:
             info = self.available[name]
             lo, hi = info["min"], info["max"]
 
-            # c is the perturbation size. Default to a twentieth of the range,
-            # which is small enough not to leave the sensible region in one step
-            # and large enough to move an integer option at all -- a c below 0.5
-            # rounds to no change and the parameter would sit frozen while
-            # appearing to be tuned.
+            # Default c to one twentieth of the range. Keep it above 0.5 so
+            # integer options do not round both perturbations to the same value.
             c = float(entry.get("c", max(1.0, (hi - lo) / 20.0)))
 
-            # a sets how far one gradient estimate can move the value, and it
-            # has to be derived rather than guessed -- the first version of this
-            # line had c cancel out of its own formula, leaving every parameter
-            # frozen while the run looked healthy.
-            #
+            # Derive a for an early step of roughly c / 5.
             #   step = a_k * ghat = [a / (A+k)^alpha] * (s - 0.5) / c_k
-            #
-            # With games_per_iter games the score is granular and |s - 0.5|
-            # averages around 0.15. Solving for a step of about c/5 in the early
-            # iterations gives a = c^2 * (A+1)^alpha / (5 * 0.15).
-            #
-            # c/5 is deliberately modest: SPSA's per-step signal is almost all
-            # noise, and the convergence comes from averaging thousands of them,
-            # not from any one step being decisive.
+            # With |s - 0.5| near 0.15, this gives
+            #   a = c^2 * (A+1)^alpha / (5 * 0.15)
+            # The small step limits noise from any one match.
             typical_signal = 0.15
             a = float(entry.get(
                 "a",
@@ -180,7 +162,7 @@ class Spsa:
             })
         return params
 
-    # ---- persistence -----------------------------------------------------
+    # Persistence
     def _load_state(self) -> dict:
         if self.state_path.exists():
             s = json.loads(self.state_path.read_text(encoding="utf-8"))
@@ -200,7 +182,7 @@ class Spsa:
         with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-    # ---- one match -------------------------------------------------------
+    # One match
     def _opts(self, theta: dict) -> list:
         return [f"option.{k}={v}" for k, v in theta.items()]
 
@@ -225,11 +207,7 @@ class Spsa:
             self.log("  match timed out -- skipping iteration")
             return None
         finally:
-            # fastchess shuts its engines down by sending `quit`; anything that
-            # kills it instead orphans them mid-search. Sweep unconditionally --
-            # thousands of iterations means one leaked pair per hundred would
-            # eventually saturate the machine and silently invalidate every
-            # timed result after it.
+            # Sweep for orphaned engines after every fastchess run.
             self._sweep()
 
         out = res.stdout or ""
@@ -250,7 +228,7 @@ class Spsa:
         subprocess.run(["taskkill", "/IM", self.exe.name, "/F"],
                        capture_output=True, text=True)
 
-    # ---- the loop --------------------------------------------------------
+    # Tuning loop
     def run(self) -> None:
         try:
             verify_all([self.exe])
@@ -283,9 +261,7 @@ class Spsa:
                 self._save_state()
                 continue
 
-            # One match result updates every parameter at once -- the whole
-            # point of SPSA. Sign only: a delta of +1 means the plus side had
-            # the higher value, so a plus-side win pushes the value up.
+            # Update every parameter from the match result using the delta sign.
             for p in self.params:
                 ck = p["c"] * ck_scale
                 if ck <= 0:
@@ -320,7 +296,7 @@ class Spsa:
         v = p["value"] if v is None else v
         return int(round(max(float(p["min"]), min(float(p["max"]), v))))
 
-    # ---- output ----------------------------------------------------------
+    # Output
     def report(self) -> None:
         self.log("")
         self.log("=" * 62)

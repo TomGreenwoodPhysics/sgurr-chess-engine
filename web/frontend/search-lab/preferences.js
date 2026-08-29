@@ -18,8 +18,7 @@ function applyTheme(nextTheme) {
   refs.theme.value = themeKey;
   refs.themeColour?.setAttribute("content", theme.vars["--bg"]);
   localStorage.setItem("sgurrTheme", themeKey);
-  // Cached so the inline head script can paint the chosen palette immediately
-  // on the next page, instead of flashing the stylesheet default first.
+  // Cache the palette so the next page can apply it before first paint.
   localStorage.setItem("sgurrThemeVars", JSON.stringify(theme.vars));
   document.dispatchEvent(new CustomEvent("sgurrthemechange", { detail: { themeKey } }));
 }
@@ -75,8 +74,7 @@ function cycleSelect(select, step) {
   select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-// The labs answer the same keys as the main app: T cycles the theme, and where
-// a lab has a detail control, D cycles that.
+// Match the main app shortcuts. T changes theme and D changes detail.
 function initLabShortcuts() {
   window.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;

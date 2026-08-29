@@ -163,7 +163,7 @@ async function startPositionAnalysis(fen, { orientation = "white", validated = n
       try {
         detail = (await response.json()).detail || detail;
       } catch {
-        // Keep the HTTP status when the server did not return JSON.
+        // Preserve the HTTP status when the response is not JSON.
       }
       throw new Error(detail);
     }

@@ -238,7 +238,7 @@ document.addEventListener("click", (event) => {
   playSound("button", { volume: 1.1 });
 });
 
-// --- Post-game review -------------------------------------------------
+// Post-game review
 function openReview() {
   if (enterReview()) {
     closeAllModals();
@@ -337,8 +337,7 @@ window.addEventListener("keydown", (event) => {
   } else if (event.key.toLowerCase() === "u" && app.mode === "game") {
     undoMove();
   } else if (event.key === "ArrowLeft" && app.mode === "game") {
-    // While reviewing, the arrows walk the record instead of taking back
-    // plies -- the game is over, there is nothing to take back.
+    // During review, the arrows step through recorded positions.
     if (app.review.active) {
       stepReview(-1);
     } else {
@@ -387,8 +386,7 @@ initAudio();
 initDemoTooltips();
 applyTheme();
 applyAnimationMode();
-// Building the intro only to dismantle it costs a scene's worth of animation
-// at the exact moment the menu is coming up, so skip it outright.
+// Skip constructing the intro when opening directly on the menu.
 if (new URLSearchParams(window.location.search).get("view") === "menu") {
   finishIntro();
 } else {

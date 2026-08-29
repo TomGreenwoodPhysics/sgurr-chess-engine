@@ -38,9 +38,7 @@ FORMAT = re.compile(r"^[a-h][1-8][a-h][1-8][qrbn]?$")
 
 
 def bestmove(path, fen, timeout=25):
-    # Absolute: a relative forward-slash path does not resolve through
-    # CreateProcess on Windows, and the failure is a bare FileNotFoundError
-    # that reads like a missing engine rather than a path problem.
+    # Use an absolute path because CreateProcess can reject relative slash paths.
     path = os.path.abspath(path)
     p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, text=True, bufsize=1)

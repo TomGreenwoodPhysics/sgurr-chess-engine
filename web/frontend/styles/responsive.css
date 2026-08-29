@@ -163,7 +163,7 @@
     grid-template-columns: 1fr;
   }
 
-  /* Three side-by-side actions would wrap 2 + 1 here; stack them instead. */
+  /* Stack the three actions before they wrap unevenly. */
   .result-box .modal-actions {
     flex-direction: column;
     width: min(260px, 100%);
@@ -307,11 +307,7 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Capture absorb: captured pieces stream into Sgurr's core (the       */
-/* mate-devour motif extended to ordinary captures), or dissolve in    */
-/* place when the human takes one of Sgurr's pieces.                   */
-/* ------------------------------------------------------------------ */
+/* Capture animation */
 
 .capture-absorb-piece {
   position: fixed;

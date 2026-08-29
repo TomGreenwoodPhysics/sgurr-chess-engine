@@ -27,7 +27,7 @@ class EngineDied(RuntimeError):
     """
 
 
-# ----------------------------- SPRT statistics -----------------------------
+# SPRT statistics
 
 def sprt_llr(w, d, l, elo0, elo1):
     n = w + d + l
@@ -38,7 +38,7 @@ def sprt_llr(w, d, l, elo0, elo1):
     xbar = (w + 0.5 * d) / n
     var = (w * (1 - xbar) ** 2 + d * (0.5 - xbar) ** 2 + l * (0 - xbar) ** 2) / n
     var = max(var, 1e-9)
-    # Normal-approximation LLR (the trinomial SPRT cutechess-cli uses).
+    # Normal-approximation LLR used by the trinomial cutechess-cli SPRT.
     return (s1 - s0) * (2 * xbar - s0 - s1) * n / (2 * var)
 
 def elo_with_ci(w, d, l):
@@ -59,7 +59,7 @@ def elo_with_ci(w, d, l):
     return elo, (hi - lo) / 2
 
 
-# ----------------------------- UCI engine ----------------------------------
+# UCI engine
 
 class Engine:
     def __init__(self, path):
@@ -116,7 +116,7 @@ class Engine:
         t0 = time.perf_counter()
         mv = None
         while True:
-            line = self._readline()      # raises EngineDied at EOF
+            line = self._readline()      # Raises EngineDied at EOF
             if line.startswith("bestmove"):
                 toks = line.split()
                 mv = toks[1] if len(toks) > 1 else "0000"
@@ -131,14 +131,14 @@ class Engine:
             self.p.kill()
 
 
-# ------------------------------- one game ----------------------------------
-# result is from WHITE's perspective: 1.0 win, 0.5 draw, 0.0 loss
+# One game
+# Results use White's perspective with 1 for a win, 0.5 draw, and 0 loss.
 
 def play_game(white, black, start_fen, opening_moves, tc):
     base_ms, inc_ms = tc
     pos = cl.Position.from_fen(start_fen)
     moves = []
-    # replay opening line
+    # Replay the opening line.
     for um in opening_moves:
         legal = {cl.move_to_uci(m): m for m in cl.legal_moves(pos)}
         if um not in legal:
@@ -154,8 +154,8 @@ def play_game(white, black, start_fen, opening_moves, tc):
         legal = cl.legal_moves(pos)
         if not legal:
             if cl.in_check(pos):
-                return 0.0 if pos.white else 1.0   # side to move is mated
-            return 0.5                              # stalemate
+                return 0.0 if pos.white else 1.0   # The side to move is mated
+            return 0.5                              # Stalemate
         if pos.half >= 100 or cl.insufficient_material(pos.bd):
             return 0.5
         k = pos.key()
@@ -169,27 +169,27 @@ def play_game(white, black, start_fen, opening_moves, tc):
         if pos.white:
             wt -= dt
             if wt < 0:
-                return 0.0   # white forfeits on time
+                return 0.0   # White forfeits on time
             wt += inc_ms
         else:
             bt -= dt
             if bt < 0:
-                return 1.0   # black forfeits on time
+                return 1.0   # Black forfeits on time
             bt += inc_ms
 
         legal_uci = {cl.move_to_uci(m): m for m in legal}
         if mv not in legal_uci:
-            # illegal or null move: the offending side loses
+            # An illegal or null move forfeits the game.
             sys.stderr.write(f"[illegal '{mv}' by {'white' if pos.white else 'black'} "
                              f"({eng.path})]\n")
             return 0.0 if pos.white else 1.0
         pos = cl.apply_move(pos, legal_uci[mv])
         moves.append(mv)
 
-    return 0.5   # ply cap
+    return 0.5   # Ply cap
 
 
-# ------------------------------ orchestration ------------------------------
+# Match orchestration
 
 def load_book(path):
     lines = []
@@ -200,18 +200,18 @@ def load_book(path):
             s = raw.strip()
             if not s or s.startswith("#"):
                 continue
-            if "/" in s:                      # FEN (EPD: first 4-6 fields)
+            if "/" in s:                      # FEN or the first EPD fields
                 lines.append(("fen", s))
             else:                             # UCI opening line from startpos
                 lines.append(("moves", s.split()))
     if not lines:
-        lines.append(("moves", []))           # fall back to bare startpos
+        lines.append(("moves", []))           # Fall back to bare startpos
     return lines
 
 def opening_for(entry):
     kind, val = entry
     if kind == "fen":
-        # normalise EPD to a full FEN if move counters are missing
+        # Add missing move counters to an EPD.
         f = val.split()
         while len(f) < 6:
             f.append("0" if len(f) == 4 else "1")
@@ -229,17 +229,17 @@ class Tally:
         self.upper = math.log((1 - args.beta) / args.alpha)
         self.lower = math.log(args.beta / (1 - args.alpha))
         self.decided = None
-        self.aborted = None   # set if any worker's engine died mid-match
+        self.aborted = None   # Set when a worker's engine dies
 
     def abort(self, reason):
         with self.lock:
             if self.aborted is None:
                 self.aborted = reason
-            # Unblock the other workers: `decided` is what their loops poll.
+            # Unblock the other workers through their shared stop flag.
             self.decided = self.decided or "ABORTED"
 
     def record_pair(self, r1, r2):
-        # r1,r2 are NEW's score in the two colour-swapped games
+        # r1 and r2 are the new engine's scores in the colour-swapped games.
         with self.lock:
             for r in (r1, r2):
                 if r == 1.0: self.w += 1
@@ -272,23 +272,21 @@ def worker(tally, jobs, args):
             except queue.Empty:
                 break
             start_fen, omoves = opening_for(entry)
-            # game 1: NEW is white ; game 2: NEW is black
+            # The new engine plays White first and Black second.
             r1 = play_game(new_eng, base_eng, start_fen, omoves, args.tc)
             r2 = play_game(base_eng, new_eng, start_fen, omoves, args.tc)
-            new_r2 = 1.0 - r2   # convert white-perspective to NEW-perspective
+            new_r2 = 1.0 - r2   # Convert to the new engine's perspective
             if tally.record_pair(r1, new_r2):
                 break
     except EngineDied as exc:
-        # Never let a dead engine become a scoreline. Flag the whole run as
-        # invalid so main() reports an abort instead of a verdict computed
-        # partly from games one side could not physically play.
+        # Abort the run rather than count games from an engine that died.
         tally.abort(str(exc))
     finally:
         new_eng.quit(); base_eng.quit()
 
 
 def parse_tc(s):
-    # "8+0.08" -> (8000 ms, 80 ms) ; "0.5" -> (500 ms, 0)
+    # Convert base and increment values to milliseconds.
     if "+" in s:
         base, inc = s.split("+")
     else:
@@ -322,11 +320,8 @@ def main():
                 break
             jobs.put(e); n_pairs += 1
 
-    # Pre-flight. Both binaries must actually start and complete a UCI
-    # handshake before a single game is played -- an engine that cannot spawn
-    # would otherwise lose every game and the SPRT would still print a verdict.
-    # Also prints each engine's self-reported id, which catches the other half
-    # of the problem: running a stale or mislabelled binary by mistake.
+    # Verify both UCI handshakes before games begin. This prevents launch
+    # failures from becoming forfeits and exposes stale or mislabelled binaries.
     try:
         for path, name in verify_all([args.new, args.base]).items():
             print(f"engine ok  {path}  ->  {name}")

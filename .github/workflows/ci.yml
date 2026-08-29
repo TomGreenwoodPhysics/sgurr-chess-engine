@@ -1,22 +1,8 @@
 name: CI
 
-# What this proves, and why it is shaped this way.
-#
-# The engine's search is deterministic: `bench` walks a fixed position list to
-# a fixed depth with no clock and no randomness, so its node total is a
-# fingerprint of *what* the engine searches. Comparing that number is stronger
-# than a unit test -- it fails on any behaviour change anywhere in movegen,
-# search or evaluation, including ones a test suite would not think to look
-# for. It is also what lets speed-only work be proved rather than argued.
-#
-# The fingerprint is reproducible within a toolchain, not across them: see the
-# note above the fingerprint steps. CI therefore checks the properties that do
-# hold everywhere -- determinism, and vectorised/scalar agreement -- rather
-# than a constant copied from another machine.
-#
-# That second claim ("the SIMD paths are a speed change and never a numeric
-# one") is load-bearing for the whole project, so it is checked on every push
-# rather than trusted.
+# `bench` gives a deterministic node fingerprint within one toolchain.
+# Standard libraries can order tied moves differently, so CI compares builds
+# made with the same toolchain. Scalar and vector inference must also agree.
 
 on:
   push:
@@ -25,10 +11,8 @@ on:
   workflow_dispatch:
 
 env:
-  # Reference values from the MSYS2 clang64 development toolchain. Reported for
-  # comparison, not asserted: see the fingerprint note below for why the node
-  # totals are toolchain-specific. EVALSUM is asserted, since the NNUE forward
-  # pass is pure integer arithmetic and genuinely is identical everywhere.
+  # MSYS2 clang64 reference values for local comparison.
+  # Only EVALSUM is portable across toolchains.
   BENCH_NNUE: "3601424"   # 19 positions at depth 11, gen8 net
   BENCH_HCE: "4616415"    # same, hand-crafted eval (no network loaded)
   EVALSUM: "-142859"      # nnue_selfcheck checksum, identical on all paths
@@ -43,9 +27,8 @@ jobs:
       - name: Compiler version
         run: clang++ --version
 
-      # -march=x86-64-v3 rather than -march=native: it pins the AVX2 baseline
-      # so the build does not silently vary with whatever runner we land on.
-      # No -static here; that flag exists in build.sh for the Windows harness.
+      # Pin the AVX2 baseline instead of using the runner's native target.
+      # The Windows harness adds its own static linking flag.
       - name: Build engine (vectorised)
         run: |
           cd sgurr_cpp
@@ -79,22 +62,9 @@ jobs:
           printf 'uci\nquit\n' | ./sgr | grep -q '^uciok$'
           printf 'uci\nquit\n' | ./sgr | sed -n 's/^id name //p'
 
-      # The fingerprint is a WITHIN-TOOLCHAIN invariant, not a universal
-      # constant, so CI asserts the invariant rather than a magic number.
-      #
-      # Why: order_moves sorts with std::sort, which is not stable, so moves
-      # with equal scores come out in an order the standard library chooses.
-      # libstdc++ here and libc++ on the MSYS2 clang64 development machine
-      # choose differently, which is a different search rather than a faster
-      # one -- board.cpp and search.cpp both already flag that sensitivity.
-      # Measured: 3457351 nodes here against 3601424 there, same source.
-      #
-      # This does not weaken the instrument for the job it does. Speed-only
-      # work is verified by diffing two builds from ONE toolchain, which is
-      # exactly what the three checks below reproduce.
-      #
-      # stdout carries the deterministic node counts; wall time, NPS and the
-      # loaded net go to stderr, so 2>/dev/null compares only the stable part.
+      # std::sort may order tied moves differently across standard libraries.
+      # The fingerprint is therefore compared only within one toolchain.
+      # Stable node counts go to stdout while timings and net details use stderr.
       - name: Search is deterministic (same binary, repeated runs)
         run: |
           cd sgurr_cpp
@@ -112,10 +82,7 @@ jobs:
           diff <(./sgr bench 2>/dev/null) <(./sgr bench 2>/dev/null)
           echo "HCE fingerprint: $(./sgr bench 2>/dev/null | tail -1 | awk '{print $2}')"
 
-      # The real claim, and it IS platform-independent: vectorised and scalar
-      # inference are bit-identical, so the vector paths buy speed and change
-      # nothing numeric. Both binaries come from this toolchain, so the
-      # std::sort tie order is common to them and cancels.
+      # Scalar and vector inference must be bit-identical.
       - name: Scalar inference agrees with vectorised
         run: |
           cd sgurr_cpp
@@ -140,9 +107,7 @@ jobs:
           cd sgurr_cpp
           ./sgr seetest 2>&1 | tee /dev/stderr | grep -q 'SEE: 9/9 passed'
 
-      # Verifies engine inference against the trainer's own forward pass across
-      # every special move type plus thousands of random game chains, and emits
-      # a cross-build checksum.
+      # Compare engine inference with the trainer across special and random moves.
       - name: NNUE bit-exactness against the trainer
         run: |
           cd sgurr_cpp
@@ -167,11 +132,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # sprt.py decided whether every search change in this project shipped.
-      # These cover the statistics and the stopping rule against closed-form
-      # values and invariants; no engine is started, so it runs in
-      # milliseconds. -W error::ResourceWarning because a leaked file handle
-      # is how the book loader was found to be holding one open.
+      # Check SPRT calculations and fail on leaked file handles.
       - name: SPRT statistics and decision rule
         run: python -W error::ResourceWarning -m unittest discover -s testing -p "test_*.py" -v
 
@@ -243,8 +204,7 @@ jobs:
         working-directory: web
         run: npx playwright install --with-deps chromium
 
-      # The suite serves the frontend itself and intercepts backend requests,
-      # so it needs no engine binary and no running API.
+      # The suite serves the frontend and intercepts backend requests.
       - name: Browser smoke tests
         working-directory: web
         run: npx playwright test

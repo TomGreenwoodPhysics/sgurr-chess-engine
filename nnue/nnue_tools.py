@@ -4,17 +4,13 @@ that mirrors the C++ integer math exactly -- used to verify the engine's NNUE.
 import struct, sys
 import numpy as np
 
-INPUT, HL, QA, QB, SCALE = 768, 384, 255, 64, 400   # HL=384 since v4.0 (gen5)
+INPUT, HL, QA, QB, SCALE = 768, 384, 255, 64, 400   # HL has been 384 since v4.0
 MAGIC = b"RUKN"
 
-# --- king buckets (version-2 nets) -----------------------------------------
-# Each perspective indexes its features by its OWN king's bucket, so the net
-# learns king-placement-specific weights. The map is over the perspective's
-# RELATIVE king square (own back rank = rank 1; black mirrors via sq^56).
-# Fine resolution on the back rank, where kings sit for most of the game,
-# coarse above it. The 64-byte map is embedded verbatim in every v2 .nnue and
-# the engine reads it back from the file, so trainer and engine cannot
-# silently disagree on bucket assignment (single source of truth: this table).
+# King buckets for version 2 nets
+# Each view uses its own king's relative square, with black mirrored by sq ^ 56.
+# Back-rank buckets are finer than those on higher ranks. The map is embedded in
+# each net so the trainer and engine use the same bucket assignment.
 def _build_king_bucket_map():
     m = np.zeros(64, np.uint8)
     for sq in range(64):
@@ -22,13 +18,13 @@ def _build_king_bucket_map():
         if r == 0:
             m[sq] = f // 2        # a1b1=0  c1d1=1  e1f1=2  g1h1=3
         elif r == 1:
-            m[sq] = 4             # rank 2
+            m[sq] = 4             # Rank 2
         elif r <= 3:
-            m[sq] = 5             # ranks 3-4
+            m[sq] = 5             # Ranks 3 and 4
         elif r <= 5:
-            m[sq] = 6             # ranks 5-6
+            m[sq] = 6             # Ranks 5 and 6
         else:
-            m[sq] = 7             # ranks 7-8
+            m[sq] = 7             # Ranks 7 and 8
     return m
 
 KING_BUCKET_MAP = _build_king_bucket_map()
@@ -83,7 +79,7 @@ def pieces_from_fen(fen):
     letter = {"P":0,"N":1,"B":2,"R":3,"Q":4,"K":5}
     rows = placement.split("/")
     out = []
-    for r, row in enumerate(rows):          # r=0 is rank 8 (top)
+    for r, row in enumerate(rows):          # Row 0 is rank 8
         rank = 7 - r
         file = 0
         for ch in row:
@@ -108,7 +104,7 @@ def trunc_div(num, den):
 def forward(net, fen):
     ftw, ftb, ow, ob, buckets, bmap = net
     plist, stm = pieces_from_fen(fen)
-    # bucket offset per perspective, from that perspective's OWN king
+    # Find each view's bucket from its own king.
     off = [0, 0]
     if buckets > 1:
         kings = {c: sq for (c, pt, sq) in plist if pt == 5}
@@ -139,7 +135,7 @@ if __name__ == "__main__":
         print(output, cp)
 
 
-# --- quantise + export: the trainer calls this to write a .nnue the engine loads ---
+# Quantise and export a net for the engine.
 def export(path, ftw, ftb, ow, ob, bucket_map=None):
     """ftw: (n_features,HL) float; ftb: (HL,) float; ow: (2*HL,) float; ob: scalar.
     Quantises with the engine's QA/QB scales and writes the RUKN format.
@@ -174,7 +170,7 @@ def forward_float(ftw, ftb, ow, ob, fen):
         for persp in (0, 1):
             acc[persp] = acc[persp] + ftw[feat(persp, colour, ptype, sq)]
     us, them = acc[stm], acc[1-stm]
-    cu = np.clip(us, 0, 1); ct = np.clip(them, 0, 1)     # float CReLU (QA -> 1.0)
+    cu = np.clip(us, 0, 1); ct = np.clip(them, 0, 1)     # Float CReLU with QA mapped to 1.0
     out = float(np.dot(cu, ow[:HL]) + np.dot(ct, ow[HL:]) + ob)
     return out * SCALE
 

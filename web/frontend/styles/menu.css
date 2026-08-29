@@ -1,9 +1,5 @@
-/* --menu-core-size lives here, on the common ancestor, because both
-   .menu-title and its sibling .menu-card size themselves from it. Declared
-   on .menu-title it would not inherit sideways to the card, and the card's
-   top: calc(...) would be invalid at computed-value time (top: auto).
-   Bounded by height as well as width so the hero never outgrows a short
-   viewport -- see the breakpoints at the foot of this file. */
+/* Define --menu-core-size on the shared ancestor so the title and card inherit it.
+   Height limits keep the core within short viewports. */
 .menu-screen {
   --menu-core-size: clamp(500px, min(42vw, 70vh), 740px);
   position: fixed;
@@ -275,12 +271,8 @@
   width: min(540px, calc(100vw - 58vw));
   min-width: 430px;
   min-height: 0;
-  /* Bounded so a short viewport cannot push the card past the fold, where
-     position: fixed would put it out of reach. The card itself keeps
-     overflow visible -- .menu-card-scroll below does the scrolling, so the
-     accent line and memory strip that sit outside the padding box are never
-     clipped. Note that setting overflow on the card would also force
-     overflow-x to compute to auto, adding a spurious sideways scrollbar. */
+  /* Limit the card height on short viewports. Only .menu-card-scroll handles overflow
+     so the outer accents are not clipped. */
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
@@ -296,9 +288,8 @@
     inset 0 0 0 1px color-mix(in srgb, var(--text), transparent 94%);
 }
 
-/* The card's only in-flow child: takes the leftover height and scrolls when
-   the controls do not fit. min-height: 0 is required -- without it a flex item
-   refuses to shrink below its content and the scrollbar never appears. */
+/* Let the controls use remaining height and scroll. min-height must stay zero
+   so the flex item can shrink. */
 .menu-card-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -337,8 +328,7 @@
   margin-top: 0;
 }
 
-/* The selected opponent's spec line, under its selector row: the rating is
-   visible without opening the picker. */
+/* Show the selected opponent's rating below the selector. */
 .selector-caption {
   margin: 7px 2px 0;
   color: var(--muted);
@@ -562,9 +552,7 @@ a.menu-action-card:focus-visible {
   display: none;
 }
 
-/* Narrow: the hero stacks above the card. Width-only, so a wide-but-short
-   window falls to the compressed side-by-side layout below instead of
-   inheriting this stacked geometry. */
+/* Stack the hero only in narrow viewports. Wide, short screens use the layout below. */
 @media (max-width: 1320px) {
   .menu-screen {
     --menu-core-size: clamp(180px, 28vh, 260px);
@@ -673,11 +661,8 @@ a.menu-action-card:focus-visible {
   }
 }
 
-/* Wide but short: keep the side-by-side composition, shrink the hero.
-   The bounds complement the narrow query exactly (1320/1321, 820/821), so
-   no viewport matches both this and the stacked layout and neither can
-   inherit the other's geometry. (The narrow+short query at the foot of the
-   file does deliberately layer on the narrow one -- see its note.) */
+/* Use a smaller side-by-side layout for wide, short screens.
+   These bounds do not overlap the stacked layout. */
 @media (min-width: 1321px) and (max-height: 820px) {
   .menu-screen {
     --menu-core-size: clamp(180px, min(32vw, 58vh), 500px);
@@ -729,11 +714,7 @@ a.menu-action-card:focus-visible {
   }
 }
 
-/* Narrow AND short at once -- the one geometry that suits neither of the
-   layouts above: too narrow to sit side by side, too short to stack at full
-   size. Pull the hero in tight so the card keeps a usable share of the
-   height. Ordered last so it wins over the narrow query; its condition is
-   disjoint from the wide query, so the two never interact. */
+/* Use a compact stacked layout for narrow, short screens. */
 @media (max-width: 1320px) and (max-height: 620px) {
   .menu-screen {
     --menu-core-size: clamp(96px, 20vh, 180px);

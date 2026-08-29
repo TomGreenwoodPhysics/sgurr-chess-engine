@@ -1,15 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-rem ============================================================
 rem Sgurr gen7 clean-data generation
-rem Safe/resumable launcher for sgurr_cpp\datagen.exe
-rem ============================================================
+rem Resumable launcher for sgurr_cpp\datagen.exe
 
-rem Repository root, resolved from this script's own location (tools\..) so
-rem a clone anywhere works. pushd/popd normalises the "..", which a bare
-rem %~dp0.. does not -- the unnormalised form breaks the tasklist and
-rem PowerShell -LiteralPath checks below.
+rem Resolve and normalise the repository root so clones work anywhere.
 pushd "%~dp0.."
 set "ROOT=%CD%"
 popd
@@ -21,9 +16,8 @@ set "LOGDIR=%ROOT%\runs\gen7_datagen"
 
 set "TARGET=12000000"
 set "LIMIT=nodes:150000"
-rem 12 workers on a 16-thread 7800X3D: datagen is NODE-limited (nodes:150000),
-rem so oversubscribing cores changes throughput but not the data. Leaves some
-rem headroom so the machine stays usable. Was 6 for the old 6-core i5.
+rem Twelve workers leave headroom on a 16-thread CPU.
+rem Node-limited generation keeps the data independent of worker speed.
 set "WORKERS=12"
 
 if /I "%~1"=="worker" goto :worker
@@ -63,8 +57,7 @@ if not exist "%NET%" (
 if not exist "%OUT%" mkdir "%OUT%"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
-rem Refuse to launch a duplicate generator set. This intentionally blocks if
-rem any datagen.exe is running, including a different generation.
+rem Refuse to start while any datagen.exe process is already running.
 tasklist /FI "IMAGENAME eq datagen.exe" 2>NUL | find /I "datagen.exe" >NUL
 if not errorlevel 1 (
     echo ERROR: At least one datagen.exe process is already running.
@@ -74,8 +67,8 @@ if not errorlevel 1 (
 )
 
 rem A forced stop can interrupt only the final record of a shard.
-rem Inspect generator shards ONLY: data_*.bin.
-rem Before removing a sub-32-byte torn tail, preserve the original file as a
+rem Inspect only data_*.bin generator shards.
+rem Before trimming a partial record, preserve the original file as a
 rem timestamped .torn-*.bak copy. Complete 32-byte records are never removed.
 echo Checking generator shards for incomplete record tails...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^

@@ -136,9 +136,8 @@ const POSITION_GROUPS = [
   { label: "Endgames · deep geometry", keys: ["opposition", "lucena", "bishops", "rookrace", "philidor", "vancura", "rookpawns", "queenend", "queenpawn", "pawnrace", "triangulation", "bishopknight", "knights", "samebishops", "rookknight", "bishoppair", "rookbishoprook", "connectedpassers"] },
 ];
 
-// Captured from the shipped v8.2 binary on the Ruy Lopez benchmark position.
-// Scores below are converted from UCI side-to-move values to the website's
-// usual White-relative convention.
+// Captured from v8.2 on the Ruy Lopez benchmark position.
+// Scores use the website's White-relative convention.
 const ITERATIONS = [
   { depth: 1, nodes: 60, nps: 60000, score: -26, uci: "a7a6" },
   { depth: 2, nodes: 226, nps: 226000, score: -17, uci: "g8e7" },
@@ -824,8 +823,7 @@ function handleLiveEvent(event) {
   refs.leaderUci.textContent = uci;
   refs.eventTag.textContent = `DEPTH ${event.depth} COMPLETE`;
   refs.explanationText.textContent = `${moveLabel(uci)} leads after ${formatCount(event.nodes)} searched nodes. Sgurr now starts a deeper pass using this result to order the next search.`;
-  // UCI reports a completed depth, not the engine's current interior-node
-  // mechanism. Keep the live highlight on the one fact the stream proves.
+  // Highlight only the completed depth reported by UCI.
   setPhase("deepen");
   renderLiveCandidates(uci, event.depth);
   renderIterationChart(liveIterations, event.depth, false);

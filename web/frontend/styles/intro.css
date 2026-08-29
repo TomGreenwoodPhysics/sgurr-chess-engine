@@ -53,9 +53,7 @@
     filter 1450ms cubic-bezier(0.2, 0.75, 0.2, 1),
     opacity 850ms ease,
     transform 1800ms cubic-bezier(0.16, 0.78, 0.2, 1);
-  /* Slow dolly-in: emerging from darkness and walking into the chamber.
-     The final keyframe matches the resting transform so dropping the
-     animation on later states never causes a visible jump. */
+  /* End the camera arrival at the resting transform to avoid later jumps. */
   animation: intro-cave-arrive 6400ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
@@ -288,8 +286,7 @@
 .intro-core.dormant {
   --core-ring-opacity: 0.2;
   --core-ring-fade: 76%;
-  /* barely there: a cold, buried ember under the mountain -- dark and
-     desaturated, but not fully dead, so something still seems to slumber. */
+  /* Keep a faint, desaturated ember visible while dormant. */
   filter: grayscale(0.6) saturate(0.55) brightness(0.34) contrast(1.05);
   opacity: 0.62;
 }
@@ -308,9 +305,7 @@
     transform 700ms cubic-bezier(0.2, 0.72, 0.2, 1);
 }
 
-/* The prompt only fades in once the dolly-in has nearly settled, so the
-   first beats belong to the cave alone. fill-mode backwards (not both) so
-   the fill never fights the state-driven opacity rules that follow. */
+/* Delay the prompt until the camera settles. Backwards fill avoids overriding later opacity states. */
 .intro-screen[data-motion="on"] .intro-copy {
   animation: intro-copy-arrive 1700ms ease 2900ms backwards;
 }
@@ -404,7 +399,7 @@
   bottom: 0;
 }
 
-/* Boss name card: serif title, gold hairline, epithet, filling health bar. */
+/* Style the boss title, epithet, and health bar. */
 .intro-bosscard {
   position: absolute;
   z-index: 17;
@@ -519,9 +514,7 @@
   opacity: 1;
 }
 
-/* The disturbance: the whole chamber quakes for a beat. The keyframes end
-   on transform: none so the fill leaves no containing block behind for the
-   fixed-position core handoff later. */
+/* End the quake without a transform so it does not contain the fixed handoff core. */
 .intro-screen[data-motion="on"][data-state="waking"] {
   animation: intro-quake 1050ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
@@ -553,9 +546,7 @@
   }
 }
 
-/* Waking drops the arrival animation (its last keyframe matches the resting
-   transform) and lurches the camera towards the thing that just noticed you;
-   naming settles back slowly while the card holds the frame. */
+/* Move the camera closer during wake, then return it during the title phase. */
 .intro-screen[data-state="waking"] .intro-cave,
 .intro-screen[data-state="naming"] .intro-cave {
   animation: none;
@@ -596,12 +587,8 @@
   transform: scale(1.04);
 }
 
-/* Same declaration in all three states so the animation carries over without
-   restarting as waking hands off to naming and then to the blackout. It has
-   to survive the blackout in particular: its `both` fill is what holds the
-   core at its swollen resting scale, and dropping it there would shrink the
-   core by 4% in a single frame just as the veil starts to close. The script
-   handoff picks the swell up from here and carries it on. */
+/* Keep the same wake animation across these states to prevent restarts.
+   Its fill holds the final scale until the script handoff. */
 .intro-screen[data-state="waking"] .intro-core-trigger,
 .intro-screen[data-state="naming"] .intro-core-trigger,
 .intro-screen[data-state="blackout"] .intro-core-trigger {
@@ -620,8 +607,7 @@
   pointer-events: none;
 }
 
-/* The name card owns the naming phase: prompt copy departs, bars close in,
-   the title and health bar arrive. */
+/* Replace the prompt with the title card during the naming phase. */
 .intro-screen[data-state="naming"] .intro-copy {
   opacity: 0;
   transform: translateX(-50%) translateY(16px);
@@ -696,14 +682,8 @@
   transition: none;
 }
 
-/* The reveal is a straight cross-dissolve. The blackout veil holds its black,
-   and the whole intro layer -- the handed-off core included -- fades away over
-   the finished menu underneath. Fading only the veil instead would leave the
-   intro core floating at full strength above a half-revealed menu, and then
-   hiding the screen at the end would swap one orb for the other in a single
-   frame: two separate elements, so the blob visibly jumped. Keep this shorter
-   than INTRO_REVEAL_DURATION_MS in js/config.js -- that timer hides the screen,
-   and it has to land after the dissolve has finished, not during it. */
+/* Cross-fade the complete intro over the finished menu to hide the core swap.
+   Keep this shorter than INTRO_REVEAL_DURATION_MS so the layer hides after the fade. */
 .intro-screen[data-state="departing"] {
   background-color: #000;
   opacity: 0;
@@ -733,9 +713,7 @@
   transition: none;
 }
 
-/* Straight to the menu: hide the cave and lift the veil before the first
-   paint, so no frame of the intro is ever shown. The module then skips
-   building the intro scene at all. */
+/* Hide the intro before first paint when opening directly on the menu. */
 :root[data-view="menu"] .intro-screen { display: none; }
 :root[data-view="menu"] body.intro-pending { overflow: auto; }
 :root[data-view="menu"] body.intro-pending .menu-screen { opacity: 1; pointer-events: auto; }
@@ -764,9 +742,7 @@ body.intro-pending .menu-title .menu-core {
   opacity: 0;
 }
 
-/* Brought up under the still-opaque veil, so the dissolve above it lands on a
-   complete menu. Waiting for intro-pending to come off at the very end would
-   pop the hero orb in on the same frame the intro core disappears. */
+/* Build the menu beneath the opaque veil before starting the dissolve. */
 body.intro-revealing .menu-title .menu-core {
   opacity: 1;
 }

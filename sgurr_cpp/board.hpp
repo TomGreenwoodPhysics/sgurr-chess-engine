@@ -15,10 +15,7 @@ constexpr U64 FULL = 0xFFFFFFFFFFFFFFFFULL;
 constexpr const char* START_FEN =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-// Everything needed to undo one move. Built on every make_move, so absent
-// values are -1 rather than std::optional: same convention as `mailbox`, which
-// has always used -1 for an empty square. captured_piece and captured_square
-// are set and cleared together -- either both hold a capture or both are -1.
+// State saved by make_move for unmake_move. Missing squares and pieces use -1.
 struct UndoInfo {
     Move move;
     int moved_piece = -1;
@@ -40,34 +37,25 @@ struct NullMoveUndo {
     U64 old_hash_key = 0;
 };
 
-// Per-position king-safety data used to test move legality without make/unmake.
-// Computed once per node; is_legal() then answers each move in O(1).
+// King safety data shared by all legality checks at a node.
 struct LegalityInfo {
     int ksq = -1;        // side-to-move king square
     int nchk = 0;        // number of checkers (0, 1, or 2)
     U64 checkers = 0;    // enemy pieces giving check
     U64 pinned = 0;      // own pieces pinned to the king
-    U64 check_mask = 0;  // when nchk == 1: squares that resolve the check
+    U64 check_mask = 0;  // squares that resolve a single check
 };
 
-// Capacity of Board::position_history, the repetition-detection ring. A power
-// of two so the wrap is a mask. See the field declaration for why a ring, and
-// why this size cannot be too small.
+// Power-of-two capacity for the repetition history ring.
 constexpr int POSITION_HISTORY_CAP = 1024;
 constexpr int POSITION_HISTORY_MASK = POSITION_HISTORY_CAP - 1;
 
-// Per-node data for answering "does this move give check?" without making the
-// move. Computed once before a node's move loop; gives_check() then answers
-// each move against it, replacing a full attack scan per move made.
-//
-// Relies on the enemy king NOT already being in check, which holds at every
-// node the search reaches: the move that arrived here was legality-filtered.
+// Per-node data used to detect checks without making each move.
+// The enemy king must not already be in check.
 struct CheckInfo {
     int ksq = -1;               // enemy king square
-    U64 check_squares[6]{};     // by piece type (P,N,B,R,Q,K): squares from
-                                // which that type of ours checks the enemy king
-    U64 discovery = 0;          // our pieces that alone block one of our own
-                                // sliders' rays to the enemy king
+    U64 check_squares[6]{};     // checking squares by piece type
+    U64 discovery = 0;          // sole blockers on our checking rays
 };
 
 int rank_of(int sq);
@@ -82,37 +70,18 @@ public:
     std::array<U64, 12> bitboards{};
     std::array<int, 64> mailbox{};
 
-    // Occupancy, maintained incrementally rather than recomputed. occupancy()
-    // used to OR together six or twelve bitboards on every call, and it is
-    // called from is_square_attacked, legality_info, both move generators, and
-    // twice inside the SEE exchange loop -- so the same twelve ORs were being
-    // redone several times per node.
-    //
-    // These are derived state: they must always equal the union of the piece
-    // bitboards. Only set_fen, make_move and unmake_move ever write a piece
-    // bitboard, so those are the only three places that maintain them, and a
-    // debug build re-derives and checks them after every make and unmake.
+    // Cached occupancy kept in sync with the piece bitboards.
     U64 occ_white = 0;
     U64 occ_black = 0;
     U64 occ_all = 0;
     int side_to_move = WHITE;
-    std::uint8_t castling_rights = 0;   // bits: 1=WK 2=WQ 4=BK 8=BQ
+    std::uint8_t castling_rights = 0;   // bit mask 1=WK 2=WQ 4=BK 8=BQ
     int en_passant = -1;                // -1 = no en-passant square
     int halfmove_clock = 0;
     int fullmove_number = 1;
     U64 hash_key = 0;
-    // Zobrist keys of the positions already visited, for repetition detection.
-    // A fixed ring rather than a std::vector: make_move and unmake_move push
-    // and pop this on every node in the tree, and a heap container there costs
-    // a pointer chase, a capacity test and an occasional reallocation.
-    //
-    // The ring does not have to hold a whole game. is_repetition() never looks
-    // back further than halfmove_clock entries, and halfmove_clock resets on
-    // every pawn move and capture -- the search already scores a draw at 100,
-    // and the 75-move rule ends a real game at 150. 1024 slots is several
-    // times more history than can ever be read back, so a game long enough to
-    // wrap loses only entries that no longer affect the answer, instead of
-    // running off the end of a plain array.
+    // Fixed ring of prior Zobrist keys used for repetition detection.
+    // Entries older than the halfmove clock can be overwritten safely.
     std::array<U64, POSITION_HISTORY_CAP> position_history{};
     int position_history_count = 0;
 
@@ -122,12 +91,10 @@ public:
     void set_fen(const std::string& fen);
     U64 compute_hash() const;
 
-    // Rebuild occ_* from the piece bitboards. Only needed when the position is
-    // set wholesale; make/unmake keep them in sync incrementally.
+    // Rebuild cached occupancy after replacing the whole position.
     void refresh_occupancy();
 
-    // Re-derives occupancy and asserts it matches the cache. Compiled to
-    // nothing when NDEBUG is set, so release builds pay nothing for it.
+    // Check cached occupancy in debug builds.
     void assert_occupancy_sync() const;
 
     U64 occupancy(std::optional<int> colour = std::nullopt) const;
@@ -173,7 +140,7 @@ public:
     int evaluate_fast() const;
     int evaluate_quiet() const;
     int evaluate() const;
-    int evaluate(int alpha, int beta) const;   // lazy: may skip slow terms when far outside the window
+    int evaluate(int alpha, int beta) const;   // may skip slow terms outside the window
 
     int game_phase() const;
     int non_pawn_material_total() const;

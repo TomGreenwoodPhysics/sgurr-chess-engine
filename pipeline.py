@@ -53,15 +53,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CLANG = r"C:\msys64\clang64\bin\clang++.exe"
 ENGINE_SRC = ["main.cpp", "board.cpp", "evaluation.cpp", "search.cpp", "nnue.cpp"]
-RECORD = 32  # bytes per datagen record
+RECORD = 32  # Bytes per datagen record
 
 sys.path.insert(0, str(ROOT / "testing"))
 from engine_check import verify_all, EngineUnusable   # noqa: E402
 
 
-# --------------------------------------------------------------------------
-# small utilities
-# --------------------------------------------------------------------------
+# Small utilities
 
 def log(msg):
     print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
@@ -118,9 +116,7 @@ def git_describe():
     return head + ("-dirty" if dirty else "")
 
 
-# --------------------------------------------------------------------------
-# pipeline state
-# --------------------------------------------------------------------------
+# Pipeline state
 
 class Pipeline:
     STAGES = ["datagen", "probe", "freeze", "train", "build", "select", "sprt",
@@ -129,7 +125,7 @@ class Pipeline:
     def __init__(self, cfg_path):
         self.cfg = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
         self.gen = self.cfg["generation"]
-        self.version = self.cfg["version"]          # e.g. "v3.0"
+        self.version = self.cfg["version"]          # Example "v3.0"
         self.prev = self.gen - 1
         self.run_dir = ROOT / "runs" / f"gen{self.gen}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +139,7 @@ class Pipeline:
             self.lambdas = [self.lambdas]
 
     def _save_state(self):
-        # atomic: a crash mid-write must never corrupt the resume state
+        # Write atomically so a crash cannot corrupt the resume state.
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.state, indent=2), encoding="utf-8")
         os.replace(tmp, self.state_path)
@@ -182,9 +178,9 @@ class Pipeline:
     def done(self, stage):
         return stage in self.state
 
-    # ---- naming helpers ----
+    # Naming helpers
     def lam_tag(self, lam):
-        return f"l{int(round(lam * 100)):03d}"        # 0.7 -> l070
+        return f"l{int(round(lam * 100)):03d}"        # 0.7 becomes l070
 
     def variant_net(self, lam):
         return ROOT / "nets" / f"gen{self.gen}-{self.lam_tag(lam)}.nnue"
@@ -201,12 +197,9 @@ class Pipeline:
     def prev_exe(self):
         return ROOT / "sgurr_cpp" / f"sgr_gen{self.prev}.exe"
 
-    # ---- SPRT baseline ----
-    # Generation and version numbers have diverged (gen5 shipped as v4.0, gen6
-    # as v5.0), so the baseline cannot be derived from self.prev: doing so named
-    # both SPRT engines "Sgurr-v5.0" and fastchess rejected the pair. Config
-    # names the baseline explicitly; the fallback is the previous generation's
-    # build, labelled by generation so it can never collide with the version.
+    # SPRT baseline
+    # Generations and release versions do not always match, so the config names
+    # the baseline. The fallback uses the generation to keep engine names unique.
     def sprt_baseline_exe(self):
         rel = self.cfg.get("sprt", {}).get("baseline_exe")
         return (ROOT / rel) if rel else self.prev_exe()
@@ -219,22 +212,16 @@ class Pipeline:
         """Ledger-facing form of the baseline name: 'Sgurr-v4.0' -> 'v4.0'."""
         return self.sprt_baseline_name().replace("Sgurr-", "")
 
-    # ---- release engine ----
-    # Normally the release IS this generation's net (final_exe). It is not when
-    # a generation turns out to be a wash: gen6 measured +6 +/-20 vs gen5 over
-    # 1200 games (net isolated, search held constant), so v5.0 ships the gen5
-    # net with the new search -- a search-only release, as v3.1 was on gen3.
-    # Config names the binary; default is this generation's build.
+    # Release engine
+    # A release can reuse an earlier net when the new one shows no clear gain.
+    # The config names that binary and defaults to this generation's build.
     def release_exe(self):
         rel = self.cfg.get("release_exe")
         return (ROOT / rel) if rel else self.final_exe()
 
-    # ----------------------------------------------------------------------
-    # stage: datagen
-    # ----------------------------------------------------------------------
+    # Datagen stage
     def target(self):
-        # the probe stage may raise the target beyond the config value when it
-        # measures that the net is still data-limited
+        # The probe can raise the target when the net is still data-limited.
         return self.state.get("target_override", self.cfg["target_positions"])
 
     def stage_datagen(self, wait=True):
@@ -283,9 +270,7 @@ class Pipeline:
         time.sleep(2)
         self.mark("datagen", positions=positions_in(self.raw_dir))
 
-    # ----------------------------------------------------------------------
-    # stage: probe  (is this much data actually enough for the net?)
-    # ----------------------------------------------------------------------
+    # Data sufficiency probe
     def stage_probe(self):
         pr = self.cfg.get("probe", {})
         if not pr.get("enabled", True):
@@ -317,7 +302,7 @@ class Pipeline:
                    else ""))
             self.state["target_override"] = new_target
             self.state["probe_extensions"] = extensions + 1
-            self.state.pop("datagen", None)          # loop back to generation
+            self.state.pop("datagen", None)          # Return to datagen
             self._save_state()
             self.restart = True
             return
@@ -326,16 +311,13 @@ class Pipeline:
                 f"({max_ext}) reached -- proceeding; noted in state")
         self.mark("probe", **result, extensions_used=extensions)
 
-    # ----------------------------------------------------------------------
-    # stage: freeze  (versioned dataset + manifest)
-    # ----------------------------------------------------------------------
+    # Dataset freeze
     def stage_freeze(self):
         shards = shards_in(self.raw_dir)
         if not shards:
             raise RuntimeError(f"freeze: no shards in {self.raw_dir}")
 
-        # trim torn tails (possible after a hard kill mid-write); sub-record
-        # only, so nothing meaningful is lost and concatenation stays aligned
+        # Trim partial records left by a hard kill.
         for p in shards:
             extra = p.stat().st_size % RECORD
             if extra:
@@ -343,7 +325,7 @@ class Pipeline:
                 with open(p, "r+b") as f:
                     f.truncate(p.stat().st_size - extra)
 
-        # structural sanity on a sample of each shard
+        # Check a sample from each shard.
         for p in shards:
             data = p.read_bytes()
             n = len(data) // RECORD
@@ -410,9 +392,7 @@ class Pipeline:
         self.mark("freeze", positions=manifest["positions"],
                   archive_sha256=manifest["archive"]["sha256"])
 
-    # ----------------------------------------------------------------------
-    # stage: train  (one net per lambda; loss curves logged)
-    # ----------------------------------------------------------------------
+    # Training stage
     def stage_train(self):
         tr = self.cfg["train"]
         concat = self.raw_dir / "all.bin"
@@ -435,15 +415,14 @@ class Pipeline:
                  "--schedule", tr.get("schedule", "cosine"),
                  "--lr_min", str(tr.get("lr_min", 1e-5)),
                  "--lambda_", str(lam), "--val_frac", str(tr.get("val_frac", 0)),
-                 # arch/extra flags (e.g. ["--buckets", "8"]) pass straight through
+                 # Pass architecture flags through unchanged.
                  *[str(a) for a in tr.get("extra_args", [])]],
                 log_path=self.run_dir / f"train_{self.lam_tag(lam)}.log",
                 cwd=ROOT / "nnue", env={"KMP_DUPLICATE_LIB_OK": "TRUE"})
             curve = [float(m.group(1)) for m in
                      re.finditer(r"epoch\s+\d+/\d+\s+(?:loss|train)\s+([\d.]+)", out)]
             curves[str(lam)] = curve
-            # divergence gate: a NaN/absurd loss means a broken net -- fail here,
-            # not after hours of games downstream
+            # Stop before match play if training diverged.
             if not curve or not math.isfinite(curve[-1]) or curve[-1] > 0.1:
                 raise RuntimeError(
                     f"train: lambda={lam} produced implausible final loss "
@@ -459,17 +438,14 @@ class Pipeline:
         self.mark("train", lambdas=self.lambdas,
                   final_losses={k: (v[-1] if v else None) for k, v in curves.items()})
 
-    # ----------------------------------------------------------------------
-    # stage: build
-    # ----------------------------------------------------------------------
+    # Build stage
     def _build(self, net_path, exe_path):
         log(f"build: {exe_path.name} (net={net_path.name})")
         run([CLANG, "-std=c++20", "-O3", "-march=native", "-DNDEBUG", "-static",
              f'-DSGR_DEFAULT_NET="{net_path.as_posix()}"', *ENGINE_SRC,
              "-o", exe_path.name],
             log_path=self.run_dir / "build.log", cwd=ROOT / "sgurr_cpp")
-        # piped UCI handshake (never launch without piped stdin: the engine
-        # would block reading the console and hang the pipeline)
+        # Use piped stdin so the engine cannot block on the console.
         p = subprocess.run([str(exe_path)], input="uci\nquit\n",
                            capture_output=True, text=True, timeout=15)
         if "uciok" not in p.stdout:
@@ -503,9 +479,7 @@ class Pipeline:
             self._build(self.final_net(), self.final_exe())
         self.mark("build")
 
-    # ----------------------------------------------------------------------
-    # stage: select  (lambda sweep decided by games)
-    # ----------------------------------------------------------------------
+    # Lambda selection
     def stage_select(self):
         if len(self.lambdas) == 1:
             self.mark("select", skipped=True, winner=str(self.lambdas[0]))
@@ -530,8 +504,7 @@ class Pipeline:
         log(f"select: round-robin {len(self.lambdas)} lambda variants + gen{self.prev}")
         out = run(cmd, log_path=self.run_dir / "select.log", cwd=ROOT / "benchmarks")
 
-        # parse the FINAL standings table only (fastchess prints interim tables
-        # every ratinginterval; take the last "Rank ..." block)
+        # Fastchess prints interim tables, so parse only the last standings block.
         final = out[out.rfind("Rank"):]
         rank = re.findall(r"^\s*\d+\s+(\S+)\s+(-?[\d.]+)", final, re.M)
         table = [(n, float(e)) for n, e in rank if n in names or n == f"gen{self.prev}"]
@@ -543,16 +516,13 @@ class Pipeline:
         self._build(self.final_net(), self.final_exe())
         self.mark("select", winner=str(winner), standings=table)
 
-    # ----------------------------------------------------------------------
-    # stage: sprt  (new gen vs previous gen)
-    # ----------------------------------------------------------------------
+    # SPRT stage
     def stage_sprt(self):
         self.assert_idle("sprt")
         sp = self.cfg.get("sprt", {})
         fc = ROOT / "benchmarks" / "tools" / "fastchess.exe"
         base_exe, base_name = self.sprt_baseline_exe(), self.sprt_baseline_name()
-        # fail fast and legibly: fastchess rejects duplicate engine names, and a
-        # missing baseline binary fails deep inside CreateProcess
+        # Check inputs before fastchess obscures the cause of a failure.
         if base_name == f"Sgurr-{self.version}":
             raise RuntimeError(
                 f"sprt: baseline name '{base_name}' collides with the new "
@@ -576,10 +546,7 @@ class Pipeline:
              "-ratinginterval", "50"],
             log_path=self.run_dir / "sprt.log", cwd=ROOT / "benchmarks")
 
-        # \b matters: fastchess prints "Elo: 155.00 +/- 28.55, nElo: 190.30 +/-
-        # 30.70" and an unanchored "Elo" also matches inside "nElo". Taking
-        # elo[-1] then recorded the NORMALISED Elo -- a silent ~35-point
-        # overstatement headed for the ledger.
+        # The word boundary keeps "Elo" from also matching inside "nElo".
         elo = re.findall(r"\bElo\s*:?\s*(-?[\d.]+)\s*\+/-\s*([\d.]+)", out)
         if not elo:
             raise RuntimeError("sprt: could not parse an Elo estimate from "
@@ -592,9 +559,7 @@ class Pipeline:
         log(f"sprt: {result}")
         self.mark("sprt", **result)
 
-    # ----------------------------------------------------------------------
-    # stage: calibrate  (pool gauntlet + Ordo over all accumulated PGNs)
-    # ----------------------------------------------------------------------
+    # Pool calibration
     def stage_calibrate(self):
         self.assert_idle("calibrate")
         cal = self.cfg.get("calibrate", {})
@@ -607,11 +572,8 @@ class Pipeline:
         if not rel_exe.exists():
             raise RuntimeError(f"calibrate: release engine not found: {rel_exe}")
 
-        # Verify the whole field, not just ours: a pool engine that cannot
-        # spawn forfeits every game it plays, which inflates Sgurr's score
-        # against it and drags the Ordo solve off the CCRL anchors. Checking
-        # them together also means one pass names every broken binary rather
-        # than one rebuild-and-retry cycle per engine.
+        # A broken pool engine forfeits games and distorts the Ordo result.
+        # Check the whole field together so every bad binary is reported.
         self.assert_engines_runnable(
             "calibrate", [rel_exe] + [bm / e["cmd"] for e in pool["engines"]])
 
@@ -622,9 +584,7 @@ class Pipeline:
         cmd += ["-each", f"tc={cal.get('tc', '10+0.1')}",
                 "-rounds", str(cal.get("rounds", 15)), "-repeat",
                 "-concurrency", str(cal.get("concurrency", 5)),
-                # one engine failing to spawn (Defender re-scan etc.) must not
-                # kill a multi-hour unattended gauntlet -- 2026-07-29 lost a
-                # calibrate run to a transient igel block 32s in
+                # Retry transient launch failures without losing the gauntlet.
                 "-recover",
                 "-openings", f"file={ROOT / 'testing' / 'book.epd'}",
                 "format=epd", "order=random",
@@ -650,7 +610,7 @@ class Pipeline:
             raise RuntimeError("calibrate: could not find new engine in Ordo output")
         rating, err = float(m.group(1)), float(m.group(2))
 
-        # W-D-L for the new engine from its gauntlet PGN
+        # Read the new engine's W-D-L from its gauntlet PGN.
         results = re.findall(
             rf'\[(White|Black) "Sgurr-{re.escape(self.version)}"\].*?\[Result "([^"]+)"\]',
             pgn.read_text(encoding="utf-8", errors="replace"), re.S)
@@ -667,9 +627,7 @@ class Pipeline:
         self.mark("calibrate", rating=rating, error=err, wdl=[w, d, l_],
                   games=w + d + l_, ordo_table=text)
 
-    # ----------------------------------------------------------------------
-    # stage: ledger
-    # ----------------------------------------------------------------------
+    # Ledger stage
     def stage_ledger(self):
         cal = self.state["calibrate"]
         sprt = self.state["sprt"]
@@ -677,8 +635,7 @@ class Pipeline:
         ledger = ROOT / "benchmarks" / "ledger.md"
         text = ledger.read_text(encoding="utf-8")
 
-        # idempotency: a crash between the ledger write and the state mark must
-        # not duplicate the row on re-run
+        # Avoid a duplicate row if a crash occurs before the state update.
         if f"| Sgurr {self.version} " in text:
             log(f"ledger: row for {self.version} already present -- not duplicating")
             self.mark("ledger", already_present=True)
@@ -696,7 +653,7 @@ class Pipeline:
                + (f"; lambda sweep winner {sel.get('winner')}"
                   if not sel.get("skipped") else "") + " |")
 
-        # newest-first: insert right after the table header separator
+        # Insert the newest entry below the table header.
         lines = text.splitlines()
         sep = next(i for i, ln in enumerate(lines)
                    if set(ln.strip()) <= set("|- ") and "|" in ln and i > 0)
@@ -725,7 +682,7 @@ class Pipeline:
         log(f"ledger: appended {self.version} row and run section")
         self.mark("ledger")
 
-    # ----------------------------------------------------------------------
+    # Status
     def status(self):
         print(f"generation {self.gen} ({self.version} "
               f"\"{self.cfg.get('codename', '')}\")")
@@ -742,8 +699,7 @@ class Pipeline:
             print(f"  [{mark_}] {s:10s} {extra}")
 
     def execute(self, until=None, wait=True):
-        # single-instance lock: two pipelines on one generation would race on
-        # state, nets, and engine processes
+        # Prevent two pipelines from racing on the same generation.
         lock = self.run_dir / ".lock"
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -760,8 +716,7 @@ class Pipeline:
             lock.unlink(missing_ok=True)
 
     def _execute(self, until=None, wait=True):
-        # outer loop supports the probe stage sending execution back to datagen
-        # when it measures the dataset as still data-limited
+        # Let the probe send data-limited runs back to datagen.
         while True:
             self.restart = False
             for s in self.STAGES:

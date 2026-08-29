@@ -27,27 +27,15 @@ const STANDARD_HIT_RADIUS_PX = 10;
 const RECONSTRUCTED_TRANSIENT_AGE_MS = 1200;
 const LIVE_EVENT_SLICE_MS = 3;
 const NAVIGATION_RELEASE_SLICE_MS = 4;
-// Cull margins in world units, sized to the largest halo a node can throw and
-// the widest glow an edge can carry, so nothing pops in at the frame edge.
+// Pad culling bounds for the largest node and edge glows.
 const NODE_CULL_PADDING = 48;
 const EDGE_CULL_PADDING = 26;
-// Just under a 60Hz frame, so an ordinary vsync-locked display still draws on
-// every refresh while a browser calling back faster is held to the same work.
+// Cap rendering near 60 Hz even when callbacks run faster.
 const MIN_FRAME_INTERVAL_MS = 14;
 
-// Detail tiers. The cost of this view is dominated by rasterising large canvas
-// surfaces, not by the JavaScript that issues the drawing, so the levers that
-// matter are the ones that shrink or remove surfaces: the render resolution
-// first, then the bloom pass and the effect layers. Node count applies to the
-// next search rather than the current tree.
-//
-// Every tier keeps its detail stable while the view moves: navigation reuses
-// the detail image already on screen rather than substituting a coarser stand
-// -in for it. An earlier design kept a cache of pre-rendered navigation tiles
-// for this, but they were rendered at a capped pixel ratio, so switching to
-// them mid-gesture was itself a drop in detail that no tuning could remove.
-// Reusing the existing image is both steadier and cheaper -- two blits instead
-// of compositing dozens of tile surfaces.
+// Canvas size dominates cost, so tiers reduce resolution before effects.
+// Node limits apply to the next search rather than the current tree.
+// Navigation reuses the current detail image to keep gestures consistent.
 const QUALITY_TIERS = Object.freeze({
   high: Object.freeze({
     label: "High detail",
@@ -76,8 +64,7 @@ const QUALITY_TIERS = Object.freeze({
 });
 const QUALITY_ORDER = Object.freeze(["high", "balanced", "low"]);
 
-// Storage access throws outright when a browser blocks it, and this runs at
-// module load, so an unguarded read would take the whole view down.
+// Guard storage because some browsers block access at module load.
 function readStored(key) {
   try {
     return window.localStorage.getItem(key);
@@ -89,7 +76,7 @@ function readStored(key) {
 function writeStored(key, value) {
   try {
     window.localStorage.setItem(key, value);
-  } catch { /* preference simply will not persist */ }
+  } catch { /* Ignore blocked storage. */ }
 }
 
 function storedQualityTier() {
@@ -101,10 +88,8 @@ let qualityTier = storedQualityTier();
 function quality() {
   return QUALITY_TIERS[qualityTier] || QUALITY_TIERS.high;
 }
-// Turn on with ?profile=1 on the URL, or localStorage.sgurrProfile = "1".
-// Off by default and costs nothing when off: it reports the browser's real
-// frame cadence, any long main-thread block, and where the time goes --
-// including work that never runs inside draw().
+// Enable with ?profile=1 or localStorage.sgurrProfile = "1".
+// Profiling tracks frame cadence, long tasks, and rendering time.
 const PROFILE = new URLSearchParams(window.location.search).get("profile") === "1"
   || readStored("sgurrProfile") === "1";
 const LIVE_STRUCTURE_REFRESH_MS = Object.freeze({ sparse: 66, dense: 100, detail: 150 });
@@ -119,10 +104,7 @@ function cssColour(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-// Profiling a live search showed this among the hottest functions in the file:
-// it ran up to three regexes and built a fresh string on every call, and it is
-// called several times per node and per edge. The palette holds a handful of
-// colours, so parse each one once and memoise the finished rgba string.
+// Cache parsed palette colours because this runs for every node and edge.
 const colourChannels = new Map();
 const alphaStrings = new Map();
 
@@ -147,13 +129,11 @@ function withAlpha(colour, alpha) {
     channels = parseColourChannels(colour.trim());
     colourChannels.set(colour, channels);
   }
-  // An unparseable colour is returned untouched, exactly as before.
+  // Preserve unparseable colours.
   if (channels === null) return colour.trim();
-  // A non-finite alpha would poison the cache key, so it skips the cache and
-  // produces the same (invalid) string the original would have produced.
+  // Bypass the cache for non-finite alpha values.
   if (!Number.isFinite(alpha)) return `rgba(${channels}, ${alpha})`;
-  // Quantised to 1/1000 -- four times finer than 8-bit compositing can show,
-  // so the output is visually identical while the cache stays bounded.
+  // Round beyond visible alpha precision to keep the cache bounded.
   const step = Math.round(alpha * 1000);
   let byAlpha = alphaStrings.get(colour);
   if (byAlpha === undefined) {
@@ -232,9 +212,7 @@ export function initSearchNetwork() {
   const depthAtmosphereContext = depthAtmosphereCanvas.getContext("2d");
   const staticCanvas = document.createElement("canvas");
   const staticContext = staticCanvas.getContext("2d");
-  // Two buffers, so a refinement pass can be built without destroying the
-  // sharp image the view is still showing. These are swapped on completion,
-  // which is what makes the release genuinely atomic.
+  // Build refinements in a back buffer and swap only when complete.
   let detailCanvas = document.createElement("canvas");
   let detailContext = detailCanvas.getContext("2d");
   let detailBackCanvas = document.createElement("canvas");
@@ -615,8 +593,7 @@ export function initSearchNetwork() {
       context = previousContext;
     }
 
-    // The finished image becomes the front buffer in a single step, so the
-    // view never shows a partially built frame or a blurred stand-in.
+    // Swap the finished image without exposing a partial frame.
     const swappedCanvas = detailCanvas;
     const swappedContext = detailContext;
     detailCanvas = detailBackCanvas;
@@ -716,10 +693,8 @@ export function initSearchNetwork() {
     cancelNavigationReleaseRefinement();
     const generation = navigationReleaseGeneration;
     const { width, height, ratio } = canvasSize();
-    // Build into the back buffer. The front buffer keeps the last sharp image,
-    // which the tile layer goes on using as its fallback (positioned by
-    // detailSceneViewport) for the whole settle. Clearing it here was what made
-    // the picture drop to the upscaled world bitmap and then snap back.
+    // Keep the front buffer visible while rebuilding the back buffer.
+    // Clearing it would expose the upscaled world bitmap.
     resetLayer(detailBackCanvas, detailBackContext, width, height, ratio);
     const now = performance.now();
     const previousContext = context;
@@ -750,9 +725,7 @@ export function initSearchNetwork() {
       maxSliceDuration: 0,
     };
     navigationReleaseJob = job;
-    // detailSceneReady deliberately stays true: the front buffer is still a
-    // valid image for the viewport it was built at, and the tile layer offsets
-    // it correctly via detailSceneViewport. It is replaced only on swap.
+    // The front buffer remains valid until the next swap.
     refs.canvas.dataset.quality = "refining";
     refs.canvas.dataset.navigationRelease = "refining";
     refs.canvas.dataset.navigationReleaseStrategy = "staged-pass-slices";
@@ -769,11 +742,8 @@ export function initSearchNetwork() {
   function setInteractionMode(active) {
     if (interactionTimer !== null) window.clearTimeout(interactionTimer);
     interactionTimer = null;
-    // A drag re-asserts navigation on every pointer sample. Once it is already
-    // established, and no refinement pass is in flight to tear down, there is
-    // nothing left to change: skip the teardown and the diagnostic attribute
-    // writes, which the wrap's :has() selector would otherwise recheck ~120
-    // times a second.
+    // Repeated drag samples need no reset once navigation is active.
+    // This also avoids repeated selector checks.
     if (active && interactionMode && navigationReleaseJob === null) {
       requestDraw();
       return;
@@ -785,11 +755,8 @@ export function initSearchNetwork() {
     requestDraw();
   }
 
-  // Wheel and keyboard navigation arrive as a stream of discrete events. At a
-  // 20ms debounce the gaps between trackpad samples were long enough to start
-  // a full refinement pass mid-gesture -- reallocating the detail canvas and
-  // kicking off a slice chain -- only for the next event to throw it away.
-  // Pointer release stays at 0 because it is a definitive end of gesture.
+  // Debounce wheel and keyboard streams to avoid rebuilding mid-gesture.
+  // Pointer release ends the gesture immediately.
   function settleInteraction(delay = 140) {
     if (interactionTimer !== null) window.clearTimeout(interactionTimer);
     interactionTimer = window.setTimeout(beginNavigationRelease, delay);
@@ -1051,14 +1018,12 @@ export function initSearchNetwork() {
         .filter((node) => node.ringIndex === ringIndex)
         .sort((a, b) => a.pathKey.localeCompare(b.pathKey) || a.id - b.id);
       ring.forEach((node, index) => {
-        // Search depth grows outward from the root. Stable ancestry ordering
-        // keeps siblings together while equal spacing balances the web.
+        // Keep siblings together while spreading each depth evenly.
         node.angle = -Math.PI / 2 + (TAU * index) / Math.max(1, ring.length);
       });
     }
 
-    // Repeated Zobrist keys are genuine transpositions or re-searches. The
-    // later occurrence becomes a chord back through the radial tree.
+    // Link repeated Zobrist keys back as transpositions or re-searches.
     const firstByHash = new Map();
     [...layoutNodes.values()].sort((a, b) => a.id - b.id).forEach((node) => {
       if (!node.hash) return;
@@ -1100,8 +1065,7 @@ export function initSearchNetwork() {
       pathKey: String(event.id).padStart(6, "0"),
       searchDepth,
       ringIndex,
-      // Golden-angle arrival placement fills every orbit evenly without ever
-      // moving a node that the viewer has already seen.
+      // Golden-angle placement fills an orbit without moving existing nodes.
       angle: event.id === 0 ? -Math.PI / 2 : -Math.PI / 2 + slot * goldenAngle,
     };
     if (node.hash && liveHashes.has(node.hash)) node.transpositionSource = liveHashes.get(node.hash);
@@ -1155,9 +1119,7 @@ export function initSearchNetwork() {
       importance.set(node.id, value + deterministicUnit(node.id, pass) * 0.01);
     });
 
-    // Push a consequential descendant's value back through its ancestors.
-    // The connected-subtree picker can then afford the quiet bridge nodes
-    // needed to reach a dramatic event near an outer ring.
+    // Propagate descendant value so the picker keeps useful bridge nodes.
     [...pool].sort((a, b) => b.id - a.id).forEach((node) => {
       if (!byId.has(node.parent)) return;
       importance.set(
@@ -1184,8 +1146,7 @@ export function initSearchNetwork() {
     const frontier = [...(children.get(0) || [])];
     const branchCounts = new Map();
     const ringCounts = new Map();
-    // Fewer nodes per depth is the one lever that reduces every downstream
-    // cost at once -- edges, glows, tile builds and hit testing alike.
+    // Fewer nodes per depth reduces every downstream rendering cost.
     const target = Math.min(quality().nodesPerIteration - 1, pool.length);
     while (selected.size < target && frontier.length) {
       let bestIndex = 0;
@@ -1420,9 +1381,7 @@ export function initSearchNetwork() {
 
   function apply(event, announce = true, animate = true) {
     const now = performance.now();
-    // Seeking rebuilds the tree synchronously. Treat those historical events
-    // as already settled so thousands of nodes do not all receive a fresh
-    // activation halo on the scrubbed frame.
+    // Treat rebuilt history as settled so seeking adds no activation halos.
     const transientAt = animate ? now : now - RECONSTRUCTED_TRANSIENT_AGE_MS;
     const colours = palette();
     const { blue, gold, red } = colours;
@@ -1613,8 +1572,7 @@ export function initSearchNetwork() {
         completionChoreographyStartedAt = null;
         refs.canvas.dataset.completionChoreography = "settled";
       }
-      // The final tree is baked once and crossfaded from the last live frame.
-      // Intermediate depths retain the individual node settle animation.
+      // Bake the final tree once while intermediate depths keep their animation.
       settleConsequentialNodes(completedPass, now, animate && !finalIteration);
         passFinishedAt.set(
         completedPass,
@@ -1691,10 +1649,7 @@ export function initSearchNetwork() {
   }
 
   function canvasSize() {
-    // getBoundingClientRect forces a layout flush, and this runs every frame
-    // and on every pointer sample -- it showed up in the profile. The box only
-    // changes when the wrap resizes, which the ResizeObserver below already
-    // observes, so measure there and reuse the result in between.
+    // Measure on resize to avoid a layout flush on every frame.
     if (canvasBoxDirty || canvasBox === null) {
       const rect = refs.canvasWrap.getBoundingClientRect();
       canvasBox = { width: rect.width, height: rect.height };
@@ -1702,8 +1657,7 @@ export function initSearchNetwork() {
     }
     const width = Math.max(320, Math.round(canvasBox.width));
     const height = Math.max(430, Math.round(canvasBox.height));
-    // Every offscreen layer is sized from this, so it is the single biggest
-    // lever on raster cost: halving it quarters the pixels drawn per layer.
+    // Offscreen layers share this scale, which controls their raster cost.
     const ratio = Math.min(quality().maxPixelRatio, window.devicePixelRatio || 1);
     if (refs.canvas.width !== Math.round(width * ratio) || refs.canvas.height !== Math.round(height * ratio)) {
       refs.canvas.width = Math.round(width * ratio);
@@ -1755,9 +1709,7 @@ export function initSearchNetwork() {
 
   function boundedViewportOffset(x, y, scale, width, height) {
     const scaledRadius = geometry(width, height).radius * scale;
-    // At normal scale most of the network must remain visible. At deep zoom,
-    // preserve a generous window-sized slice so every rim can still be
-    // inspected without allowing the web to be lost in empty space.
+    // Keep most of the network visible normally and a useful slice at deep zoom.
     const minimumVisible = Math.min(
       scaledRadius * 1.5,
       Math.min(width, height) * 0.64,
@@ -1810,10 +1762,7 @@ export function initSearchNetwork() {
     context.translate(-width / 2, -height / 2);
   }
 
-  // Geometry only depends on the canvas box, but point() is called once per
-  // node and twice per edge, so building a fresh object each time was the
-  // largest source of per-frame garbage. Callers only ever read these, so a
-  // single shared instance per size is safe.
+  // Reuse immutable geometry for each canvas size to avoid per-frame garbage.
   let geometryCache = { width: -1, height: -1, value: null };
   let canvasBox = null;
   let canvasBoxDirty = true;
@@ -1835,12 +1784,8 @@ export function initSearchNetwork() {
     }
   }
 
-  // Counting how often the app chose to draw says nothing about what the
-  // browser actually presented: when the scene settles the renderer throttles
-  // itself on purpose, so a low draw count there is correct, not a fault. The
-  // cadence below is therefore sampled from an independent ticker, and long
-  // main-thread blocks are caught wherever they happen -- including in work
-  // that never runs inside draw(), like building navigation tiles.
+  // Sample cadence independently because settled scenes throttle drawing.
+  // This also catches long tasks outside draw().
   function recordFrame() {
     profileDraws += 1;
   }
@@ -1898,7 +1843,7 @@ export function initSearchNetwork() {
       new PerformanceObserver((list) => {
         list.getEntries().forEach((entry) => longTasks.push(Math.round(entry.duration)));
       }).observe({ entryTypes: ["longtask"] });
-    } catch { /* longtask timing is not available in every browser */ }
+    } catch { /* Long task timing is not available everywhere. */ }
     window.setInterval(reportProfile, 2000);
   }
 
@@ -1918,11 +1863,9 @@ export function initSearchNetwork() {
 
   function point(node, width, height) {
     const { center, radius } = geometry(width, height);
-    // The root gets a copy rather than the shared centre, so a caller that
-    // stores the result can never write through to the cached geometry.
+    // Copy the root point so callers cannot alter cached geometry.
     if (!node || node.id === 0) return { x: center.x, y: center.y };
-    // A node's angle is fixed once laid out, so the trig is cached on the node
-    // and only recomputed if the layout actually reassigns the angle.
+    // Cache trigonometry until the layout changes a node's angle.
     if (node.angleTrigFor !== node.angle || node.angleCos === undefined) {
       node.angleTrigFor = node.angle;
       node.angleCos = Math.cos(node.angle);
@@ -1935,12 +1878,7 @@ export function initSearchNetwork() {
     };
   }
 
-  // Culling is derived from the live context transform rather than from the
-  // viewport, because these passes also render into world-space cache layers
-  // and into navigation tiles, each under a different transform. Inverting
-  // whatever transform is current gives one rule that is correct for all of
-  // them: a full-canvas world layer culls nothing, a zoomed screen pass culls
-  // everything off-screen, and a tile culls to the tile.
+  // Derive culling from the current transform so every render pass shares one rule.
   function visibleWorldBounds(padding) {
     const target = context.canvas;
     if (!target || !context.getTransform) return null;
@@ -1978,8 +1916,7 @@ export function initSearchNetwork() {
       || position.y > bounds.bottom;
   }
 
-  // A quadratic curve is contained by the convex hull of its three control
-  // points, so testing their bounding box never discards a visible edge.
+  // A quadratic curve stays inside its control-point bounding box.
   function edgeOutsideBounds(edge, bounds) {
     const { from, to, control } = edge;
     if (Math.min(from.x, to.x, control.x) > bounds.right) return true;
@@ -2007,18 +1944,13 @@ export function initSearchNetwork() {
     };
   }
 
-  // Resolving the principal variation used to scan every node once per move in
-  // the line, and the whole thing reran for each of its eight call sites --
-  // several of them per frame, plus once per hover sample. Index the nodes by
-  // the tuple the scan was matching on, and memoise the finished line until
-  // the tree changes.
+  // Index PV nodes and cache completed lines to avoid repeated tree scans.
   function pvNodeLookup() {
     if (pvNodeIndex) return pvNodeIndex;
     pvNodeIndex = new Map();
     visibleNodes.forEach((node) => {
       const key = `${Number(node.pass)}:${node.parent}:${node.move}:${Number(node.ringIndex)}`;
-      // First writer wins, matching the original scan: it kept the first match
-      // it met in insertion order and ignored any later duplicates.
+      // Keep the first insertion-order match for duplicate keys.
       if (!pvNodeIndex.has(key)) pvNodeIndex.set(key, node);
     });
     return pvNodeIndex;
@@ -2043,19 +1975,14 @@ export function initSearchNetwork() {
     let anchorAngle = fallbackAngle;
 
     moves.forEach((move, index) => {
-      // Search depth is selective rather than identical to literal ply: LMR,
-      // extensions, and TT cutoffs can make a real PV one move shorter or
-      // longer than the nominal iteration. Spread its legal move sequence
-      // across the completed horizon so the endpoint remains truthful to the
-      // depth ring while every intermediate point remains an actual PV move.
+      // Selective depth can differ from literal ply after search adjustments.
+      // Spread legal PV moves across the horizon to keep the endpoint accurate.
       const ringIndex = Math.max(1, Math.round(((index + 1) / moves.length) * targetRing));
       let tracedNode = null;
       if (parentId !== null) {
         const candidate = pvNodeLookup()
           .get(`${Number(pv.pass)}:${parentId}:${move}:${ringIndex}`);
-        // The index keys on Number(pass), so re-apply the original strict
-        // comparison: a non-numeric pv.pass matched nothing before and must
-        // still match nothing now.
+        // Preserve strict handling of non-numeric pass values.
         if (
           candidate
           && Number(candidate.pass) === pv.pass
@@ -2123,9 +2050,7 @@ export function initSearchNetwork() {
     refs.canvas.dataset.survivorDesign = "celestial-filament";
     refs.canvas.dataset.survivorEnvelope = "amber-white-core";
     refs.canvas.dataset.principalHitTargets = String(points.length - 1);
-    // Completion is baked into a static layer once. Never capture that layer
-    // midway through the PV reveal or the gold survivor path will stay faint
-    // until an unrelated navigation repaint occurs.
+    // Bake completion only after the PV reveal reaches full brightness.
     const reveal = finished ? 1 : easeOutCubic((now - pv.revealedAt) / 760);
     refs.canvas.dataset.pvReveal = reveal.toFixed(3);
 
@@ -2273,8 +2198,7 @@ export function initSearchNetwork() {
     paintNebula(width * 0.28, height * 0.94, radius * 0.8, palette.violet, 0.08);
     paintNebula(center.x, center.y * 1.04, radius * 0.72, palette.gold, 0.025);
 
-    // An enormous blurred rift crosses behind the search. A near-black dust
-    // lane cuts through its light so it reads as a distant galaxy, not UI.
+    // Add a dark dust lane so the blurred rift reads as distant space.
     const riftGradient = backgroundContext.createLinearGradient(0, height, width, 0);
     riftGradient.addColorStop(0, withAlpha(palette.blue, 0));
     riftGradient.addColorStop(0.18, withAlpha(palette.blue, 0.095));
@@ -2316,7 +2240,7 @@ export function initSearchNetwork() {
     backgroundContext.stroke();
     backgroundContext.restore();
 
-    // Layered cloud fragments give the rift turbulent, ominous edges.
+    // Layer cloud fragments along the rift's edges.
     backgroundContext.save();
     backgroundContext.globalCompositeOperation = "screen";
     backgroundContext.filter = "blur(9px)";
@@ -2335,8 +2259,7 @@ export function initSearchNetwork() {
     }
     backgroundContext.restore();
 
-    // Faint neural filaments make the void feel connected without competing
-    // with the actual search tree in the foreground.
+    // Keep background filaments faint behind the search tree.
     backgroundContext.save();
     backgroundContext.lineWidth = 0.55;
     for (let index = 0; index < 28; index += 1) {
@@ -2387,8 +2310,7 @@ export function initSearchNetwork() {
     }
     backgroundContext.restore();
 
-    // Slow orbital currents are baked here; two tiny animated highlights move
-    // over them in drawBackground.
+    // Bake slow currents here and animate their highlights separately.
     backgroundContext.save();
     backgroundContext.translate(center.x, center.y);
     for (let index = 0; index < 7; index += 1) {
@@ -2404,8 +2326,7 @@ export function initSearchNetwork() {
     }
     backgroundContext.restore();
 
-    // Pull light out of the centre so the network appears to be suspended over
-    // a deep gravitational void rather than sitting on a flat backdrop.
+    // Darken the centre to add depth behind the network.
     const abyss = backgroundContext.createRadialGradient(center.x, center.y, 0, center.x, center.y, radius * 0.94);
     abyss.addColorStop(0, "rgba(0, 0, 4, 0.34)");
     abyss.addColorStop(0.45, "rgba(0, 0, 5, 0.17)");
@@ -2660,10 +2581,7 @@ export function initSearchNetwork() {
     return node.parent < 0 ? localScore : -localScore;
   }
 
-  // `nodes` may be narrowed to a single pass's bucket. That is only sound when
-  // the bucket already contains exactly the nodes includeNode would accept,
-  // which is why callers pass the matching predicate alongside it: the grouping
-  // below then sees the same members it would have seen from a full sweep.
+  // A narrowed bucket is valid only with its matching inclusion predicate.
   function evaluationProfile(includeNode = () => true, cacheKey = null, nodes = null) {
     if (cacheKey) {
       const cached = evaluationProfileCache.get(cacheKey);
@@ -2697,8 +2615,7 @@ export function initSearchNetwork() {
       const groupKey = `${node.parent}:${node.pass || node.iterationDepth || 0}`;
       const best = bestByGroup.get(groupKey) ?? score;
       const delta = Math.max(0, best - score);
-      // A 100 cp deficit is visible without making the rest of the tree
-      // disappear; extreme and mate scores are compressed safely.
+      // Keep a 100 cp deficit visible and compress extreme or mate scores.
       const relative = Math.exp(-Math.min(delta, 1800) / 210);
       const favourability = 0.5 + 0.5 * Math.tanh(score / 260);
       let energy = clamp(0.12 + relative * 0.7 + favourability * 0.18, 0.12, 1);
@@ -3051,8 +2968,7 @@ export function initSearchNetwork() {
       context.fillStyle = withAlpha(colour, baseOpacity * reveal * exposure);
       context.fill();
 
-      // A fine outer shell keeps dense nodes crisp; evaluation only changes
-      // its intensity, preserving the original field of blue sparks.
+      // Use a fine outer shell to keep dense nodes crisp.
       if (evaluation.known && !isRoot) {
         context.beginPath();
         context.arc(position.x, position.y, radius + 0.42, 0, TAU);
@@ -3217,10 +3133,7 @@ export function initSearchNetwork() {
     context.restore();
   }
 
-  // Group the nodes by pass in a single sweep. Several callers need to work
-  // pass by pass, and doing that by re-scanning every node once per pass made
-  // them O(passes x nodes) -- the dominant cost while the tree was growing and
-  // on the refinement pass that runs when a gesture ends.
+  // Group once by pass instead of rescanning all nodes for every pass.
   function passIndex() {
     const index = new Map();
     visibleNodes.forEach((node, id) => {
@@ -3375,18 +3288,9 @@ export function initSearchNetwork() {
     if (PROFILE) recordPhase("settled-detail (in structure)", performance.now() - settledDetailStartedAt);
   }
 
-  // The level of detail is part of every tile key, so letting it change during
-  // a zoom gesture threw away the whole tile set each time the scale crossed a
-  // level -- and tiles cannot be rebuilt mid-gesture, so coverage fell to zero
-  // and the view dropped to the upscaled world bitmap. Hold the level steady
-  // for the duration of a gesture instead: the existing tiles simply scale,
-  // which is slightly soft while moving and is replaced by the native-detail
-  // refinement the moment the gesture settles. Panning never hit this because
-  // it does not change scale.
-  // Several layers deliberately dim or drop parts of themselves while the view
-  // moves, to buy back frame time. On a tier whose whole point is that the
-  // picture never changes character mid-gesture, that trade is wrong: the
-  // saving is invisible but the change is not.
+  // Freeze detail level during zoom so the cached image remains usable.
+  // Rebuild native detail after the gesture.
+  // Keep effect layers stable during motion to avoid visible shifts.
   function navigationReduced() {
     return interactionMode && !quality().stableDetail;
   }
@@ -3528,9 +3432,7 @@ export function initSearchNetwork() {
     const resolutionChanged = staticCanvas.width !== Math.round(width * ratio)
       || staticCanvas.height !== Math.round(height * ratio);
     const needsNativeDetail = !interactionMode && viewport.scale > NATIVE_DETAIL_MIN_SCALE;
-    // At zoom, keep the world bitmap as a navigation fallback but refresh it
-    // far less often than the native-detail layer. This avoids rendering the
-    // same thousands of paths twice in the same frame.
+    // Refresh the world fallback less often than native detail while zoomed.
     const refreshInterval = needsNativeDetail ? 360 : structuralRefreshInterval(now);
     const refreshDue = now - staticSceneBuiltAt >= refreshInterval;
     let rebuiltWorldThisFrame = false;
@@ -3574,12 +3476,8 @@ export function initSearchNetwork() {
       }
     }
 
-    // Without tiles, navigation would swap the sharp detail layer for the
-    // upscaled world bitmap and swap back on release -- the picture visibly
-    // coarsening the instant the view moves. Keep showing the detail image
-    // instead, repositioned for where it was rendered, and fill only the strip
-    // it does not cover from the world bitmap. The detail is resampled while
-    // moving but never replaced, so nothing changes character mid-gesture.
+    // Keep the detail image during navigation and fill uncovered strips from
+    // the world bitmap. Resampling is less distracting than replacing it.
     const stableDetail = quality().stableDetail
       && interactionMode
       && detailSceneReady
@@ -3596,9 +3494,7 @@ export function initSearchNetwork() {
       };
       context.save();
       applyViewportTransform(width, height);
-      // World bitmap everywhere the detail image does not reach. The even-odd
-      // rule punches the detail region out, so the two never overlap and the
-      // translucent structure is not drawn twice.
+      // Fill outside the detail image without overlapping translucent layers.
       context.save();
       context.beginPath();
       context.rect(-width, -height, width * 3, height * 3);
@@ -3850,9 +3746,7 @@ export function initSearchNetwork() {
 
     const principal = principalIds();
     lap("principal");
-    // These layers carry nearly every shadowBlur in the renderer, and a
-    // shadowed draw costs a separate blur pass. Dropping them is the largest
-    // saving available short of drawing fewer nodes.
+    // Skip blur-heavy effects on tiers that disable them.
     if (quality().effects) {
       drawEventLight(now, width, height, colours, principal);
       drawLeaderGhosts(now, width, height, colours);
@@ -3961,13 +3855,7 @@ export function initSearchNetwork() {
 
   function drawFrame(now) {
     animationFrame = null;
-    // requestAnimationFrame fires at whatever rate the browser presents at,
-    // which is not always the display refresh: software compositing can run it
-    // several hundred times a second, and the renderer would then do several
-    // hundred frames of canvas work for a screen that cannot show them. Cap
-    // the rate here so cost tracks what is needed rather than how often the
-    // browser happens to call back. The interval sits just under a 60Hz frame
-    // so every vsync still draws on an ordinary display.
+    // Cap callbacks near 60 Hz because they may outpace the display refresh.
     if (lastDrawnAt !== null && now - lastDrawnAt < MIN_FRAME_INTERVAL_MS) {
       scheduleNextDraw(MIN_FRAME_INTERVAL_MS - (now - lastDrawnAt));
       return;
@@ -4204,9 +4092,7 @@ export function initSearchNetwork() {
         traced: pvPoint.traced,
       };
     });
-    // The survivor path wins hit testing inside its larger target. This makes
-    // a gold node selectable even when the dense search leaves several blue
-    // nodes visually closer to the pointer.
+    // Give survivor nodes priority within their larger hit targets.
     if (principalNearest) return principalNearest;
 
     let nearest = null;
@@ -4333,8 +4219,7 @@ export function initSearchNetwork() {
     const eventIndex = events.length;
     events.push(event);
     if (event.e === "node") addLiveLayoutNode(event, eventIndex);
-    // Engine records can arrive in large chunks. Apply their data immediately,
-    // but commit text, range controls, and paint scheduling only once per frame.
+    // Apply engine data immediately but update the UI once per frame.
     apply(event, false, true);
     cursor = events.length;
     queueEngineTimer(event.t_us, "live");
@@ -4440,9 +4325,7 @@ export function initSearchNetwork() {
     if (message.type === "error") throw new Error(message.detail || "Trace failed");
   }
 
-  // Live mode applies events as they arrive, so the horizon is current. Replay
-  // records them for playback and applies none of them yet, so the depth has to
-  // be read back out of what was recorded.
+  // Replay depth comes from recorded events rather than applied live state.
   function depthReached(runMode) {
     if (runMode === "live") return searchHorizon;
     return events.reduce(
@@ -4453,12 +4336,8 @@ export function initSearchNetwork() {
     );
   }
 
-  // The demo stops a long search once its time limit is reached, and that stop
-  // arrives as an error after most of the network has already been drawn.
-  // Throwing there would replace a nearly complete picture with an
-  // "unavailable" panel, so a stop that follows at least one completed
-  // iteration is finished as a capped search, the way the node limit already
-  // is. A stop with nothing drawn is still a genuine failure and still throws.
+  // Treat a timed stop after one iteration as a completed capped search.
+  // A stop before any completed iteration remains an error.
   function completionFromStop(message, requestedDepth, runMode) {
     if (message?.type !== "error") return message;
     const depth = depthReached(runMode);
@@ -4490,9 +4369,7 @@ export function initSearchNetwork() {
       for (const line of lines) {
         if (!line.trim()) continue;
         const parsed = JSON.parse(line);
-        // Drain the queue before deciding how the search ended, so a stop is
-        // credited with every depth that actually arrived rather than only
-        // those applied by the time its message was read.
+        // Drain queued depths before deciding how the search ended.
         if (runMode === "live" && (parsed.type === "complete" || parsed.type === "error")) {
           await flushPendingLiveEvents();
         }
@@ -4670,21 +4547,18 @@ export function initSearchNetwork() {
       dragState = null;
       pinchState = null;
       refs.canvas.dataset.dragging = "false";
-      // Pointer release is definitive, so restore the native-detail layer on
-      // the next task instead of waiting for the wheel/keyboard debounce.
+      // Restore native detail immediately after pointer release.
       settleInteraction(0);
     }
   }
 
-  // These describe the renderer's fixed grading choices. They never vary, so
-  // they are stamped once here rather than rewritten on every frame.
+  // Stamp fixed renderer grading values once.
   refs.canvas.dataset.networkLuminosity = "1.08";
   refs.canvas.dataset.completionDimming = "disabled";
   refs.canvas.dataset.centerExposure = "filmic-radial-compression";
   refs.canvas.dataset.centerExposureFloor = "0.48";
 
-  // Detail control. Changing tiers resizes every cached layer, so all of them
-  // are invalidated and the scene is rebuilt at the new resolution.
+  // Rebuild cached layers when the detail tier changes.
   const detailSelect = document.querySelector("#labDetailSelect");
   if (detailSelect) {
     QUALITY_ORDER.forEach((key) => {

@@ -9,17 +9,14 @@ function applyTheme() {
     document.documentElement.style.setProperty(name, value);
   }
   document.documentElement.dataset.theme = app.themeKey;
-  // Keeps the browser chrome in step with the palette; the labs do the same
-  // in their own preferences module.
+  // Match the browser chrome to the selected palette.
   refs.themeColour?.setAttribute("content", theme.vars["--bg"]);
   localStorage.setItem("sgurrTheme", app.themeKey);
-  // Lets the labs paint this palette before their first frame.
+  // Expose the palette for labs before their first paint.
   localStorage.setItem("sgurrThemeVars", JSON.stringify(theme.vars));
 }
 
-// Mirrors app.animationMode onto the body so CSS can suppress decorative
-// layers. Must run before initIntro() so the intro's first frame is already
-// correct for users who have animations off.
+// Copy the animation setting to the body before the intro starts.
 function applyAnimationMode() {
   document.body.classList.toggle("animations-off", app.animationMode === "Off");
 }
@@ -38,19 +35,10 @@ function cycleTime(direction) {
   render();
 }
 
-// ---------------------------------------------------------------------
-// The modal layer, and its focus handling.
-//
-// The dialogs are siblings of #menuScreen and #appShell, so marking those
-// two inert lifts the whole background out of the tab order in one move --
-// the same primitive the intro uses while it holds the screen. Inert is
-// what actually stops focus escaping; the Tab wrap below is polish, so the
-// last control cycles back to the first instead of out to browser chrome.
-//
-// #resultModal is deliberately not in this set. It is render-driven -- ui.js
-// shows it from game state rather than from a user action -- so there is no
-// trigger element to hand focus back to when it closes.
-// ---------------------------------------------------------------------
+// Modal focus handling
+// Make the menu and app shell inert while a modal is open.
+// Tab handling wraps focus within the dialog.
+// Exclude resultModal because game state drives it and there is no trigger to restore.
 function userModals() {
   return [
     refs.themeModal,
@@ -84,8 +72,7 @@ function focusablesWithin(root) {
 }
 
 function setBackgroundInert(inert) {
-  // While the intro still holds the screen it owns these two flags. Closing a
-  // modal must never hand the menu back early.
+  // Do not release the menu while the intro still owns it.
   if (!inert && !app.intro.complete) {
     return;
   }
@@ -126,10 +113,8 @@ function openModal(modal) {
   setBackgroundInert(true);
   modalReturnFocus = trigger instanceof HTMLElement ? trigger : null;
 
-  // Focus the dialog box itself rather than its first control, so assistive
-  // technology reads the title before the buttons. It is not natively
-  // focusable, hence the programmatic tabindex. Callers that want a specific
-  // control focused simply focuses it after this returns.
+  // Focus the dialog so assistive technology announces its title first.
+  // Callers may override the focus target.
   const box = modal.querySelector('[role="dialog"]');
   if (box) {
     box.tabIndex = -1;
@@ -139,10 +124,8 @@ function openModal(modal) {
   }
 }
 
-// Bound directly as a click listener on [data-close-modal], so this is also
-// called with a MouseEvent. Read the flag defensively rather than
-// destructuring, so only a genuine { restoreFocus: false } suppresses the
-// hand-back -- anything else, event object included, restores focus.
+// This also receives MouseEvent objects when used as a click handler.
+// Only a false restoreFocus value disables focus restoration.
 function closeAllModals(options) {
   const restoreFocus = options?.restoreFocus !== false;
   for (const modal of userModals()) {

@@ -8,9 +8,7 @@
 
 namespace {
 
-// Tunable evaluation parameters. Normally constexpr; the Texel tuner compiles
-// this file with -DTUNING to make them mutable so they can be adjusted at
-// runtime.
+// The Texel tuner makes these parameters mutable with -DTUNING.
 #ifdef TUNING
 #define EVAL_PARAM
 #else
@@ -263,7 +261,7 @@ int Board::game_phase() const {
         (count_bits(bitboards[WR]) + count_bits(bitboards[BR])) * PHASE_ROOK +
         (count_bits(bitboards[WQ]) + count_bits(bitboards[BQ])) * PHASE_QUEEN;
 
-    // Promotions can push the raw phase above the opening value; clamp.
+    // Promotions can push the raw phase above the opening value.
     return std::min(phase, PHASE_MAX);
 }
 
@@ -311,9 +309,7 @@ int Board::evaluate_fast() const {
 }
 
 int Board::evaluate_quiet() const {
-    // Stand-pat uses the full evaluation: quiescence terminates almost every
-    // search line, so whatever this returns is the positional knowledge the
-    // search actually sees.
+    // Stand pat uses the full evaluation at quiescence leaves.
     return evaluate();
 }
 
@@ -534,7 +530,7 @@ int Board::evaluate_pawn_structure_for_colour(int colour) const {
 namespace {
 
 struct PawnCacheEntry {
-    U64 white_pawns = ~0ULL;   // impossible pawn set: never matches a real position
+    U64 white_pawns = ~0ULL;   // Impossible pawn set that forces the first fill.
     U64 black_pawns = ~0ULL;
     int score = 0;
 };
@@ -557,8 +553,7 @@ int Board::evaluate_pawn_structure() const {
     U64 wp = bitboards[WP];
     U64 bp = bitboards[BP];
 
-    // Pawn structure only changes on a minority of moves, so cache the result
-    // keyed on the exact pawn bitboards.
+    // Cache pawn structure by the exact pawn bitboards.
     std::size_t index = mix64(wp ^ mix64(bp)) & PAWN_CACHE_MASK;
     PawnCacheEntry& entry = pawn_cache[index];
 
@@ -585,8 +580,7 @@ int Board::evaluate_king_safety_for_colour(int colour) const {
 
     U64 zone = king_attacks(king_sq) | bit(king_sq);
 
-    // Weighted pressure: each enemy piece contributes
-    // weight x (attacked squares inside the king zone).
+    // Weight each attack into the enemy king zone.
     int pressure = 0;
     U64 occ = occupancy();
 
@@ -781,16 +775,12 @@ int Board::evaluate(int alpha, int beta) const {
         score = -score;                       // white point of view
     }
 
-    // Mop-up stays in the cheap stage: it is nearly free in normal positions
-    // and its swings are far larger than the lazy margin, so it can't be
-    // skipped without breaking endgame conversion.
+    // Keep mop-up in the cheap stage so lazy evaluation cannot skip it.
     score += evaluate_mop_up();
 
     int side_relative = side_to_move == WHITE ? score : -score;
 
-    // If even the maximum possible contribution of the remaining terms cannot
-    // bring the score back inside the window, the exact value is irrelevant
-    // to the cutoff decision.
+    // Skip slow terms when they cannot bring the score back into the window.
     if (side_relative + LAZY_EVAL_MARGIN <= alpha
         || side_relative - LAZY_EVAL_MARGIN >= beta) {
         return side_relative;

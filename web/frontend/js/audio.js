@@ -117,9 +117,7 @@ function playProceduralSound(name, { volume = 1, rate = 1 } = {}) {
 
   const speed = Math.max(0.5, Math.min(2, rate));
   const master = context.createGain();
-  // Ceiling is above 1.0 so specific sounds (button, move) can be amplified
-  // past unity gain; the synth tones peak at ~0.12 internally, so headroom is
-  // large and there is no clipping risk.
+  // Allow extra gain because generated tones peak well below full scale.
   master.gain.value = Math.max(0, Math.min(6, app.masterVolume * app.soundVolume * volume));
   master.connect(context.destination);
   const now = context.currentTime + 0.004;
@@ -142,8 +140,7 @@ function playProceduralSound(name, { volume = 1, rate = 1 } = {}) {
     noise(0, { duration: 0.055, gain: 0.12, frequency: 520 });
     tone(0, { frequency: pitch, endFrequency: pitch * 0.72, duration: 0.07, gain: 0.1, type: "sine" });
   } else if (name === "capture") {
-    // Heavier, grittier impact than a normal move: a longer low-frequency
-    // crunch plus a deeper thump, so a capture is unmistakable by ear.
+    // Make captures heavier than normal moves.
     noise(0, { duration: 0.11, gain: 0.2, frequency: 300 });
     tone(0, { frequency: 140, endFrequency: 46, duration: 0.17, gain: 0.14, type: "triangle" });
   } else if (name === "castle") {
@@ -169,8 +166,7 @@ function playProceduralSound(name, { volume = 1, rate = 1 } = {}) {
       tone(index * 0.075, { frequency, endFrequency: frequency * 0.9, duration: 0.2, gain: 0.065, type: "triangle" });
     });
   } else if (name === "boss_rumble") {
-    // The disturbance: a hard impact, then rockfall noise over a deep groan
-    // that bends downward like something vast shifting its weight.
+    // Layer an impact, rockfall, and a descending groan.
     noise(0, { duration: 0.16, gain: 0.42, frequency: 140 });
     tone(0, { frequency: 92, endFrequency: 30, duration: 0.5, gain: 0.26, type: "sine" });
     noise(0.06, { duration: 1.3, gain: 0.34, frequency: 95 });
@@ -178,7 +174,7 @@ function playProceduralSound(name, { volume = 1, rate = 1 } = {}) {
     tone(0.1, { frequency: 56, endFrequency: 32, duration: 1.55, gain: 0.2, type: "triangle" });
     tone(0.16, { frequency: 112, endFrequency: 55, duration: 1.05, gain: 0.08, type: "sawtooth" });
   } else if (name === "boss_reveal") {
-    // The name card: a slow low swell (open fifth) with a breath of air.
+    // Use a low open-fifth swell with light noise for the title card.
     tone(0, { frequency: 49, duration: 2.8, gain: 0.12, type: "sine", attack: 0.9 });
     tone(0.12, { frequency: 98, duration: 2.5, gain: 0.09, type: "triangle", attack: 0.85 });
     tone(0.25, { frequency: 146.83, duration: 2.3, gain: 0.05, type: "triangle", attack: 0.75 });
@@ -192,9 +188,7 @@ function syncMenuMusic({ force = false, immediate = false } = {}) {
     return;
   }
 
-  // Hold the menu music back until the intro has fully departed -- the cave
-  // belongs to the rumble and the reveal swell. finishIntro() force-syncs,
-  // so the music fades in the moment the menu actually appears.
+  // Start menu music only after the intro finishes.
   const shouldRun = app.masterVolume > 0 && app.musicVolume > 0 && app.mode === "menu" && app.intro.complete;
   const shouldPlay = shouldRun && !document.hidden;
   const target = shouldPlay ? app.masterVolume * app.musicVolume : 0;
@@ -369,21 +363,17 @@ function playSound(name, { volume = 1, rate = 1, delay = 0, condition = null } =
   }
 }
 
-// Scored to the 4200ms checkmate reveal on the board, so the sounds land
-// on the visuals instead of arriving with the modal afterwards. Sgurr's
-// feast and Sgurr's death take different scores; each leaves the result
-// modal to play only a quiet epilogue.
+// Time the checkmate score to the board reveal. The result modal plays only an epilogue.
 function playCheckmateRevealSound(humanWon) {
   const during = () => app.mode === "game" && app.gameOver && app.reason === "checkmate";
   if (humanWon) {
-    // the eye arrives guttering, keens as it convulses, and ruptures
+    // Guttering arrival, convulsion, then rupture.
     playSound("result_sgurr_energy", { volume: 0.42, rate: 1.12 });
     playSound("result_sgurr_alien", { volume: 0.5, rate: 0.68, delay: 1450, condition: during });
     playSound("result_human_explosion", { volume: 0.95, delay: 2950, condition: during });
     return;
   }
-  // the feast: a rumble as the eye materialises, a hum as it regards the
-  // king, the wet swallow as he goes down, a bright call at the blink
+  // Materialisation, gaze, swallow, then blink.
   playSound("boss_rumble", { volume: 0.45, rate: 1.25 });
   playSound("result_sgurr_energy", { volume: 0.4, rate: 0.9, delay: 1300, condition: during });
   playSound("result_sgurr_burble", { volume: 0.85, rate: 0.9, delay: 2750, condition: during });
@@ -391,19 +381,16 @@ function playCheckmateRevealSound(humanWon) {
 }
 
 function playResultSound(outcome) {
-  // A checkmate with animations on has just played the full board score,
-  // so the modal adds only an epilogue. Every other ending (resignation,
-  // flag, stalemate, animations off) gets its full account here.
+  // Animated checkmates already played the board score. Other endings play their full cue here.
   const revealScored = app.reason === "checkmate" && app.animationMode !== "Off";
   if (outcome === "human-win") {
-    // the fanfare stands alone: the modal shows a dead husk, not a blast
+    // The modal shows a dead husk, so use only the fanfare.
     playSound("result_human_victory", { volume: 0.84 });
     return;
   }
   if (outcome === "sgurr-win" || outcome === "watch-white-win" || outcome === "watch-black-win") {
     if (revealScored) {
-      // epilogue over the king adrift in the glass: one low call, then a
-      // slow burble from somewhere very deep
+      // Play a low call followed by a slow, deep burble.
       playSound("result_sgurr_alien", { volume: 0.4, rate: 0.7 });
       playSound("result_sgurr_burble", { volume: 0.32, rate: 0.68, delay: 480 });
       return;

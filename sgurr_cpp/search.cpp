@@ -26,9 +26,7 @@ constexpr std::array<int, 12> PIECE_VALUE = {
 
 constexpr int MAX_PIECE_VALUE = 900;
 
-// The LMP quiet budget by depth. Was a constexpr table {0, 6, 12, 18};
-// the three live entries are tunable now, so it becomes a lookup that
-// reads them. Depth is already guarded to <= lmp_max_depth by the caller.
+// Tunable LMP quiet budget by depth.
 int lmp_count_for(int depth) {
     switch (depth) {
         case 1:  return params.lmp_count_1;
@@ -44,15 +42,12 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
 }
 
 #if SGR_TRACE_SEARCH
-// Optional visualisation trace. It is compiled completely out of release
-// builds; use -DSGR_TRACE_SEARCH=1 for the separate trace recorder binary.
-// The engine still searches normally. We only emit a bounded sample of its
-// actual node entries, best-child changes, pruning decisions and cutoffs.
+// Optional bounded search trace for the visualiser.
 struct SearchTraceState {
     bool active = false;
     int pass = 0;
     int current_depth = 0;
-    int next_id = 1;       // root is always node 0
+    int next_id = 1;       // Root is always node 0.
     bool limit_reported = false;
     Move pending_move = NO_MOVE;
     bool pending_is_null = false;
@@ -248,7 +243,7 @@ int trace_enter_node(int ply, int depth, int alpha, int beta, const char* kind, 
                   << ",\"depth\":" << depth << ",\"alpha\":" << alpha
                   << ",\"beta\":" << beta << ",\"move\":\"";
         trace_json_move(search_trace.pending_move, search_trace.pending_is_null);
-        // Hashes are strings so JavaScript never rounds a 64-bit Zobrist key.
+        // Strings preserve 64-bit hashes in JavaScript.
         std::cout << "\",\"kind\":\"" << kind << "\",\"hash\":\""
                   << std::hex << hash << std::dec << "\",\"t_us\":"
                   << trace_elapsed_us() << "}\n";
@@ -380,10 +375,7 @@ std::vector<Move> extract_principal_variation(
 } // namespace
 
 Engine::Engine() {
-    // The LMR table is derived from params and starts zeroed. Without this the
-    // engine would reduce every late move by 0 plies -- a silent, catastrophic
-    // behaviour change rather than a crash, so it is built here where every
-    // path that can search must pass.
+    // Build the derived LMR table before any search.
     refresh_derived_params();
     resize_hash(DEFAULT_HASH_MB);
     reset_killers();
@@ -395,19 +387,13 @@ void Engine::resize_hash(int mb) {
 
     std::size_t entries = (static_cast<std::size_t>(mb) * 1024 * 1024) / sizeof(TTEntry);
 
-    // Round DOWN to a power of two. The probe indexes with `hash & tt_mask`,
-    // which is one AND on the hottest path in the engine; a non-power-of-two
-    // size would force a modulo there. Rounding down rather than up also keeps
-    // the table inside the megabytes the user actually asked for.
+    // Round down for masked indexing and to respect the requested size.
     std::size_t pow2 = 1;
     while (pow2 * 2 <= entries) {
         pow2 *= 2;
     }
 
-    // Allocation can fail outright at the top of the range -- 4096 MB is a
-    // 3.2 GB request once rounded. Falling back to the default is strictly
-    // better than letting bad_alloc escape and kill the engine mid-game, and
-    // the fallback is announced rather than silent.
+    // Fall back to the default if the requested allocation fails.
     try {
         std::vector<TTEntry> fresh(pow2, TTEntry{});
         transposition_table.swap(fresh);
@@ -416,9 +402,9 @@ void Engine::resize_hash(int mb) {
     } catch (const std::bad_alloc&) {
         std::cerr << "info string Hash: could not allocate " << mb
                   << " MB, keeping " << (tt_size / 1024) << "k entries\n";
-        if (tt_size == 0) {                     // nothing usable yet: must not
-            tt_size = 1 << 16;                  // leave the table empty, since
-            tt_mask = tt_size - 1;              // every probe indexes into it
+        if (tt_size == 0) {                     // Ensure probes always have a table.
+            tt_size = 1 << 16;
+            tt_mask = tt_size - 1;
             transposition_table.assign(tt_size, TTEntry{});
         }
     }
@@ -449,10 +435,7 @@ namespace {
 
 constexpr int MATE_THRESHOLD = MATE - 1000;
 
-// Mate scores inside the search are root-relative ("mate at absolute ply m").
-// TT entries must be node-relative ("mate in d plies from this position") so
-// they stay valid when probed at a different ply, or in a later search after
-// the game has advanced.
+// Convert root-relative mate scores to node-relative TT scores and back.
 int score_to_tt(int score, int ply) {
     if (score > MATE_THRESHOLD) {
         return score + ply;
@@ -477,29 +460,15 @@ int score_from_tt(int score, int ply) {
     return score;
 }
 
-// The UCI `score` field.
-//
-// A forced mate must be reported as `score mate <moves>` -- positive when this
-// side is delivering it, negative when receiving it. Reporting it as a
-// centipawn value instead makes a GUI display a mate as a ~10,000-pawn
-// advantage, which is how this engine behaved until now.
-//
-// Internally a mate is encoded root-relative as MATE - plies (negamax returns
-// -MATE + ply at a checkmated node), so plies-to-mate is MATE - |score|, and
-// UCI wants MOVES, hence the round-up by (plies + 1) / 2.
-//
-// The |score| <= MATE guards keep the +/-INF sentinel -- used as the initial
-// best_score when a search is started on a position with no legal moves --
-// out of the mate band, so it falls through to a centipawn score rather than
-// being reported as a nonsensical mate distance.
+// Format centipawn and mate scores for UCI.
+// Internal mate distance is in plies while UCI reports moves.
 std::string uci_score(int score) {
     if (score > MATE_THRESHOLD && score <= MATE) {
         return "mate " + std::to_string((MATE - score + 1) / 2);
     }
 
     if (score < -MATE_THRESHOLD && score >= -MATE) {
-        // A root that is ALREADY mate is zero moves away, and "-0" is not a
-        // number any GUI should be handed. Zero is unsigned.
+        // Report an already-mated root as unsigned zero.
         int moves = (MATE + score + 1) / 2;
         return moves == 0 ? "mate 0" : "mate -" + std::to_string(moves);
     }
@@ -519,8 +488,7 @@ void Engine::clear_search_heuristics() {
 }
 
 void Engine::clear_for_new_position() {
-    // Keep the TT (entries stay valid as the game advances). Killers are
-    // ply-indexed, so reset them; history stays useful, so halve it instead.
+    // Keep the TT, reset ply-based killers and age history.
     reset_killers();
 
     for (auto& row : history) {
@@ -588,23 +556,20 @@ SearchResult Engine::search_best_move(
     stop_search = false;
 
 #if SGR_TRACE_SEARCH
-    // The diagnostic binary visualises the entire iterative-deepening search.
-    // Its timestamps share one clock so a browser can replay depths 1..N as a
-    // single continuous run. Release builds compile all of this away.
+    // Share one trace clock across iterative-deepening passes.
     search_trace.pass = 0;
     search_trace.current_depth = 0;
     search_trace.started_at = std::chrono::steady_clock::now();
     search_trace.last_flush_at = search_trace.started_at;
 #endif
 
-    // Build the accumulators for the root position; make/unmake keep them in
-    // sync through the tree.
+    // Build root accumulators before incremental updates begin.
     if (nnue::active()) nnue::refresh(board);
 
     reset_killers();
 
 #if SGR_CONTHIST
-    ss_piece.fill(-1);   // no previous move anywhere until a make records one
+    ss_piece.fill(-1);   // No prior move until make records one.
 #endif
 
     MoveList legal_moves = board.generate_legal_moves();
@@ -621,16 +586,11 @@ SearchResult Engine::search_best_move(
 
 #if SGR_BMSTAB
     std::optional<Move> prev_root_best = std::nullopt;
-    int bm_stable = 0;   // consecutive iterations the root best move has held
+    int bm_stable = 0;   // Consecutive iterations with the same best move.
 #endif
 
     for (int depth = 1; depth <= max_depth; ++depth) {
-        // Soft limit: once this far into the budget a deeper pass almost never
-        // finishes before the hard deadline, so keep the last completed depth
-        // rather than spending the rest of the clock on a search we discard.
-        // The budget is scaled by best-move stability (stretched while the root
-        // move is still changing, trimmed once it has settled) and clamped to
-        // the hard deadline. Depth 1 always runs so a searched move exists.
+        // Scale the soft limit by best-move stability. Depth 1 always runs.
         if (depth > 1 && soft_time_limit.has_value()) {
             double soft = *soft_time_limit;
 #if SGR_BMSTAB
@@ -667,7 +627,7 @@ SearchResult Engine::search_best_move(
             move = result.second;
 
             if (!stop_search && (score <= alpha || score >= beta)) {
-                // Widen progressively before falling back to a full window.
+                // Widen progressively before using a full window.
                 alpha = score - params.aspiration_window * 4;
                 beta = score + params.aspiration_window * 4;
 
@@ -704,11 +664,7 @@ SearchResult Engine::search_best_move(
             best_score = score;
             completed_depth = depth;
         } else if (completed_depth == 0) {
-            // Terminal root: checkmate or stalemate, so there is no move to
-            // report, but negamax_root's score (-MATE or 0) IS meaningful.
-            // Without this, best_score keeps its -INF initialiser and the info
-            // line reports `score cp -10000000` -- a ~100,000-pawn evaluation
-            // where a mate or a draw belongs.
+            // Keep the checkmate or stalemate score when the root has no move.
             best_score = score;
         }
 
@@ -718,26 +674,17 @@ SearchResult Engine::search_best_move(
             pv = extract_principal_variation(*this, board, *best_move, depth);
         }
 
-        // `tbhits` used to carry the transposition-table hit count here. That
-        // field means ENDGAME TABLEBASE hits in UCI, and this engine has no
-        // tablebases, so any GUI or PGN tracker reading it recorded nonsense
-        // (fastchess has a track_tbhits switch that would have done exactly
-        // that). TT health belongs in `hashfull`, which is what it now
-        // reports; tt_hits is still counted and still returned in
-        // SearchResult, it is simply no longer mislabelled on the wire.
+        // Report TT occupancy through hashfull. This engine has no tablebases.
         std::cout
             << "info depth " << depth
             << " score " << uci_score(best_score)
             << " nodes " << nodes
-            // Divide by at least 1ms: an iteration that completes inside the
-            // clock's resolution would otherwise report the raw node count as
-            // a rate, which reads as an absurdly SLOW engine at shallow depth.
+            // Use at least 1 ms when calculating NPS.
             << " nps " << (nodes * 1000 / std::max(ms, 1LL))
             << " hashfull " << hashfull()
             << " time " << ms;
 
-        // Omit `pv` entirely rather than emitting the non-move token "none":
-        // a GUI parsing the pv field is entitled to expect moves in it.
+        // Omit pv when no move exists.
         if (!pv.empty()) {
             std::cout << " pv";
             for (const Move& pv_move : pv) {
@@ -759,12 +706,7 @@ SearchResult Engine::search_best_move(
 }
 
 int Engine::hashfull() const {
-    // UCI `hashfull` is transposition-table occupancy in permille. Sampled
-    // over the first 1000 slots rather than scanned in full: entries are
-    // indexed by hash & TT_MASK and so are spread uniformly, and walking all
-    // TT_SIZE entries once per iteration would cost more than the number is
-    // worth. This is also the telemetry that was missing when the 2026-07-15
-    // "TT size buys nothing" result proved hard to interpret.
+    // Estimate UCI hashfull from the first 1000 uniformly indexed slots.
     int used = 0;
 
     for (int i = 0; i < 1000; ++i) {
@@ -793,14 +735,7 @@ int Engine::evaluate_position(const Board& board) const {
 }
 
 #if SGR_EVALSCALE
-// A position's evaluation means less the closer it sits to a draw by the
-// halfmove clock: two plies short of the fifty-move reset, a "winning"
-// position is not winning. Scale linearly from evalscale_start toward
-// evalscale_min_pct at 100.
-//
-// Mate scores are left alone -- a forced mate is not diluted by the clock,
-// it ENDS the game before the clock matters, and rescaling it would corrupt
-// the mate-distance encoding the TT relies on.
+// Scale non-mate evaluations down as the halfmove clock approaches 100.
 int Engine::scale_for_fifty_move(const Board& board, int score) const {
     if (std::abs(score) > MATE_THRESHOLD) {
         return score;
@@ -860,11 +795,11 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     int us = board.side_to_move;
     bool legal_found = false;
 #if SGR_ROOTPVS
-    bool legal_found_any = false;   // first SEARCHED root move gets the full window
+    bool legal_found_any = false;   // First searched root move gets a full window.
 #endif
 
 #if SGR_IMPROVING
-    // Seed ply 0 so interior nodes at ply 2 have a same-side reference.
+    // Seed ply 0 for improving checks at ply 2.
     ss_static_eval[0] = board.in_check(us)
         ? NO_STATIC_EVAL
         : evaluate_position(board);
@@ -887,10 +822,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 #endif
         UndoInfo undo = board.make_move(move);
 
-        // The child node's first act is to probe this slot. Start the fetch
-        // now so the line is on its way while make_move's remaining work and
-        // the call setup happen. A hint only: it cannot fault and cannot
-        // change what is searched.
+        // Prefetch the TT slot probed by the child.
         __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
 
 #if SGR_CONTHIST
@@ -898,12 +830,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         ss_to[0] = move.to();
 #endif
 #if SGR_ROOTPVS
-        // PVS at the root. The first move gets the full window as the presumed
-        // PV; every later one only has to be PROVED worse, which a null window
-        // does for a fraction of the cost. Re-search fully only when one
-        // surprises us by beating alpha -- and only while it is still inside
-        // the aspiration window, since a score at or above beta is a fail-high
-        // the caller will widen and re-run anyway.
+        // Search the first root move fully, then use null windows with re-search.
         int score;
 
         if (!legal_found_any) {
@@ -1027,23 +954,10 @@ bool Engine::can_reduce_late_move(
 
 namespace {
 
-// LMR reductions, precomputed. The formula costs two std::log calls, and it was
-// evaluating them at every late move of every node -- but both inputs are small
-// integers, so every result it can produce fits in a table.
-//
-// LMR_DIM covers depth and move number up to 63. Depth is bounded by the root
-// depth (extensions only ever restore a ply, never add one beyond the parent),
-// so a `go depth 64`+ search or a position with 64+ legal moves falls through to
-// the formula rather than reading off the end.
+// Precomputed LMR values for depths and move counts below LMR_DIM.
 constexpr int LMR_DIM = 64;
 
-// Exactly the expression lmr_reduction used to evaluate inline: same double
-// arithmetic, same truncating cast, same clamp. Both clamp inputs are table
-// indices, so the clamp is folded into the table rather than left at the call
-// site -- there is nothing at the call site it could depend on.
-//
-// The divisor is now params.lmr_div_x100 / 100.0. At the default 250 that is
-// 2.5, i.e. bit-for-bit the original expression.
+// Preserve the inline formula's arithmetic and clamping.
 int lmr_formula(int depth, int legal_moves_searched) {
     int reduction = 1 + static_cast<int>(
         std::log(depth) * std::log(std::max(legal_moves_searched, 1))
@@ -1053,8 +967,7 @@ int lmr_formula(int depth, int legal_moves_searched) {
     return std::max(1, std::min(reduction, depth - 1));
 }
 
-// No longer const: the divisor is tunable, so the table is derived state that
-// must be rebuilt whenever it changes. See refresh_derived_params().
+// Rebuilt whenever the tunable divisor changes.
 std::array<std::array<int, LMR_DIM>, LMR_DIM> LMR_TABLE{};
 
 } // namespace
@@ -1062,9 +975,7 @@ std::array<std::array<int, LMR_DIM>, LMR_DIM> LMR_TABLE{};
 SearchParams params;
 
 void refresh_derived_params() {
-    // Row 0 is left zeroed. log(0) is -inf and -inf * 0 is NaN, so depth 0 has
-    // no defined value here -- it is also unreachable, since the caller is
-    // gated on depth >= lmr_min_depth.
+    // Leave unreachable depth 0 zeroed to avoid log(0).
     for (int depth = 1; depth < LMR_DIM; ++depth) {
         for (int moves = 0; moves < LMR_DIM; ++moves) {
             LMR_TABLE[depth][moves] = lmr_formula(depth, moves);
@@ -1132,9 +1043,7 @@ int Engine::negamax(
         return 0;
     }
 
-    // Draw detection must precede the TT probe: repetition is a property of
-    // the path taken, and a stored score for this position must not mask a
-    // draw on this particular path.
+    // Detect path-dependent repetition before probing the TT.
     if (ply > 0 && (board.halfmove_clock >= 100 || board.is_repetition())) {
 #if SGR_TRACE_SEARCH
         trace_end(trace_scope.id, "draw", 0);
@@ -1147,9 +1056,7 @@ int Engine::negamax(
 
     const TTEntry& tt_slot = transposition_table[board_hash & tt_mask];
 
-    // With a move excluded the stored entry describes a different search, so
-    // no TT cutoff (and no store below); the entry is still read for the
-    // singular test's own conditions.
+    // Excluded-move searches may read the TT but cannot cut off or store.
     if (!excluded.has_value() && tt_slot.key == board_hash && tt_slot.depth >= depth) {
         const TTEntry& entry = tt_slot;
         tt_hits += 1;
@@ -1196,10 +1103,8 @@ int Engine::negamax(
     }
 
 #if SGR_IMPROVING
-    // Record the static eval for this ply and compare with the same side's
-    // eval two plies up. An in-check ply records the sentinel: it has no
-    // meaningful static eval, and a comparison through one counts as not
-    // improving (the conservative side -- full RFP margin, halved LMP budget).
+    // Compare static eval with the same side two plies earlier.
+    // In-check plies use a sentinel and count as not improving.
     int node_static_eval = NO_STATIC_EVAL;
     bool improving = false;
 
@@ -1214,10 +1119,7 @@ int Engine::negamax(
 #endif
 
 #if SGR_RFP
-    // Reverse futility: the mirror of the futility block below. If the static
-    // eval is so far above beta that a conservative margin per remaining ply
-    // cannot pull it back under, trust it and stand pat. Same mate and check
-    // guards as futility; like the futility return, nothing is TT-stored.
+    // Reverse futility pruning on a static eval well above beta.
     if (
         depth <= params.rfp_max_depth
         && !in_check_node
@@ -1225,8 +1127,7 @@ int Engine::negamax(
         && std::abs(beta) < MATE - 1000
     ) {
 #if SGR_IMPROVING
-        // A rising eval is a more trustworthy bound, so one ply of margin is
-        // waived; at depth 1 improving this prunes on eval >= beta alone.
+        // Waive one ply of margin when the eval is improving.
         int rfp_eval = node_static_eval;
 
         if (rfp_eval - params.rfp_margin * (depth - (improving ? 1 : 0)) >= beta) {
@@ -1250,7 +1151,7 @@ int Engine::negamax(
         && std::abs(beta) < MATE - 1000
     ) {
 #if SGR_IMPROVING
-        int static_eval = node_static_eval;   // already computed above
+        int static_eval = node_static_eval;   // Already computed above.
 #else
         int static_eval = evaluate_position(board);
 #endif
@@ -1264,13 +1165,7 @@ int Engine::negamax(
     }
 
 #if SGR_RAZOR
-    // Verified razoring at depth 3..razor_max_depth. Same idea as the block
-    // above -- a static eval this far below alpha is not being rescued by quiet
-    // moves -- but with a wider, depth-scaled margin, and it CONFIRMS with a
-    // quiescence search before bailing out. The shallow block returns the
-    // quiescence score outright; at these depths there is more to lose from a
-    // wrong bail, so a qsearch that comes back above alpha means the position
-    // is not actually lost and the node is searched normally.
+    // Confirm deeper razoring with quiescence before returning.
     if (
         depth > 2
         && depth <= params.razor_max_depth
@@ -1295,21 +1190,15 @@ int Engine::negamax(
     }
 #endif
 
-    // No null move with a move excluded: the verdict must come from the
-    // remaining moves themselves.
+    // Excluded-move searches must test the remaining moves directly.
     if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)) {
         NullMoveUndo undo = board.make_null_move();
 #if SGR_CONTHIST
-        ss_piece[ply] = -1;   // a null move is no follow-up context
+        ss_piece[ply] = -1;   // Null moves provide no continuation context.
 #endif
 
 #if SGR_NMPSCALE
-        // R grows with depth, and with how far the static eval already sits
-        // above beta: the bigger that surplus, the more certain the null move
-        // is to fail high and the less tree is worth spending to confirm it.
-        // The eval term is only available when a static eval was computed at
-        // this node -- in-check plies record the sentinel, but can_try_null_move
-        // has already excluded those.
+        // Scale reduction by depth and the static eval surplus over beta.
         int R = params.null_move_reduction + depth / params.nmp_depth_div;
 #if SGR_IMPROVING
         if (node_static_eval != NO_STATIC_EVAL) {
@@ -1317,8 +1206,7 @@ int Engine::negamax(
                           params.nmp_eval_max);
         }
 #endif
-        // Never reduce past the node itself; a negative depth would hand the
-        // child a quiescence search whose bound is not what this test means.
+        // Keep the reduced child depth non-negative.
         R = std::clamp(R, 1, depth - 1);
 #else
         int R = params.null_move_reduction + (depth >= 6 ? 1 : 0);
@@ -1363,33 +1251,17 @@ int Engine::negamax(
     LegalityInfo li = board.legality_info();
 
 #if SGR_IIR
-    // Internal iterative reduction. No TT move means this node has never been
-    // searched usefully, so its ordering is guesswork and a full-depth pass
-    // mostly buys a re-search. Take a ply off; the shallower search populates
-    // the TT, and the ordering on any revisit is real.
-    //
-    // Deliberately AFTER the singular test's depth gate would read `depth`, so
-    // it cannot silently disqualify a node from singular extension -- the
-    // reduction is applied here, before the loop, and the singular block below
-    // sees the reduced value, which is the intended relationship: a node too
-    // poorly ordered to have a TT move is not one to spend a singular search on.
+    // Reduce nodes without a TT move before testing singular extension.
     if (depth >= params.iir_min_depth && !tt_move_key.has_value()) {
         depth -= params.iir_reduction;
     }
 #endif
 
-    // Check geometry for this node, computed once. The move loop below tests
-    // each move against it instead of making the move and scanning the board.
-    // Valid for the whole loop: make/unmake is balanced, so the position is
-    // unchanged between iterations (and across the singular search below).
+    // Compute check geometry once for the unchanged node position.
     CheckInfo ci = board.check_info();
 
 #if SGR_SINGULAR
-    // Singular extension test: the TT move carries a lower-bound score from a
-    // search nearly as deep as this node. Search the OTHER moves, reduced,
-    // against a window a margin below that score; if none reaches it, the TT
-    // move is the position's only good move and earns one extra ply in the
-    // loop below.
+    // Extend a lower-bound TT move when reduced alternatives fail its margin.
     int singular_extension = 0;
 
     if (
@@ -1401,8 +1273,7 @@ int Engine::negamax(
         && tt_slot.flag != TT_UPPER
         && tt_slot.depth >= depth - params.singular_tt_depth_slack
     ) {
-        // Copy out of the TT before recursing: the helper search may replace
-        // this slot.
+        // Copy the entry before recursion can replace its slot.
         int tt_score = score_from_tt(tt_slot.score, ply);
 
         if (std::abs(tt_score) < MATE_THRESHOLD) {
@@ -1430,16 +1301,13 @@ int Engine::negamax(
     int legal_moves_searched = 0;
 
 #if SGR_HMALUS
-    // Quiets searched at this node, in order; on a quiet beta cutoff every
-    // earlier entry is a quiet that failed where the cutoff move succeeded.
+    // Quiets searched before a possible cutoff move.
     Move tried_quiets[256];
     int n_tried = 0;
 #endif
 
 #if SGR_CAPHIST
-    // Captures searched at this node, in order. On a NOISY beta cutoff every
-    // earlier entry is a capture that failed where the cutoff capture worked --
-    // the same malus logic the quiets already get.
+    // Captures searched before a possible noisy cutoff.
     Move tried_caps[256];
     int n_caps = 0;
 #endif
@@ -1455,17 +1323,9 @@ int Engine::negamax(
         }
 
 #if SGR_LMP
-        // Late move pruning: enough quiets have been searched at this shallow
-        // depth without a cutoff; the rest are ordered worst-by-history and
-        // almost never matter. Killers are exempt, captures and promotions
-        // are never pruned, and the threshold guarantees legal_found is
-        // already true. Placed before the malus recording below so a pruned
-        // (never-searched) quiet cannot be penalised at a cutoff.
-        // The depth guard must precede the lmp_count_for() lookup: it only
-        // covers depths 0..params.lmp_max_depth.
+        // Prune late quiets before recording searched moves for malus updates.
 #if SGR_IMPROVING
-        // A falling eval halves the quiet budget: the worst-ordered quiets
-        // are even less likely to rescue a position trending downward.
+        // Halve the quiet budget when the eval is not improving.
         int lmp_budget = depth <= params.lmp_max_depth
             ? (improving ? lmp_count_for(depth) : lmp_count_for(depth) / 2)
             : 0;
@@ -1487,16 +1347,8 @@ int Engine::negamax(
         }
 #endif
 
-        // ---- shallow-depth move pruning ------------------------------------
-        // All of these sit BEFORE the malus recording below, for the same
-        // reason LMP does: a move that is never searched must not be punished
-        // at a later cutoff for failing.
-        //
-        // Common guards: never prune the first move (legal_found would stay
-        // false and a legal position could be reported as mate), never prune
-        // while in check, never prune near mate scores, and never prune the TT
-        // move or a killer. Ordered cheapest test first -- a history lookup
-        // costs an array read, SEE costs an exchange simulation.
+        // Shallow move pruning runs before malus recording.
+        // Keep the first move, checks, mate scores, TT moves and killers.
         if (
             legal_moves_searched > 0
             && !in_check_node
@@ -1504,13 +1356,11 @@ int Engine::negamax(
             && !(tt_move_key.has_value() && move == *tt_move_key)
             && !is_killer_move(ply, move)
         ) {
-            // maybe_unused: the only three readers of this are the
-            // SGR_HISTPRUNE, SGR_FUTILITY and SGR_SEEPRUNE blocks below, and
-            // all three default to 0 -- so the default build warns without it.
+            // Readers may all be compiled out in the default build.
             [[maybe_unused]] const bool quiet = !is_noisy_move(board, move);
 
 #if SGR_HISTPRUNE
-            // A quiet that keeps failing in this exact continuation.
+            // Prune a quiet with poor continuation history.
             if (quiet && depth <= params.histprune_max_depth) {
                 int h = history[move.from()][move.to()];
 #if SGR_CONTHIST
@@ -1529,7 +1379,7 @@ int Engine::negamax(
 #endif
 
 #if SGR_FUTILITY
-            // Too far behind for a quiet move to matter at this depth.
+            // Prune a quiet that cannot overcome the futility margin.
             if (quiet && depth <= params.fut_max_depth) {
 #if SGR_IMPROVING
                 int fe = node_static_eval;
@@ -1544,9 +1394,7 @@ int Engine::negamax(
 #endif
 
 #if SGR_SEEPRUNE
-            // Loses too much material by static exchange to be worth the
-            // remaining depth. Captures get a quadratic allowance because a
-            // sacrifice has more scope to pay off than a quiet blunder does.
+            // Prune moves below their depth-scaled SEE allowance.
             if (depth <= params.see_max_depth && !move.is_promotion()) {
                 int threshold = quiet
                     ? -params.see_quiet_margin * depth
@@ -1557,7 +1405,6 @@ int Engine::negamax(
             }
 #endif
         }
-        // --------------------------------------------------------------------
 
 #if SGR_HMALUS
         if (!is_noisy_move(board, move)) {
@@ -1588,17 +1435,12 @@ int Engine::negamax(
         int trace_child = trace_expected_child();
 #endif
 
-        // Answered from the node's check geometry before the move is made.
-        // This used to be in_check() on the position AFTER make_move, which
-        // is a full attack scan -- knights, pawns, king, then both slider
-        // sets -- run for every move searched at every interior node.
+        // Use precomputed node geometry to detect checks before making the move.
         bool gives_check = board.gives_check(move, ci);
 
         UndoInfo undo = board.make_move(move);
 
-        // See negamax_root: prefetch the slot the child will probe. The gap
-        // here is larger -- the extension logic and the LMR arithmetic both
-        // run before the recursive call reaches the TT.
+        // Prefetch the child TT slot before extension and LMR work.
         __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
 
 #if SGR_CONTHIST
@@ -1621,23 +1463,19 @@ int Engine::negamax(
         int score;
 
         if (legal_moves_searched == 1) {
-            // First move: full window (the presumed PV).
+            // Search the presumed PV with a full window.
 #if SGR_TRACE_SEARCH
             trace_prepare_move(move);
 #endif
             score = -negamax(board, next_depth, -beta, -alpha, ply + 1);
         } else {
-            // PVS: prove later moves are worse with a null window, possibly
-            // LMR-reduced. Re-search at full depth, then full window, only on
-            // surprise.
+            // Test later moves with a reduced null window and re-search surprises.
             int reduction = reduce_late_move
                 ? lmr_reduction(depth, legal_moves_searched)
                 : 0;
 
 #if SGR_HISTLMR
-            // The quiet's history record adjusts its reduction: proven quiets
-            // are reduced less, serial failures more. can_reduce_late_move has
-            // already filtered to non-TT, non-killer quiets.
+            // Adjust quiet-move reduction from its history.
             if (reduction > 0) {
                 int hist_score = history[move.from()][move.to()];
 #if SGR_CONTHIST
@@ -1710,7 +1548,7 @@ int Engine::negamax(
                 hist = std::min(hist + bonus, HISTORY_MAX);
 
 #if SGR_CONTHIST
-                // The move has been unmade, so piece_at(from) is the mover.
+                // After unmake, piece_at(from) is the mover.
                 int prev_piece = ply > 0 ? ss_piece[ply - 1] : -1;
                 int prev_to = ply > 0 ? ss_to[ply - 1] : 0;
 
@@ -1725,9 +1563,7 @@ int Engine::negamax(
 #endif
 
 #if SGR_HMALUS
-                // Penalise the quiets tried before the cutoff move (the last
-                // entry is the cutoff move itself), so moves that keep failing
-                // sink in the ordering instead of staying at a flattering peak.
+                // Penalise quiets tried before the cutoff move.
                 for (int i = 0; i < n_tried - 1; ++i) {
                     const Move& q = tried_quiets[i];
                     int& qh = history[q.from()][q.to()];
@@ -1748,10 +1584,8 @@ int Engine::negamax(
             }
 #if SGR_CAPHIST
             else if (!move.is_promotion()) {
-                // Noisy cutoff. Reward this capture and penalise the captures
-                // tried before it, exactly as quiets are handled above. The
-                // move is unmade, so piece_at(from) is the mover and
-                // piece_at(to) is the victim again.
+                // Reward the cutoff capture and penalise earlier captures.
+                // After unmake, the mover and victim are back on the board.
                 int bonus = depth * depth;
                 auto pc = board.piece_at(move.from());
 
@@ -1799,8 +1633,7 @@ int Engine::negamax(
         flag = TT_LOWER;
     }
 
-    // An excluded-move search describes a position minus one move; storing it
-    // would poison later probes of the real position.
+    // Do not store scores from an excluded-move search.
     if (!excluded.has_value()) {
         store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
     }
@@ -1867,8 +1700,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     }
 
 #if SGR_EVALSCALE
-    // The stand-pat must be scaled the same way evaluate_position is, or
-    // quiescence and the main search would disagree about the same position.
+    // Apply the same fifty-move scaling as the main search.
     int stand_pat = scale_for_fifty_move(board, board.evaluate(alpha, beta));
 #else
     int stand_pat = board.evaluate(alpha, beta);
@@ -1884,11 +1716,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     alpha = std::max(alpha, stand_pat);
 
-    // Generated directly rather than by generating everything and discarding
-    // the quiets. Emission order matches the old filter exactly, which matters:
-    // order_moves sorts with std::sort, which is not stable, so a reordering
-    // among equal-scored captures would change the search rather than speed it
-    // up.
+    // Generate noisy moves directly while preserving their original order.
     MoveList noisy_moves = board.generate_noisy_moves();
 
     MovePicker npicker(*this, board, noisy_moves, std::nullopt, ply, false);
@@ -1906,9 +1734,7 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
             }
         }
 
-        // SEE pruning: skip captures that lose material by static exchange.
-        // Never reached while in check (evasions take the path above), and
-        // promotions are never pruned.
+        // Prune losing captures outside check. Promotions are exempt.
         if (!move.is_promotion() && !board.see_ge(move, 0)) {
             continue;
         }
@@ -1959,8 +1785,7 @@ void Engine::store_killer(int ply, const Move& move) {
 }
 
 namespace {
-// The one comparator, shared by the picker and by order_moves, so the two can
-// never drift into different orderings.
+// Shared comparator for MovePicker and order_moves.
 struct ByScoreDesc {
     template <class T>
     bool operator()(const T& a, const T& b) const { return a.score > b.score; }
@@ -1975,10 +1800,7 @@ Engine::MovePicker::MovePicker(
     int ply,
     bool split_bad_captures
 ) {
-    // Bucketing is EAGER and byte-for-byte the same pass order_moves does. Only
-    // the sorting is deferred: deferring the bucketing too would mean deciding
-    // the good/bad capture split lazily, and that split needs SEE, which is
-    // exactly the expensive thing worth keeping in one predictable place.
+    // Bucket eagerly so SEE classification happens in one predictable pass.
     std::optional<Move> killer_key_one = std::nullopt;
     std::optional<Move> killer_key_two = std::nullopt;
 
@@ -2091,9 +1913,7 @@ bool Engine::MovePicker::next(Move& out) {
 
             case S_OTHER_QUIET:
 #if SGR_HMALUS || SGR_CONTHIST
-                // With malus or continuation scores these are genuinely
-                // negative, so they order least-bad first. Without either,
-                // every score here is exactly zero and the sort is a no-op.
+                // Sort negative quiet scores from least bad to worst.
                 if (!sorted_oq_) {
                     std::sort(other_quiets_, other_quiets_ + n_oq_, ByScoreDesc{});
                     sorted_oq_ = true;
@@ -2120,8 +1940,7 @@ MoveList Engine::order_moves(
     std::optional<Move> killer_one = std::nullopt;
     std::optional<Move> killer_two = std::nullopt;
 
-    // Score each move once; the sorts below compare cached values instead of
-    // recomputing scores inside the comparator.
+    // Cache scores before sorting.
     struct Scored { Move move; int score; };
     Scored captures[256];     int n_cap = 0;
     Scored bad_captures[256]; int n_bad = 0;
@@ -2147,10 +1966,8 @@ MoveList Engine::order_moves(
         if (is_noisy_move(board, move)) {
             int cscore = capture_score(board, move);
 
-            // Losing captures (SEE < 0) get their own bucket, placed below
-            // killers but above quiets. Promotions always stay in the main
-            // capture bucket. Quiescence doesn't split: it SEE-prunes losing
-            // captures itself, so splitting would pay for SEE twice.
+            // Put losing captures below killers but above quiets.
+            // Promotions stay with captures and quiescence skips this split.
             if (split_bad_captures && !move.is_promotion()
                     && !board.see_ge(move, 0)) {
                 bad_captures[n_bad++] = {move, cscore};
@@ -2173,9 +1990,7 @@ MoveList Engine::order_moves(
         int hist = history[move.from()][move.to()];
 
 #if SGR_CONTHIST
-        // Add the follow-up score for the previous ply's move. Quiescence
-        // passes split_bad_captures=false and skips this: it neither records
-        // moves on the ply stack nor benefits from quiet ordering.
+        // Add continuation history from the previous ply outside quiescence.
         if (split_bad_captures && ply > 0 && ss_piece[ply - 1] >= 0) {
             auto piece = board.piece_at(move.from());
             if (piece.has_value()) {
@@ -2200,9 +2015,7 @@ MoveList Engine::order_moves(
     std::sort(bad_captures, bad_captures + n_bad, by_score);
     std::sort(good_quiets, good_quiets + n_gq, by_score);
 #if SGR_HMALUS || SGR_CONTHIST
-    // With malus / continuation scores these can be genuinely negative, so
-    // order them least-bad first. Without either feature every score here is
-    // exactly zero and the sort would be a no-op, so it is compiled out.
+    // Sort negative quiet scores when history features can produce them.
     std::sort(other_quiets, other_quiets + n_oq, by_score);
 #endif
 
@@ -2224,10 +2037,7 @@ MoveList Engine::order_moves(
         ordered.add(*killer_two);
     }
 
-    // Losing captures go after the killers but ahead of quiet moves. SEE is
-    // pin-blind and sometimes mislabels a winning capture, and a forcing
-    // capture is usually worth trying before a random quiet; demoting them
-    // below all quiets tested worse.
+    // Keep losing captures after killers but before quiet moves.
     for (int i = 0; i < n_bad; ++i) {
         ordered.add(bad_captures[i].move);
     }
@@ -2262,9 +2072,7 @@ int Engine::capture_score(const Board& board, const Move& move) const {
     int score = 10'000 + 10 * PIECE_VALUE[*victim] - PIECE_VALUE[*attacker];
 
 #if SGR_CAPHIST
-    // Nudges within an MVV-LVA tier rather than across tiers: the divisor keeps
-    // the history term small against a base that is already ~10,000 with a 10x
-    // victim multiplier.
+    // Limit capture history to a nudge within its MVV-LVA tier.
     score += std::clamp(
         caphist[caphist_index(*attacker, move.to(), *victim % 6)] / params.caphist_div,
         -params.caphist_max, params.caphist_max);
@@ -2282,13 +2090,9 @@ void Engine::store_tt(
 ) {
     TTEntry& slot = transposition_table[board_hash & tt_mask];
 
-    // Replace if the slot holds a different position, or ours is searched at
-    // least as deep. The table never wipes; old entries age out per slot.
+    // Replace collisions or entries no deeper than this search.
     if (slot.key != board_hash || depth >= slot.depth) {
-        // Explicit narrowing at the one place it happens. depth is bounded by
-        // MAX_PLY - 1 = 127 (the UCI layer clamps, and the search never
-        // extends past its own root depth), flag holds 0-2, and score keeps
-        // its full 32 bits for mate encoding.
+        // Depth and flag are bounded to their packed field widths.
         slot = TTEntry{
             board_hash,
             static_cast<std::int32_t>(score),

@@ -62,8 +62,7 @@ function renderWatchArena() {
   const watching = app.mode === "game" && app.humanSide === null;
   const coreHeader = refs.coreLine.closest(".core-header");
   coreHeader.classList.toggle("watch-mode", watching);
-  // Body-level hook so the board-side presences can adhere to their colours
-  // in the arena (see board.css) without affecting human-vs-engine games.
+  // Mark self-play so board presences use their side colours.
   document.body.classList.toggle("watch-mode", watching);
   if (!watching) {
     return;
@@ -326,9 +325,7 @@ function addEvalHistoryPoint(evalInfo, ply) {
 
 function renderEvalTrend(display) {
   const reviewing = app.review.active;
-  // Live: the capped rolling window, spaced evenly. Review: the whole game,
-  // spaced by ply so the graph reads as elapsed game time and the swing mark
-  // lands where the move actually was.
+  // Live graphs use an evenly spaced rolling window. Review graphs use ply positions.
   const reviewSeries = reviewing ? reviewEvalSeries() : [];
   const points = reviewing
     ? (reviewSeries.length ? reviewSeries : [{ ply: 0, cp: 0, display }])
@@ -354,7 +351,7 @@ function renderEvalTrend(display) {
   });
   const path = svgPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
 
-  // Live the dot marks the latest eval; in review it marks where you are.
+  // The dot marks the latest live score or the current review position.
   let marker = svgPoints[svgPoints.length - 1] || { x: 0, y: height / 2 };
   if (reviewing) {
     const currentPly = reviewCurrent()?.ply ?? 0;
@@ -386,7 +383,7 @@ function renderEvalTrend(display) {
   }
 }
 
-// The review panel: where you are in the game, and the moment it turned.
+// Render the current review position and turning point.
 function renderReviewPanel() {
   if (!refs.reviewBlock) {
     return;
@@ -407,9 +404,7 @@ function renderReviewPanel() {
 
   refs.reviewMove.textContent = plyMoveText(current);
 
-  // The engine only searches on its own turn, so many plies carry no score.
-  // Rather than a bare "no eval", fall back to the last real one and say so --
-  // that is also what the eval column beside the board is showing.
+  // Use the latest engine score for unscored plies, matching the board evaluation.
   const carried = reviewEvalAt(app.review.index);
   const ownEval = current?.display || null;
   refs.reviewEval.textContent = ownEval
@@ -705,8 +700,7 @@ function resultPresentation(outcome, message) {
 
 function renderResultModal() {
   refs.rematchButton.textContent = app.gameOrigin === "editor" ? "Replay position" : "Rematch";
-  // Reviewing keeps the game-over state, so the modal has to stand aside
-  // while it runs -- and reappears when review is dismissed.
+  // Hide the result modal during review and restore it afterwards.
   refs.resultModal.hidden =
     !(app.mode === "game" && app.gameOver) || checkmateRevealPending() || app.review.active;
   if (refs.resultModal.hidden) {
@@ -1036,11 +1030,7 @@ function renderBlobMemory() {
   refs.menuMemory.hidden = false;
 }
 
-// Self-play is a mirror match, so the arena is named for the build fighting
-// itself: the quoted codename where a release has one ('Sgurr v8.2
-// "Thearlaich"' -> Thearlaich), otherwise whatever follows "Sgurr"
-// ('Sgurr classical' -> Classical). This used to be hardcoded as "MacKenzie
-// Mirror" and froze there when v4.0 stopped being the current release.
+// Name self-play from the quoted release codename or the text after Sgurr.
 function engineCodename(label) {
   const quoted = label.match(/"([^"]+)"/)?.[1];
   if (quoted) {

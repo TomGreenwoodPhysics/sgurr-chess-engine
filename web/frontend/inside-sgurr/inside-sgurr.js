@@ -262,8 +262,7 @@ function buildBoard() {
   refs.board.replaceChildren(fragment);
 }
 
-// Updates the existing squares rather than rebuilding them, so selecting a
-// piece never tears down and repaints the board.
+// Update existing squares so selection does not rebuild the board.
 function renderBoard() {
   if (!boardSquares.size) buildBoard();
   const parsed = parseFen(position?.fen || START_FEN);
@@ -335,7 +334,7 @@ function snapshotForPhase() {
   return transition.after;
 }
 
-// Re-triggers the settle animation so a new score fades in rather than swapping.
+// Restart the settle animation for each new score.
 function pulseEvaluation() {
   const next = refs.evaluation.textContent;
   if (refs.evalReadout.dataset.value === next) return;

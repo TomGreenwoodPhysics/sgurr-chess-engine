@@ -69,16 +69,13 @@
   grid-template-columns: var(--play-width) calc(var(--editor-column-width) * 2 + 12px);
 }
 
-/* The shell's top padding centres the play column, but in the lab the panel is
-   the taller half, so that padding pushed the footer off the bottom. Pad evenly
-   here and let the two halves centre on each other instead. */
+/* Use even lab padding so the taller panel does not push out the footer. */
 .app-shell[data-mode="editor"] {
   padding-top: 14px;
   padding-bottom: 14px;
 }
 
-/* Whichever half is taller sets the row height and the other sits in the middle
-   of it, leaving the panel the same distance above and below the board. */
+/* Vertically centre the shorter half within the row. */
 .app-shell[data-mode="editor"] .board-area,
 .app-shell[data-mode="editor"] .editor-panel {
   align-self: center;
@@ -296,9 +293,7 @@ h2 {
   margin-right: 4px;
 }
 
-/* In the engine arena the board-side presences adhere to their colours,
-   matching the duel instances in the side panel: White pale and luminous,
-   Black deep and shadowed. */
+/* Tint board presences by side during self-play. */
 body.watch-mode .player-card[data-colour="white"] .player-presence {
   filter: saturate(0.62) brightness(1.42) contrast(1.02);
 }
@@ -690,15 +685,14 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
 .mate-devour::after {
   z-index: 2;
   background:
-    /* the mark: a danger ring on the king's square */
+    /* Mark the king with a danger ring. */
     radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), transparent 0 7%, color-mix(in srgb, var(--danger), transparent 34%) 7.3% 7.9%, transparent 8.3%),
-    /* the summons: a faint accent ring where the eye is about to open */
+    /* Mark where the eye will open. */
     radial-gradient(circle at var(--eye-x, 50%) var(--eye-y, 50%), transparent 0 15%, color-mix(in srgb, var(--accent), transparent 58%) 15.3% 15.8%, transparent 16.2%);
   animation: mate-signal-converge var(--mate-duration, 4200ms) ease-in-out forwards;
 }
 
-/* Sparks wheeling inward as the eye feeds -- loose light dragged into the
-   pupil ahead of the king itself. */
+/* Pull sparks inward before the king moves. */
 .mate-sparks {
   position: absolute;
   z-index: 3;
@@ -713,7 +707,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   animation: mate-sparks-spiral var(--mate-duration, 4200ms) cubic-bezier(0.5, 0, 0.7, 0.4) forwards;
 }
 
-/* Shockwaves: reality flinches twice as the king goes down the throat. */
+/* Send two shockwaves as the king is swallowed. */
 .mate-shockwave {
   position: absolute;
   z-index: 3;
@@ -763,9 +757,8 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   border-width: 2px;
 }
 
-/* The pupil fixes on the king, dilates hugely to swallow it, then narrows
-   to a sated slit. Extra specificity so this beats the shared wander rule
-   in core.css, which comes later in the cascade. */
+/* Track the king, dilate, then narrow after the swallow.
+   Specificity overrides the later shared pupil rule. */
 .mate-devour .mate-devour-core .core-pupil {
   animation: mate-pupil-feast var(--mate-duration, 4200ms) ease-in-out forwards;
 }
@@ -790,7 +783,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
 .mate-devour-piece .piece-image {
   width: 100%;
   height: 100%;
-  /* the king trembles when it realises, before it is torn loose */
+  /* Tremble before the king is pulled away. */
   animation: mate-piece-tremble var(--mate-duration, 4200ms) ease-in-out forwards;
 }
 
@@ -836,9 +829,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   }
 }
 
-/* The eye does not summon the king to the centre -- it comes for him. It
-   materialises directly overhead, regards him for a long beat, feeds, then
-   blinks shut and is gone. */
+/* Open the eye over the king, pause, feed, and blink out. */
 @keyframes mate-core-arrive {
   0%,
   8% {
@@ -866,7 +857,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: translate(-50%, -50%) scale(1.14);
     filter: saturate(1.7) brightness(1.3);
   }
-  /* the blink: the whole eye snaps shut on the king */
+  /* Close the eye over the king. */
   82% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.2, 0.05);
@@ -884,8 +875,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   }
 }
 
-/* The king holds his square, trembling -- then is torn loose, stretched
-   thin toward the pupil, and goes down spinning. */
+/* Pull the king into the pupil. */
 @keyframes mate-piece-taken {
   0%,
   30% {
@@ -972,7 +962,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: scale(1.18);
     opacity: 0.8;
   }
-  /* dilates to take the king in whole */
+  /* Dilate around the king. */
   76% {
     transform: scale(1.8);
     opacity: 0.95;
@@ -1021,14 +1011,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Human victory: Sgurr is slain, not fed. The board floods with light   */
-/* instead of draining; the eye arrives already beaten -- guttering like  */
-/* a faulty lamp, colour draining, pupil shrunk to a terrified pinprick  */
-/* -- convulses, and ruptures in a blast of white. Its king quakes        */
-/* through the death-throes, then topples and dissolves upward into      */
-/* light.                                                                */
-/* ------------------------------------------------------------------ */
+/* Human win sequence ruptures Sgurr's core and dissolves its king into light. */
 
 .board-wrap.checkmate-reveal.human-victory .board {
   animation: board-mate-radiance var(--mate-duration, 4200ms) ease-in forwards;
@@ -1043,9 +1026,9 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
 
 .mate-devour.human-victory::after {
   background:
-    /* the mark: a victory-white ring on Sgurr's king */
+    /* Mark Sgurr's king with a light ring. */
     radial-gradient(circle at var(--mate-x, 50%) var(--mate-y, 50%), transparent 0 7%, color-mix(in srgb, var(--white-eval), transparent 26%) 7.3% 7.9%, transparent 8.3%),
-    /* the omen: a danger ring where the dying eye will appear */
+    /* Mark where the damaged eye will appear. */
     radial-gradient(circle at var(--eye-x, 50%) var(--eye-y, 50%), transparent 0 15%, color-mix(in srgb, var(--danger), transparent 55%) 15.3% 15.8%, transparent 16.2%);
 }
 
@@ -1116,7 +1099,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: translate(-50%, -52%) scale(0.9);
     filter: saturate(0.85) brightness(1.05) blur(1px);
   }
-  /* guttering: the light inside it stutters */
+  /* Stutter the inner light. */
   20% {
     opacity: 0.4;
   }
@@ -1131,7 +1114,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: translate(-50%, -50%) scale(1);
     filter: saturate(0.8) brightness(0.95) blur(0);
   }
-  /* convulsions: colour draining with every spasm */
+  /* Drain colour during each convulsion. */
   46% {
     transform: translate(-51.5%, -49%) scale(1.01) rotate(-2deg);
     filter: saturate(0.66) brightness(0.9);
@@ -1148,7 +1131,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: translate(-49%, -49.5%) scale(0.97) rotate(3deg);
     filter: saturate(0.45) brightness(1.3);
   }
-  /* rupture */
+  /* Rupture the eye. */
   72% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.3);
@@ -1168,7 +1151,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: scale(0.85);
     opacity: 0.6;
   }
-  /* pinprick: fear */
+  /* Contract the pupil. */
   40% {
     transform: scale(0.3);
     opacity: 0.9;
@@ -1177,7 +1160,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     transform: scale(0.22);
     opacity: 0.95;
   }
-  /* blown wide at the moment of death */
+  /* Expand the pupil during the rupture. */
   72% {
     transform: scale(2.2);
     opacity: 0.2;
@@ -1197,7 +1180,7 @@ body.watch-mode .player-card[data-colour="black"] .player-presence {
     opacity: 1;
     transform: translate(-50%, -50%) rotate(0deg);
   }
-  /* recoil from the blast */
+  /* Recoil from the rupture. */
   76% {
     left: var(--mate-x, 50%);
     top: var(--mate-y, 50%);

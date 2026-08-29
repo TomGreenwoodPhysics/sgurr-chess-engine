@@ -52,7 +52,7 @@ def train_once(WF, BF, STM, SC, RES, train_idx, val_idx, steps, dev):
     ti_all = torch.from_numpy(train_idx)
     n = int(ti_all.numel())
     done = 0
-    while done < steps:                        # reshuffle each pass over the data
+    while done < steps:                        # Reshuffle after each data pass
         ti = ti_all[torch.randperm(n)]
         model.train()
         for i in range(0, n, BATCH):
@@ -89,10 +89,8 @@ def main():
     edges = np.concatenate([[0], np.cumsum(sizes)])
     total = int(edges[-1])
 
-    # hold out whole shards (game-disjoint val) from BOTH ends of the shard
-    # list: two different writer processes, and where sessions differ, two
-    # different sessions. A single-shard val is one process's correlated games
-    # and proved too noisy to rank half-vs-full reliably.
+    # Hold out whole shards from both ends for game-disjoint validation.
+    # Using two writers and sessions is less noisy than one correlated shard.
     val_shard_idx = [0, len(sizes) - 1]
     val_rows, pool_rows = [], []
     for i in range(len(sizes)):
@@ -104,9 +102,8 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     concat = os.path.join(args.raw_dir, "all.bin")
     if not os.path.exists(concat) or os.path.getsize(concat) != total * 32:
-        # copy EXACTLY the byte counts measured above: live datagen may still be
-        # appending, and copying grown files would shift every later shard's
-        # rows off the boundaries used for the game-disjoint split
+        # Copy only the measured bytes because live datagen may still append.
+        # Larger copies would move later rows across the validation boundary.
         with open(concat, "wb") as out:
             for p, n_pos in zip(shards, sizes):
                 remaining = n_pos * 32
@@ -136,11 +133,8 @@ def main():
     print(f"probe: full ({full.size:,}) val={v_full:.5f}", flush=True)
 
     rel = (v_half - v_full) / v_half * 100.0
-    # tri-state: full clearly BETTER -> more data still pays; roughly flat ->
-    # saturated; full clearly WORSE -> implausible for healthy data under a
-    # matched optimiser budget, so either the measurement is unstable or the
-    # data carries inconsistent labels ("anomalous") -- in both cases the
-    # verdict must not be read as saturation.
+    # Better means more data still helps, while a flat result means saturation.
+    # A worse result is anomalous and should not be read as saturation.
     if rel >= args.threshold_pct:
         verdict = "data-limited"
     elif rel > -args.threshold_pct:

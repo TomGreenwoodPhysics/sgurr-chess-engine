@@ -632,9 +632,7 @@
   --core-bright-low: 1;
   --core-bright-mid: 1.06;
   --core-bright-late: 0.98;
-  /* The aftermath: the rupture already happened on the board. What hangs
-     here is the husk -- dark, drained of colour, listing slightly, its
-     interior a ghost of what it was, a last ember guttering inside. */
+  /* Show the drained core left after the board rupture. */
   opacity: 0.9;
   width: 360px;
   height: 360px;
@@ -655,7 +653,7 @@
   animation: none;
 }
 
-/* Ash sifting down off the husk, over and over, never settling. */
+/* Loop falling ash around the core. */
 #resultModal[data-outcome="human-win"] .result-shard {
   animation: result-ash-drift var(--ash-dur, 7s) linear var(--ash-delay, 0s) infinite;
 }
@@ -717,7 +715,7 @@
   --ash-delay: -6.1s;
 }
 
-/* Dead halos: the god's machinery hangs tilted and still, barely lit. */
+/* Keep the damaged halos dim and still. */
 #resultModal[data-outcome="human-win"] .result-orbit {
   display: block;
   opacity: 0;
@@ -905,15 +903,12 @@
   animation: sgurr-label-resolve 1000ms steps(6, end) 650ms both;
 }
 
-/* The taken king is not destroyed -- he is kept. When the screen opens he
-   is already deep in the eye, dim and blurred with depth, tumbling slowly
-   in the currents: no arrival, no re-entry -- he has been in there since
-   the devour. Negative delays start both motions mid-cycle. */
+/* Start the captured king deep inside the core. Negative delays begin both motions mid-cycle. */
 #resultModal[data-outcome="sgurr-win"] .result-king {
   position: absolute;
   z-index: 3;
   left: 50%;
-  /* the core scene sits at -270px; this puts the king at the orb's heart */
+  /* Centre the king within the core scene. */
   top: -74px;
   display: grid;
   place-items: center;
@@ -927,8 +922,7 @@
   text-shadow:
     0 0 14px color-mix(in srgb, var(--accent), transparent 40%),
     0 0 34px color-mix(in srgb, var(--accent-2), transparent 64%);
-  /* the tumble animates the `rotate` property, which composes beneath the
-     drift's `transform`, so the two motions never fight */
+  /* Animate rotation separately from transform so tumbling and drifting compose. */
   animation:
     sgurr-king-adrift 16s ease-in-out -6.5s infinite,
     sgurr-king-tumble 47s linear -12s infinite;
@@ -1015,9 +1009,7 @@
   box-shadow: inset 0 0 18px color-mix(in srgb, var(--accent), transparent 84%);
 }
 
-/* The shared .modal-actions grid is two columns, which strands the third
-   action alone in the bottom-left cell. Equal-width flex children keep the
-   row centred and the buttons uniform however many there are. */
+/* Use equal flex items so three result actions stay centred and evenly sized. */
 .result-box .modal-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1095,8 +1087,7 @@
   }
 }
 
-/* Mostly dark; every so often the last ember inside catches, twice, and
-   fails again. */
+/* Briefly relight the last ember at long intervals. */
 @keyframes result-husk-flicker {
   0%,
   60%,
@@ -1340,14 +1331,14 @@
   }
 }
 
-/* Weightless: the king tumbles end over end, far too slowly to watch. */
+/* Slowly tumble the king. */
 @keyframes sgurr-king-tumble {
   to {
     rotate: 360deg;
   }
 }
 
-/* Suspended: a slow, weightless drift, never settling. */
+/* Drift the king without settling. */
 @keyframes sgurr-king-adrift {
   0%,
   100% {

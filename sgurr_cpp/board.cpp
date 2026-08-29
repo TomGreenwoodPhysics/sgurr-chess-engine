@@ -10,21 +10,14 @@
 
 const std::string PIECES = "PNBRQKpnbrqk";
 
-// Step offsets, used once at startup to build the knight and king attack
-// tables. Sliders do not appear here: they are answered by magic lookup, and
-// their delta sets were only ever a way of naming the piece type.
+// Step offsets used to build knight and king attack tables.
 const std::vector<int> KNIGHT_DELTAS = {17, 15, 10, 6, -17, -15, -10, -6};
 const std::vector<int> KING_DELTAS = {8, -8, 1, -1, 9, 7, -9, -7};
 
-// SEE piece values, indexed by piece type (0..5 = P,N,B,R,Q,K). Same simple
-// material scale as the MVV-LVA / delta pruning values in search.cpp, not the
-// tuned eval values, so SEE stays consistent with the other ordering terms.
-// The king value is a sentinel; the king-legality guard in see() stops it
-// ever being counted as captured.
+// SEE values by piece type. The king value is a sentinel.
 constexpr std::array<int, 6> SEE_VALUE = {100, 320, 330, 500, 900, 100000};
 
-// Castling rights as a 4-bit mask. The bit layout matches the index used by
-// ZOBRIST_CASTLING, so the rights byte indexes that table directly.
+// Castling rights share the bit layout used by ZOBRIST_CASTLING.
 constexpr std::uint8_t CR_WK = 1, CR_WQ = 2, CR_BK = 4, CR_BQ = 8;
 
 std::array<std::array<U64, 64>, 12> ZOBRIST_PIECES{};
@@ -225,11 +218,8 @@ bool step_ok(int a, int b, int delta) {
     return same_row_or_col_or_diag(a, b, delta);
 }
 
-// Magic bitboards for sliding pieces: one multiply-shift indexes a per-square
-// table of precomputed attack sets. The magics are searched for at startup
-// with a fixed PRNG seed, so the tables are identical on every run and no
-// precomputed constants need embedding. Plain (non-PEXT) magics, so the binary
-// runs on any 64-bit CPU regardless of -march.
+// Plain magic bitboards for sliding attacks. A fixed seed makes the generated
+// tables deterministic.
 
 namespace {
 
@@ -253,7 +243,7 @@ int popcount64(U64 b) {
     return __builtin_popcountll(b);
 }
 
-// Reference attack set by ray-walking; used only while building the tables.
+// Ray-walk reference used while building the magic tables.
 U64 slide_reference(int sq, U64 occ, const int* deltas) {
     U64 attacks = 0;
 
@@ -281,8 +271,7 @@ U64 slide_reference(int sq, U64 occ, const int* deltas) {
     return attacks;
 }
 
-// Relevant-occupancy mask: the interior squares of each ray. Edge squares are
-// excluded because a blocker on the far edge cannot change what lies beyond it.
+// Interior ray squares that can affect a sliding attack.
 U64 slider_mask(int sq, const int* deltas) {
     U64 mask = 0;
 
@@ -300,7 +289,7 @@ U64 slider_mask(int sq, const int* deltas) {
             int beyond = nxt + delta;
 
             if (!step_ok(nxt, beyond, delta)) {
-                break;   // nxt is an edge square: stop without adding it
+                break;   // stop before the edge square
             }
 
             mask |= bit(nxt);
@@ -316,8 +305,7 @@ void init_slider(
     std::vector<U64>& pool,
     const int* deltas
 ) {
-    // Pass 1: masks, shifts, and per-square offsets into one flat pool. The
-    // pool is sized exactly once so the attack pointers stored below stay valid.
+    // Build masks, shifts and offsets before allocating the flat table.
     std::array<int, 64> offset{};
     int total = 0;
 
@@ -338,8 +326,7 @@ void init_slider(
         int bits = 64 - table[sq].shift;
         int size = 1 << bits;
 
-        // Enumerate every occupancy subset of the mask (carry-rippler) and its
-        // reference attack set.
+        // Enumerate every occupancy subset and its reference attack set.
         std::vector<U64> occ(size), ref(size);
         U64 sub = 0;
         for (int i = 0; i < size; ++i) {
@@ -408,9 +395,9 @@ inline U64 rook_attacks(int sq, U64 occ) {
     return m.attacks[((occ & m.mask) * m.magic) >> m.shift];
 }
 
-// Geometry tables for legality testing.
-//   BETWEEN[a][b] = squares strictly between a and b on a shared line (else 0)
-//   LINE[a][b]    = the whole board line through a and b (else 0)
+// Geometry tables used for legality checks.
+// BETWEEN holds squares strictly between aligned squares.
+// LINE holds the full line through aligned squares.
 U64 BETWEEN[64][64];
 U64 LINE[64][64];
 bool lines_initialised = false;
@@ -430,7 +417,7 @@ void init_lines() {
     const int dirs[8] = {1, -1, 8, -8, 9, -9, 7, -7};
 
     for (int a = 0; a < 64; ++a) {
-        // BETWEEN: walk each ray, accumulating the squares passed so far.
+        // Walk each ray and record the squares passed so far.
         for (int di = 0; di < 8; ++di) {
             int delta = dirs[di];
             int cur = a;
@@ -444,8 +431,7 @@ void init_lines() {
             }
         }
 
-        // LINE: for each of the four axes, build the full board line through a,
-        // then assign it to every square that lies on that line.
+        // Build each full line through a and assign it to every square on it.
         const int axes[4][2] = {{1, -1}, {8, -8}, {9, -9}, {7, -7}};
 
         for (auto& axis : axes) {
@@ -583,9 +569,7 @@ void Board::refresh_occupancy() {
 
 void Board::assert_occupancy_sync() const {
 #ifndef NDEBUG
-    // The failure mode this guards against is silent: a stale occupancy makes
-    // movegen and SEE reason about a board that does not exist, and the search
-    // carries on producing plausible numbers. Check it on every make/unmake.
+    // Catch stale occupancy after every make and unmake.
     U64 white = bitboards[WP] | bitboards[WN] | bitboards[WB] |
                 bitboards[WR] | bitboards[WQ] | bitboards[WK];
     U64 black = bitboards[BP] | bitboards[BN] | bitboards[BB] |
@@ -643,10 +627,7 @@ U64 Board::pawn_attacks_from(int sq, int colour) const {
 }
 
 bool Board::is_square_attacked(int sq, int by_colour) const {
-    // Attacker-centric: stand on sq and ask which squares could attack it.
-    // Symmetry: a knight on A attacks B iff a knight on B attacks A.
-    // For pawns the pattern is colour-flipped: a WHITE pawn attacks sq iff
-    // it sits on a square in the BLACK pawn-attack pattern from sq.
+    // Look outward from sq to find possible attackers. Pawn colours are flipped.
 
     if (bitboards[by_colour == WHITE ? WN : BN] & KNIGHT_ATTACKS_TBL[sq]) {
         return true;
@@ -682,17 +663,13 @@ bool Board::is_square_attacked(int sq, int by_colour) const {
 }
 
 U64 Board::attackers_to(int sq, U64 occ) const {
-    // Every piece of either colour that attacks `sq` given occupancy `occ`.
-    // Sliders are regenerated against `occ`, so removing a front piece from
-    // `occ` and recomputing reveals any x-ray attacker behind it for free.
+    // Find every attacker of sq under the supplied occupancy.
     U64 result = 0;
 
     result |= KNIGHT_ATTACKS_TBL[sq] & (bitboards[WN] | bitboards[BN]);
     result |= KING_ATTACKS_TBL[sq] & (bitboards[WK] | bitboards[BK]);
 
-    // Pawn attackers are colour-flipped, matching is_square_attacked: white
-    // pawns attack `sq` from the black pawn-attack pattern of `sq`, and vice
-    // versa.
+    // Pawn attack patterns are looked up with the opposite colour.
     result |= PAWN_ATTACKS_TBL[BLACK][sq] & bitboards[WP];
     result |= PAWN_ATTACKS_TBL[WHITE][sq] & bitboards[BP];
 
@@ -702,15 +679,12 @@ U64 Board::attackers_to(int sq, U64 occ) const {
     result |= bishop_attacks(sq, occ) & bishops_queens;
     result |= rook_attacks(sq, occ) & rooks_queens;
 
-    // Restrict to pieces still present in `occ` (table-based knight/king/pawn
-    // hits are not otherwise occ-aware).
+    // Remove table hits for pieces absent from occ.
     return result & occ;
 }
 
 bool Board::square_attacked_with_occ(int sq, int by_colour, U64 occ) const {
-    // Like is_square_attacked, but slider rays are cast against a caller-supplied
-    // occupancy. Used for king-move legality, where the king is first removed
-    // from the board so it cannot block a check on itself.
+    // Attack test with caller-supplied occupancy, used for king moves.
     if (bitboards[by_colour == WHITE ? WN : BN] & KNIGHT_ATTACKS_TBL[sq]) {
         return true;
     }
@@ -745,7 +719,7 @@ LegalityInfo Board::legality_info() const {
     U64 occ = occupancy();
     U64 their_pieces = occupancy(them);
 
-    // Checkers: enemy pieces attacking the king right now.
+    // Enemy pieces currently checking the king.
     U64 checkers = attackers_to(ksq, occ) & their_pieces;
     li.checkers = checkers;
     li.nchk = __builtin_popcountll(checkers);
@@ -753,13 +727,11 @@ LegalityInfo Board::legality_info() const {
     if (li.nchk == 1) {
         auto [csq, rest] = pop_lsb(checkers);
         (void) rest;
-        // Resolve a single check by capturing the checker or, for slider checks,
-        // interposing on a square between it and the king.
+        // A single check can be met by capture or interposition.
         li.check_mask = checkers | BETWEEN[ksq][csq];
     }
 
-    // Pinned pieces: for each enemy slider aligned with the king, if exactly one
-    // piece sits between it and the king and that piece is ours, it is pinned.
+    // Find our sole blockers between the king and an enemy slider.
     U64 bq = bitboards[them == WHITE ? WB : BB] | bitboards[them == WHITE ? WQ : BQ];
     U64 rq = bitboards[them == WHITE ? WR : BR] | bitboards[them == WHITE ? WQ : BQ];
     U64 snipers = (bishop_attacks(ksq, 0) & bq) | (rook_attacks(ksq, 0) & rq);
@@ -785,21 +757,18 @@ bool Board::is_legal(const Move& move, const LegalityInfo& li) const {
     int from = move.from();
     int to = move.to();
 
-    // Castling is fully validated during generation (king not in check and the
-    // transit squares unattacked), so accept it directly.
+    // Castling safety is fully checked during generation.
     if (move.is_castling()) {
         return true;
     }
 
-    // King moves: the destination must be safe once the king has left its square
-    // (otherwise it could appear to escape a slider while still on the ray).
+    // Test the destination after removing the king from its current square.
     if (from == li.ksq) {
         U64 occ = occupancy() ^ bit(li.ksq);
         return !square_attacked_with_occ(to, them, occ);
     }
 
-    // En passant removes two pawns at once and can unveil a discovered check, so
-    // test the king against the exact post-capture occupancy.
+    // En passant needs an attack test with the exact resulting occupancy.
     if (move.is_en_passant()) {
         int cap = us == WHITE ? to - 8 : to + 8;
         U64 occ2 = (occupancy() ^ bit(from) ^ bit(cap)) | bit(to);
@@ -817,19 +786,18 @@ bool Board::is_legal(const Move& move, const LegalityInfo& li) const {
         return true;
     }
 
-    // During double check only the king may move.
+    // Only the king can answer double check.
     if (li.nchk == 2) {
         return false;
     }
 
-    // A pinned piece may only travel along its pin line and can never resolve a
-    // check.
+    // A pinned piece may only move along its pin line.
     if (bit(from) & li.pinned) {
         if (li.nchk != 0) return false;
         if (!(LINE[li.ksq][from] & bit(to))) return false;
     }
 
-    // Under a single check a non-king move must capture the checker or block it.
+    // Non-king replies to one check must capture or block it.
     if (li.nchk == 1 && !(li.check_mask & bit(to))) {
         return false;
     }
@@ -851,10 +819,7 @@ CheckInfo Board::check_info() const {
 
     U64 occ = occ_all;
 
-    // Squares from which each of our piece types would attack the enemy king.
-    // Pawns are colour-flipped in the same way as is_square_attacked: our pawn
-    // attacks ksq exactly when it stands on the enemy pawn-attack pattern of
-    // ksq. Kings cannot deliver check.
+    // Squares from which each piece type checks the enemy king.
     ci.check_squares[0] = PAWN_ATTACKS_TBL[them][ksq];
     ci.check_squares[1] = KNIGHT_ATTACKS_TBL[ksq];
     ci.check_squares[2] = bishop_attacks(ksq, occ);
@@ -862,11 +827,7 @@ CheckInfo Board::check_info() const {
     ci.check_squares[4] = ci.check_squares[2] | ci.check_squares[3];
     ci.check_squares[5] = 0;
 
-    // Discovered-check candidates: the mirror of legality_info's pin scan, run
-    // against the ENEMY king with OUR sliders. A piece that is the only thing
-    // on the ray between one of our sliders and their king discovers check by
-    // stepping off that ray. Only our own pieces qualify -- a lone enemy
-    // blocker is pinned to its own king, and moving it is not our move.
+    // Find our sole blockers on rays from our sliders to the enemy king.
     U64 our_bq = bitboards[us == WHITE ? WB : BB] | bitboards[us == WHITE ? WQ : BQ];
     U64 our_rq = bitboards[us == WHITE ? WR : BR] | bitboards[us == WHITE ? WQ : BQ];
     U64 snipers = (bishop_attacks(ksq, 0) & our_bq) | (rook_attacks(ksq, 0) & our_rq);
@@ -900,15 +861,10 @@ bool Board::gives_check(const Move& move, const CheckInfo& ci) const {
     U64 our_bq = bitboards[us == WHITE ? WB : BB] | bitboards[us == WHITE ? WQ : BQ];
     U64 our_rq = bitboards[us == WHITE ? WR : BR] | bitboards[us == WHITE ? WQ : BQ];
 
-    // Promotion, en passant and castling all change occupancy in ways the
-    // precomputed check_squares cannot describe (the arriving piece is not the
-    // one that left, or two squares empty at once, or two pieces move). Each
-    // is rare, so each is answered from the exact post-move occupancy.
+    // Special moves need a check test with their exact resulting occupancy.
     switch (move.kind()) {
         case MT_PROMO: {
-            // The pawn vacates `from`, which may itself be on the line the
-            // promoted piece now checks along -- e.g. a pawn on e7 promoting
-            // to a queen on e8 against a king on e1.
+            // The vacated pawn square may extend the promoted piece's ray.
             U64 occ_after = (occ_all ^ bit(from)) | bit(to);
             int ptype = move.promo_piece(us) % 6;
 
@@ -930,9 +886,7 @@ bool Board::gives_check(const Move& move, const CheckInfo& ci) const {
         }
 
         case MT_EP: {
-            // Two squares empty at once: the pawn's origin and the victim's
-            // square, which are on different files. Either can uncover a
-            // slider, so recompute both ray sets outright.
+            // Either vacated pawn square may uncover a slider.
             int cap = us == WHITE ? to - 8 : to + 8;
             U64 occ_after = (occ_all ^ bit(from) ^ bit(cap)) | bit(to);
 
@@ -945,8 +899,7 @@ bool Board::gives_check(const Move& move, const CheckInfo& ci) const {
         }
 
         case MT_CASTLE: {
-            // The king cannot give check, but the rook lands on a new square,
-            // and the king vacating its own can uncover one of our sliders.
+            // The rook move or vacated king square may give check.
             int rook_from;
             int rook_to;
 
@@ -969,33 +922,20 @@ bool Board::gives_check(const Move& move, const CheckInfo& ci) const {
             break;
     }
 
-    // Ordinary move or capture.
-    //
-    // The direct test uses check_squares, which was built against the
-    // PRE-move occupancy. That is exact here. The only square whose emptiness
-    // could extend a ray to `to` is `from`, and for `from` to sit between the
-    // enemy king and `to` all three must be collinear -- which for a slider
-    // means it was already attacking the king along that ray before moving,
-    // i.e. the enemy king was already in check. It never is. Knights cannot
-    // produce three collinear squares at all, and the pawn, knight and king
-    // tables do not depend on occupancy.
+    // For ordinary moves, pre-move check squares remain exact at the destination.
     int ptype = mailbox[from] % 6;
 
     if (ci.check_squares[ptype] & bit(to)) {
         return true;
     }
 
-    // Discovered check: the mover was the sole blocker on one of our sliders'
-    // rays to the enemy king, and it has stepped off that line. Staying on the
-    // line -- moving further out along it, for instance -- still blocks.
+    // A sole blocker gives discovered check only by leaving its line.
     return (ci.discovery & bit(from)) && !(LINE[ksq][from] & bit(to));
 }
 
 int Board::see(const Move& move) const {
-    // Static exchange evaluation of a capture: net material won on move.to()
-    // if both sides keep recapturing with their least valuable attacker while
-    // it is profitable. Pin-blind, as SEE usually is. Promotions are handled
-    // by the caller, not here.
+    // Pin-blind static exchange evaluation using least valuable attackers.
+    // The caller handles promotions.
     int to = move.to();
     int from = move.from();
     int mover = mailbox[from];
@@ -1016,7 +956,7 @@ int Board::see(const Move& move) const {
         int victim = mailbox[to];
 
         if (victim < 0) {
-            return 0;   // not a capture: SEE is only defined on captures
+            return 0;   // SEE is only defined for captures
         }
 
         victim_value = SEE_VALUE[victim % 6];
@@ -1054,9 +994,7 @@ int Board::see(const Move& move) const {
             break;
         }
 
-        // A king may only capture if the square is not defended by the other
-        // side once the king has moved (otherwise it would step into check).
-        // Removing the king's origin bit also reveals any x-ray behind it.
+        // A king may capture only an undefended square.
         if (lva_type == 5) {
             U64 opp_attackers =
                 attackers_to(to, occ ^ bit(lva_sq)) & occupancy(side ^ 1);
@@ -1070,7 +1008,7 @@ int Board::see(const Move& move) const {
         gain[d] = SEE_VALUE[on_square_type] - gain[d - 1];
 
         on_square_type = lva_type;
-        occ ^= bit(lva_sq);   // remove the used attacker; reveals x-rays
+        occ ^= bit(lva_sq);   // remove the attacker and reveal x-rays
         side ^= 1;
 
         if (d >= 31) {
@@ -1078,9 +1016,7 @@ int Board::see(const Move& move) const {
         }
     }
 
-    // Negamax the gain array back: each side stops capturing once continuing
-    // would lose material. `d` counts recaptures; the initial capture is
-    // already folded into gain[0], so fold gain[d]..gain[1] down into gain[0].
+    // Fold the gain sequence back under optimal stopping.
     while (d > 0) {
         gain[d - 1] = -std::max(-gain[d - 1], gain[d]);
         --d;
@@ -1090,10 +1026,7 @@ int Board::see(const Move& move) const {
 }
 
 bool Board::see_ge(const Move& move, int threshold) const {
-    // Equivalent to see(move) >= threshold but without computing the exact
-    // value: exits early when the victim already covers the threshold even
-    // after conceding the moving piece. Same geometry, x-ray handling and
-    // king-legality rule as see().
+    // Threshold form of see() with early exits.
     int from = move.from();
     int to = move.to();
     int mover = mailbox[from];
@@ -1116,8 +1049,7 @@ bool Board::see_ge(const Move& move, int threshold) const {
         }
     }
 
-    // Fail if winning the victim still falls short of the threshold; succeed
-    // if we clear it even after conceding the moving piece.
+    // Resolve thresholds settled by the victim and moving piece alone.
     int balance = victim_value - threshold;
     if (balance < 0) {
         return false;
@@ -1151,14 +1083,13 @@ bool Board::see_ge(const Move& move, int threshold) const {
             }
         }
 
-        // Same king-legality rule as see(): a king may only capture an
-        // otherwise-undefended square. Removing its origin reveals x-rays.
+        // As in see(), a king may capture only an undefended square.
         if (lva_type == 5
                 && (attackers_to(to, occ ^ lva_bit) & occupancy(side ^ 1))) {
             break;
         }
 
-        occ ^= lva_bit;          // remove the used attacker; reveals x-rays
+        occ ^= lva_bit;          // remove the attacker and reveal x-rays
         side ^= 1;
         balance = -balance - 1 - SEE_VALUE[lva_type];
 
@@ -1167,8 +1098,7 @@ bool Board::see_ge(const Move& move, int threshold) const {
         }
     }
 
-    // Whichever side could not (profitably) continue is the loser; the move
-    // meets the threshold iff that side is not the original mover's side.
+    // The move passes when the opponent is first unable to continue profitably.
     return mover_colour != side;
 }
 
@@ -1176,9 +1106,7 @@ bool Board::is_repetition() const {
     int n = position_history_count;
     int limit = std::min(n, halfmove_clock);
 
-    // Same side to move recurs every 2 plies; positions older than the last
-    // irreversible move (pawn move / capture) can never repeat. `limit` is
-    // bounded by halfmove_clock, so this window is always far inside the ring.
+    // Check same-side positions since the last irreversible move.
     for (int i = n - 2; i >= n - limit; i -= 2) {
         if (position_history[i & POSITION_HISTORY_MASK] == hash_key) {
             return true;
@@ -1197,7 +1125,7 @@ void Board::add_pawn_move(MoveList& moves, int from_sq, int to_sq, int colour) {
     int promotion_rank = colour == WHITE ? 7 : 0;
 
     if (rank_of(to_sq) == promotion_rank) {
-        // queen first: promotions are generated in likely-best order
+        // Generate the queen first.
         moves.add(Move(from_sq, to_sq, PROMO_Q, MT_PROMO));
         moves.add(Move(from_sq, to_sq, PROMO_R, MT_PROMO));
         moves.add(Move(from_sq, to_sq, PROMO_B, MT_PROMO));
@@ -1247,14 +1175,8 @@ void Board::add_king_moves(MoveList& moves, int piece, U64 own) {
 
 namespace {
 
-// Emit moves for one piece bitboard. Templated on the attack generator, so
-// each call site compiles down to its own lookup with no dispatch: the piece
-// type is a property of the call, not of the data.
-//
-// `targets` is the already-masked destination set -- everything except our own
-// pieces and the enemy king for full generation, or just the enemy pieces when
-// generating captures only. It does not vary between piece types, so the
-// caller computes it once rather than per piece.
+// Emit moves for one piece bitboard using a compile-time attack generator.
+// The caller supplies the destination mask shared by all piece types.
 template <typename AttackFn>
 void add_moves_from_attacks(MoveList& moves, U64 bb, U64 targets, U64 occ, AttackFn attacks_of) {
     while (bb) {
@@ -1316,8 +1238,7 @@ MoveList Board::generate_pseudo_legal_moves() {
 
     enemy &= ~enemy_king;
 
-    // The enemy king must not be capturable, but it must still block occupancy.
-    // Without this, pawns can illegally move forwards onto the enemy king square.
+    // The enemy king blocks moves but cannot be captured.
     U64 occ = own | enemy | enemy_king;
 
     if (us == WHITE) {
@@ -1338,11 +1259,7 @@ MoveList Board::generate_pseudo_legal_moves() {
                 }
             }
 
-            // Capture directions, visited in the same order the two-element
-            // loop used: +7 (toward the a-file) then +9. A white pawn is never
-            // on the 8th rank, so the only way either target leaves the board
-            // is wrapping round a file edge -- which one file test settles,
-            // replacing the old on_board / file_of / std::abs guard.
+            // Preserve capture order with +7 before +9.
             int file = file_of(sq);
 
             if (file > 0) {
@@ -1383,8 +1300,7 @@ MoveList Board::generate_pseudo_legal_moves() {
                 }
             }
 
-            // Same, mirrored: -7 moves toward the h-file, -9 toward the
-            // a-file, and the order (-7 then -9) is preserved.
+            // Preserve the mirrored order with -7 before -9.
             int file = file_of(sq);
 
             if (file < 7) {
@@ -1427,19 +1343,8 @@ MoveList Board::generate_pseudo_legal_moves() {
     return moves;
 }
 
-// Captures, en passant and promotions only -- the moves quiescence searches.
-//
-// Quiescence used to generate every pseudo-legal move and then discard the
-// quiet ones, which is most of them. This emits only the moves it keeps.
-//
-// The emission ORDER must match what that filter produced, move for move.
-// order_moves() sorts with std::sort, which is not stable, so two moves with
-// equal scores can come out in either order depending on how they arrived --
-// and equal scores are common among captures. A different order here would be
-// a different search, not a faster one. So this mirrors the structure of
-// generate_pseudo_legal_moves exactly: same piece order, same per-pawn order
-// of push-promotion before captures, same left-then-right capture direction,
-// and the same ascending square walks.
+// Generate captures, en passant and promotions for quiescence.
+// Keep the full generator's emission order because move sorting is unstable.
 MoveList Board::generate_noisy_moves() {
     MoveList moves;
 
@@ -1454,9 +1359,7 @@ MoveList Board::generate_noisy_moves() {
 
     U64 occ = own | enemy | enemy_king;
 
-    // For every non-pawn, the full generator masks with ~own & ~enemy_king, so
-    // the moves it emits that land on an occupied square are exactly those
-    // landing on `enemy`. That single mask replaces the is_noisy_move test.
+    // For non-pawns, the enemy mask selects the full generator's noisy moves.
     if (us == WHITE) {
         U64 pawns = bitboards[WP];
 
@@ -1464,19 +1367,14 @@ MoveList Board::generate_noisy_moves() {
             auto [sq, next] = pop_lsb(pawns);
             pawns = next;
 
-            // A push is noisy only when it promotes. A non-promoting push and
-            // the double push both land on an empty square, so neither can be.
+            // Only promotion pushes are noisy.
             int one = sq + 8;
 
             if (on_board(one) && !(occ & bit(one)) && rank_of(one) == 7) {
                 add_pawn_move(moves, sq, one, WHITE);
             }
 
-            // Capture directions, visited in the same order the two-element
-            // loop used: +7 (toward the a-file) then +9. A white pawn is never
-            // on the 8th rank, so the only way either target leaves the board
-            // is wrapping round a file edge -- which one file test settles,
-            // replacing the old on_board / file_of / std::abs guard.
+            // Match the full generator with +7 before +9.
             int file = file_of(sq);
 
             if (file > 0) {
@@ -1512,8 +1410,7 @@ MoveList Board::generate_noisy_moves() {
                 add_pawn_move(moves, sq, one, BLACK);
             }
 
-            // Same, mirrored: -7 moves toward the h-file, -9 toward the
-            // a-file, and the order (-7 then -9) is preserved.
+            // Match the mirrored order with -7 before -9.
             int file = file_of(sq);
 
             if (file < 7) {
@@ -1549,7 +1446,7 @@ MoveList Board::generate_noisy_moves() {
     add_moves_from_attacks(moves, bitboards[us == WHITE ? WK : BK], enemy, occ,
                      [](int sq, U64) { return KING_ATTACKS_TBL[sq]; });
 
-    // Castling is never noisy: the king's destination is required to be empty.
+    // Castling is never noisy because its destination is empty.
 
     return moves;
 }
@@ -1647,15 +1544,7 @@ UndoInfo Board::make_move(const Move& move) {
         }
     }
 
-    // Mirror the piece edits above into the occupancy cache. side_to_move is
-    // still the mover here; it is flipped further down.
-    //
-    // Each edit is one XOR. For the mover, `from` is ours and empties, `to`
-    // becomes ours -- and `to` is never already in our set, because a move
-    // cannot capture its own colour -- so both squares toggle. The castling
-    // rook toggles its pair the same way. For the opponent, only a captured
-    // square toggles, and captured_square is the en-passant victim's square,
-    // not move.to(), when the two differ.
+    // Mirror the piece edits into the occupancy cache before changing sides.
     U64& occ_us = side_to_move == WHITE ? occ_white : occ_black;
     U64& occ_them = side_to_move == WHITE ? occ_black : occ_white;
 
@@ -1697,8 +1586,7 @@ UndoInfo Board::make_move(const Move& move) {
     h ^= ZOBRIST_PIECES[piece][move.from()];
     h ^= ZOBRIST_PIECES[placed_piece][move.to()];
 
-    // captured and captured_square are always set together, so one test covers
-    // both: -1/-1 for a quiet move, the victim and its square otherwise.
+    // Captured piece and square are either both set or both -1.
     if (captured >= 0) {
         h ^= ZOBRIST_PIECES[captured][captured_square];
     }
@@ -1740,8 +1628,7 @@ UndoInfo Board::make_move(const Move& move) {
 void Board::unmake_move(const UndoInfo& undo) {
     const Move& move = undo.move;
 
-    // hash_key is still the post-move key here; on_unmake reverses the feature
-    // deltas before the board state below is restored.
+    // Reverse NNUE deltas while the post-move key is still available.
     if (nnue::active()) nnue::on_unmake(undo, hash_key);
 
     side_to_move ^= 1;
@@ -1788,9 +1675,7 @@ void Board::unmake_move(const UndoInfo& undo) {
         }
     }
 
-    // Undo the occupancy edits. side_to_move was flipped back to the mover at
-    // the top of this function, so these are exactly the XORs make_move
-    // applied -- and an XOR is its own inverse.
+    // Reverse the occupancy XORs after restoring the moving side.
     U64& occ_us = side_to_move == WHITE ? occ_white : occ_black;
     U64& occ_them = side_to_move == WHITE ? occ_black : occ_white;
 
@@ -1832,7 +1717,7 @@ NullMoveUndo Board::make_null_move() {
         undo.old_hash_key;
     position_history_count += 1;
 
-    // Incremental Zobrist update: only en passant and side change.
+    // Only en passant and the moving side affect this Zobrist update.
     U64 h = undo.old_hash_key;
 
     if (undo.old_en_passant >= 0) {

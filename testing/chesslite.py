@@ -54,7 +54,7 @@ class Position:
         return p
 
     def key(self):
-        # repetition key: placement + side + castling + ep
+        # The repetition key includes placement, side, castling, and en passant.
         return ("".join(self.bd), self.white, frozenset(self.castle), self.ep)
 
 KN = [(1,2),(2,1),(2,-1),(1,-2),(-1,-2),(-2,-1),(-2,1),(-1,2)]
@@ -144,7 +144,7 @@ def pseudo_moves(p):
                     t = sq(nf, nr)
                     if bd[t] == "." or opp(bd[t]):
                         moves.append((s, t, None))
-            # castling
+            # Castling
             if white and s == 4:
                 if "K" in p.castle and bd[5] == "." and bd[6] == "." and bd[7] == "R" \
                    and not attacked(bd, 4, False) and not attacked(bd, 5, False) and not attacked(bd, 6, False):
@@ -185,14 +185,14 @@ def apply_move(p, m):
     n.half = p.half + 1
     if u == "P" or bd[t] != ".":
         n.half = 0
-    # en passant capture
+    # En passant capture
     if u == "P" and fil(s) != fil(t) and bd[t] == ".":
         cap = t - 8 if c == "P" else t + 8
         bd[cap] = "."
-    # double push sets ep
+    # A double push sets the en passant square.
     if u == "P" and abs(rnk(t) - rnk(s)) == 2:
         n.ep = (s + t) // 2
-    # castling rook move
+    # Move the rook when castling.
     if u == "K" and abs(fil(s) - fil(t)) == 2:
         if t == 6: bd[5], bd[7] = bd[7], "."
         elif t == 2: bd[3], bd[0] = bd[0], "."
@@ -202,7 +202,7 @@ def apply_move(p, m):
     bd[s] = "."
     if promo:
         bd[t] = promo.upper() if c.isupper() else promo.lower()
-    # update castling rights
+    # Update castling rights.
     for srt, ch in ((4,"KQ"),(60,"kq")):
         if s == srt:
             for x in ch: n.castle.discard(x)
@@ -238,7 +238,7 @@ def insufficient_material(bd):
     if len(pieces) == 1 and pieces[0].upper() in "BN":
         return True
     if len(pieces) == 2 and all(x.upper() == "B" for x in pieces):
-        # both bishops same colour square -> draw (approx: treat KBKB as draw-ish only if same colour)
+        # Treat same-coloured bishops in KBKB as an approximate draw.
         bsq = [i for i, c in enumerate(bd) if c.upper() == "B"]
         if len(bsq) == 2 and ((fil(bsq[0]) + rnk(bsq[0])) % 2) == ((fil(bsq[1]) + rnk(bsq[1])) % 2):
             return True

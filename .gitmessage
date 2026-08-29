@@ -1,21 +1,17 @@
-# <area>: <what changed, imperative, <=72 chars>
-# |<---- keep the subject inside this line, 72 chars ---------------->|
+# <area>: <imperative summary under 72 characters>
 #
-# Areas used here: sgurr_cpp, nnue, testing, benchmarks, web, docs, ci,
+# Areas include sgurr_cpp, nnue, testing, benchmarks, web, docs, ci,
 # chore, release, nets, tools.
 #
-# Then a blank line, then the body. The body is where this project's
-# commits earn their keep, so it is worth writing:
+# Leave a blank line before the body. Include
 #
-#   - WHY, not what. The diff already says what changed.
-#   - The measurement, with its error bar and game count, if one exists.
+#   - Why the change was needed.
+#   - Measurements with error bars and game counts when available.
 #     "+21.2 +/-8.7 over 4,000 games" not "improves strength".
-#   - The bench fingerprint if the change was meant to be speed-only, or a
-#     note that it moved if it was not.
-#   - What was ruled out, and how. A negative result recorded here is worth
-#     more later than a confident sentence with nothing behind it.
+#   - The bench fingerprint and whether it changed.
+#   - What was ruled out and how.
 #
 # Wrap the body at 72 characters.
 #
-# Install this template with:
+# Install this template with
 #     git config commit.template .gitmessage

@@ -1,8 +1,7 @@
 const RAMP_STEPS = 32;
 const INTENSITY_STEPS = 24;
 const SETTLE_EPSILON = 0.003;
-// Time constants, in milliseconds, for the exponential easing. Roughly 3x these
-// numbers is how long a change takes to read as finished.
+// Exponential easing constants in milliseconds. Motion settles in about 3x each value.
 const NODE_TAU = 88;
 const AMBIENT_TAU = 150;
 const CORE_TAU = 105;
@@ -84,16 +83,13 @@ function hueGap(a, b) {
   return Math.min(gap, 360 - gap);
 }
 
-// Several themes set an accent that is all but the same hue as the cool pole,
-// which would leave "raises" and "lowers" looking identical. Fall back to the
-// theme's second accent when that happens, and only then.
+// Use the second accent when the first is too close to the cool pole.
 function warmBase(accent, accent2, cool) {
   const coolHue = rgbToHsl(cool)[0];
   return hueGap(rgbToHsl(accent)[0], coolHue) < 45 ? accent2 : accent;
 }
 
-// A third family for the lanes pinned at the ceiling, placed a third of the way
-// round the wheel from the warm pole, on whichever side is clear of the cool one.
+// Place clipped-high lanes on a third colour family away from both poles.
 function crestHue(warm, cool) {
   const warmHue = rgbToHsl(warm)[0];
   const coolHue = rgbToHsl(cool)[0];
@@ -101,16 +97,13 @@ function crestHue(warm, cool) {
   return hueGap(options[0], coolHue) >= hueGap(options[1], coolHue) ? options[0] : options[1];
 }
 
-// Pushes a colour away from its own grey without moving its hue, so a theme's
-// accent reads as itself, only more so. Keeps the two poles far apart.
+// Increase saturation without changing hue.
 function vivid(rgb, amount) {
   const grey = (rgb[0] + rgb[1] + rgb[2]) / 3;
   return rgb.map((channel) => clamp(grey + (channel - grey) * (1 + amount), 0, 255));
 }
 
-// A lane carries two numbers: which way it leans and how hard. The lean picks
-// the pole, the strength walks that pole from near-dark through its own colour
-// to a bright tint, so magnitude reads as colour and not only as size.
+// Lane direction chooses the colour pole and strength chooses its shade.
 function poleRamp(base, floor, crest) {
   const stops = [];
   for (let step = 0; step <= INTENSITY_STEPS; step += 1) {
@@ -160,13 +153,10 @@ function buildRamp(negative, positive) {
   };
 }
 
-// Frame-rate independent easing: every value walks a fixed fraction of the
-// remaining distance per millisecond, so the same motion reads identically at
-// 30fps and 120fps. Returns whether the value moved.
+// Ease by elapsed time so motion is frame-rate independent.
 function approach(holder, key, target, blend) {
   const distance = target - holder[key];
-  // Settle on an epsilon, not on equality: these live in Float32Arrays, so a
-  // stored value never compares equal to the double it was assigned from.
+  // Use an epsilon because Float32 values may not equal assigned doubles.
   if (Math.abs(distance) <= SETTLE_EPSILON) {
     holder[key] = target;
     return false;
@@ -375,9 +365,7 @@ class CortexVisual {
     return candidates.slice(0, 42);
   }
 
-  // Marks the lanes a piece or a move actually drives. Values are magnitudes;
-  // they are normalised against the strongest lane in the pair, so the display
-  // shows where the weight is, not an arbitrary cut-off.
+  // Normalise driven lane magnitudes against their combined 88th percentile.
   setFocus(whiteValues, blackValues) {
     if (!whiteValues || !blackValues) {
       this.focusTarget.fill(0);
@@ -471,8 +459,7 @@ class CortexVisual {
 
   frame(time) {
     this.animationFrame = null;
-    // Draw at the display rate while anything is still easing, and drop back to
-    // an idle cadence once the picture has settled.
+    // Draw at display rate while easing, then return to idle cadence.
     const gate = this.settled ? 42 : 0;
     if (time - this.lastFrame < gate && !this.reducedMotion) {
       this.start();
@@ -485,8 +472,7 @@ class CortexVisual {
     if (!this.settled || (!this.reducedMotion && time < this.animateUntil)) this.start();
   }
 
-  // Walks every displayed value towards the value the network actually holds.
-  // Nothing is drawn from the raw data directly, so every change fades.
+  // Ease displayed values towards network state so every change fades.
   advance(delta) {
     const instant = this.reducedMotion || !this.motionPrimed;
     const nodeBlend = instant ? 1 : 1 - Math.exp(-delta / NODE_TAU);
@@ -578,14 +564,10 @@ class CortexVisual {
     };
   }
 
-  // Both accumulators are 16 x 24 grids of lanes. Lane 0 is top left of its
-  // panel and addresses run left to right, so a row is 16 consecutive lanes.
-  // Cells stay square and the pair is centred in whatever space the stage has.
+  // Each accumulator is a 16 by 24 row-major grid of square cells.
   computeLayout() {
     const header = 30;
-    // The pieces on the board are the network's inputs, so they get a band of
-    // their own above the accumulators instead of being left implied. It has to
-    // hold the input row, the strands and the panel labels without crowding.
+    // Place network inputs above the accumulators with room for strands and labels.
     const inputBand = clamp(this.height * 0.15, 78, 132);
     const footer = clamp(this.height * 0.17, 86, 138);
     const usableHeight = Math.max(60, this.height - header - inputBand - footer);
@@ -664,7 +646,7 @@ class CortexVisual {
     };
   }
 
-  // Fills `out` with the values this lane should be showing, as plain numbers.
+  // Fill `out` with this lane's display values.
   // `polarity` is -1 for the cyan end of the ramp and +1 for the warm end.
   measureNode(perspective, index, values, out) {
     if (this.displayMode === "change") {
@@ -838,8 +820,7 @@ class CortexVisual {
     this.draw(performance.now());
   }
 
-  // The faint lattice behind each accumulator: it says these 384 values are one
-  // structured plane, not a scatter of dots. Static per layout, so build once.
+  // Build each accumulator lattice once per layout.
   ensureMesh() {
     if (this.meshPath) return this.meshPath;
     const mesh = new Path2D();
@@ -891,8 +872,7 @@ class CortexVisual {
     return this.glowCache;
   }
 
-  // One node per piece on the board. Each selects a row in both accumulators,
-  // so each fans two strands down into the two collectors.
+  // Each piece selects one row in both accumulators.
   drawInputs(context, palette, time) {
     if (!this.transition) return;
     const snapshot = this.phase === "before" && this.transition.before
@@ -1066,8 +1046,7 @@ class CortexVisual {
     context.lineWidth = 0.75;
     for (const item of this.connectionCache) {
       const point = this.point(item.perspective, item.index);
-      // Each accumulator's links gather at a waist below its grid before running
-      // into the core, so the two halves read as two cables into one output.
+      // Gather each accumulator's links before they enter the core.
       const waist = {
         x: mix(this.collector(item.perspective).x, core.x, 0.45),
         y: mix(this.grid.bottom, core.y, 0.55),
@@ -1107,8 +1086,7 @@ class CortexVisual {
       context.stroke();
     }
     context.restore();
-    // The number itself never interpolates: a score shown here is one the
-    // network actually produced.
+    // Show only scores produced by the network, without interpolation.
     let scoreText = formatEval(evaluation);
     if (this.transition?.before && ["board", "lanes"].includes(this.anatomyStage)) {
       scoreText = `${formatEval(this.transition.before.whiteRelative)} →`;
@@ -1126,8 +1104,7 @@ class CortexVisual {
     context.restore();
   }
 
-  // How far a wave of light has travelled down the grid, in rows, while a move
-  // is being pushed through the network. Null when nothing is igniting.
+  // Track the move's light wave by row. Null means no active wave.
   igniteFront(time) {
     if (this.anatomyStage !== "lanes" || this.reducedMotion) return null;
     const progress = (time - this.anatomyStarted) / 780;
@@ -1191,8 +1168,7 @@ class CortexVisual {
     const front = this.igniteFront(time);
     context.save();
 
-    // The dormant lattice, split so a lane held at zero looks different from a
-    // lane that simply carries little. Rebuilt with the data, not every frame.
+    // Rebuild the dormant lattice with data so zeroed lanes remain distinct.
     const lattice = this.ensureLattice();
     context.fillStyle = ramp.dead;
     context.globalAlpha = 0.5;
@@ -1209,8 +1185,7 @@ class CortexVisual {
         if (activity <= 0.01) continue;
         const intensity = this.nodeIntensity[slot];
         const focus = this.focusWeight[slot];
-        // With no focus every lane reads normally. With one, the lanes the piece
-        // or the move actually drives stay lit and the rest step back.
+        // Keep driven lanes lit and dim the rest when focused.
         const emphasis = mix(1, mix(0.07, 1.5, focus), this.focusFade);
         const wave = front === null
           ? 0

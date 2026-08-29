@@ -29,13 +29,11 @@
   flex-direction: column;
   gap: 10px;
   overflow: visible;
-  /* Even padding, so centring the panel centres what you can see in it. */
+  /* Use even padding so visible content remains centred. */
   padding: 10px 0;
 }
 
-/* Build on the left, set up on the right, then act on the bar underneath.
-   The two columns size themselves, so neither is padded out to match the
-   other's height. */
+/* Place build and setup in separate columns above the actions. */
 .editor-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -132,8 +130,7 @@
   margin-top: 12px;
 }
 
-/* Each instance is a colour-tinted card: White's half pale and luminous,
-   Black's half deep ink -- the duel reads as two territories. */
+/* Tint each self-play card by side. */
 .watch-instance {
   position: relative;
   min-width: 0;
@@ -176,8 +173,7 @@
   transition: opacity 360ms ease, transform 360ms ease;
 }
 
-/* The thinking side's territory wakes: accent ring, soft outer glow, and
-   the underline sweeping in. */
+/* Highlight the side currently thinking. */
 .watch-instance.active {
   border-color: color-mix(in srgb, var(--accent), transparent 26%);
   box-shadow:
@@ -211,10 +207,8 @@
   justify-self: end;
 }
 
-/* The two arena instances adhere to their colours: the White core pale and
-   luminous, the Black core deep and shadowed. Extra specificity so the tint
-   survives the shared state rules in core.css (which come later in the
-   cascade), and the filter carries the whole subtree -- face, cosmos, halo. */
+/* Preserve side colours over the later core state rules.
+   The filter tints the full core subtree. */
 .watch-duel .white-instance .watch-core {
   --core-border: color-mix(in srgb, var(--white-eval), var(--accent) 34%);
   --core-inner-glow: color-mix(in srgb, var(--white-eval), transparent 30%);
@@ -224,8 +218,7 @@
 .watch-duel .black-instance .watch-core {
   --core-border: color-mix(in srgb, var(--black-eval), var(--accent) 40%);
   --core-inner-glow: color-mix(in srgb, var(--accent-2), transparent 26%);
-  /* vibrantly black: contrast crushes the glass to obsidian while the
-     ember, sparks and glow stay saturated and bright -- rich, not dim */
+  /* Increase contrast without desaturating the glow. */
   filter: saturate(1.55) brightness(0.82) contrast(1.55);
 }
 

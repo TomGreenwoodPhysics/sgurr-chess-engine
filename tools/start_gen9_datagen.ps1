@@ -1,21 +1,12 @@
-# gen9 datagen -- 12 hidden workers appending into data\gen9_raw.
+# Start 12 hidden gen9 workers writing to data\gen9_raw.
+# Use the v8.0 net as the labeller and the verified -DSGR_RFP=0 datagen build.
+# RFP-enabled builds can record raw scores and must not label this data.
 #
-# Labeller is the v8.0 net (nets/gen8.nnue), the strongest verified net: the
-# flywheel's only proven lever (+126 Elo last turn). datagen.exe MUST be the
-# -DSGR_RFP=0 build -- RFP returns raw rather than searched scores and poisoned
-# gen6 entirely; the binary was rebuilt and byte-verified against an RFP=1 twin
-# before this run.
+# The target is a high cap because the data study still found gains at 56M.
+# At roughly 7.9M positions per day, collect as long as the schedule allows.
 #
-# Target is a high CAP, not a goal: the 2026-08-01 data study found returns
-# still ACCELERATING at 56M (14M->28M +17 Elo, 28M->56M +48), so more positions
-# were still paying when measurement stopped. Collect as long as the calendar
-# allows; ~7.9M/day means ~110M in two weeks.
-#
-# Safe to stop any time (Ctrl+C the workers, or Stop-Process datagen) and safe
-# to shut the PC down: datagen counts what is already on disk and continues,
-# and the pipeline's freeze stage trims any partial trailing record.
-# Repository root, resolved from this script's own location (tools/..) so a
-# clone anywhere works.
+# The run is resumable after stopping workers or shutting down the PC.
+# Resolve the repository root from this script so clones work anywhere.
 $root = Split-Path -Parent $PSScriptRoot
 $eng  = "$root\sgurr_cpp\datagen.exe"
 $out  = "$root\data\gen9_raw"

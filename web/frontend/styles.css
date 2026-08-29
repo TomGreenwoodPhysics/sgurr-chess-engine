@@ -1,5 +1,4 @@
-/* Sgurr web styles -- modular cascade. Partials load in this order; the
-   ordering IS the cascade, so keep it stable when adding sections. */
+/* Stylesheets load in cascade order. Keep imports stable when adding sections. */
 @import "styles/base.css";
 @import "styles/marks.css";
 @import "styles/intro.css";

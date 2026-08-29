@@ -232,11 +232,8 @@ class SgurrUciEngine:
 
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
-        # Released binaries have an absolute default net compiled in
-        # (-DSGR_DEFAULT_NET) that only resolves on the machine that built them.
-        # $SGR_EVALFILE overrides it, so each engine finds its own net wherever
-        # the repo lives. Without this they silently fall back to the HCE --
-        # no error, just "info string nnue: no network", and ~430 Elo missing.
+        # Override the build-time net path with this checkout's network.
+        # Otherwise a released binary can silently fall back to HCE.
         env = dict(os.environ)
         if self.net_path is not None:
             env["SGR_EVALFILE"] = str(self.net_path)

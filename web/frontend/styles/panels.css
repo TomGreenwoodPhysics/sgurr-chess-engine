@@ -487,7 +487,7 @@ tr.redo-notice td {
   display: none;
 }
 
-/* ---- Post-game review ------------------------------------------------ */
+/* Post-game review */
 .review-block {
   display: grid;
   gap: 10px;
@@ -526,7 +526,7 @@ tr.redo-notice td {
   font-variant-numeric: tabular-nums;
 }
 
-/* Not every ply carries an eval -- the engine only scores on its own turn. */
+/* The engine scores only its own turns, so some plies have no evaluation. */
 .review-eval.is-empty {
   color: var(--muted);
   font-size: 0.72rem;
@@ -569,7 +569,7 @@ tr.redo-notice td {
   text-align: center;
 }
 
-/* The headline finding: click to jump straight to the moment it turned. */
+/* Jump directly to the turning point. */
 .review-swing {
   width: 100%;
   padding: 9px 11px;

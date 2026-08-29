@@ -13,8 +13,7 @@
 .analysis-hero,
 .analysis-verdict,
 .analysis-metrics {
-  /* These cards clip their overflow, so they must never be shrunk below their
-     content by the flex column: that cut the UCI line off the best move. */
+  /* Prevent clipped cards from shrinking and cutting off the UCI line. */
   flex-shrink: 0;
   border: 1px solid var(--edge);
   border-radius: 12px;

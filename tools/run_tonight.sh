@@ -1,95 +1,45 @@
 #!/usr/bin/env bash
 #
-# Unattended overnight run: the v6.0 decomposition, plus the v8.1 speed
-# measurement. Four jobs, ~8-10 hours, safe to interrupt at any point.
+# Run four overnight jobs for the v6.0 decomposition and v8.1 speed test.
+# The script is safe to interrupt and writes only logs and PGNs.
 #
-# Supersedes run_v60_decomp.sh (one script rather than two that drift apart).
+# Jobs 1, 2, and 4 isolate improving, singular extensions, and history LMR.
+# The v6.0 package gained 57.3 Elo, but the components were not tested alone.
+# A null history-LMR result applies only to the current divisor because the
+# shipped adjustment is nearly inert.
 #
-# ---------------------------------------------------------------------------
-# JOBS 1, 2, 4 -- the v6.0 decomposition, owed since 2026-07-16 (ROADMAP.md)
-# ---------------------------------------------------------------------------
-# The v6.0 package (improving flag + history-adjusted LMR + singular
-# extensions) shipped as one SPRT: +57.3 +/-17.3 vs v5.0, undecomposed. Which
-# of the three earned it has never been established.
+# Job 3 compares node-identical and move-identical v8.0 and v8.1 builds.
+# The only intended difference is about 20% more speed in v8.1.
+# It uses a fixed match for a confidence interval rather than an SPRT verdict.
+# The expected gain of 18 to 19 Elo was recorded before the run in
+# benchmarks/v81_speed_prediction.md.
+# Component predictions are in benchmarks/v60_decomp_predictions.md.
 #
-# Node counts say the components are wildly unequal, but node counts cannot say
-# which of them is worth Elo:
-#
-#   build              bench 13 nodes    vs baseline
-#   baseline              13,614,729           --
-#   -DSGR_IMPROVING=0     17,373,703       +27.6%   real pruning work
-#   -DSGR_HISTLMR=0       13,796,251        +1.3%   near-inert
-#   -DSGR_SINGULAR=0       7,351,781       -46.0%   singular costs +85% of tree
-#
-# READ THIS BEFORE INTERPRETING JOB 4. History-adjusted LMR is effectively
-# INERT as shipped: history earns depth*depth per cutoff (169 at depth 13) and
-# is halved every move, so hist_score / 400000 rounds to zero nearly always --
-# setting HistLmrMax to 0, which disables the adjustment outright, changes the
-# bench tree not at all. A null result there means "worth nothing AT THIS
-# DIVISOR", not "the technique is worthless". Do not delete the code on it.
-#
-# ---------------------------------------------------------------------------
-# JOB 3 -- v8.1 vs v8.0: what is speed actually worth?
-# ---------------------------------------------------------------------------
-# The v8.1 candidate is NODE-IDENTICAL and MOVE-IDENTICAL to the released
-# v8.0 binary. Verified at fixed depth on three positions: same node counts,
-# same scores, same moves. The only difference between them is that v8.1 is
-# about 20% faster (PGO + ThinLTO, then nine node-identical optimisations).
-#
-# That makes this the cleanest controlled experiment available here, on a
-# question the project has never answered. METHODOLOGY.md 5 flags the SIMD
-# result as *inferred* -- converted to Elo through the ~70-per-doubling rule
-# rather than measured in games -- and every speed gain since has been valued
-# the same way, without ever being checked.
-#
-# Prediction from the rule: +18 to +19 Elo. If that holds, the rule is
-# validated and future speed work rests on something measured. If it comes
-# back at +5, speed work has been systematically overvalued for months.
-#
-# Deliberately NOT an SPRT. An SPRT answers "is it better?"; the question here
-# is "by how much?", which wants a confidence interval. Early stopping would
-# save nothing anyway, since the machine is idle either way.
-#
-# ---------------------------------------------------------------------------
-# Predictions were registered BEFORE this ran:
-#   benchmarks/v60_decomp_predictions.md
-#   benchmarks/v81_speed_prediction.md
-# Read them before the logs.
-#
-# Job order is deliberate: the two early-stopping SPRTs first, then the
-# release-relevant measurement, then the least surprising job last. Waking up
-# to a half-finished job 4 costs the least.
-#
-# Nothing here writes to the ledger. It produces logs and PGNs for review.
-#
-# Stop any time with Ctrl+C, or:  taskkill /IM fastchess.exe /F
-# Partial results stay in the logs and the PGNs remain valid.
+# Early-stopping jobs run first and the least important fixed match runs last.
+# Stop with Ctrl+C or `taskkill /IM fastchess.exe /F`.
+# Partial logs and PGNs remain valid.
 
 set -u
 
-# Resolve the repository root from this script's own location, so a clone
-# anywhere works. Hardcoding an absolute path meant the script only ran on the
-# machine it was written on.
+# Resolve the repository root from this script so clones work anywhere.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CPP="$ROOT/sgurr_cpp"
 FC="$ROOT/benchmarks/tools/fastchess.exe"
 BOOK="$ROOT/testing/book.epd"
-# Windows form: SGR_EVALFILE is read by the engine binary, which cannot open
-# an MSYS "/c/..." path.
+# SGR_EVALFILE needs a Windows path because the engine cannot open MSYS paths.
 NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 OUT="$ROOT/runs/tonight/$STAMP"
 
-# ---- knobs -----------------------------------------------------------------
-# -repeat plays a colour-balanced PAIR per round, so games = rounds * 2.
-CONCURRENCY=7          # 8 physical cores; leave headroom so timing stays valid
-TC=8+0.08              # the project's standard control (METHODOLOGY 1)
-JOB1_ROUNDS=3000       # cap 6,000 games. SPRT, usually stops well before.
-JOB2_ROUNDS=3000       # cap 6,000 games. SPRT, expected to stop fast.
-JOB3_ROUNDS=2000       # fixed 4,000 games -> ~+/-10 Elo at 95%
-JOB4_ROUNDS=2000       # fixed 4,000 games -> ~+/-10 Elo at 95%
-# ----------------------------------------------------------------------------
+# Run settings
+# Each repeat is a colour-balanced pair, so games equal rounds times two.
+CONCURRENCY=7          # Leave one core free for stable timing
+TC=8+0.08              # Standard project time control
+JOB1_ROUNDS=3000       # Cap at 6,000 games with an earlier SPRT stop
+JOB2_ROUNDS=3000       # Cap at 6,000 games with an earlier SPRT stop
+JOB3_ROUNDS=2000       # Fixed 4,000 games for roughly +/-10 Elo at 95%
+JOB4_ROUNDS=2000       # Fixed 4,000 games for roughly +/-10 Elo at 95%
 
 mkdir -p "$OUT"
 export SGR_EVALFILE="$NET"
@@ -97,10 +47,7 @@ export SGR_EVALFILE="$NET"
 # shellcheck source=testing/gauntlet_lib.sh
 . "$ROOT/testing/gauntlet_lib.sh"
 
-# Killing fastchess orphans its engines mid-search rather than stopping them --
-# 13 were once left spinning at 83% CPU after a run had "ended". With four jobs
-# back to back that matters twice over: leftovers from one job would corrupt the
-# timing of the next, and every result after it.
+# Sweep orphaned engines so one job cannot load the machine for later jobs.
 ENGINE_PROCS="ab_base ab_nosing ab_noimp ab_nohlmr ab_v81 sgr_gen8"
 
 # shellcheck disable=SC2086
@@ -110,10 +57,8 @@ echo "overnight run  ->  $OUT"
 date
 echo
 
-# ---- preflight -------------------------------------------------------------
-# METHODOLOGY 8 rule 5: timed games are only valid on an idle machine. And a
-# binary that cannot spawn does not crash a match -- it forfeits every game and
-# still produces a complete, plausible result.
+# Preflight
+# Timed games need an idle machine, and launch failures must not become forfeits.
 
 busy=$(powershell -c "(Get-Process datagen,fastchess -ErrorAction SilentlyContinue | Measure-Object).Count" 2>/dev/null | tr -d '\r')
 if [ "${busy:-0}" != "0" ]; then
@@ -133,9 +78,7 @@ if ! "$PY" "$ROOT/testing/engine_check.py" $CHECK; then
     exit 1
 fi
 
-# None of these binaries has a baked-in net, so a missing SGR_EVALFILE would
-# silently drop them to the hand-crafted eval -- ~430 Elo, one info line, no
-# error. That failure went undetected across 44 released binaries once.
+# These binaries need SGR_EVALFILE or they silently fall back to the HCE.
 for e in $ENGINES; do
     if ! printf 'uci\nquit\n' | "$CPP/$e.exe" 2>&1 >/dev/null | grep -q "nnue: loaded"; then
         echo "ABORT: $e is NOT loading the net -- it would play as HCE." >&2
@@ -145,7 +88,7 @@ done
 echo "preflight: all six engines start, load the net, machine idle"
 echo
 
-# Self-describing logs: record exactly what was tested.
+# Record the exact inputs in each log.
 {
     echo "run     : $STAMP"
     echo "commit  : $(cd "$ROOT" && git rev-parse HEAD)"
@@ -179,9 +122,7 @@ run_match() {   # name, new_exe, new_label, base_exe, base_label, rounds, sprt(0
         -recover \
         2>&1 | tee "$OUT/$tag.log"
 
-    # Between jobs, not just at the end. A job that leaves engines running would
-    # load the machine for every job after it, and timed results under load are
-    # invalid (METHODOLOGY 8 rule 5) -- silently so.
+    # Clean up between jobs to keep later timings valid.
     # shellcheck disable=SC2086
     stop_gauntlet $ENGINE_PROCS
 }
@@ -213,7 +154,7 @@ date
 run_match job4_nohistlmr ab_nohlmr.exe no-histlmr ab_base.exe baseline "$JOB4_ROUNDS" 0
 echo "job 4 finished"; date; echo
 
-# ---- summary ---------------------------------------------------------------
+# Summary
 # shellcheck disable=SC2086
 stop_gauntlet $ENGINE_PROCS
 # shellcheck disable=SC2086

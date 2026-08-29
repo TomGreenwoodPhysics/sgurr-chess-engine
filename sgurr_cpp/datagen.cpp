@@ -1,22 +1,17 @@
 // Self-play data generator for NNUE training.
+// Writes 32-byte records to auto-numbered data_NNNN_TAG.bin shards.
+// Existing shards count toward the target, and each run gets a unique tag.
 //
-// Plays self-play games and appends 32-byte records to a fresh auto-numbered
-// shard (data_NNNN_TAG.bin) in the output directory. Runs are resumable:
-// Ctrl+C stops on a game boundary, and the next run continues towards the
-// target by summing the shards already on disk. TAG is a random per-run token
-// so parallel processes never collide on a filename, and the RNG is seeded
-// from std::random_device so separate runs explore different games.
-//
-// Record layout (32 bytes, little-endian; decoded in nnue_tools.py):
+// Little-endian record layout decoded by nnue_tools.py
 //   u64    occupancy       (set bit = occupied square, LSB = a1)
-//   u8[16] piece nibbles   (piece 0..11 per occupied square, ascending; low
+//   u8[16] piece nibbles   (piece 0..11 per occupied square, ascending, low
 //                           nibble of each byte first)
 //   u8     side_to_move    (0 = white, 1 = black)
 //   i16    score           (centipawns, side-to-move relative)
 //   u8     result          (0 = stm lost, 1 = draw, 2 = stm won)
 //   u8[4]  padding
 //
-// Usage:
+// Usage
 //   datagen <out_dir> <target_positions> <depth|nodes:N> [book.epd|-] [net.nnue|-]
 //
 //   out_dir           directory for shards (created if absent)
@@ -26,8 +21,7 @@
 //   book.epd          optional opening book ('-' or omit = start position only)
 //   net.nnue          optional network for labelling ('-' or omit = HCE)
 //
-// A hard kill is also safe: the loaders floor to whole 32-byte records, so a
-// torn tail is ignored.
+// Loaders ignore an incomplete record left by a hard stop.
 
 #include "board.hpp"
 #include "search.hpp"
@@ -50,16 +44,15 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr int SCORE_CAP = 2000;        // skip positions outside +/- this
-constexpr int ADJ_SCORE = 2000;        // adjudicate a win above this (white POV)
-constexpr int ADJ_PLIES = 6;           // ... sustained for this many plies
+constexpr int SCORE_CAP = 2000;        // Skip positions outside this range.
+constexpr int ADJ_SCORE = 2000;        // Winning threshold from White's view.
+constexpr int ADJ_PLIES = 6;           // Required consecutive winning plies.
 constexpr int MAX_PLIES = 400;
-constexpr int OPENING_SKIP = 8;        // don't record the first few plies
-constexpr int OPENING_BALANCE_CAP = 200;  // reject openings a probe rates beyond +/- this (cp)
-constexpr int OPENING_PROBE_NODES = 5000; // cheap node budget for that opening probe
+constexpr int OPENING_SKIP = 8;        // Skip the first few plies.
+constexpr int OPENING_BALANCE_CAP = 200;  // Maximum balanced opening score.
+constexpr int OPENING_PROBE_NODES = 5000; // Opening probe budget.
 
-// Set by the Ctrl+C handler; polled at safe points so we stop on a clean game
-// boundary rather than mid-write.
+// Set by Ctrl+C and polled between safe write points.
 std::atomic<bool> g_stop{false};
 void on_sigint(int) { g_stop.store(true); }
 
@@ -107,17 +100,16 @@ bool is_shard(const fs::path& p) {
         && p.filename().string().rfind("data_", 0) == 0;
 }
 
-// Fresh shard path data_NNNN_TAG.bin: NNNN is one past the highest index on
-// disk, TAG keeps parallel processes from picking the same filename.
+// Pick the next shard number and a unique tag for parallel runs.
 fs::path next_shard(const fs::path& dir, std::uint32_t tag) {
     int max_idx = -1;
     for (const auto& e : fs::directory_iterator(dir)) {
         if (!is_shard(e.path())) continue;
         std::string stem = e.path().stem().string();     // "data_NNNN[_TAG]"
         try {
-            int v = std::stoi(stem.substr(5));           // stoi stops at '_'
+            int v = std::stoi(stem.substr(5));           // stoi stops at '_'.
             if (v > max_idx) max_idx = v;
-        } catch (...) { /* non-numeric suffix: ignore */ }
+        } catch (...) { /* Ignore non-numeric suffixes. */ }
     }
     char buf[48];
     std::snprintf(buf, sizeof(buf), "data_%04d_%08x.bin", max_idx + 1, tag);
@@ -143,8 +135,7 @@ int main(int argc, char** argv) {
     fs::path out_dir = argv[1];
     long long target = std::stoll(argv[2]);
 
-    // argv[3]: a plain integer is a fixed depth; "nodes:N" is a node budget
-    // with depth left uncapped.
+    // argv[3] accepts either a fixed depth or an uncapped "nodes:N" budget.
     std::string limit_arg = argv[3];
     int depth = 0;
     long long node_budget = 0;
@@ -190,7 +181,7 @@ int main(int argc, char** argv) {
     std::ofstream out(shard, std::ios::binary);
     if (!out) { std::cerr << "cannot open shard " << shard.string() << "\n"; return 1; }
 
-    // The search prints UCI "info" lines to stdout; mute them for datagen.
+    // Suppress UCI info output during data generation.
     std::cout.setstate(std::ios::failbit);
 
     std::cerr << "shard=" << shard.filename().string()
@@ -206,20 +197,10 @@ int main(int argc, char** argv) {
     long long skipped_openings = 0; // openings rejected by the balance filter
 
     while (!g_stop.load()) {
-        // Check the on-disk total so parallel processes collectively stop at
-        // the shared target rather than each writing the full amount.
+        // Let parallel processes share one on-disk target.
         if (target > 0 && total_positions(out_dir) >= target) break;
 
-        // The Engine is reused across the whole run (probes, rejected
-        // openings, and every game), but killer moves are the only heuristic
-        // search_best_move() resets on its own; the history table otherwise
-        // accumulates across totally unrelated positions -- most consequentially
-        // the ~48% of opening probes that get rejected, whose shallow 5000-node
-        // search would otherwise pollute the move ordering that the next
-        // (unrelated) attempt's real 150k-node search relies on. For a
-        // node-budgeted search, worse ordering directly costs effective depth,
-        // so a full reset before every attempt keeps every position's label
-        // independent of whatever came before it in this process.
+        // Reset heuristics so unrelated games cannot affect node-limited labels.
         engine.clear_for_new_game();
 
         std::string start = book.empty()
@@ -227,25 +208,17 @@ int main(int argc, char** argv) {
             : book[rng() % book.size()];
         Board board(start);
 
-        // Random plies for opening diversity. The book has only ~150 starts, so
-        // a wide random prefix is what actually spreads the data across distinct
-        // middlegames. We can randomise hard because the balance filter below
-        // discards any opening that came out lopsided.
+        // Add random opening plies, then reject lopsided positions below.
         int rand_plies = 4 + (rng() % 6);   // 4..9
         bool dead = false;
         for (int i = 0; i < rand_plies; ++i) {
             MoveList ms = board.generate_legal_moves();
-            if (ms.size() == 0) { dead = true; break; }   // random plies mated/stalemated
+            if (ms.size() == 0) { dead = true; break; }   // Opening ended early.
             board.make_move(ms[rng() % ms.size()]);
         }
         if (dead) continue;
 
-        // Opening balance filter: cheaply probe the post-opening position and
-        // start a game only if it is a genuine contest. This keeps every
-        // recorded game competitive (meaningful WDL, hard-fought middlegames)
-        // despite the heavy opening randomisation -- we reject imbalanced
-        // *starts* only; in-game play still yields plenty of imbalanced
-        // positions across the eval spectrum.
+        // Probe the opening and reject imbalanced starting positions.
         {
             SearchResult probe = engine.search_best_move(
                 board, MAX_PLY - 1, std::nullopt, OPENING_PROBE_NODES);
@@ -256,13 +229,13 @@ int main(int argc, char** argv) {
             }
         }
 
-        std::vector<std::pair<Sample, int>> recorded;   // sample + stm
+        std::vector<std::pair<Sample, int>> recorded;   // Sample and moving side.
         int result_white = -1;   // 0 black win, 1 draw, 2 white win
         int adj_count = 0, adj_sign = 0;
         bool aborted = false;
 
         for (int ply = 0; ply < MAX_PLIES; ++ply) {
-            if (g_stop.load()) { aborted = true; break; }   // discard partial game
+            if (g_stop.load()) { aborted = true; break; }   // Discard partial games.
 
             MoveList legal = board.generate_legal_moves();
             if (legal.size() == 0) {
@@ -281,13 +254,13 @@ int main(int argc, char** argv) {
             Move best = *r.best_move;
             int white_score = (board.side_to_move == WHITE) ? score : -score;
 
-            // win adjudication
+            // Adjudicate sustained winning scores.
             if (white_score >= ADJ_SCORE)      { adj_count = (adj_sign == 1 ? adj_count : 0) + 1; adj_sign = 1; }
             else if (white_score <= -ADJ_SCORE){ adj_count = (adj_sign == -1 ? adj_count : 0) + 1; adj_sign = -1; }
             else                               { adj_count = 0; adj_sign = 0; }
             if (adj_count >= ADJ_PLIES) { result_white = adj_sign == 1 ? 2 : 0; break; }
 
-            // record quiet, non-extreme positions past the opening
+            // Record quiet, non-extreme positions after the opening.
             if (ply >= OPENING_SKIP && !board.in_check(board.side_to_move)
                 && !is_noisy(board, best) && std::abs(score) < SCORE_CAP) {
                 Sample s;
@@ -296,15 +269,15 @@ int main(int argc, char** argv) {
                 recorded.emplace_back(s, board.side_to_move);
             }
 
-            // play best move, with occasional random move for diversity
+            // Occasionally choose a random move for diversity.
             Move play = best;
             if ((rng() % 100) < 5) play = legal[rng() % legal.size()];
             board.make_move(play);
         }
-        if (aborted) break;                       // don't write an interrupted game
-        if (result_white < 0) result_white = 1;   // ply cap => draw
+        if (aborted) break;                       // Do not write an interrupted game.
+        if (result_white < 0) result_white = 1;   // Treat the ply cap as a draw.
 
-        // flush samples with stm-relative WDL
+        // Write samples with side-to-move-relative WDL.
         for (auto& [s, stm] : recorded) {
             int stm_result;   // 0 loss, 1 draw, 2 win for stm
             if (result_white == 1) stm_result = 1;
@@ -323,7 +296,7 @@ int main(int argc, char** argv) {
             out.write(reinterpret_cast<char*>(pad), 4);
             ++written;
         }
-        out.flush();                              // each game is durable on disk
+        out.flush();                              // Make each game durable on disk.
         ++games;
         if (games % 50 == 0)
             std::cerr << "games=" << games << "  run_positions=" << written
@@ -336,7 +309,7 @@ int main(int argc, char** argv) {
     out.close();
     if (written == 0) {
         std::error_code ec;
-        fs::remove(shard, ec);                     // don't leave an empty shard
+        fs::remove(shard, ec);                     // Remove an unused shard.
     }
 
     std::cerr << "\nstopped" << (g_stop.load() ? " (Ctrl+C)" : "")

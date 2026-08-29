@@ -1,21 +1,10 @@
 import { app } from "./state.js";
 
-// Post-game review: step back through a finished game with the evaluation
-// beside it, and find the moment it turned.
-//
-// This keeps its own per-ply record rather than reusing app.evalHistory,
-// which is deliberately capped at the last 36 points for the live sparkline
-// and so cannot describe a whole game. Recording is cheap -- one small object
-// per ply -- and the record doubles as the position source, so review can
-// re-render the real board instead of needing a second board renderer.
-//
-// Imports are limited to state on purpose: ui.js and engine.js depend on this
-// module, so depending on them back would close an import cycle.
+// Handles post-game positions, evaluations, and turning points.
+// Review stores every ply because app.evalHistory only keeps the live graph window.
+// Import only state to avoid a cycle with ui.js and engine.js.
 
-// Mate is stored as +/-100000 so it sorts correctly, but that number would
-// swamp both the graph and the swing arithmetic. Everything numeric here
-// works on the clamped value; the human-readable string from the server
-// ("+0.8", "M3") is what actually gets displayed.
+// Clamp mate scores for graphs and swing calculations. Display the server's original label.
 const SWING_CLAMP_CP = 2000;
 
 function clampCp(cp) {
@@ -52,17 +41,8 @@ function plyMoveText(entry) {
   return `${plyLabel(entry.ply)} ${entry.san || entry.uci || "?"}`;
 }
 
-// Called on every server state. Keyed by ply so a repeated update for the
-// same ply overwrites rather than duplicating, and the truncation keeps the
-// record honest when plies are taken back or a new game starts.
-//
-// `freshEval` matters more than it looks. The player-move path applies its
-// response with keepEval: true, so after a human move app.latestEval still
-// holds the score from the engine's *previous* search. Recording that would
-// be a lie twice over: it draws a flat segment on the graph where no
-// evaluation happened, and -- because the stale point sits between the two
-// real ones -- it shrinks the swing span onto the engine's reply and blames
-// the wrong move. Only genuinely scored positions get a cp.
+// Replace records by ply and truncate after takebacks or restarts.
+// Record a score only when freshEval is true because human moves may retain the previous score.
 function recordReviewPly({ freshEval = true } = {}) {
   if (app.mode !== "game") {
     return;
@@ -101,18 +81,14 @@ function reviewCurrent() {
   return entries[index];
 }
 
-// Only plies the engine actually scored. The engine searches on its own turn,
-// so evals land roughly every other ply; the gap between two of them brackets
-// one human move and its reply, which is exactly the span a swing describes.
+// Keep only engine-scored plies. Each gap covers a human move and its reply.
 function reviewEvalSeries() {
   return reviewEntries()
     .filter((entry) => entry.cp !== null && entry.cp !== undefined)
     .map((entry) => ({ ply: entry.ply, cp: clampCp(entry.cp), display: entry.display }));
 }
 
-// The sharpest turn against the human, in centipawns, together with the move
-// that spans it. Returns null when there is nothing to say -- a game too short
-// to have two scored positions, or a self-play game with no human side.
+// Return the largest swing against the human, or null when it cannot be calculated.
 function reviewSwing() {
   if (app.humanSide === null) {
     return null;
@@ -122,8 +98,7 @@ function reviewSwing() {
     return null;
   }
 
-  // Evals are white-relative (the backend sets perspective: "white"), so a
-  // Black-playing human reads every delta the other way round.
+  // Scores are White-relative, so invert deltas for a human playing Black.
   const humanSign = app.humanSide === "white" ? 1 : -1;
   let worst = null;
   for (let i = 1; i < series.length; i += 1) {
@@ -144,8 +119,7 @@ function reviewSwing() {
     return null;
   }
 
-  // Name the human's own move inside the span where possible; fall back to
-  // the ply the swing landed on.
+  // Prefer the human move within the swing. Fall back to the ending ply.
   const entries = reviewEntries();
   const spanned = entries.filter(
     (entry) => entry.ply > worst.fromPly && entry.ply <= worst.toPly,
@@ -160,11 +134,7 @@ function reviewSwing() {
   };
 }
 
-// The engine's most recent assessment at or before the position on screen.
-// Not every ply is scored, so the eval column would otherwise sit on the
-// game's *final* score while you scrub through positions where it was not
-// remotely true. Walking backwards to the last real evaluation keeps the
-// column, the graph and the board describing the same moment.
+// Use the latest scored evaluation at or before the displayed position.
 function reviewEvalAt(index) {
   const entries = reviewEntries();
   for (let i = Math.min(index, entries.length - 1); i >= 0; i -= 1) {
@@ -188,8 +158,7 @@ function enterReview() {
     return false;
   }
   app.review.active = true;
-  // Open on the turning point when there is one: the answer to "where did
-  // that go wrong" is the reason to open a review at all.
+  // Open on the turning point when available.
   const swing = reviewSwing();
   app.review.index = swing ? reviewIndexForPly(swing.ply) : entries.length - 1;
   return true;

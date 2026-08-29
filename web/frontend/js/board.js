@@ -158,7 +158,7 @@ function canQueuePremove() {
 }
 
 function boardInteractionAvailable() {
-  // Review is a read-only view of a finished game; the board is scenery.
+  // Review is read-only, so the board ignores input.
   if (app.review.active) {
     return false;
   }
@@ -394,9 +394,7 @@ function createFloatingPiece(piece, className) {
 }
 
 function captureAbsorbTarget(capturerColour) {
-  // The capturing engine's presence core on its player card -- matched by
-  // colour, so in watch mode each core is fed by its own side's captures --
-  // with any visible presence or the side panel's header core as fallback.
+  // Target the capturing engine's colour-matched core. Fall back to any visible presence.
   const cards = [
     [refs.bottomPlayerCard, refs.bottomPlayerPresence],
     [refs.topPlayerCard, refs.topPlayerPresence],
@@ -413,8 +411,7 @@ function captureAbsorbTarget(capturerColour) {
 }
 
 function humanAbsorbTarget() {
-  // The human's answer to the engine's presence core: their name plate on
-  // whichever player card is theirs this game.
+  // Target the human player's nameplate.
   const card = [refs.bottomPlayerCard, refs.topPlayerCard].find(
     (el) => el && el.classList.contains("human-side") && el.offsetParent !== null,
   );
@@ -431,8 +428,7 @@ function capturedPieceForMove(uci, previousPieces) {
   if (direct) {
     return { piece: direct, square: to };
   }
-  // En passant: a pawn moved diagonally onto an empty square; the captured
-  // pawn sits on the destination file at the origin rank.
+  // An en passant capture removes the pawn on the destination file at the origin rank.
   const mover = previousPieces[from];
   if (mover && mover.toLowerCase() === "p" && from[0] !== to[0]) {
     const epSquare = `${to[0]}${from[1]}`;
@@ -444,10 +440,7 @@ function capturedPieceForMove(uci, previousPieces) {
   return null;
 }
 
-// Captured pieces don't just vanish: they stream into the capturer. Sgurr's
-// captures feed its presence core (the mate-devour motif, extended to
-// ordinary captures); the human's captures stream into their own name plate.
-// The in-place dissolve remains as a fallback when no target is laid out.
+// Animate captured pieces toward the capturer's presence. Dissolve locally if no target is visible.
 function triggerCaptureAbsorb(lastMove, previousPieces, { byHuman = false } = {}) {
   if (app.animationMode === "Off" || !lastMove?.uci) {
     return;
@@ -459,8 +452,7 @@ function triggerCaptureAbsorb(lastMove, previousPieces, { byHuman = false } = {}
   const mover = previousPieces[lastMove.uci.slice(0, 2)];
   const capturerColour = mover ? pieceColor(mover) : "white";
 
-  // Lift off just as the capturing piece lands: a touch of overlap reads as
-  // impact, where a gap after the landing reads as hesitation.
+  // Start the lift as the capturing piece lands to keep the impact continuous.
   const delay = Math.max(
     0,
     (byHuman ? humanMoveAnimationDurationMs() : moveAnimationDurationMs()) - 30,
@@ -508,8 +500,7 @@ function triggerCaptureAbsorb(lastMove, previousPieces, { byHuman = false } = {}
         ],
         { duration: 460, easing: "cubic-bezier(0.5, 0, 0.2, 1)" },
       );
-      // Fire the flash a beat before the piece fully vanishes so arrival and
-      // impact read as one motion rather than two queued steps.
+      // Flash just before the piece vanishes so the arrival stays continuous.
       const flashTarget = byHuman ? target.closest(".player-card") || target : target;
       const flashClass = byHuman ? "card-absorb-flash" : "core-absorb-flash";
       const flashTimer = window.setTimeout(() => {

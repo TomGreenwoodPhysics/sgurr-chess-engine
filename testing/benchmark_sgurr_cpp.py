@@ -13,35 +13,31 @@ import chess.engine
 import chess.pgn
 
 
-# ---------------------------------------------------------------------
-# paths
-# ---------------------------------------------------------------------
+# Paths
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
 STOCKFISH_PATH = r"C:\Users\Tom Greenwood\Desktop\Coding Projects\Chess Bot\stockfish\stockfish-windows-x86-64-avx2.exe"
 Sgurr_CPP_PATH = PROJECT_DIR.parent / "sgurr_cpp" / "sgr.exe"
 
-# allows a dynamically linked MSYS2 build to run when launched from PowerShell/Anaconda
+# Add the MSYS2 runtime path for dynamically linked builds.
 MSYS2_UCRT64_BIN = r"C:\msys64\ucrt64\bin"
 os.environ["PATH"] = MSYS2_UCRT64_BIN + os.pathsep + os.environ["PATH"]
 
 
-# ---------------------------------------------------------------------
-# benchmark settings
-# ---------------------------------------------------------------------
+# Benchmark settings
 
 STOCKFISH_ELO = 2400
 NUM_GAMES = 1000
 MAX_PLIES = 400
 
-# depth is a safety cap; time is the main limit
+# Depth is a safety cap while time is the main limit.
 Sgurr_MAX_DEPTH = 100
 Sgurr_TIME_PER_MOVE = 0.5
 STOCKFISH_TIME_PER_MOVE = 0.5
 
-# true = most stable while debugging; avoids carrying C++ TT/history across positions
-# false = faster and closer to a normal engine game, but currently more likely to expose state bugs
+# True isolates positions by clearing the engine's search state.
+# False is faster and closer to normal game use.
 USE_FRESH_Sgurr_PROCESS_EACH_MOVE = False
 
 ENGINE_STARTUP_TIMEOUT = 20.0
@@ -109,16 +105,8 @@ def choose_sgurr_cpp_move(
     nodes = int(info.get("nodes", 0))
     depth = int(info.get("depth", 0))
 
-    # Always 0 now, and correctly so. The engine used to report its
-    # transposition-table hit count in the UCI `tbhits` field, which actually
-    # means ENDGAME TABLEBASE hits -- so this column was reading a mislabelled
-    # number. The engine no longer emits `tbhits` at all; TT health is now
-    # reported in `hashfull` (occupancy in permille).
-    #
-    # This script is legacy and not wired into pipeline.py; `sgr.exe bench`
-    # plus testing/sprt.py have superseded it. The column is left in place
-    # rather than renamed across its eight call sites here, since that refactor
-    # is not part of a UCI conformance fix.
+    # This legacy column remains zero because `tbhits` means tablebase hits,
+    # not transposition-table hits. Use `hashfull` for TT occupancy instead.
     tt_hits = int(info.get("tbhits", 0))
 
     score_obj = info.get("score")

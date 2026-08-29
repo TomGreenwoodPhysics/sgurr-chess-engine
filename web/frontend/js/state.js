@@ -210,8 +210,7 @@ const app = {
   lastMove: null,
   latestEval: null,
   evalHistory: [],
-  // Full per-ply record for post-game review. evalHistory above is capped for
-  // the live sparkline and cannot describe a whole game; see js/review.js.
+  // Keep every ply for review because evalHistory is capped for the live graph.
   review: { active: false, index: 0, plies: [] },
   material: null,
   canMate: { white: true, black: true },

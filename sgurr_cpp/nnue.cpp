@@ -8,22 +8,15 @@
 #include <iostream>
 #include <vector>
 
-// -DSGR_SIMD switches the accumulator to int16 and the output layer to an
-// AVX2 clamp+madd. The result is bit-identical to the scalar int32 path (all
-// integer arithmetic, no reordering that changes the total), so it carries no
-// Elo risk of its own -- only speed. The int16 accumulator is provably safe:
-// train.py clips feature weights to +/-127, so the worst-case raw accumulator
-// (bias + 32 pieces) stays inside +/-~4100, an 8x+ margin under int16. See the
-// range check in the roadmap notes.
+// SGR_SIMD uses int16 accumulators and vectorised output.
+// Clipped feature weights keep every accumulator safely within int16.
 #if SGR_SIMD
 #if !defined(__AVX2__)
 #error "SGR_SIMD needs AVX2 (build with -march=native on any modern x86, or set -DSGR_SIMD=0 for the scalar path)"
 #endif
 #include <immintrin.h>
 static_assert(nnue::HL % 16 == 0, "SGR_SIMD requires HL to be a multiple of 16");
-// The output int32 lane sums stay exact (== the scalar int64 total) only while
-// HL <= 512: per lane <= (HL/8) * 2*255*32767 must fit int32. HL=1024 would
-// need periodic widening to int64 -- guard it rather than fail silently.
+// This bound keeps vector lane sums within int32.
 static_assert(nnue::HL <= 512, "SGR_SIMD output sum needs int64 widening for HL>512");
 #endif
 
@@ -32,15 +25,12 @@ namespace nnue {
 namespace {
 
 struct Network {
-    std::vector<std::int16_t> ft_weight;   // buckets * INPUT * HL, feature-major
+    std::vector<std::int16_t> ft_weight;   // Feature-major weights for all buckets.
     std::array<std::int16_t, HL> ft_bias{};
     std::array<std::int16_t, 2 * HL> out_weight{};
     std::int32_t out_bias = 0;
-    // King buckets (version-2 nets). bucket_map maps the perspective's OWN
-    // king square (relative frame; black mirrors via sq^56) to a bucket, and
-    // that perspective's features shift by bucket*INPUT. The map is READ FROM
-    // THE NET FILE -- the trainer embeds it -- so engine and trainer can never
-    // disagree on bucket assignment. v1 nets load as buckets=1, zero map.
+    // King buckets read from version 2 network files.
+    // Black mirrors its own king square with sq^56.
     int buckets = 1;
     std::array<std::uint8_t, 64> bucket_map{};
 };
@@ -48,17 +38,10 @@ struct Network {
 Network g_net;
 bool g_active = false;
 
-// Per-perspective feature offset (bucket * INPUT) for the accumulators'
-// current position; recomputed by refresh(). A king move that changes its own
-// side's bucket invalidates that perspective wholesale -- on_make/on_unmake
-// detect this and mark the accumulator stale instead of editing it, and
-// evaluate() falls back to a full refresh, the same safety net every other
-// mismatch already uses.
+// Current feature offset for each perspective's king bucket.
 int g_bucket_off[2] = {0, 0};
 
-// Accumulators: [0] = white perspective, [1] = black. g_acc_hash is the
-// Zobrist key of the position they currently represent; evaluate() rebuilds
-// them whenever it doesn't match the board.
+// White and black accumulators tagged with their position key.
 #if SGR_SIMD
 using AccT = std::int16_t;
 #else
@@ -68,9 +51,7 @@ alignas(64) AccT g_acc[2][HL];
 bool g_acc_valid = false;
 U64 g_acc_hash = 0;
 
-// Feature index from a given perspective. From black's perspective the board is
-// mirrored vertically (sq ^ 56) and the piece colours are swapped, so the same
-// weights serve both sides.
+// Map a piece to one perspective, mirroring and swapping colours for Black.
 inline int feature_index(int persp, int colour, int ptype, int sq) {
     int rel_sq = (persp == WHITE) ? sq : (sq ^ 56);
     int rel_colour = (colour == persp) ? 0 : 1;
@@ -79,10 +60,7 @@ inline int feature_index(int persp, int colour, int ptype, int sq) {
 
 #if SGR_SIMD
 #if defined(__AVX512BW__)
-// AVX-512 path: 32 int16 lanes per instruction. On Zen 4 these are
-// double-pumped through 256-bit units, so the win over AVX2 is halved
-// instruction count (front-end pressure), not raw ALU width -- measured, not
-// assumed. Arithmetic is exact at any width, so output stays bit-identical.
+// AVX-512 path with 32 int16 lanes per instruction.
 static_assert(nnue::HL % 32 == 0, "AVX-512 path requires HL % 32 == 0");
 
 inline void vec_add(AccT* acc, const std::int16_t* w) {
@@ -101,10 +79,7 @@ inline void vec_sub(AccT* acc, const std::int16_t* w) {
     }
 }
 
-// Both perspectives' clamp+madd, reduced to one int32. Per-lane bound: each
-// madd result is <= 2*255*32767 ~ 16.7M and both sides give at most
-// 2*(HL/32) <= 32 accumulations per lane, so lane sums stay far inside int32
-// (the HL <= 512 static_assert above is the formal guard).
+// Clamp and multiply both perspectives before reducing to one int32.
 inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     const __m512i zero = _mm512_setzero_si512();
     const __m512i vqa  = _mm512_set1_epi16(static_cast<short>(QA));
@@ -112,7 +87,7 @@ inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     __m512i sum = _mm512_setzero_si512();
     for (int k = 0; k < HL; k += 32) {
         __m512i a = _mm512_loadu_si512(us + k);
-        a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);   // crelu
+        a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);   // Clipped ReLU.
         sum = _mm512_add_epi32(sum, _mm512_madd_epi16(a, _mm512_loadu_si512(w + k)));
     }
     for (int k = 0; k < HL; k += 32) {
@@ -125,7 +100,7 @@ inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
 const char* const kSimdKind = "avx512";
 
 #else
-// AVX2 path: 16 int16 lanes per instruction.
+// AVX2 path with 16 int16 lanes per instruction.
 inline void vec_add(AccT* acc, const std::int16_t* w) {
     for (int k = 0; k < HL; k += 16) {
         __m256i a  = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(acc + k));
@@ -157,7 +132,7 @@ inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     __m256i sum = _mm256_setzero_si256();
     for (int k = 0; k < HL; k += 16) {
         __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(us + k));
-        a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);   // crelu
+        a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);   // Clipped ReLU.
         sum = _mm256_add_epi32(sum, _mm256_madd_epi16(
                   a, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + k))));
     }
@@ -181,8 +156,7 @@ inline std::int32_t crelu(std::int32_t x) {
 const char* const kSimdKind = "scalar";
 #endif
 
-// Add (sign = +1) or remove (sign = -1) one piece's contribution to both
-// accumulators.
+// Add or remove one piece from both accumulators.
 inline void edit_feature(int piece, int sq, int sign) {
     int colour = piece / 6;
     int ptype = piece % 6;
@@ -204,10 +178,7 @@ inline void edit_feature(int piece, int sq, int sign) {
 #endif
 }
 
-// Apply a move's feature changes to the accumulators: s = +1 for make,
-// s = -1 for unmake. Mirrors the piece edits in Board::make_move, including
-// the en-passant victim (recorded in captured_piece/square) and the castling
-// rook.
+// Apply move feature deltas, including en passant and castling.
 void apply_move(const UndoInfo& undo, int s) {
     const Move& m = undo.move;
     edit_feature(undo.moved_piece, m.from(), -s);
@@ -217,21 +188,17 @@ void apply_move(const UndoInfo& undo, int s) {
     if (m.is_castling()) {
         int rook = -1, rf = 0, rt = 0;
         switch (m.to()) {
-            case 6:  rook = WR; rf = 7;  rt = 5;  break;   // white kingside
-            case 2:  rook = WR; rf = 0;  rt = 3;  break;   // white queenside
-            case 62: rook = BR; rf = 63; rt = 61; break;   // black kingside
-            case 58: rook = BR; rf = 56; rt = 59; break;   // black queenside
+            case 6:  rook = WR; rf = 7;  rt = 5;  break;   // White kingside.
+            case 2:  rook = WR; rf = 0;  rt = 3;  break;   // White queenside.
+            case 62: rook = BR; rf = 63; rt = 61; break;   // Black kingside.
+            case 58: rook = BR; rf = 56; rt = 59; break;   // Black queenside.
             default: break;
         }
         if (rook >= 0) { edit_feature(rook, rf, -s); edit_feature(rook, rt, +s); }
     }
 }
 
-// Does this move change the mover's own king bucket? Only that side's
-// perspective re-indexes (the opponent sees the king as an ordinary piece and
-// updates incrementally), but the single g_acc_valid flag covers both, so a
-// crossing costs one full refresh -- rare enough (bucket-crossing king moves
-// plus castling) that the simplicity wins.
+// Check whether the moving king crosses its perspective's bucket boundary.
 inline bool crosses_bucket(const UndoInfo& undo) {
     if (g_net.buckets <= 1) return false;
     const Move& m = undo.move;
@@ -242,11 +209,7 @@ inline bool crosses_bucket(const UndoInfo& undo) {
     return false;
 }
 
-// Clamp each accumulator lane to [0, QA], multiply by the int16 output
-// weights, and total. The vector paths compute every intermediate exactly as
-// the scalar path does (integer ops, no overflow within the guarded bounds),
-// so the int64 total is identical across scalar/AVX2/AVX-512 -- a speed
-// change, never a numeric one.
+// Clamp, multiply and sum both accumulators. All paths are bit-identical.
 std::int64_t output_from_acc(int side_to_move) {
     const AccT* us   = g_acc[side_to_move == WHITE ? 0 : 1];
     const AccT* them = g_acc[side_to_move == WHITE ? 1 : 0];
@@ -265,8 +228,7 @@ std::int64_t output_from_acc(int side_to_move) {
 }  // namespace
 
 void refresh(const Board& board) {
-    // Bucket offsets from each side's own king, BEFORE any features are
-    // added: every edit_feature call below indexes through these.
+    // Set bucket offsets before adding features.
     if (g_net.buckets > 1) {
         int wk = __builtin_ctzll(board.bitboards[WK]);
         int bk = __builtin_ctzll(board.bitboards[BK]);
@@ -276,8 +238,7 @@ void refresh(const Board& board) {
         g_bucket_off[0] = g_bucket_off[1] = 0;
     }
 #if SGR_SIMD
-    // AccT == int16_t == the stored bias type, so the init is two straight
-    // copies rather than a widening loop.
+    // Accumulator and stored bias types match in SIMD builds.
     std::memcpy(g_acc[0], g_net.ft_bias.data(), HL * sizeof(AccT));
     std::memcpy(g_acc[1], g_net.ft_bias.data(), HL * sizeof(AccT));
 #else
@@ -299,10 +260,7 @@ void refresh(const Board& board) {
 }
 
 void on_make(const UndoInfo& undo, std::uint64_t new_hash) {
-    // Only update if the accumulator matches the pre-move position; otherwise
-    // mark it stale and let the next evaluate() rebuild it. A king move that
-    // changes its own bucket re-indexes that whole perspective, so it also
-    // goes the stale->refresh route rather than an incremental edit.
+    // Refresh later if the key is stale or the king changes buckets.
     if (!g_acc_valid || g_acc_hash != undo.old_hash_key) { g_acc_valid = false; return; }
     if (crosses_bucket(undo)) { g_acc_valid = false; return; }
     apply_move(undo, +1);
@@ -317,7 +275,7 @@ void on_unmake(const UndoInfo& undo, std::uint64_t post_hash) {
 }
 
 void note_hash(std::uint64_t hash) {
-    // Null move: no pieces change, only the tagged key follows the board.
+    // Null moves only change the tagged key.
     if (g_acc_valid) g_acc_hash = hash;
 }
 
@@ -338,7 +296,7 @@ int evaluate(const Board& board) {
 }
 
 bool load(const std::string& path) {
-    g_acc_valid = false;   // accumulators built with the old weights are stale
+    g_acc_valid = false;   // Old-weight accumulators are stale.
 
     std::ifstream in(path, std::ios::binary);
     if (!in) {
@@ -352,7 +310,7 @@ bool load(const std::string& path) {
         return false;
     }
 
-    std::uint32_t header[6];   // version, input, hl, qa, qb, scale
+    std::uint32_t header[6];   // Version, input, hl, qa, qb and scale.
     in.read(reinterpret_cast<char*>(header), sizeof(header));
     if (header[2] != HL || header[3] != QA
         || header[4] != QB || header[5] != SCALE) {
@@ -363,8 +321,7 @@ bool load(const std::string& path) {
         return false;
     }
 
-    // v1: classic 768-input net. v2: king-bucketed, input = buckets*768 with
-    // the 64-byte bucket map stored right after the header.
+    // Version 1 uses 768 inputs. Version 2 adds king buckets and their map.
     if (header[0] == 1) {
         if (header[1] != INPUT) {
             std::cerr << "nnue: v1 input " << header[1] << " != " << INPUT << "\n";

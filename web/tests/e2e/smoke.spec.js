@@ -93,10 +93,8 @@ const AFTER_E4_E5_STATE = gameState({
     perspective: "white",
   },
 });
-// A game that turns: White stands slightly better after 1.e4 e5, then throws
-// it away over 2.Nf3 Nc6. Two scored positions either side of a human move is
-// the minimum a turning point needs, and the drop is signed white-relative
-// exactly as the backend sends it.
+// White starts slightly better, then the evaluation drops after 2.Nf3 Nc6.
+// The scores use the backend's White-relative convention.
 const AFTER_NF3_FEN = "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
 const AFTER_NC6_FEN = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3";
 
@@ -1101,8 +1099,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await expect(page.locator("#positionSelect option")).toHaveCount(61);
   await expect(page.locator("#leaderValue")).toHaveText("a6");
 
-  // The lab now lands on the search network, so the walkthrough has to be
-  // opened before its steps can be driven.
+  // Open the walkthrough before driving its steps.
   await page.locator("#walkthroughTab").click();
   await expect(page.locator("#walkthroughControls")).toBeVisible();
   await expect(page.locator("#depthValue")).toHaveText("1");
@@ -1237,11 +1234,8 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   const settledBackgroundBuilds = Number(await canvas.getAttribute("data-background-builds"));
   const settledAtmosphereBuilds = Number(await canvas.getAttribute("data-depth-atmosphere-builds"));
   const settledLiveStructureBuilds = Number(await canvas.getAttribute("data-live-structure-builds"));
-  // A ceiling against runaway rebuilding, not a tuned constant: the count
-  // depends on how many frames the machine fits into the settling animation,
-  // and a slow CI runner legitimately lands higher than a fast desktop. The
-  // invariant that matters is the next assertion, that it stops growing once
-  // the scene has settled. Runaway rebuilding would be in the hundreds.
+  // The count varies with frame rate, so this only catches runaway rebuilding.
+  // The next assertion checks that rebuilding stops after the scene settles.
   expect(settledBuilds).toBeLessThan(80);
   await page.waitForTimeout(120);
   expect(Number(await canvas.getAttribute("data-static-builds"))).toBe(settledBuilds);
@@ -1266,9 +1260,8 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   await page.mouse.down();
   await page.mouse.move(canvasBounds.x + canvasBounds.width / 2 + 180, canvasBounds.y + canvasBounds.height / 2 + 90, { steps: 8 });
   await expect(canvas).toHaveAttribute("data-quality", "navigation");
-  // Navigation reuses the detail image already on screen rather than swapping
-  // in a coarser stand-in, so the picture must not change character mid-drag
-  // and no new detail may be rendered while the pointer is down.
+  // Navigation keeps the current detail image throughout a drag.
+  // No replacement detail should render until the pointer is released.
   const detailBuildsDuringNavigation = Number(await canvas.getAttribute("data-detail-builds"));
   await expect(canvas).toHaveAttribute("data-render-layer", "stable-detail");
   await expect(canvas).toHaveAttribute("data-structure-state", "stable-detail");
@@ -1368,7 +1361,7 @@ test("opens on an overview that explains the engine and offers both labs", async
   await expect(page.locator(".lab-choice-card h2").last()).toHaveText("Evaluation Lab");
   await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Overview");
 
-  // The big cards are the way in, and each lab can reach the other.
+  // Each card opens a lab, and the labs link to each other.
   await page.locator(".lab-choice-card").last().click();
   await expect(page).toHaveURL(/\/inside-sgurr\/evaluation\.html$/);
   await expect(page.locator('.lab-switch a[aria-current="page"]')).toHaveText("Evaluation Lab");
@@ -1388,10 +1381,8 @@ test("keeps the dark pieces visible on every themed board", async ({ page }) => 
   await installMockBackend(page);
   await openMainMenu(page);
 
-  // Only the dark-piece-on-dark-square pairing is checked. White pieces sit on
-  // light squares at low contrast in every theme by design -- their dark
-  // outline carries them -- but a dark piece whose fill matches the square it
-  // stands on disappears, which is what happened to Neon Dark.
+  // Check the dark piece and square pairing that regressed in Neon Dark.
+  // White pieces use their outline for contrast by design.
   const worst = await page.evaluate(async () => {
     const { THEMES, THEME_ORDER } = await import("/js/config.js");
     const luminance = (hex) => {
@@ -1410,9 +1401,7 @@ test("keeps the dark pieces visible on every themed board", async ({ page }) => 
     }));
   });
 
-  // Neon Dark is the one that regressed: its dark square and dark piece were
-  // within 1.01 of each other. How light a board should look is a design call,
-  // so this only guards against a piece being lost in its square.
+  // Guard against a dark piece blending into its square in Neon Dark.
   for (const theme of worst) {
     expect(theme.ratio, `${theme.key}: dark pieces vanish into the dark squares`).toBeGreaterThan(1.25);
   }
@@ -1437,8 +1426,7 @@ test("marks every menu action with a mark from the same family", async ({ page }
 
 test("returns from a lab straight to the menu, with no intro frame", async ({ page }) => {
   await installMockBackend(page);
-  // No modules at all: whatever shows is what the document and CSS decide, which
-  // is exactly what the visitor sees before the deferred scripts run.
+  // Block modules to capture the document before deferred scripts run.
   await page.route("**/*.js", (route) => route.abort());
 
   await page.goto("/?view=menu").catch(() => {});
@@ -1486,7 +1474,7 @@ test("shows the longest theme name in full on every lab", async ({ page }) => {
 
 test("paints the saved theme before the lab scripts run", async ({ page }) => {
   await installMockBackend(page);
-  // Seed a chosen palette the way picking a theme does.
+  // Store a palette as the theme picker would.
   await page.addInitScript(() => {
     localStorage.setItem("sgurrTheme", "highland");
     localStorage.setItem("sgurrThemeVars", JSON.stringify({ "--bg": "#1c1720", "--accent": "#bc7ec3" }));
@@ -1543,8 +1531,7 @@ test("keeps both labs on one skeleton so switching does not jump", async ({ page
       header: box("header"),
       tabs: box(".lab-switch"),
       masthead: box(".lab-masthead"),
-      // The headlines differ in length, but they bottom-align, so everything
-      // below the masthead starts at the same place on both labs.
+      // Bottom-aligned headlines keep the content below them level.
       headingBottom: Math.round(heading.bottom),
     };
   });
@@ -1769,7 +1756,7 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   await openMainMenu(page);
   await page.locator("#playWhiteButton").click();
 
-  // 1.e4 e5, then 2.Nf3 Nc6 which ends the game with the eval collapsed.
+  // The evaluation collapses after 2.Nf3 Nc6.
   await page.locator('[data-square="e2"]').click();
   await page.locator('[data-square="e4"]').click();
   await expect(page.locator("#moveRows")).toContainText("e5");
@@ -1784,7 +1771,7 @@ test("reviews a finished game and names the move it turned on", async ({ page })
   await expect(page.locator("#reviewBlock")).toBeVisible();
   await expect(page.locator("#board .square")).toHaveCount(64);
 
-  // +0.2 -> -3.5 white-relative, spanning White's own 2.Nf3.
+  // The White-relative score falls from +0.2 to -3.5 after 2.Nf3.
   const swing = page.locator("#reviewSwingButton");
   await expect(swing).toBeVisible();
   await expect(swing).toContainText("2. Nf3");

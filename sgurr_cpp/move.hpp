@@ -13,8 +13,8 @@ enum Piece {
     BP = 6, BN = 7, BB = 8, BR = 9, BQ = 10, BK = 11
 };
 
-// Promotion piece type, stored in bits 12-13 of a packed move. Ordered so that
-// (WN + type) / (BN + type) yields the colour-specific promoted piece index.
+// Promotion type stored in bits 12-13 of a packed move.
+// Its order maps directly to the colour-specific piece index.
 enum PromoType {
     PROMO_N = 0,
     PROMO_B = 1,
@@ -22,7 +22,7 @@ enum PromoType {
     PROMO_Q = 3
 };
 
-// Special move kind, stored in bits 14-15.
+// Special move kind stored in bits 14-15.
 enum MoveType {
     MT_NORMAL = 0,   // quiet move or ordinary capture
     MT_PROMO  = 1,
@@ -30,13 +30,13 @@ enum MoveType {
     MT_CASTLE = 3
 };
 
-// Packed 16-bit move:
+// Packed 16-bit move
 //   bits 0-5   from square
 //   bits 6-11  to square
 //   bits 12-13 promotion type (only meaningful when kind == MT_PROMO)
 //   bits 14-15 move kind (MoveType)
 //
-// The packed value doubles as the transposition / killer key.
+// The packed value also serves as the transposition and killer key.
 struct Move {
     std::uint16_t data = 0;
 
@@ -46,7 +46,7 @@ struct Move {
     Move(int from, int to)
         : data(static_cast<std::uint16_t>(from | (to << 6))) {}
 
-    // Special move (promotion / en passant / castling).
+    // Promotion, en passant or castling.
     Move(int from, int to, int promo_type, MoveType kind)
         : data(static_cast<std::uint16_t>(
               from | (to << 6) | (promo_type << 12) | (kind << 14))) {}
@@ -61,7 +61,7 @@ struct Move {
 
     int promo_type() const { return (data >> 12) & 3; }
 
-    // Colour-specific promoted piece index (WN..WQ or BN..BQ).
+    // Colour-specific promoted piece index from WN..WQ or BN..BQ.
     int promo_piece(int side) const {
         return (side == WHITE ? WN : BN) + promo_type();
     }
@@ -70,10 +70,9 @@ struct Move {
     bool operator!=(const Move& other) const { return data != other.data; }
 };
 
-constexpr Move NO_MOVE{};   // the null sentinel (a1a1, never generated)
+constexpr Move NO_MOVE{};   // Null sentinel a1a1, which is never generated.
 
-// Fixed-capacity, allocation-free move container. A chess position has at
-// most 218 legal moves, so 256 slots can never overflow.
+// Allocation-free container sized above the 218-move legal maximum.
 struct MoveList {
     Move moves[256];
     int count = 0;

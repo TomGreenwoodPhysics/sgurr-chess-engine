@@ -50,7 +50,7 @@ def main():
             pos = cl.apply_move(pos, random.choice(legal))
         if not ok or not cl.legal_moves(pos):
             continue
-        # build a FEN
+        # Build the FEN.
         fen = to_fen(pos)
         epd = " ".join(fen.split()[:4])
         if epd in seen:

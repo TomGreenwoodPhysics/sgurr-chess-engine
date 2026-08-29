@@ -20,31 +20,30 @@ import torch
 import torch.nn as nn
 
 INPUT, HL, SCALE = nt.INPUT, nt.HL, nt.SCALE
-PAD = INPUT            # padding feature index -> a forced-zero embedding row
-MAXP = 32             # at most 32 pieces on the board
+PAD = INPUT            # Padding feature with a forced-zero embedding row
+MAXP = 32             # Maximum pieces on the board
 
-# Record layout (little-endian), from datagen.cpp:
-#   bytes  0..7   occ      u64 (set bit = occupied, LSB = a1 = sq 0)
-#   bytes  8..23  nibbles  16 bytes; piece code per occupied square in
-#                          ascending-square order, low nibble of each byte first
-#   byte   24     stm      u8  (0 white, 1 black)
-#   bytes  25..26 score    i16 (centipawns, stm-relative)
-#   byte   27     result   u8  (0 loss, 1 draw, 2 win for stm)
-#   bytes  28..31 padding
+# Little-endian record layout from datagen.cpp
+#   Bytes  0..7   occ      u64 with a1 as bit 0
+#   Bytes  8..23  nibbles  piece codes in ascending-square order
+#                          with the low nibble first
+#   Byte   24     stm      u8 where 0 is white and 1 is black
+#   Bytes  25..26 score    i16 in centipawns relative to the side to move
+#   Byte   27     result   u8 where 0 is loss, 1 draw, and 2 win
+#   Bytes  28..31 padding
 #
-# Feature index (mirrors nnue_tools.feat / the C++ feature_index):
+# Feature index matching nnue_tools.feat and the C++ feature_index
 #   rel_sq     = sq            if persp==0 else sq ^ 56
 #   rel_colour = 0 if colour==persp else 1
 #   index      = rel_colour*384 + ptype*64 + rel_sq
 #
-# rel_sq is the only square-dependent term and is additive, so the constant
-# base per piece code (colour = pc//6, ptype = pc%6) is precomputed and the
-# (possibly mirrored) square added at decode time.
+# Only rel_sq depends on the square. Precompute the base for each piece code,
+# then add the possibly mirrored square while decoding.
 _pc = np.arange(12)
 _colour = _pc // 6
 _ptype = _pc % 6
-_W_BASE = (_colour * 384 + _ptype * 64).astype(np.int64)          # white persp
-_B_BASE = ((1 - _colour) * 384 + _ptype * 64).astype(np.int64)    # black persp
+_W_BASE = (_colour * 384 + _ptype * 64).astype(np.int64)          # White view
+_B_BASE = ((1 - _colour) * 384 + _ptype * 64).astype(np.int64)    # Black view
 
 
 def _decode_chunk(arr, bmap=None, pad=PAD):
@@ -65,20 +64,20 @@ def _decode_chunk(arr, bmap=None, pad=PAD):
     score = arr[:, 25:27].copy().view(np.int16).reshape(m).astype(np.float32)
     result = (arr[:, 27].astype(np.float32)) / 2.0
 
-    # occupancy -> (m,64) uint8 bit matrix; column = sq, ascending (LSB first).
+    # Decode occupancy into an (m, 64) bit matrix ordered from the LSB.
     occ_bytes = np.ascontiguousarray(arr[:, 0:8])
     occ_bits = np.unpackbits(occ_bytes, axis=1, bitorder="little")  # (m,64)
 
-    # nibbles -> (m,32) piece codes in stored order (low nibble of each byte first)
+    # Decode nibbles into (m, 32) piece codes with the low nibble first.
     nib = arr[:, 8:24]
     codes = np.empty((m, 32), np.uint8)
     codes[:, 0::2] = nib & 0x0F
     codes[:, 1::2] = nib >> 4
 
-    # slot (rank among occupied squares) per square; -1 on a leading empty run.
+    # Map each square to its occupied slot, using -1 before the first piece.
     ranks = np.cumsum(occ_bits, axis=1, dtype=np.uint8).astype(np.int16) - 1
 
-    # flat occupied cells, ascending square within each row.
+    # Flatten occupied cells in ascending square order within each row.
     rows, cols = np.nonzero(occ_bits)
     slot = ranks[rows, cols].astype(np.intp)
     code_flat = codes[rows, slot].astype(np.intp)                 # (L,) 0..11
@@ -87,8 +86,7 @@ def _decode_chunk(arr, bmap=None, pad=PAD):
     bf_flat = _B_BASE[code_flat] + (cols ^ np.int64(56))
 
     if bmap is not None:
-        # exactly one king of each colour per record (freeze validates this;
-        # the assert catches a corrupt input loudly instead of mistraining)
+        # Require one king of each colour to catch corrupt input before training.
         m5, m11 = code_flat == 5, code_flat == 11        # WK, BK codes
         assert int(m5.sum()) == m and int(m11.sum()) == m, \
             "record without exactly one king per side"
@@ -96,8 +94,8 @@ def _decode_chunk(arr, bmap=None, pad=PAD):
         wk = np.zeros(m, np.int64); bk = np.zeros(m, np.int64)
         wk[rows[m5]] = cols[m5]
         bk[rows[m11]] = cols[m11]
-        woff = bmap64[wk] * 768                # white persp: own king, no mirror
-        boff = bmap64[bk ^ np.int64(56)] * 768 # black persp: own king, mirrored
+        woff = bmap64[wk] * 768                # White king without mirroring
+        boff = bmap64[bk ^ np.int64(56)] * 768 # Mirrored black king
         wf_flat = wf_flat + woff[rows]
         bf_flat = bf_flat + boff[rows]
 
@@ -230,7 +228,7 @@ class FactorizedNNUE(nn.Module):
     def __init__(self, buckets):
         super().__init__()
         n_delta = INPUT * buckets
-        self.pad = n_delta                    # loader's PAD index
+        self.pad = n_delta                    # Loader padding index
         self.ft_shared = nn.Embedding(INPUT + 1, HL, padding_idx=INPUT)
         self.ft_delta = nn.Embedding(n_delta + 1, HL, padding_idx=n_delta)
         self.ftb = nn.Parameter(torch.zeros(HL))
@@ -242,7 +240,7 @@ class FactorizedNNUE(nn.Module):
         nn.init.normal_(self.out.weight, 0, 0.05)
 
     def _acc(self, f):
-        # base feature index for the shared table; PAD maps to the shared pad row
+        # Map padding to the shared table's padding row.
         base = torch.where(f == self.pad, torch.full_like(f, INPUT), f % INPUT)
         return (self.ft_shared(base) + self.ft_delta(f)).sum(dim=1) + self.ftb
 
@@ -259,8 +257,8 @@ class FactorizedNNUE(nn.Module):
 class NNUE(nn.Module):
     def __init__(self, n_features=INPUT):
         super().__init__()
-        # +1 row for padding (forced to zero, contributes nothing to the sum).
-        # n_features = INPUT * buckets for king-bucketed nets.
+        # Add one forced-zero padding row.
+        # King-bucketed nets use INPUT * buckets features.
         self.ft = nn.Embedding(n_features + 1, HL, padding_idx=n_features)
         self.ftb = nn.Parameter(torch.zeros(HL))
         self.out = nn.Linear(2 * HL, 1)
@@ -276,7 +274,7 @@ class NNUE(nn.Module):
         us = torch.where(m, accw, accb)
         them = torch.where(m, accb, accw)
         x = torch.cat([torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)], dim=1)
-        return self.out(x).squeeze(1)                  # output; *SCALE = centipawns
+        return self.out(x).squeeze(1)                  # Multiply by SCALE for centipawns
 
 
 def batch_loss(model, fetch, sel, dev, lambda_):
@@ -353,9 +351,7 @@ def main():
                     help="seed for the train/val split and weight init")
     args = ap.parse_args()
 
-    # HL is read at model-construction time (NNUE.__init__ looks up the module
-    # global) and by nt.export for the file header; set both so a --hl override
-    # produces a self-consistent net.
+    # Set the module value before construction and export so --hl stays consistent.
     global HL
     HL = args.hl
     nt.HL = args.hl
@@ -371,9 +367,8 @@ def main():
     print("device:", dev)
     t0 = time.time()
 
-    # Loader choice. The decoded form costs ~137 B/position resident; the raw
-    # record is 32. Past roughly 60M positions the decoded form stops being a
-    # sensible thing to hold, so `auto` switches to the memory map.
+    # Decoded positions use about 137 bytes each, versus 32 bytes for raw data.
+    # Auto mode uses a memory map beyond roughly 60 million positions.
     n_positions = os.path.getsize(args.data) // 32
     kind = args.loader
     if kind == "auto":
@@ -381,7 +376,7 @@ def main():
 
     if kind == "memory":
         wf, bf, stm, score, result, n = load_dataset(args.data, buckets=args.buckets)
-        # from_numpy shares the buffer, so nothing is copied here.
+        # from_numpy shares the buffer without copying it.
         WF = torch.from_numpy(wf); BF = torch.from_numpy(bf)
         STM = torch.from_numpy(stm)
         SC = torch.from_numpy(score); RES = torch.from_numpy(result)
@@ -404,7 +399,7 @@ def main():
               f"{os.path.getsize(args.data)/1e9:.1f} GB on disk  "
               f"({time.time()-t0:.1f}s)")
 
-    # train/val split
+    # Training and validation split
     torch.manual_seed(args.seed)
     train_idx_np, val_idx_np = make_split(n, args.val_frac, args.seed)
     train_idx = torch.from_numpy(train_idx_np)
@@ -423,7 +418,7 @@ def main():
             opt, T_max=args.epochs * steps_per_epoch, eta_min=args.lr_min)
 
     for epoch in range(args.epochs):
-        order = torch.randperm(n_train)        # shuffle the train indices only
+        order = torch.randperm(n_train)        # Shuffle only training indices
         ti = train_idx[order]
         total = 0.0; t0 = time.time()
         model.train()
@@ -435,9 +430,8 @@ def main():
                 sched.step()
             with torch.no_grad():
                 if args.factorize:
-                    # coalesced weight = shared + delta must obey wclip (int16
-                    # accumulator safety). Split the budget so their sum stays
-                    # in range: shared carries the bulk, delta a small correction.
+                    # Keep shared plus delta within wclip for int16 safety.
+                    # Give most of the range to the shared weights.
                     model.ft_shared.weight[:INPUT].clamp_(-args.wclip * 0.75, args.wclip * 0.75)
                     model.ft_delta.weight[:n_features].clamp_(-args.wclip * 0.25, args.wclip * 0.25)
                 else:
@@ -454,13 +448,12 @@ def main():
                   f"({time.time()-t0:.1f}s)")
 
     if args.factorize:
-        # COALESCE: final per-bucket weight[b][f] = shared[f] + delta[b*768+f].
-        # Result is an ordinary v2 per-bucket table -- the engine never knows a
-        # factorizer was used. Re-clip the sum to wclip to guarantee int16 safety.
+        # Coalesce each bucket as shared[f] + delta[b * 768 + f].
+        # Reclip the ordinary v2 table to keep it safe for int16 accumulators.
         import numpy as _np
         shared = model.ft_shared.weight[:INPUT].detach().cpu().numpy()          # (768, HL)
         delta = model.ft_delta.weight[:n_features].detach().cpu().numpy()       # (768*K, HL)
-        ftw = delta + _np.tile(shared, (args.buckets, 1))                        # broadcast per bucket
+        ftw = delta + _np.tile(shared, (args.buckets, 1))                        # Broadcast per bucket
         ftw = _np.clip(ftw, -args.wclip, args.wclip)
     else:
         ftw = model.ft.weight[:n_features].detach().cpu().numpy()   # (n_features, HL)

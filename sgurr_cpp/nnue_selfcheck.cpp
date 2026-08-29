@@ -1,13 +1,9 @@
-// Checks that the incremental accumulator matches a from-scratch refresh,
-// bit for bit. Build without main.cpp:
+// Check incremental accumulators against a full refresh.
+// Build without main.cpp
 //
 //   clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
 //       nnue_selfcheck.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o nnue_selfcheck.exe
 //   ./nnue_selfcheck.exe ../nets/gen1.nnue
-//
-// evaluate_raw() uses the maintained accumulator when its tracked key matches
-// the board (as it does right after make/unmake), so calling refresh() first
-// gives the ground truth to compare against.
 #include "board.hpp"
 #include "nnue.hpp"
 
@@ -17,23 +13,20 @@
 #include <vector>
 
 static long long g_checks = 0, g_fails = 0;
-// Sum of every ground-truth (refresh-based) eval seen. Deterministic across
-// builds, so scalar and SGR_SIMD builds must print an identical checksum --
-// that is the cross-build bit-equivalence test for the SIMD output layer.
+// Deterministic checksum used to compare scalar and SIMD builds.
 static long long g_evalsum = 0;
 
-// Check every legal move in the position: make it, compare the maintained
-// output to a fresh refresh, then unmake and compare again.
+// Compare incremental and refreshed scores after every make and unmake.
 static void check_all_moves(const std::string& fen) {
     Board board(fen);
     nnue::refresh(board);
     MoveList moves = board.generate_legal_moves();
     for (int i = 0; i < moves.size(); ++i) {
-        nnue::refresh(board);                       // clean base
+        nnue::refresh(board);                       // Clean base.
         UndoInfo u = board.make_move(moves[i]);
-        long long inc = nnue::evaluate_raw(board);  // incremental
+        long long inc = nnue::evaluate_raw(board);  // Incremental score.
         nnue::refresh(board);
-        long long ref = nnue::evaluate_raw(board);  // scratch
+        long long ref = nnue::evaluate_raw(board);  // Refreshed score.
         g_evalsum += ref;
         ++g_checks;
         if (inc != ref) { ++g_fails; if (g_fails <= 10)
@@ -50,9 +43,7 @@ static void check_all_moves(const std::string& fen) {
     }
 }
 
-// Play a random game with no interleaved refresh, so the whole make chain
-// (then the whole unmake chain) is purely incremental. Compare against a fresh
-// refresh at the leaf and back at the root to catch accumulated error.
+// Check a fully incremental random make and unmake sequence.
 static void check_chain(std::mt19937& rng, int max_ply) {
     Board board(START_FEN);
     nnue::refresh(board);
@@ -82,10 +73,7 @@ int main(int argc, char** argv) {
     printf("loaded %s active=%d simd=%s buckets=%d\n", net, (int)nnue::active(),
            nnue::simd_kind(), nnue::buckets());
 
-    // fwd mode: print evaluate_raw for one FEN. Golden cross-check against the
-    // Python integer reference (nnue_tools.py fwd) -- the two must agree to
-    // the integer, which catches feature-indexing/bucket bugs neither side's
-    // internal consistency checks can see.
+    // Print one raw FEN score for comparison with nnue_tools.py fwd.
     if (argc > 3 && std::string(argv[2]) == "fwd") {
         Board board(argv[3]);
         nnue::refresh(board);
@@ -93,24 +81,21 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Positions chosen to exercise every special move type, plus king
-    // placements on and around bucket boundaries (v2 nets: d1/e1 crosses
-    // back-rank buckets, rank 2/3 and 4/5 cross the band buckets; king moves
-    // from these squares exercise the stale->refresh crossing path).
+    // Cover special moves and king-bucket boundaries.
     const std::vector<std::string> fens = {
         START_FEN,
-        "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1",        // castling both sides
-        "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1",        // castling, black
-        "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3",  // en passant (white)
-        "rnbqkbnr/pppp1ppp/8/8/3Pp3/2N5/PPP1PPPP/R1BQKBNR b KQkq d3 0 3", // en passant (black)
-        "8/P6k/8/8/8/8/6Kp/8 w - - 0 1",                            // white promotion
-        "8/P6k/8/8/8/8/6Kp/8 b - - 0 1",                            // black promotion
-        "r1bqkbnr/pPpp1ppp/2n5/8/8/8/P1PPpPPP/RNBQKBNR w KQkq - 0 1", // promotion with capture
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // kiwipete
-        "4k3/8/8/8/8/8/8/3K4 w - - 0 1",     // kings at d1/e8: back-rank boundary
-        "4k3/8/8/8/8/8/4K3/8 w - - 0 1",     // white king rank 2: rank-band edge
-        "8/8/8/4k3/4K3/8/8/8 w - - 0 1",     // both kings mid-board, band 5/6 edge
-        "8/8/2k5/8/8/5K2/8/8 b - - 0 1",     // asymmetric bands, black to move
+        "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1",        // Castling for White.
+        "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1",        // Castling for Black.
+        "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3",  // White en passant.
+        "rnbqkbnr/pppp1ppp/8/8/3Pp3/2N5/PPP1PPPP/R1BQKBNR b KQkq d3 0 3", // Black en passant.
+        "8/P6k/8/8/8/8/6Kp/8 w - - 0 1",                            // White promotion.
+        "8/P6k/8/8/8/8/6Kp/8 b - - 0 1",                            // Black promotion.
+        "r1bqkbnr/pPpp1ppp/2n5/8/8/8/P1PPpPPP/RNBQKBNR w KQkq - 0 1", // Capture promotion.
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete.
+        "4k3/8/8/8/8/8/8/3K4 w - - 0 1",     // Back-rank bucket boundary.
+        "4k3/8/8/8/8/8/4K3/8 w - - 0 1",     // Rank-band boundary.
+        "8/8/8/4k3/4K3/8/8/8 w - - 0 1",     // Middle rank-band boundary.
+        "8/8/2k5/8/8/5K2/8/8 b - - 0 1",     // Asymmetric buckets.
     };
     for (const auto& f : fens) check_all_moves(f);
 

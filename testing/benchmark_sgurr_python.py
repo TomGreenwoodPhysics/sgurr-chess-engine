@@ -136,7 +136,7 @@ def play_game(
 ) -> tuple[str, int, str, list[dict], str]:
     board = chess.Board()
 
-    # fresh engine each game so the transposition table does not carry over
+    # Use a fresh engine so the transposition table does not carry across games.
     Sgurr = SgurrEngine()
 
     move_stats = []

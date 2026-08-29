@@ -33,8 +33,7 @@ async function apiPost(path, body) {
 }
 
 function applyServerState(data, { keepEval = false } = {}) {
-  // Whether this payload carried its own evaluation, as opposed to inheriting
-  // the previous one via keepEval. js/review.js needs the distinction.
+  // Track whether the payload includes a fresh evaluation for game review.
   const freshEval = Boolean(data.latest_eval);
   const wasGameOver = app.gameOver;
   const previousEval = app.latestEval;
@@ -111,9 +110,7 @@ function engineChoiceMessage(sel) {
     + (sel.available === false ? `: ${sel.unavailable_reason || "unavailable"}` : "");
 }
 
-// Pick an opponent outright rather than stepping to it. The gallery hands back
-// an index into app.engines (not the displayed order, which is sorted by
-// rating), so selection stays correct however the list is presented.
+// The gallery returns an app.engines index independent of its display order.
 function setEngineIndex(index) {
   if (!app.engines.length) {
     return false;
@@ -132,9 +129,7 @@ function setEngineIndex(index) {
   return true;
 }
 
-// The opponent ladder. Sorted by rating so the progression from the
-// hand-crafted eval up to the current release reads at a glance, with each
-// card's bar scaled across the span of the field.
+// Sort opponents by rating and scale each bar across the full range.
 function enginesByStrength() {
   return app.engines
     .map((engine, index) => ({ engine, index }))
@@ -208,8 +203,7 @@ function renderEngineGallery() {
     track.className = "engine-meter-track";
     const fill = document.createElement("span");
     fill.className = "engine-meter-fill";
-    // Floor the bar at 12% so the weakest entry still reads as a bar rather
-    // than an empty track.
+    // Keep the weakest rating bar visible.
     const ratio = span > 0 && Number.isFinite(engine.rating)
       ? (engine.rating - weakest) / span
       : 1;
@@ -257,7 +251,7 @@ async function fetchEngines() {
       render();
     }
   } catch {
-    // keep the built-in fallback label if the list can't be fetched
+    // Keep the built-in label if fetching fails.
   }
 }
 
