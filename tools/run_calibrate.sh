@@ -68,8 +68,7 @@ export SGR_EVALFILE="$NET"
 # shellcheck source=testing/gauntlet_lib.sh
 . "$ROOT/testing/gauntlet_lib.sh"
 
-# Derive process names from the current binary and pool roster.
-# This keeps the cleanup sweep in sync with every engine the run can leave behind.
+# Build the cleanup list from the current binary and pool roster.
 ENGINE_PROCS="$(basename "$REL_EXE" .exe) $(python -c "
 import json, os
 p = json.load(open(r'$WIN_BM/pool.json'))
@@ -199,8 +198,8 @@ FC_PID=$!
 echo "fastchess pid $FC_PID, log $OUT/gauntlet.log"
 echo
 
-# Confirm that every early game includes the engine under test.
-# This catches accidental `-seeds` use that creates a different gauntlet.
+# Confirm that every early game includes the engine under test; accidental
+# `-seeds` use creates a different gauntlet.
 for _ in $(seq 60); do
     [ "$(grep -c '^\[Event' "$PGN" 2>/dev/null | head -1 || echo 0)" -ge 20 ] && break
     sleep 5

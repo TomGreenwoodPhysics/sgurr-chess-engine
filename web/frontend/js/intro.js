@@ -101,8 +101,7 @@ function spawnDisturbanceDust() {
   }, 2400);
 }
 
-// Replace the delayed CSS animation with a fade from its current state.
-// This keeps early interaction from leaving the prompt over the title card.
+// Fade from the current prompt state if interaction beats the CSS delay.
 function dismissIntroCopy() {
   const copy = refs.introCopy;
   if (!copy || typeof copy.getAnimations !== "function") {
@@ -130,7 +129,7 @@ function dismissIntroCopy() {
   );
 }
 
-// Synchronise the intro and menu core phases for a seamless handoff.
+// Match core animation phases across the intro-to-menu handoff.
 // The menu core is still hidden here.
 function syncMenuCorePhase() {
   const phase = refs.introCore?.style.getPropertyValue("--core-phase");
@@ -237,8 +236,7 @@ function beginIntroMenuHandoff() {
   const dy = (target.top + target.height / 2) - (source.top + source.height / 2);
   const scale = targetWidth / sourceWidth;
 
-  // Derive the starting scale from the rendered and layout boxes.
-  // This prevents a jump when the CSS animation hands off.
+  // Derive the first keyframe from the rendered scale to avoid a handoff jump.
   const restScale = source.width / sourceWidth;
   const frame = (x, y, zoom) =>
     `translate(${(x - sourceWidth / 2).toFixed(2)}px, ${(y - sourceHeight / 2).toFixed(2)}px) scale(${zoom.toFixed(4)})`;

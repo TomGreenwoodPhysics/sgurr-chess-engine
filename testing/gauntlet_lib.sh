@@ -8,7 +8,7 @@
 
 # stop_gauntlet [extra_process_names...]
 #
-# Stop fastchess and its engines. This is safe to call more than once.
+# Stop fastchess and its engines; safe to call more than once.
 stop_gauntlet() {
     # Capture child PIDs before the parent dies and they are reparented.
     local kids

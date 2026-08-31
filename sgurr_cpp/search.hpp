@@ -144,7 +144,7 @@ struct SearchParams {
     int lmr_min_depth           = 3;
     int lmr_full_depth_moves    = 2;
     int lmr_div_x100            = 250;   // Scaled form of the 2.5 LMR divisor.
-    // Kept deliberately inert until history scaling is validated in games.
+    // Near-inert until history scaling is validated in games.
     int histlmr_div             = 400'000;
     int histlmr_max             = 2;
 

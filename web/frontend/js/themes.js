@@ -124,8 +124,7 @@ function openModal(modal) {
   }
 }
 
-// This also receives MouseEvent objects when used as a click handler.
-// Only a false restoreFocus value disables focus restoration.
+// Click handlers pass a MouseEvent; only restoreFocus: false disables restoration.
 function closeAllModals(options) {
   const restoreFocus = options?.restoreFocus !== false;
   for (const modal of userModals()) {

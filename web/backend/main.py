@@ -95,9 +95,8 @@ TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 ENGINE_SPECS: list[dict[str, object]] = [
     {
         # v8.2 keeps the v8.1 net and search but is about 15% faster.
-        # Controlled recalibration measured 3012.1 +/-5.8 over 9,890 games.
-        # This corrected a 3058 result affected by inconsistent hash sizes,
-        # a filtered book, and promotion forfeits. See METHODOLOGY section 9.
+        # Recalibration: 3012.1 +/-5.8 over 9,890 games. The old 3058 estimate
+        # mixed hash sizes, a filtered book, and promotion forfeits (METHODOLOGY 9).
         "id": "v8.2",
         "exe": CPP_DIR / "sgr_v8_2.exe",
         "net": NETS_DIR / "gen8.nnue",
@@ -188,7 +187,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "rating": 2341,
     },
     {
-        # This version intentionally uses hand-crafted evaluation.
+        # Classical release: hand-crafted evaluation, no network.
         "id": "classical",
         "exe": CPP_DIR / "Ruk_hce.exe",
         "net": None,

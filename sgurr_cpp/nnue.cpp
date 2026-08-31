@@ -16,7 +16,7 @@
 #endif
 #include <immintrin.h>
 static_assert(nnue::HL % 16 == 0, "SGR_SIMD requires HL to be a multiple of 16");
-// This bound keeps vector lane sums within int32.
+// HL <= 512 keeps vector lane sums within int32.
 static_assert(nnue::HL <= 512, "SGR_SIMD output sum needs int64 widening for HL>512");
 #endif
 

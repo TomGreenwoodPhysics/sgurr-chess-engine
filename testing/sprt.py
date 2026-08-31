@@ -320,8 +320,8 @@ def main():
                 break
             jobs.put(e); n_pairs += 1
 
-    # Verify both UCI handshakes before games begin. This prevents launch
-    # failures from becoming forfeits and exposes stale or mislabelled binaries.
+    # Reject launch failures before they become forfeits. Reported names also
+    # expose stale or mislabelled binaries.
     try:
         for path, name in verify_all([args.new, args.base]).items():
             print(f"engine ok  {path}  ->  {name}")

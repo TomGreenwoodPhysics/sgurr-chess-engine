@@ -105,8 +105,8 @@ def choose_sgurr_cpp_move(
     nodes = int(info.get("nodes", 0))
     depth = int(info.get("depth", 0))
 
-    # This legacy column remains zero because `tbhits` means tablebase hits,
-    # not transposition-table hits. Use `hashfull` for TT occupancy instead.
+    # Legacy column: `tbhits` means tablebase hits, not TT hits.
+    # `hashfull` carries TT occupancy.
     tt_hits = int(info.get("tbhits", 0))
 
     score_obj = info.get("score")

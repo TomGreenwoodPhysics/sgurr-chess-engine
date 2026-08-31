@@ -10,7 +10,7 @@
 #
 # Job 3 compares node-identical and move-identical v8.0 and v8.1 builds.
 # The only intended difference is about 20% more speed in v8.1.
-# It uses a fixed match for a confidence interval rather than an SPRT verdict.
+# The fixed match reports a confidence interval, not an SPRT verdict.
 # The expected gain of 18 to 19 Elo was recorded before the run in
 # benchmarks/v81_speed_prediction.md.
 # Component predictions are in benchmarks/v60_decomp_predictions.md.
@@ -78,7 +78,7 @@ if ! "$PY" "$ROOT/testing/engine_check.py" $CHECK; then
     exit 1
 fi
 
-# These binaries need SGR_EVALFILE or they silently fall back to the HCE.
+# SGR_EVALFILE is required; otherwise these binaries fall back to the HCE.
 for e in $ENGINES; do
     if ! printf 'uci\nquit\n' | "$CPP/$e.exe" 2>&1 >/dev/null | grep -q "nnue: loaded"; then
         echo "ABORT: $e is NOT loading the net -- it would play as HCE." >&2

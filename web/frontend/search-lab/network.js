@@ -742,8 +742,7 @@ export function initSearchNetwork() {
   function setInteractionMode(active) {
     if (interactionTimer !== null) window.clearTimeout(interactionTimer);
     interactionTimer = null;
-    // Repeated drag samples need no reset once navigation is active.
-    // This also avoids repeated selector checks.
+    // Repeated drag samples need no reset or selector work during navigation.
     if (active && interactionMode && navigationReleaseJob === null) {
       requestDraw();
       return;
@@ -1784,8 +1783,8 @@ export function initSearchNetwork() {
     }
   }
 
-  // Sample cadence independently because settled scenes throttle drawing.
-  // This also catches long tasks outside draw().
+  // Independent cadence sampling catches stalls outside draw() when settled
+  // scenes have throttled their own rendering.
   function recordFrame() {
     profileDraws += 1;
   }

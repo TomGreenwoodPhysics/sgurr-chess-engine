@@ -674,7 +674,7 @@ SearchResult Engine::search_best_move(
             pv = extract_principal_variation(*this, board, *best_move, depth);
         }
 
-        // Report TT occupancy through hashfull. This engine has no tablebases.
+        // hashfull reports TT occupancy; there are no tablebases.
         std::cout
             << "info depth " << depth
             << " score " << uci_score(best_score)

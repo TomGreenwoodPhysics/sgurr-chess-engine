@@ -1,8 +1,8 @@
 import { clampNumber } from "./utils.js";
 import { app, refs } from "./state.js";
 
-// Add decorative layers to every core and cursor tracking to menu and result cores.
-// These effects are disabled when animations are off.
+// Decorative layers for every core; cursor tracking for menu and result cores.
+// Animation mode controls both effects.
 
 function motionOn() {
   return app.animationMode !== "Off";
