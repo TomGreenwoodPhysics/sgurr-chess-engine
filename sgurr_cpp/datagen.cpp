@@ -40,6 +40,10 @@
 #include <string>
 #include <vector>
 
+#if SGR_RFP
+#error "datagen must be compiled with -DSGR_RFP=0; RFP produces unsafe labels"
+#endif
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -127,6 +131,23 @@ long long total_positions(const fs::path& dir) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--build-info") {
+        std::cout << "datagen-build"
+                  << " rfp=" << SGR_RFP
+                  << " simd=" << SGR_SIMD
+                  << " hl=" << SGR_HL
+                  << " iir=" << SGR_IIR
+                  << " nmpscale=" << SGR_NMPSCALE
+                  << " razor=" << SGR_RAZOR
+                  << " futility=" << SGR_FUTILITY
+                  << " seeprune=" << SGR_SEEPRUNE
+                  << " histprune=" << SGR_HISTPRUNE
+                  << " caphist=" << SGR_CAPHIST
+                  << " rootpvs=" << SGR_ROOTPVS
+                  << " evalscale=" << SGR_EVALSCALE
+                  << "\n";
+        return 0;
+    }
     if (argc < 4) {
         std::cerr << "usage: datagen <out_dir> <target_positions> <depth|nodes:N>"
                      " [book.epd|-] [net.nnue|-]\n";

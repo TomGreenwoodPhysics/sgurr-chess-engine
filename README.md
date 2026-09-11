@@ -151,6 +151,11 @@ is still useful as a readable reference.
 
 ### Training
 
+An isolated experimental [Sgurr-StockfishTeacher workflow](docs/STOCKFISH_TEACHER.md)
+trains Sgurr's own network on public external Stockfish-labelled data. That
+edition is not self-contained. It does not replace the normal self-play line
+or the canonical Gen8 network.
+
 The training loop is built in this repository. Sgurr generates self-play
 positions, labels them with the previous network generation, trains a new
 network, exports the quantised file and tests it in games. External engines are

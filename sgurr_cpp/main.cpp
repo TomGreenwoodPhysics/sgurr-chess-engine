@@ -17,7 +17,10 @@
 #ifndef SGR_VERSION
 #define SGR_VERSION "8.2"
 #endif
-constexpr const char* ENGINE_NAME = "Sgurr";
+#ifndef SGR_ENGINE_NAME
+#define SGR_ENGINE_NAME "Sgurr"
+#endif
+constexpr const char* ENGINE_NAME = SGR_ENGINE_NAME;
 constexpr const char* ENGINE_AUTHOR = "Tom";
 
 // Runtime UCI options. Threads is advertised but fixed at one.
@@ -625,6 +628,11 @@ int main(int argc, char* argv[]) {
             if (nnue::buckets() > 1) std::cerr << ", k=" << nnue::buckets();
             std::cerr << ")\n";
         } else {
+#if defined(SGR_REQUIRE_NET) && SGR_REQUIRE_NET
+            std::cerr << "error: this edition requires its configured Sgurr NNUE: "
+                      << net_path << "\n";
+            return 1;
+#endif
             std::cerr << "info string nnue: no network, using hand-crafted eval\n";
         }
     }

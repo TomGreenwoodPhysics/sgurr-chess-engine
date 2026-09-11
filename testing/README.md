@@ -69,6 +69,33 @@ to within +/-70 cp by Sgurr's own eval). Regenerate or enlarge it with:
 For serious testing, a large curated book such as UHO (unbalanced human
 openings) or a Pohl book reduces draw rates and variance.
 
+Gen9 datagen uses `datagen_gen9.epd`, not the starter book. It contains 15,000
+unique engine-neutral positions selected reproducibly from Stockfish's generic
+34,700-line `8moves_v3.pgn`: equal 5,000-position samples after 8, 10 and 12
+plies. This preserves early-opening training coverage while representing all
+385 ECO codes in the source. Rebuild it with:
+
+    python make_datagen_book.py
+
+The exact source and output hashes, selection seed and coverage statistics are
+recorded in `datagen_gen9_book.json`. The Gen9 launcher refuses a different
+book or manifest.
+
+The preserved 2,420,781-position starter-book pilot can be compared fairly
+with an equal new-book subset using:
+
+    python prepare_gen9_book_ab.py
+
+`prepare_gen9_book_ab.py` never changes either raw directory. It concatenates
+the complete old pilot, selects equal record prefixes from all 12 new-book
+worker shards, and writes exact input/output hashes plus allocations to
+`data/gen9_book_ab_2420781/manifest.json`.
+
+`run_gen9_book_ab.py` runs the controlled two-seed comparison. It uses those
+matched datasets and a pinned, training-disjoint Stockfish UHO match book,
+waits for Trackmania/datagen to stop, keeps production datagen paused, and
+writes atomic status plus complete logs under `runs/gen9_book_ab/`.
+
 ## Time control
 
 Test at the TC that matters. Fast TC (8+0.08) gives many games quickly and is

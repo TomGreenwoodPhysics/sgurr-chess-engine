@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "id": "wrong-is-right-n5000-pv2",
+  "edition": "Sgurr-StockfishTeacher",
+  "publisher": "official-stockfish; uploaded by vondele",
+  "repository": "https://huggingface.co/datasets/official-stockfish/master-binpacks",
+  "revision": "1e095a758c630bc58d0b6dac4da44fcd38ac89c2",
+  "file": "wrongIsRight_nodes5000pv2.binpack",
+  "url": "https://huggingface.co/datasets/official-stockfish/master-binpacks/resolve/1e095a758c630bc58d0b6dac4da44fcd38ac89c2/wrongIsRight_nodes5000pv2.binpack",
+  "bytes": 7319926088,
+  "sha256": "54cbbfaf528df4c0198f4788823512c0c2dbba2913075c4022992c74247a9e8e",
+  "checksum_source": "https://huggingface.co/datasets/official-stockfish/master-binpacks/commit/8987f266dd27b8a2942ef10a7e502e77273d8fa5",
+  "licence": {
+    "stated": "ODbL-1.0 (repository metadata: odbl)",
+    "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "alternative_publisher_label": "Publisher's Kaggle card says CC0; equivalence of the bytes has not been verified. This workflow relies on the official HF ODbL label.",
+    "alternative_url": "https://www.kaggle.com/datasets/joostvandevondele/wrongisright-u-nodes5000pv2",
+    "redistribution": "No external data or resulting models are cleared for release by this experiment. Retain attribution and database licence; review database/contents/model obligations before redistribution. Sgurr's proprietary licence does not relicense the data."
+  },
+  "provenance": {
+    "classification": "stockfish-generated-stockfish-labelled",
+    "position_origin": "Stockfish self-play from openings it usually gets wrong (targeted, not representative of arbitrary chess positions)",
+    "score_engine": "Stockfish",
+    "score_engine_revision": null,
+    "search_limit": {"nodes": 5000, "multipv": 2, "evidence": "filename and Stockfish training-dataset history; original complete generator command unavailable"},
+    "result_semantics": "Stored -1/0/+1 loss/draw/win for side to move. Generator final outcomes may include adjudication; exact settings for this artifact are unknown.",
+    "results_trusted_for_training": false,
+    "game_ids": false,
+    "preexisting_filters": "Targeted opening selection; exact generator filters, adjudication thresholds and subsequent filtering unknown.",
+    "evidence": [
+      "https://github.com/official-stockfish/Stockfish/commit/e4a0c6c75950bf27b6dc32490a1102499643126b",
+      "https://github.com/official-stockfish/nnue-pytorch/wiki/Training-datasets"
+    ]
+  },
+  "format": {
+    "name": "Stockfish binpack",
+    "documentation": "https://github.com/official-stockfish/Stockfish/blob/9a4c7cf4e311f8d9526b79295b80c4d0464c07cf/docs/binpack.md",
+    "framing": "BINP + little-endian u32 payload size; independent compression chunks, not guaranteed whole games",
+    "scores": "Signed-to-unsigned mapped big-endian 16-bit stem scores; delta-compressed continuation scores. Side-to-move perspective, native Stockfish search Value units, not assumed modern normalized UCI centipawns.",
+    "plain": "Official converter: fen/move/score/ply/result/e. ASCII decimal scores; -1/0/+1 results remain side-to-move relative.",
+    "sgurr": "32 bytes, little-endian occupancy a1=0; ascending occupied squares, low nibble first, PNBRQKpnbrqk=0..11; stm 0 white/1 black; i16 mapped Sgurr cp; result source+1; four zero padding bytes"
+  },
+  "expansion": {
+    "exact_positions": null,
+    "exact_full_sgurr_bytes": null,
+    "estimated_full_sgurr_bytes": [78079211605, 117118817408],
+    "estimate_basis": "Official tools README says approximately 2-3 compressed bytes/position for generated data. Estimate only; full expansion is deliberately not performed.",
+    "pilot": "Eight complete chunks selected by seeded hash across the entire verified artifact. Exact compressed/expanded/filtered sizes are measured in the conversion manifest; never expand the entire artifact implicitly."
+  },
+  "converter": {
+    "repository": "https://github.com/official-stockfish/Stockfish",
+    "revision": "9a4c7cf4e311f8d9526b79295b80c4d0464c07cf",
+    "licence": "GPL-3.0; retained in Copying.txt",
+    "url": "https://codeload.github.com/official-stockfish/Stockfish/zip/9a4c7cf4e311f8d9526b79295b80c4d0464c07cf",
+    "file": "stockfish-tools-9a4c7cf.zip",
+    "bytes": 368329,
+    "sha256": "77fa34492e3a608678ac46b2eadbc443ecb579e9f47946827c669dde1649e09d",
+    "boundary": "Unmodified source in ignored cache, standalone converter executable invoked as subprocess. No linking or source incorporation into Sgurr; no Stockfish net download or runtime dependency."
+  },
+  "transformations": [
+    "Verify whole-file SHA-256, index every compression chunk, choose smallest seeded SHA-256 priorities without reading a biased prefix.",
+    "Official converter with validate, then independent FEN/move/kings validation and Sgurr record round-trip.",
+    "Reject malformed input; filter in-check, capture/promotion best moves, early plies and extreme mapped scores explicitly.",
+    "Drop repeated piece-placement+side-to-move keys within the selected sample deterministically; report duplicates. This is Sgurr feature equivalence, not full chess-state equivalence.",
+    "Map teacher raw score to round(raw_score*400/teacher_sigmoid_scale) Sgurr cp. Keep output/runtime scale 400. Record scale in every conversion and run.",
+    "No train/validation split for this artifact: original game IDs are not available. Stored outcomes are diagnostic only; pilot lambda=1."
+  ],
+  "researched_on": "2026-09-06"
+}

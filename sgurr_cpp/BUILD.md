@@ -137,6 +137,7 @@ what makes the speedup free rather than a behaviour change (see below).
 ## Datagen
 
     /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
+        -DSGR_RFP=0 \
         datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
         -o datagen.exe
 
@@ -145,6 +146,9 @@ See the header of `datagen.cpp` for arguments (fixed depth vs `nodes:N`).
 > **Labeller builds must pass `-DSGR_RFP=0`.** Reverse futility pruning returns
 > a raw static eval where a searched score is expected; under a fixed node
 > budget that poisons the labels. It cost gen6 an entire cycle.
+
+`datagen.cpp` also enforces this at compile time. An unsafe manual build now
+fails instead of producing a runnable binary that can silently poison a cycle.
 
 PGO applies here too, and matters more than it does for the engine: datagen
 is a multi-day CPU-bound job. Generate a *datagen* profile rather than reusing

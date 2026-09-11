@@ -11,6 +11,11 @@
 # POSIX shell scripts need LF.
 *.sh   text eol=lf
 
+# Opening books are hashed as reproducible pipeline inputs.
+*.epd  text eol=lf
+testing/make_datagen_book.py text eol=lf
+testing/datagen_gen9_book.json text eol=lf
+
 # Binary assets
 *.png  binary
 *.jpg  binary

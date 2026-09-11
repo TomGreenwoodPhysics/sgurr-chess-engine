@@ -22,7 +22,14 @@
 
   "engine": "sgurr_cpp/sgr_v9_rc.exe",
   "net": "nets/gen8.nnue",
-  "book": "testing/book.epd",
+  "book": "testing/8moves_v3.pgn",
+  "book_format": "pgn",
+  "_book_note": [
+    "Use the generic 34,700-line game-derived book rather than the 150-position",
+    "Sgurr-filtered starter book. A 24,000-game tune would reuse each starter",
+    "position about 80 times per colour pair and risk tuning to Sgurr's own",
+    "opening selection. Repeat still reverses colours for every sampled line."
+  ],
 
   "tc": "8+0.08",
   "_tc_note": [

@@ -1230,3 +1230,69 @@ n=5 and not significant.
   into a number.
 * **An error bar is only as good as its widest ignored term.** ±5.4 was printed
   while the opening draw alone contributed ±15.
+
+## 2026-09-02, Gen9 gets an engine-neutral, phase-matched datagen book
+
+The first Gen9 pilot reused `testing/book.epd`: 150 random eight-ply positions
+selected within ±70 cp by Sgurr itself. That file was the historical datagen
+input, but "historical" did not make it the right root distribution for a
+100M+ dataset. Conversely, substituting the generic `8moves_v3.pgn` at its
+final positions would have changed two variables at once: diversity and
+opening depth (8 plies to 16).
+
+Built `testing/datagen_gen9.epd` reproducibly from the generic 34,700-line
+source instead: 5,000 unique positions at each of 8, 10 and 12 source plies,
+ranked by a fixed SHA-256 seed without consulting a Sgurr evaluation. The
+15,000 selected roots are all legal and unique and collectively represent all
+385 ECO codes in the source. Datagen still adds 4-9 random legal plies and
+accepts only positions within ±200 cp under its 5,000-node Gen8-net probe.
+
+The book rebuilds byte-for-byte as SHA-256
+`dc7c21bda62d7ba413afe1d3bb316b30e966aacd33d0634f0fb7ba3008a3473e`.
+A production-settings smoke game at 150,000 nodes emitted 41 records; all 41
+passed the format and position validator. The launcher pins the source/output
+hashes and manifest and writes the clean run to `data/gen9_raw_generic`. The
+2,420,781 positions produced by the old starter-book pilot remain untouched in
+`data/gen9_raw` but are deliberately excluded from the clean dataset.
+
+## 2026-09-02, Gen9 opening book clears the harm check
+
+Before committing the machine to the full Gen9 run, the old and new opening
+books were compared at the 2,420,781-position mark. This was a safety check,
+not an attempt to put an Elo value on opening-book diversity. The question was
+whether the new book gave any reason to stop the run.
+
+The comparison used all 2,420,781 positions from the old-book pilot and an
+equal-sized prefix spread across the twelve new-book shards. Both arms used
+the normal Sgurr training recipe: HL384, lambda 0.9, batch 16,384, fourteen
+cosine-schedule epochs and the same two training seeds. The resulting engines
+passed the NNUE self-check, UCI handshake and legal-move/FEN gates. Games used
+a pinned Stockfish UHO book with its eight exact overlaps with the new datagen
+roots removed (there were none with the old roots), 8+0.08, colour-reversed
+pairs and a fixed opening sample.
+
+Seed 0 completed all 2,000 games. The new-book net scored +821 =457 -722,
+52.48%, or **+17.21 ±12.02 Elo** for that trained pair. Seed 1 was stopped
+after 405 games once the purpose of the run was restated. Its last complete
+report, at 398 games, was +173 =87 -138, 54.40%, in the same direction.
+Because that arm was stopped after looking at an interim score, it is supporting
+evidence only and is not used for an Elo estimate.
+
+Fastchess also exposed a harness bug during the run. It warns when a displayed
+PV continues beyond a threefold repetition or the fifty-move rule; the first
+parser treated every line beginning `Warning;` as a crash or forfeit. Seed 0's
+PGN was complete and contained no illegal move, disconnect, stall or time
+forfeit. The recovery parser now exempts only those two known PV warnings and
+continues to reject every other warning.
+
+Decision: **the new book passes the harm check.** Keep
+`testing/datagen_gen9.epd`, exclude the old 2.42M pilot from Gen9 training, and
+continue the clean run from 5,741,104 positions with the Gen8 labeller at
+150,000 nodes. This result does not claim that the book is generally worth
++17 Elo; resolving an effect of that size across training seeds would require
+the full multi-seed experiment, which was not needed for this decision. There
+is no version bump, ledger row or CHANGELOG entry.
+
+The run record, matched-data hashes, trained nets, logs and PGNs are under
+`runs/gen9_book_ab/20260902-180020`; the decision summary is
+`safety_check_result.json` in that directory.

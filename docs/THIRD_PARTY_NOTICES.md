@@ -86,6 +86,32 @@ Their exact versions and integrity hashes are in `web/package-lock.json`.
 
 ## Scope Boundary
 
+### External-data training experiment
+
+The optional Sgurr-StockfishTeacher development workflow has its own
+[provenance and reproduction record](STOCKFISH_TEACHER.md). It uses:
+
+- `official-stockfish/master-binpacks`, pinned in
+  `nnue/stockfish_teacher/dataset.json`, under the publisher's stated ODbL
+  terms. Original Sgurr licensing does not relicense that database or its
+  converted records. No resulting model is cleared for public redistribution
+  by this experiment.
+- An unmodified Stockfish `tools` source archive at revision
+  `9a4c7cf4e311f8d9526b79295b80c4d0464c07cf`, compiled as a standalone
+  conversion tool under GPL-3.0. The complete source, `Copying.txt` and `AUTHORS`
+  stay together in the ignored external-data cache. Sgurr does not link to it
+  or use any Stockfish weights or code at runtime.
+- The installed `chess` package (1.11.2 in the implementation environment),
+  GPL-3.0-or-later, for development-time board validation and PGN inspection.
+  No source from it is pasted into Sgurr. PyTorch and NumPy remain the existing
+  training dependencies; exact versions are recorded with each training run.
+
+Retain each component's original licence and attribution when distributing
+tooling. A subprocess boundary describes the implementation; it is not a
+blanket legal conclusion about every possible distribution. The external
+database's ODbL conditions and the treatment of resulting model files require
+separate review before public release.
+
 This notice does not certify every training, benchmarking, or research
 dependency in the repository. Audit those separately before shipping a
 development toolkit. The commercial web release should contain only the

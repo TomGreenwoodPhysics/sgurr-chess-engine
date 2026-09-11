@@ -23,6 +23,16 @@ weights entered the training pipeline.
 
 ## Third-party material
 
+The separate experimental **Sgurr-StockfishTeacher** line uses public external
+training data and must not inherit the shipped Gen8 network's self-play-only
+provenance claim. Its dataset, transformation and training records are described
+in [`STOCKFISH_TEACHER.md`](STOCKFISH_TEACHER.md), with the pinned source manifest
+in [`../nnue/stockfish_teacher/dataset.json`](../nnue/stockfish_teacher/dataset.json).
+It retains Sgurr's search, features, architecture, exporter and inference. The
+Stockfish converter is an isolated development subprocess, never a runtime
+dependency. No external-data model is automatically promoted or cleared for
+redistribution.
+
 Third-party software and media retain their own terms. They are listed in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md), with dependency licence texts

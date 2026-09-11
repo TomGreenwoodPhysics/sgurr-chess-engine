@@ -16,6 +16,22 @@
 > METHODOLOGY §9 and the 2026-08-10 ledger row. Note the book concern flagged
 > under "Rebuild the pool" was correct and understated: the openings turned out
 > to contribute ~±15 Elo irreducibly, three times the interval being quoted.
+>
+> **Datagen update, 2026-09-02.** Gen9 does not reuse the 150-position,
+> Sgurr-filtered starter book. Its reproducible `testing/datagen_gen9.epd`
+> contains 15,000 unique engine-neutral roots sampled equally at 8, 10 and 12
+> plies from Stockfish's 34,700-line `8moves_v3` book. This retains early-phase
+> coverage, represents all 385 source ECO codes, and is still followed by
+> datagen's 4-9 random plies and 5,000-node balance gate. The 2.42M-position
+> starter-book pilot is preserved separately and excluded from the clean run.
+>
+> A matched 2.42M-position safety check cleared the new book before the long
+> run resumed. The complete first training seed scored 52.48% over 2,000 games
+> (+17.21 ±12.02 Elo for that pair); a second seed was stopped at 405 games
+> with its last complete report also positive at 54.40%. The second result is
+> not used as an Elo estimate because the stop followed an interim look. The
+> decision is limited to the question asked: there is no evidence of practical
+> harm requiring Gen9 to stop. It is not a claim that the book adds +17 Elo.
 
 Current: **v8.0 "Thearlaich", 3006 ±11** (pool-2026-07-B, 3,329 games).
 Written 2026-08-01, after the architecture × data study. Supersedes the

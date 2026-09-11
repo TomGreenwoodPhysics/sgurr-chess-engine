@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-02T17:34:51.447818+01:00",
+  "purpose": "Gen9 old 150-root book versus new 15,000-root book A/B",
+  "record_bytes": 32,
+  "positions_per_arm": 2420781,
+  "selection": {
+    "old": "all complete old-pilot records in sorted shard order",
+    "new": "equal per-shard prefixes in sorted shard order; first remainder shards receive one additional record"
+  },
+  "controlled_conditions": {
+    "labeller": "C:\\coding\\Sgurr\\nets\\gen8.nnue",
+    "labeller_sha256": "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf",
+    "search_limit": "nodes:150000 per move",
+    "datagen_filters": "same datagen implementation: 4-9 random opening plies, 5000-node balance probe, quiet positions, |score| < 2000",
+    "functional_difference": "opening-book root distribution"
+  },
+  "books": {
+    "old": {
+      "path": "C:\\coding\\Sgurr\\testing\\book.epd",
+      "positions": 150,
+      "sha256": "fd8293d724e03d94533fe446ef9984d4a643e799f65bcc001d1a5e0e717fdbc6"
+    },
+    "new": {
+      "path": "C:\\coding\\Sgurr\\testing\\datagen_gen9.epd",
+      "positions": 15000,
+      "sha256": "dc7c21bda62d7ba413afe1d3bb316b30e966aacd33d0634f0fb7ba3008a3473e"
+    }
+  },
+  "outputs": {
+    "old": {
+      "path": "C:\\coding\\Sgurr\\data\\gen9_book_ab_2420781\\old_book_2420781.bin",
+      "records": 2420781,
+      "bytes": 77464992,
+      "sha256": "e4b831458a7926340dd5e41155e13cdab84826cc4e9d47a09caa05298733aaa8",
+      "selection": [
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0000_b177711a.bin",
+          "available_records": 202267,
+          "selected_records": 202267,
+          "source_sha256": "0bb039e1e069ae0c19512ff70abae732f2a772d97fcd6f1c11c4295bd1645513"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0001_ba126b5b.bin",
+          "available_records": 202366,
+          "selected_records": 202366,
+          "source_sha256": "933da283c834a57817568d2807ec4d970a9e6e920ba61b2847c3eaa9b7b98777"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0002_3534e093.bin",
+          "available_records": 200893,
+          "selected_records": 200893,
+          "source_sha256": "42bdb44813443ae09e84ccf454527968521d23ab4f7155efdca61e858c087025"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0003_eb09c01f.bin",
+          "available_records": 202338,
+          "selected_records": 202338,
+          "source_sha256": "345d995ad5dd42dcba7ebd309c42178e3d8a19bd547f1004d691d8855b83ddb8"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0004_e2d5cd61.bin",
+          "available_records": 201921,
+          "selected_records": 201921,
+          "source_sha256": "ff7d856424de3b20c305ebd50b47db321676c8c7c465460f745b050566454129"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0005_c22c6549.bin",
+          "available_records": 201665,
+          "selected_records": 201665,
+          "source_sha256": "57e5ebeb7b57dd620d520f4a6e3d7657faf50a318acf3cab001f174d51ba75d9"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0006_dab822c1.bin",
+          "available_records": 200446,
+          "selected_records": 200446,
+          "source_sha256": "3119e97664601b7f1086349dd364208a628af6b9cdab0d19b5bfeb1ced248c2c"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0007_751a1182.bin",
+          "available_records": 201872,
+          "selected_records": 201872,
+          "source_sha256": "6ca30a07ea0d433027cc9cb3eb91014d90d59a09d2c02ce8149a8fff632be668"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0008_c96da8fe.bin",
+          "available_records": 201900,
+          "selected_records": 201900,
+          "source_sha256": "1e4c90ff433014b7c50fe6f47725f1a40b06d0769b8470594c3a7eccc6cb0aa5"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0009_c19a0514.bin",
+          "available_records": 202067,
+          "selected_records": 202067,
+          "source_sha256": "40f1eda2de00981bfecbfe111606418999cb9db000b5b6fb4b63af12d87b31b8"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0010_13a20bc3.bin",
+          "available_records": 200826,
+          "selected_records": 200826,
+          "source_sha256": "253e5c6c245d59cfe2f816507b37528f4716ef69baecae3c1246e1a23dadb248"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw\\data_0011_100a3f5e.bin",
+          "available_records": 202220,
+          "selected_records": 202220,
+          "source_sha256": "f3685c50a1ce409b04cfc619f2037b2cd13120d42c4421b0fec1b757ef9abd90"
+        }
+      ]
+    },
+    "new": {
+      "path": "C:\\coding\\Sgurr\\data\\gen9_book_ab_2420781\\new_book_2420781.bin",
+      "records": 2420781,
+      "bytes": 77464992,
+      "sha256": "a0559c091299608ef3c133c7515886759910dee02e50f1572d622cea11050ed2",
+      "selection": [
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0000_63525efb.bin",
+          "available_records": 478680,
+          "selected_records": 201732,
+          "source_sha256": "c4fbf5903d049bec3960625f3fa1d79ab1deaa61a49ae37a473e8ecb2cc61e8c"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0001_e984294b.bin",
+          "available_records": 478240,
+          "selected_records": 201732,
+          "source_sha256": "91841ad05eb47057571f18e91548078d74806b7ae4504773137edc69927f01d1"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0002_448afeeb.bin",
+          "available_records": 480321,
+          "selected_records": 201732,
+          "source_sha256": "7621253fdf47b59f23b4c613d6eb6298c50dea1d5f60dc385dc29c475f56f47e"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0003_808d5f2b.bin",
+          "available_records": 476573,
+          "selected_records": 201732,
+          "source_sha256": "e73cbb9e9decbd3f553c70289dad78bf17e7f2b8307d250b7918875a631702b8"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0004_3e10d927.bin",
+          "available_records": 478877,
+          "selected_records": 201732,
+          "source_sha256": "3689e8914bf99be3f4dc31e9996fb01da683b119bec73d4d6db757c682a6e5de"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0005_b8c09f96.bin",
+          "available_records": 473841,
+          "selected_records": 201732,
+          "source_sha256": "a6b934e6452a3e607489af362478f5cb116cd3d9211404baf43c4e9ef53c6436"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0006_21278a4d.bin",
+          "available_records": 479196,
+          "selected_records": 201732,
+          "source_sha256": "a296a45ee26df8bc977db0dbeb07590bc0f07ac832dbfa01f7f9a864fdf24ed0"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0007_4cb7d05b.bin",
+          "available_records": 474207,
+          "selected_records": 201732,
+          "source_sha256": "1d30fd224c779e46ae0413cb80a4226d77b3fef2f9c0fa24437777f8bf40a877"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0008_025242ad.bin",
+          "available_records": 478996,
+          "selected_records": 201732,
+          "source_sha256": "c2c9ba8a8e5f4299a260a5c9a6436ecfdaed81f1b908127b7b74fa0aeef732ec"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0009_c836a0fe.bin",
+          "available_records": 482156,
+          "selected_records": 201731,
+          "source_sha256": "bfec387ffec3450f968c0c2ca84d60cb937c8cb034e7f90b28958918c3ce2f21"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0010_ffbc52f4.bin",
+          "available_records": 480963,
+          "selected_records": 201731,
+          "source_sha256": "5782749dfeb742742959b98188e5746f7a3a4d807962cb863e885b72f25d0666"
+        },
+        {
+          "path": "C:\\coding\\Sgurr\\data\\gen9_raw_generic\\data_0011_b9310960.bin",
+          "available_records": 479054,
+          "selected_records": 201731,
+          "source_sha256": "bd5456c16ea8635c469ff93201c7e79cfd090cab3065b7dbe50a7df6b4a6c967"
+        }
+      ]
+    }
+  },
+  "repository": {
+    "commit": "f5eb0a7f5d5e265a1cfd5b2188445592fda6ed7a",
+    "dirty": true
+  }
+}

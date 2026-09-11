@@ -36,6 +36,7 @@ stockfish/
 *.nnue
 *.bin
 data/**/*.zip
+data/stockfish_teacher/
 engines/
 
 # Keep the shipped net so clones can reproduce the release benchmark.

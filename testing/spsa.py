@@ -102,6 +102,11 @@ class Spsa:
         self.cfg_path = cfg_path
         self.exe = (ROOT / cfg["engine"]).resolve()
         self.book = (ROOT / cfg.get("book", "testing/book.epd")).resolve()
+        self.book_format = cfg.get(
+            "book_format", "pgn" if self.book.suffix.lower() == ".pgn" else "epd")
+        if self.book_format not in {"epd", "pgn"}:
+            raise SystemExit(
+                f"spsa: unsupported book format '{self.book_format}' (use epd or pgn)")
         self.fastchess = (ROOT / "benchmarks/tools/fastchess.exe").resolve()
         self.net = cfg.get("net")
 
@@ -186,7 +191,7 @@ class Spsa:
     def _opts(self, theta: dict) -> list:
         return [f"option.{k}={v}" for k, v in theta.items()]
 
-    def play(self, plus: dict, minus: dict) -> float | None:
+    def play(self, plus: dict, minus: dict, opening_seed: int) -> float | None:
         """theta+ against theta-. Returns theta+'s score in [0,1], or None."""
         rounds = max(1, self.games_per_iter // 2)
         cmd = [
@@ -196,7 +201,9 @@ class Spsa:
             "-each", f"tc={self.tc}",
             "-rounds", str(rounds), "-repeat",
             "-concurrency", str(self.concurrency),
-            "-openings", f"file={self.book}", "format=epd", "order=random",
+            "-srand", str(opening_seed),
+            "-openings", f"file={self.book}",
+            f"format={self.book_format}", "order=random",
             "-recover",
         ]
         try:
@@ -240,11 +247,15 @@ class Spsa:
                  f"tc={self.tc}")
         self.log(f"  starting at iteration {self.state['iteration']}")
 
-        rng = random.Random(self.cfg.get("seed", 0) + self.state["iteration"])
+        base_seed = int(self.cfg.get("seed", 0))
         t0 = time.time()
 
         while self.state["iteration"] < self.iterations:
             k = self.state["iteration"] + 1
+            # Make each iteration reproducible in isolation. A resumed run now
+            # generates the same perturbation and opening seed as an uninterrupted
+            # run instead of starting a different random sequence.
+            rng = random.Random(base_seed + 1_000_003 * k)
             ck_scale = 1.0 / (k ** self.gamma)
             ak_scale = 1.0 / ((self.A + k) ** self.alpha)
 
@@ -255,7 +266,7 @@ class Spsa:
                 plus[p["name"]] = self._clamped(p, p["value"] + step)
                 minus[p["name"]] = self._clamped(p, p["value"] - step)
 
-            score = self.play(plus, minus)
+            score = self.play(plus, minus, base_seed + k)
             if score is None:
                 self.state["iteration"] = k
                 self._save_state()
@@ -274,7 +285,6 @@ class Spsa:
             self.state["history"].append(
                 {"k": k, "score": round(score, 4),
                  "values": {p["name"]: round(p["value"], 2) for p in self.params}})
-            self.state["history"] = self.state["history"][-500:]
             self._save_state()
 
             if k % 25 == 0 or k == 1:

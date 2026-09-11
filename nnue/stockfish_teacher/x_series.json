@@ -1,0 +1,37 @@
+{
+  "id": "x-scaling-20260906",
+  "purpose": "User-authorized sequential 112M current-architecture test, then 826M king-bucket test. All games fixed in advance; no score-dependent stopping, mixing self-play data, promotion or commit.",
+  "jobs": [
+    {
+      "config": "nnue/stockfish_teacher/x_112m.json",
+      "opponents": [
+        {
+          "name": "Sgurr-X-56M",
+          "net": "nets/stockfish_teacher/56m-s0-scale361/pilot.nnue",
+          "sha256": "c9704b107890a2c7a83693f3d42a695929be8e5e83d2d36cb571fceecf04901c"
+        },
+        {
+          "name": "Sgurr-Gen8",
+          "net": "nets/gen8.nnue",
+          "sha256": "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
+        }
+      ]
+    },
+    {
+      "config": "nnue/stockfish_teacher/x_826m_k8.json",
+      "opponents": [
+        {
+          "name": "Sgurr-X-112M",
+          "net": "nets/stockfish_teacher/x-112m-s0-scale361/pilot.nnue",
+          "training_receipt": "runs/stockfish_teacher/x-112m-s0-scale361/training-result.json",
+          "verification_receipt": "runs/stockfish_teacher/x-112m-s0-scale361/verification.json"
+        },
+        {
+          "name": "Sgurr-Gen8",
+          "net": "nets/gen8.nnue",
+          "sha256": "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "run": "x-826m-s0-k8-factorized",
+  "edition": "Sgurr-X",
+  "sampling": {
+    "seed": 20260906,
+    "target_positions": 826000000,
+    "max_chunks": 6144,
+    "workers": 7
+  },
+  "conversion": {
+    "teacher_sigmoid_scale": 361,
+    "runtime_scale": 400,
+    "min_ply": 8,
+    "max_abs_cp": 2000,
+    "quiet_only": true
+  },
+  "training": {
+    "seed": 0,
+    "steps": 398250,
+    "batch": 16384,
+    "lr": 0.001,
+    "lr_min": 0.00001,
+    "lambda": 1,
+    "val_frac": 0,
+    "hl": 384,
+    "buckets": 8,
+    "checkpoint_every": 100,
+    "device": "cuda",
+    "factorize": true
+  },
+  "match": {
+    "pairs": 400,
+    "tc": "8+0.08",
+    "concurrency": 7,
+    "hash_mb": 256,
+    "threads": 1,
+    "seed": 20260906,
+    "book": "testing/UHO_4060_v4.epd",
+    "book_sha256": "3f499996ff0b674a04f85f2634811d102dd53b5115841e8f11d18e1f550ba2ca"
+  },
+  "notes": "Second authorized Sgurr-X experiment: >=826M globally unique records, HL384, eight factorized king buckets coalesced to v2. Same source/filter/scale361/lambda1/seed, roughly 7.9 passes. This changes volume and architecture together; it does not isolate the bucket contribution. Fixed 800 games per opponent; one seed; no automatic promotion."
+}

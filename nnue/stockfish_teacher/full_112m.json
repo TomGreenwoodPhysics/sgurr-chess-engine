@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "run": "112m-s0-scale361",
+  "edition": "Sgurr-StockfishTeacher",
+  "sampling": {
+    "seed": 20260906,
+    "target_positions": 112000000,
+    "max_chunks": 768,
+    "workers": 7
+  },
+  "conversion": {
+    "teacher_sigmoid_scale": 361.0,
+    "runtime_scale": 400,
+    "min_ply": 8,
+    "max_abs_cp": 2000,
+    "quiet_only": true
+  },
+  "training": {
+    "seed": 0,
+    "steps": 54000,
+    "batch": 16384,
+    "lr": 0.001,
+    "lr_min": 1e-05,
+    "lambda": 1.0,
+    "val_frac": 0,
+    "hl": 384,
+    "buckets": 1,
+    "checkpoint_every": 100,
+    "device": "cuda"
+  },
+  "match": {
+    "pairs": 400,
+    "tc": "8+0.08",
+    "concurrency": 7,
+    "hash_mb": 256,
+    "threads": 1,
+    "seed": 20260906,
+    "book": "testing/UHO_4060_v4.epd",
+    "book_sha256": "3f499996ff0b674a04f85f2634811d102dd53b5115841e8f11d18e1f550ba2ca"
+  },
+  "notes": "Data-volume step: 112M accepted records at the same teacher scale 361 and the same filters, so volume is the only variable against 56m-s0-scale361. Chunk ranking is a sorted prefix, so this corpus is a strict superset of the 56M one. Steps double to 54000 to hold roughly eight passes, since the project measured undertraining as the worse bias. METHODOLOGY 4 measured 14M->56M at 65 Elo with returns still accelerating (28M->56M was +48), so this is the lever open data actually unlocks. Never promotes Gen8."
+}
