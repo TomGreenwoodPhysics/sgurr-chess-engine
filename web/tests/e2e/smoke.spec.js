@@ -7,8 +7,8 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const AFTER_E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
 const AFTER_E4_E5_FEN = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
 const PROMOTION_FEN = "7k/P7/8/8/8/8/8/7K w - - 0 1";
-const NNUE_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf";
-const NNUE_BYTES = readFileSync(new URL("../../../nets/gen8.nnue", import.meta.url));
+const NNUE_SHA256 = "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1";
+const NNUE_BYTES = readFileSync(new URL("../../../nets/gen9.nnue", import.meta.url));
 
 const WHITE_START_MOVES = [
   "a2a3", "a2a4", "b2b3", "b2b4", "c2c3", "c2c4", "d2d3", "d2d4",
@@ -170,7 +170,7 @@ async function installMockBackend(page, {
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === `/api/nnue/gen8/${NNUE_SHA256}.nnue`) {
+    if (path === `/api/nnue/gen9/${NNUE_SHA256}.nnue`) {
       if (!nnueAvailable) {
         await json(route, { detail: "NNUE Lab unavailable" }, 503);
         return;
@@ -199,15 +199,15 @@ async function installMockBackend(page, {
     }
     if (path === "/api/engines") {
       await json(route, {
-        default: "v8.2",
+        default: "v9.0",
         public_demo: publicDemo,
         engines: [
           {
-            id: "v8.2",
-            label: 'Sgurr v8.2 "Thearlaich"',
-            subtitle: "GEN8 NNUE + PACKED TT · ~3012",
-            tech: "GEN8 NNUE + PACKED TT",
-            rating: 3012,
+            id: "v9.0",
+            label: 'Sgurr v9.0 "Dearg"',
+            subtitle: "GEN9 NNUE (102M SELF-PLAY) · ~3081",
+            tech: "GEN9 NNUE (102M SELF-PLAY)",
+            rating: 3081,
             available: engineExists,
           },
           {
@@ -217,7 +217,7 @@ async function installMockBackend(page, {
             tech: "GEN8 NNUE + PGO SPEED",
             rating: 2981,
             available: !publicDemo && engineExists,
-            unavailable_reason: "Available locally; the free demo includes Sgurr v8.2 only.",
+            unavailable_reason: "Available locally; the free demo includes Sgurr v9.0 only.",
             unavailable_badge: "LOCAL ONLY",
           },
         ],
@@ -240,6 +240,12 @@ async function installMockBackend(page, {
     calls.push({ path, body });
     if (path === "/api/new") {
       await json(route, INITIAL_STATE);
+      return;
+    }
+    if (path === "/api/resume") {
+      const states = [INITIAL_STATE, AFTER_E4_STATE, AFTER_E4_E5_STATE];
+      const state = states.find((entry) => entry.fen === body.fen);
+      await json(route, state ? { ...state, start_fen: body.start_fen, moves: body.moves, move_rows: body.moves.length ? state.move_rows : [] } : gameState({ fen: body.fen, startFen: body.start_fen, moves: body.moves }));
       return;
     }
     if (path === "/api/load-fen") {
@@ -271,7 +277,7 @@ async function installMockBackend(page, {
     }
     if (path === "/api/search-trace") {
       const events = [
-        { type: "started", engine: "v8.2", label: 'Sgurr v8.2 "Thearlaich"', perspective: "white", movetime_ms: 5000 },
+        { type: "started", engine: "v9.0", label: 'Sgurr v9.0 "Dearg"', perspective: "white", movetime_ms: 5000 },
         {
           type: "iteration", kind: "cp", value: 8, display: "+0.1", depth: 3,
           nodes: 720, nps: 240000, time_ms: 3, pv: ["d2d4"],
@@ -367,6 +373,8 @@ test.beforeEach(async ({ page }) => {
   pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.addInitScript(() => {
+    if (sessionStorage.getItem("sgurrTestInitialized")) return;
+    sessionStorage.setItem("sgurrTestInitialized", "1");
     localStorage.clear();
     localStorage.setItem("sgurrAnimationMode", "Off");
     localStorage.setItem("sgurrSoundEnabled", "false");
@@ -398,6 +406,234 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator(".inside-sgurr-link")).toHaveAttribute("href", "inside-sgurr/");
 });
 
+test("shows the Enter prompt promptly with intro animations enabled", async ({ page }, testInfo) => {
+  await installMockBackend(page);
+  await page.addInitScript(() => localStorage.setItem("sgurrAnimationMode", "On"));
+  for (const reducedMotion of ["no-preference", "reduce"]) {
+    await page.emulateMedia({ reducedMotion });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#introScreen")).toHaveAttribute("data-motion", "on");
+    await expect(page.locator(".intro-copy")).toHaveCSS("opacity", "1", { timeout: 1200 });
+    await expect(page.locator("#wakeSgurrButton")).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath(`entrance-${reducedMotion}.png`) });
+    await page.locator("#wakeSgurrButton").click();
+    await expect(page.locator("#introScreen")).toHaveAttribute("data-state", "waking");
+  }
+});
+
+test("keeps the redesigned menu reachable across screen sizes and themes", async ({ page }, testInfo) => {
+  await installMockBackend(page);
+  await page.goto("/");
+  await expect(page.locator("#wakeSgurrButton")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("entrance.png") });
+  await openMainMenu(page);
+  for (const viewport of [{ width: 2048, height: 986 }, { width: 2560, height: 1280 }, { width: 1440, height: 1000 }, { width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    for (const selector of ["#menuSettingsButton", "#menuTimeButton", "#playWhiteButton", "#playBlackButton", "#watchButton", "#positionLabButton", ".inside-sgurr-link", ".menu-footer a"]) {
+      const control = page.locator(selector);
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeInViewport();
+      const box = await control.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    }
+    await page.locator("#menuScreen").evaluate((el) => { el.scrollTop = 0; });
+    const menuLayout = await page.evaluate(() => {
+      const card = document.querySelector(".menu-card").getBoundingClientRect();
+      const footer = document.querySelector(".menu-footer").getBoundingClientRect();
+      return { cardBottom: card.bottom, footerTop: footer.top };
+    });
+    expect(menuLayout.footerTop).toBeGreaterThan(menuLayout.cardBottom);
+    await page.screenshot({ path: testInfo.outputPath(`menu-${viewport.width}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator("#menuSettingsButton").click();
+  await page.locator("#themeUpButton").click();
+  await page.locator("#settingsModal [data-close-modal]").click();
+  await expect(page.locator("#menuScreen")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("menu-alternate-theme.png") });
+  await page.locator("#menuSettingsButton").click();
+  await expect(page.locator("#settingsModal")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("settings.png") });
+  await page.locator("#settingsModal [data-close-modal]").click();
+  await page.locator("#playWhiteButton").click();
+  await expect(page.locator("#board .square")).toHaveCount(64);
+  await page.screenshot({ path: testInfo.outputPath("game.png") });
+  await page.goto("/inside-sgurr/");
+  await expect(page.locator("#hubTitle")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("overview.png") });
+});
+
+test("skips the entrance on return and can replay it from Settings", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.reload();
+  await expect(page.locator("#introScreen")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+  await page.locator("#menuSettingsButton").click();
+  await page.locator("#replayIntroButton").click();
+  await expect(page).toHaveURL(/view=intro/);
+  await expect(page.locator("#wakeSgurrButton")).toBeVisible();
+  await page.locator("#wakeSgurrButton").click();
+  await expect(page.locator("#introScreen")).toBeHidden();
+});
+
+test("cycles time controls and keeps appearance and engine detail optional", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await expect(page.locator("#menuEngineCaption")).toBeHidden();
+  await expect(page.locator("#menuThemeButton")).toBeHidden();
+  await page.locator("#timeUpButton").click();
+  await expect(page.locator("#menuTimeButton")).toHaveText("Blitz 3+2");
+  await page.locator("#timeDownButton").click();
+  await expect(page.locator("#menuTimeButton")).toHaveText("Blitz 3+0");
+  await page.locator("#menuTimeButton").click();
+  await page.locator(".time-card").filter({ hasText: "Rapid 15+10" }).click();
+  await page.locator("#timeModal [data-close-modal]").click();
+  await expect(page.locator("#menuTimeButton")).toHaveText("Rapid 15+10");
+  await page.locator(".opponent-heading [data-engine-details]").click();
+  await expect(page.locator("#menuEngineCaption")).toBeVisible();
+  await page.locator("#menuSettingsButton").click();
+  await page.locator("#themeUpButton").click();
+  await expect(page.locator("#menuThemeButton")).toHaveText("Highland Heather");
+  await page.locator("#settingsModal [data-close-modal]").click();
+  await page.reload();
+  await expect(page.locator("#menuTimeButton")).toHaveText("Rapid 15+10");
+  await expect(page.locator("#menuEngineCaption")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "highland");
+});
+
+test("resumes a reloaded game with its clocks, opponent and move history", async ({ page }) => {
+  const calls = await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  await page.locator("#mainMenuButton").click();
+  await expect(page.locator("#resumeGameButton")).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("sgurrSavedGame")));
+  await page.locator("#timeDownButton").click();
+  await page.locator("#timeDownButton").click();
+  await page.locator("#engineDownButton").click();
+  await page.reload();
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#moveRows")).toContainText("e4");
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  await expect(page.locator("#bottomPlayerName")).toContainText("You");
+  await expect(page.locator("#coreEngineName")).toContainText("v9.0");
+  await expect(page.locator("#bottomPlayerClock")).toContainText("2:");
+  expect(calls.find((call) => call.path === "/api/resume").body).toEqual({ fen: AFTER_E4_E5_FEN, start_fen: START_FEN, moves: ["e2e4", "e7e5"] });
+  const resumed = await page.evaluate(() => JSON.parse(localStorage.getItem("sgurrSavedGame")));
+  expect(resumed.timeKey).toBe("blitz_3_0");
+  expect(resumed.snapshot.clocks.white).toBeGreaterThan(saved.snapshot.clocks.white - 3);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#moveRows")).not.toContainText("e5");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#moveRows")).toContainText("e5");
+});
+
+test("saves a Black game on refresh and retains it after a failed resume request", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playBlackButton").click();
+  await expect(page.locator("#moveRows")).toContainText("e4");
+  await page.reload();
+  await page.route(`${API_BASE}/api/resume`, (route) => json(route, { detail: "Temporarily unavailable" }, 503), { times: 1 });
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#menuStatus")).toContainText("Could not resume");
+  await expect(page.locator("#resumeGameButton")).toBeEnabled();
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#moveRows")).toContainText("e4");
+  await expect(page.locator("#bottomPlayerName")).toContainText("You");
+  await expect(page.locator("#bottomPlayerCard")).toHaveAttribute("data-colour", "black");
+  await expect(page.locator("#turnValue")).toHaveText("Black to move");
+});
+
+test("resumes an edited starting position without replacing its FEN", async ({ page }) => {
+  const calls = await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#positionLabButton").click();
+  await page.locator("#editorFenInput").fill(AFTER_E4_E5_FEN);
+  await page.locator("#editorLoadFenButton").click();
+  await page.locator("#editorPlayButton").click();
+  await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "game");
+  await page.reload();
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#appShell")).toHaveAttribute("data-mode", "game");
+  expect(calls.find((call) => call.path === "/api/resume").body).toEqual({ fen: AFTER_E4_E5_FEN, start_fen: AFTER_E4_E5_FEN, moves: [] });
+  await expect(page.locator("#moveRows")).toContainText("No moves yet");
+});
+
+test("resumes an interrupted engine turn exactly once", async ({ page }) => {
+  const calls = await installMockBackend(page);
+  await page.route(`${API_BASE}/api/engine-move`, (route) => route.abort(), { times: 1 });
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#statusValue")).toContainText(/fetch/i);
+  await page.locator("#mainMenuButton").click();
+  await page.reload();
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  expect(calls.filter((call) => call.path === "/api/engine-move")).toHaveLength(1);
+});
+
+test("keeps a save when its opponent is unavailable and ignores damaged saves", async ({ page }) => {
+  await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+  await page.locator("#mainMenuButton").click();
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("sgurrSavedGame"));
+    saved.engineId = "unavailable-build";
+    localStorage.setItem("sgurrSavedGame", JSON.stringify(saved));
+  });
+  await page.reload();
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#menuStatus")).toContainText("unavailable");
+  await expect(page.locator("#resumeGameButton")).toBeVisible();
+  await page.evaluate(() => localStorage.setItem("sgurrSavedGame", "broken json"));
+  await page.reload();
+  await expect(page.locator("#resumeGameButton")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+});
+
+test("carries the current position through both labs and keeps the game resumable", async ({ page }) => {
+  test.setTimeout(30_000);
+  const calls = await installMockBackend(page);
+  await openMainMenu(page);
+  await page.locator("#playWhiteButton").click();
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e4"]').click();
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  await page.locator("#explorePositionButton").click();
+  await page.locator('[data-position-lab]').filter({ hasText: "Search Lab" }).click();
+  expect(new URL(page.url()).searchParams.get("fen")).toBe(AFTER_E4_E5_FEN);
+  await expect(page.locator("#customFenInput")).toHaveValue(AFTER_E4_E5_FEN);
+  await page.locator(".lab-switch a").filter({ hasText: "Evaluation Lab" }).click();
+  await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#nnueFenInput")).toHaveValue(AFTER_E4_E5_FEN);
+  expect(calls.filter((call) => call.path === "/api/load-fen").at(-1).body.fen).toBe(AFTER_E4_E5_FEN);
+  await page.goto("/?view=menu");
+  await page.locator("#resumeGameButton").click();
+  await expect(page.locator("#moveRows")).toContainText("e5");
+  await page.locator("#explorePositionButton").click();
+  await page.locator("#exploreEditorButton").click();
+  await expect(page.locator("#editorFenInput")).toHaveValue(AFTER_E4_E5_FEN);
+});
+
+test("clears completed games from Resume", async ({ page }) => {
+  await installMockBackend(page, { finishWatch: true });
+  await openMainMenu(page);
+  await page.locator("#watchButton").click();
+  await expect(page.locator("#resultModal")).toBeVisible();
+  await page.locator("#resultMenuButton").click();
+  await expect(page.locator("#resumeGameButton")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("sgurrSavedGame"))).toBeNull();
+});
+
 test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ page }) => {
   test.setTimeout(30_000);
   await installMockBackend(page);
@@ -405,8 +641,8 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
 
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#nnueBoard .board-square")).toHaveCount(64);
-  await expect(page.locator("#modelStatus")).toContainText("Gen8 v1 loaded");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#modelStatus")).toContainText("Gen9 v1 loaded");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.55");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White");
   await expect(page.locator("#nnueEvalDetail")).toContainText("no search");
   const boardOpacity = await page.evaluate(() => ({
@@ -455,14 +691,14 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator('[data-square="e2"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-square="e4"]')).toHaveClass(/legal/);
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.11");
   await expect(page.locator("#pieceEdits")).toHaveText("2");
   await expect(page.locator("#weightRows")).toHaveText("4");
   await expect(page.locator("#laneOperations")).toHaveText("1,536");
   await expect(page.locator("#featureTrace")).toContainText("inputs W 12→28 · B 436→420");
   await expect(page.locator("#moveAutopsy")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#autopsyTitle")).toHaveText("e2 → e4");
-  await expect(page.locator("#autopsyNet")).toHaveText("+0.21 eval");
+  await expect(page.locator("#autopsyNet")).toHaveText("−0.44 eval");
   await expect(page.locator("#autopsyList .autopsy-lane")).toHaveCount(5);
   await page.locator("#autopsyList .autopsy-lane").first().click();
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
@@ -474,13 +710,13 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#deltaState")).toBeEnabled();
 
   await page.locator("#beforeState").click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.55");
   await page.locator("#deltaState").click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.21");
+  await expect(page.locator("#nnueEval")).toHaveText("−0.44");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#undoPosition").click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.55");
   await expect(page.locator("#positionTurn")).toHaveText("White to move");
   await expect(page.locator('[data-square="e2"] .piece-image')).toBeVisible();
   await expect(page.locator("#undoPosition")).toBeDisabled();
@@ -625,7 +861,7 @@ test("walks a move along the evaluation path and back to the current state", asy
   await expect(page.locator("#stateTimeline")).toBeDisabled();
   await page.locator('[data-square="e2"]').click();
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.11");
   await expect(page.locator("#stateTimeline")).toBeEnabled();
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "idle");
 
@@ -633,7 +869,7 @@ test("walks a move along the evaluation path and back to the current state", asy
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "lanes");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "idle", { timeout: 8000 });
   await expect(page.locator("#afterState")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.11");
 });
 
 test("scrubs the state timeline through before, change and after", async ({ page }) => {
@@ -644,15 +880,15 @@ test("scrubs the state timeline through before, change and after", async ({ page
 
   await page.locator('[data-square="e2"]').click();
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.53");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.11");
   await expect(page.locator("#stateTimeline")).toHaveValue("2");
 
   await page.locator("#stateTimeline").fill("0");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.32");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.55");
   await expect(page.locator("#beforeState")).toHaveAttribute("aria-pressed", "true");
 
   await page.locator("#stateTimeline").fill("1");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.21");
+  await expect(page.locator("#nnueEval")).toHaveText("−0.44");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#afterState").click();
@@ -821,17 +1057,17 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#watchButton")).toHaveAttribute("title", /available.*locally/i);
   await expect(page.locator("#engineDownButton")).toBeDisabled();
   await expect(page.locator("#engineUpButton")).toBeDisabled();
-  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v8\.2 only/i);
+  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v9\.0 only/i);
   await page.locator("#engineDownButton").hover({ force: true });
   await expect(page.locator("#demoTooltip")).toBeVisible();
-  await expect(page.locator("#demoTooltip")).toContainText("v8.2 only");
+  await expect(page.locator("#demoTooltip")).toContainText("v9.0 only");
 
   await expect(page.locator("#demoLimitsButton")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#demoLimitsButton")).toBeInViewport();
   await page.locator("#demoLimitsButton").click();
   await expect(page.locator("#demoLimitsModal")).toBeVisible();
-  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v8.2 C++ engine");
+  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v9.0 C++ engine");
   await expect(page.locator("#demoLimitsModal li")).toHaveCount(7);
   await expect(page.locator("#demoLimitsModal")).toContainText("1.5 million nodes");
   await expect(page.locator("#demoLimitsModal .modal-box")).toBeInViewport();
@@ -843,11 +1079,11 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await page.locator("#menuEngineButton").click();
   const localOnly = page.locator('.engine-card[aria-disabled="true"]');
   await expect(localOnly).toContainText("LOCAL ONLY");
-  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v8\.2/i);
+  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v9\.0/i);
   await expect(localOnly).toBeDisabled();
   await localOnly.evaluate((button) => button.click());
   await expect(page.locator("#engineModal")).toBeVisible();
-  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.0");
 
   await page.locator("#engineModal [data-close-modal]").click();
   await page.locator("#positionLabButton").click();
@@ -856,16 +1092,16 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#positionLabButton")).toBeEnabled();
 });
 
-test("starts at v8.2 and cycles left through weaker engines", async ({ page }) => {
+test("starts at v9.0 and cycles left through weaker engines", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
 
   await expect(page.locator("#engineDownButton")).toBeEnabled();
-  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.0");
   await page.locator("#engineDownButton").click();
   await expect(page.locator("#menuEngineButton")).toContainText("v8.1");
   await page.locator("#engineDownButton").click();
-  await expect(page.locator("#menuEngineButton")).toContainText("v8.2");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.0");
 });
 
 test("introduces the Search Lab once and lets the guide be reopened", async ({ page }) => {
@@ -1004,7 +1240,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   ];
   await page.route(`${API_BASE}/api/search-trace`, async (route) => {
     const events = [
-      { type: "started", engine: "v8.2", label: 'Sgurr v8.2 "Thearlaich"', perspective: "white" },
+      { type: "started", engine: "v9.0", label: 'Sgurr v9.0 "Dearg"', perspective: "white" },
       { type: "iteration", kind: "cp", value: -26, display: "-0.3", depth: 1, nodes: 60, nps: 60000, time_ms: 1, pv: ["a7a6"] },
       { type: "iteration", kind: "cp", value: 40, display: "+0.4", depth: 12, nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["a7a6"] },
       { type: "complete", bestmove: "a7a6" },

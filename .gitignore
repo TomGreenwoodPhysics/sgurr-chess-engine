@@ -43,6 +43,7 @@ engines/
 # Ignore `nets/*` rather than the directory so the exceptions still match.
 nets/*
 !nets/gen8.nnue
+!nets/gen9.nnue
 !nets/README.md
 
 # Benchmark downloads and run output

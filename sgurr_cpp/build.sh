@@ -8,6 +8,7 @@
 #   ./build.sh -r                     # release build  -> sgr.exe  (PGO+ThinLTO)
 #   ./build.sh -o sgr_test.exe        # choose the output name
 #   ./build.sh -r -o sgr_v8_1.exe
+#   ./build.sh -r -o sgr_v9_0.exe --version 9.0
 #   ./build.sh -d                     # datagen build  -> datagen.exe (RFP off)
 #   ./build.sh -t                     # visual trace   -> sgr_trace.exe
 #
@@ -30,6 +31,7 @@ while [ $# -gt 0 ]; do
         -d|--datagen) mode=datagen ;;
         -t|--trace)   mode=trace ;;
         -o|--out)     out="$2"; shift ;;
+        --version)    extra="$extra -DSGR_VERSION=\"$2\""; shift ;;
         -D*)          extra="$extra $1" ;;
         -h|--help)    sed -n '2,30p' "$0"; exit 0 ;;
         *)            echo "build.sh: unknown option '$1'" >&2; exit 2 ;;

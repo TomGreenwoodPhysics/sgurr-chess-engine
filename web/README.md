@@ -1,16 +1,16 @@
 # Sgurr Web
 
 Sgurr Web is a browser chess experience backed by the Sgurr UCI engine.
-Every canonical release from the classical evaluation up to v8.2 is
-selectable locally, newest first, and v8.2 is the default. The hosted demo runs
-v8.2 only. FastAPI
+Every canonical release from the classical evaluation up to v9.0 is
+selectable locally, newest first, and v9.0 is the default. The hosted demo runs
+v9.0 only. FastAPI
 validates chess state, owns the engine process, serves the production
 frontend and allowlisted media, and exposes a small JSON API. The same
 frontend can also run from VS Code Live Server during development.
 
-The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`; its
-v8.2 rating comes from the controlled pool-2026-08-D solve. Older releases are
-translated onto that scale using v8.2 as the bridge. Adding an engine there
+The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`; the
+v9.0 and v8.2 ratings come from controlled pool-2026-08-D solves. Older releases
+are translated onto that scale using v8.2 as the bridge. Adding an engine there
 puts it in the picker.
 
 ## Structure
@@ -25,7 +25,7 @@ web/
   frontend/
     index.html             static browser UI (loads js/main.js + styles.css)
     search-lab/            guided search walkthrough + live depth stream
-    inside-sgurr/           exact browser-side Gen8 accumulator explorer
+    inside-sgurr/           exact browser-side Gen9 accumulator explorer
     styles.css             @import manifest; ordering IS the cascade
     styles/                CSS partials for the main interface
     js/                    native ES modules; main.js is the entry point
@@ -45,6 +45,32 @@ manifest whose partial order defines the cascade, keep it stable when adding
 sections, and note that relative `url()`s inside `styles/*.css` need a `../`
 hop to reach `assets/`.
 
+The final `styles/experience.css` layer supplies the Highland observatory
+presentation: entrance typography, a scrolling responsive menu, and subdued
+game panels. Theme colours and board geometry remain owned by the existing
+modules. `styles/lab-shell.css` styles the shared lab navigation and overview;
+the search network renderer, its palette, and evaluation logic are unchanged.
+The browser suite also checks menu access at desktop, short desktop, and
+320/390-pixel mobile widths and saves visual previews in `test-results/`.
+
+The entrance runs on a first visit; Settings offers **Replay entrance**.
+The menu arrows cycle time controls; the central button opens the full time
+picker. Appearance lives in Settings, and **Engine info**
+reveals technical metadata when wanted.
+
+An unfinished game is saved in this browser after moves and periodically while
+playing. **Resume game** restores its opponent, time control, clocks, move
+history, takebacks and review data. Clocks pause after leaving the game or
+closing the page; starting another game replaces this single save. Completed
+games clear the resume slot. The `/api/resume` endpoint validates the saved FEN
+against the full move history, preserving repetition and draw rules. The saved
+opponent must still be available; a local self-play game cannot resume on the
+hosted demo. This is browser-local storage, not an account or cross-device save.
+
+During play or review, **Explore this position** opens the current displayed
+board in Position Lab, Search Lab or Evaluation Lab. Search and Evaluation Lab
+links carry the FEN between labs, and the live game remains available to resume.
+
 The browser owns the current FEN and move list. The backend validates moves
 with `python-chess`, asks Sgurr for engine moves over UCI, parses
 `info ... score ...` lines, and returns updated state. The browser uses
@@ -57,17 +83,17 @@ Use the MSYS2 `clang64` shell on Windows, from the repository root:
 
 ```bash
 cd sgurr_cpp
-./build.sh -r -o sgr_v8_2.exe     # release build; see BUILD.md for the recipe
+./build.sh -r -o sgr_v9_0.exe --version 9.0
 ```
 
 The backend looks for the binary each `ENGINE_SPECS` entry names, so build
-whichever releases you want selectable. Only the default (`sgr_v8_2.exe`) is
+whichever releases you want selectable. Only the default (`sgr_v9_0.exe`) is
 needed to play; the rest degrade to unavailable entries in the picker.
 
 Quick UCI check:
 
 ```bash
-./sgr_v8_2.exe uci
+./sgr_v9_0.exe uci
 ```
 
 Then enter `uci`, `isready`, `position startpos`, `go movetime 500`, and
@@ -92,12 +118,12 @@ For a reproducible release build, install the audited exact versions instead:
 python -m pip install -r web\backend\requirements.lock.txt
 ```
 
-The default engine path is `sgurr_cpp\sgr_v8_2.exe` with `nets\gen8.nnue`.
+The default engine path is `sgurr_cpp\sgr_v9_0.exe` with `nets\gen9.nnue`.
 Override it before starting Uvicorn when necessary:
 
 ```bat
-set SGURR_ENGINE_EXE=C:\path\to\sgr_v8_2.exe
-set SGR_EVALFILE=C:\path\to\gen8.nnue
+set SGURR_ENGINE_EXE=C:\path\to\sgr_v9_0.exe
+set SGR_EVALFILE=C:\path\to\gen9.nnue
 ```
 
 ## 3. Start Sgurr Web
@@ -179,8 +205,8 @@ process supervision, request logging, and request limits.
 The public demo is available at
 <https://sgurr-chess-engine.onrender.com/>.
 
-This is the real Sgurr v8.2 C++ engine, not a static or prerecorded version of
-the site. The Evaluation Lab also runs the shipped Gen8 NNUE directly in your
+This is the real Sgurr v9.0 C++ engine, not a static or prerecorded version of
+the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
 I host the demo on Render's free tier. If nobody has visited for a while, the
@@ -190,7 +216,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v8.2 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.0 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -212,7 +238,7 @@ the project locally gives you every engine version you have built, continuous
 self-play, Search Network depths up to 20, longer game searches and no
 shared-server rate limit.
 
-The root `Dockerfile` builds scalar Linux versions of v8.2 and the trace
+The root `Dockerfile` builds scalar Linux versions of v9.0 and the trace
 engine, verifies the committed NNUE, and runs one Uvicorn worker:
 
 ```bash
@@ -278,7 +304,7 @@ obligations.
 GET  /health
 GET  /ready
 GET  /api/capabilities
-GET  /api/nnue/gen8/<verified-sha>.nnue
+GET  /api/nnue/gen9/<verified-sha>.nnue
 POST /api/new
 POST /api/load-fen
 POST /api/player-move
@@ -288,7 +314,7 @@ POST /api/search-trace
 POST /api/search-network
 ```
 
-The content-addressed NNUE route serves only the verified Gen8 network with an
+The content-addressed NNUE route serves only the verified Gen9 network with an
 immutable cache policy. Inside Sgurr checks the SHA-256 again in its worker
 before parsing or evaluating it.
 
@@ -328,7 +354,7 @@ visibly alive after each bounded structural-node sample is full.
   completed-depth stream, and a glowing radial search web whose depth-from-root
   rings, timestamped traveling light, cutoffs, and transposition chords come
   from real engine events;
-- an Evaluation Lab that verifies and evaluates the shipped Gen8 network in a
+- an Evaluation Lab that verifies and evaluates the shipped Gen9 network in a
   browser worker, then exposes both 384-lane accumulators as cortex, circuit,
   and move-delta views;
 - responsive backend recovery without refreshing the browser.
@@ -339,7 +365,7 @@ transformer work, ONNX, and quantisation remain outside this web layer.
 ## Troubleshooting
 
 If `/health` reports `"engine_exists": false`, build
-`sgurr_cpp\sgr_v8_2.exe` or set `SGURR_ENGINE_EXE`.
+`sgurr_cpp\sgr_v9_0.exe` or set `SGURR_ENGINE_EXE`.
 
 If the browser reports a backend error, keep the backend terminal visible. The
 frontend polls the backend periodically and should recover without a refresh.

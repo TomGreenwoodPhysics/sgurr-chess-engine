@@ -10,7 +10,7 @@ const EXPECTED_NETWORK = Object.freeze({
   qa: 255,
   qb: 64,
   scale: 400,
-  sha256: "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf",
+  sha256: "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1",
 });
 
 function readInt16Array(view, offset, count) {
@@ -46,7 +46,7 @@ function parseNnue(buffer) {
     || qb !== EXPECTED_NETWORK.qb
     || scale !== EXPECTED_NETWORK.scale
   ) {
-    throw new Error("Network architecture does not match Sgurr Gen8");
+    throw new Error("Network architecture does not match Sgurr Gen9");
   }
 
   let offset = 28;

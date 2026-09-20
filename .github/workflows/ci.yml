@@ -13,9 +13,9 @@ on:
 env:
   # MSYS2 clang64 reference values for local comparison.
   # Only EVALSUM is portable across toolchains.
-  BENCH_NNUE: "3601424"   # 19 positions at depth 11, gen8 net
+  BENCH_NNUE: "3337275"   # 19 positions at depth 11, gen9 net
   BENCH_HCE: "4616415"    # same, hand-crafted eval (no network loaded)
-  EVALSUM: "-142859"      # nnue_selfcheck checksum, identical on all paths
+  EVALSUM: "-10123"        # nnue_selfcheck checksum, identical on all paths
 
 jobs:
   engine:
@@ -68,10 +68,10 @@ jobs:
       - name: Search is deterministic (same binary, repeated runs)
         run: |
           cd sgurr_cpp
-          diff <(SGR_EVALFILE=../nets/gen8.nnue ./sgr bench 2>/dev/null) \
-               <(SGR_EVALFILE=../nets/gen8.nnue ./sgr bench 2>/dev/null) \
+          diff <(SGR_EVALFILE=../nets/gen9.nnue ./sgr bench 2>/dev/null) \
+               <(SGR_EVALFILE=../nets/gen9.nnue ./sgr bench 2>/dev/null) \
             || { echo "::error::bench is not deterministic across runs."; exit 1; }
-          fp=$(SGR_EVALFILE=../nets/gen8.nnue ./sgr bench 2>/dev/null | tail -1 | awk '{print $2}')
+          fp=$(SGR_EVALFILE=../nets/gen9.nnue ./sgr bench 2>/dev/null | tail -1 | awk '{print $2}')
           echo "fingerprint on this toolchain: $fp"
           echo "reference on MSYS2 clang64:    $BENCH_NNUE"
           echo "FP=$fp" >> "$GITHUB_ENV"
@@ -86,8 +86,8 @@ jobs:
       - name: Scalar inference agrees with vectorised
         run: |
           cd sgurr_cpp
-          diff <(SGR_EVALFILE=../nets/gen8.nnue ./sgr        bench 2>/dev/null) \
-               <(SGR_EVALFILE=../nets/gen8.nnue ./sgr_scalar bench 2>/dev/null) \
+          diff <(SGR_EVALFILE=../nets/gen9.nnue ./sgr        bench 2>/dev/null) \
+               <(SGR_EVALFILE=../nets/gen9.nnue ./sgr_scalar bench 2>/dev/null) \
             || { echo "::error::SIMD and scalar inference disagree. One of them is wrong."; exit 1; }
           echo "vectorised and scalar fingerprints are byte-identical at $FP nodes"
 
@@ -111,7 +111,7 @@ jobs:
       - name: NNUE bit-exactness against the trainer
         run: |
           cd sgurr_cpp
-          out=$(./nnue_selfcheck ../nets/gen8.nnue 2>&1)
+          out=$(./nnue_selfcheck ../nets/gen9.nnue 2>&1)
           echo "$out"
           echo "$out" | grep -q 'fails=0'
           echo "$out" | grep -q -- "-> PASS"
@@ -119,7 +119,7 @@ jobs:
 
       - name: Committed network matches its recorded hash
         run: |
-          echo "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf  nets/gen8.nnue" \
+          echo "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1  nets/gen9.nnue" \
             | sha256sum --check --strict
 
   harness:

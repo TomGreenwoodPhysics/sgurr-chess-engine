@@ -1,21 +1,44 @@
 # Networks
 
-Trained NNUE files are build artefacts of the training pipeline, so this
-directory is gitignored, with one exception.
-
-**`gen8.nnue` is committed.** It is the network shipped in v8.0, v8.1 and
-v8.2, and without it a clone falls back to the hand-crafted evaluation and
-cannot reproduce the release `bench` fingerprint at all. Every other net here
-(earlier generations, lambda-sweep variants, A/B controls) stays local.
+Trained NNUE files are build artefacts, so only shipped networks are committed.
+`gen9.nnue` is the current network. `gen8.nnue` remains for older releases.
 
 ```bash
-SGR_EVALFILE=nets/gen8.nnue sgurr_cpp/sgr.exe bench
-#   -> nodes 3601424
+SGR_EVALFILE=nets/gen9.nnue sgurr_cpp/sgr.exe bench
+#   -> nodes 3337275
 ```
 
 The engine reads `$SGR_EVALFILE`, defaulting to `sgurr.nnue` in the working
 directory. With no network it uses the hand-crafted evaluation and says so on
 stdout, so a missing net is visible rather than silent.
+
+---
+
+## Model release record: gen9.nnue
+
+| | |
+|---|---|
+| file | `gen9.nnue` |
+| SHA-256 | `92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1` |
+| size | 592,160 bytes |
+| architecture | `768 -> 384 -> 1`, integer-quantised, output scale 400 |
+| shipped in | v9.0 "Dearg" |
+| dataset | [../data/gen9_102m/manifest.json](../data/gen9_102m/manifest.json), 102,011,689 self-play positions, SHA-256 `fb42bb334652ed60b702a53553a976ea5e5fdd6af1930bbd43dfe700ce339f60` |
+| labeller | `nets/gen8.nnue` at 150,000 nodes per move |
+| training | [../data/gen9_102m/training_log.json](../data/gen9_102m/training_log.json), seed 0, lambda 0.8, 8 epochs, batch 16,384, Adam, cosine learning rate, no validation split |
+| source commit | `dc6d05f` |
+
+Lambda 0.8 was selected by games. It beat lambda 0.9 by 18.1 ±16.9 Elo and
+lambda 0.7 by 23.3 ±18.5 Elo in 1,000-game seed-0 matches. Final pool
+calibration measured **3081.2 ±6.7** over 6,508 valid games.
+
+```bash
+sha256sum nets/gen9.nnue
+# 92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1
+
+cd sgurr_cpp && ./nnue_selfcheck.exe ../nets/gen9.nnue
+# checks=4516 fails=0 evalsum=-10123 -> PASS
+```
 
 ---
 

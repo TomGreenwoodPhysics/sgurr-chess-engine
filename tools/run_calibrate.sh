@@ -30,7 +30,14 @@ case "$BOOK" in
     *.pgn) BOOK_FORMAT=pgn ;;
     *)     BOOK_FORMAT=epd ;;
 esac
-NET=$(cygpath -m "$ROOT/nets/gen8.nnue")
+# The release network is explicit so a new release cannot silently be
+# calibrated with the previous generation's net.
+NET_SOURCE="${NET_FILE:-$ROOT/nets/gen8.nnue}"
+NET=$(cygpath -m "$NET_SOURCE")
+if [ ! -f "$NET_SOURCE" ]; then
+    echo "ABORT: calibration net not found: $NET_SOURCE" >&2
+    exit 1
+fi
 
 # Arguments keep one runner reusable across releases.
 # Usage  tools/run_calibrate.sh [version] [exe-name] [openings-seed]
@@ -48,7 +55,9 @@ TARGET_ERR="${5:-5}"
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 OUT="$ROOT/runs/calibrate/${VERSION}_$STAMP"
-PGN="$BM/games/calib-$VERSION-$(date +%Y-%m-%d).pgn"
+# Keep every interrupted or resumed run as a separate append-only input to
+# Ordo. A date-only filename could overwrite an earlier run from the same day.
+PGN="$BM/games/calib-$VERSION-$STAMP.pgn"
 
 # Run settings
 TC=10+0.1              # Pool control used since pool-2026-07-A
@@ -58,7 +67,7 @@ CONCURRENCY=7
 # Engine defaults vary enough to distort ratings against the anchors.
 # All pool engines advertise support for this value.
 HASH=256
-ROUNDS="${4:-500}"     # Eight opponents make 16 games per round
+ROUNDS="${4:-500}"     # Five opponents make 10 games per round
 CHECK_EVERY=1800       # Seconds between checks, plus Ordo solve time
 MIN_GAMES=400          # Wait for this many games before solving
 
@@ -201,11 +210,14 @@ echo
 # Confirm that every early game includes the engine under test; accidental
 # `-seeds` use creates a different gauntlet.
 for _ in $(seq 60); do
-    [ "$(grep -c '^\[Event' "$PGN" 2>/dev/null | head -1 || echo 0)" -ge 20 ] && break
+    ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null || true)
+    [ "${ev:-0}" -ge 20 ] && break
     sleep 5
 done
-ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null | head -1 || echo 0)
-mine=$(grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null | head -1 || echo 0)
+ev=$(grep -c '^\[Event' "$PGN" 2>/dev/null || true)
+mine=$(grep -c "\"$ENGINE_NAME\"" "$PGN" 2>/dev/null || true)
+ev=${ev:-0}
+mine=${mine:-0}
 if [ "$ev" -gt 0 ] && [ "$ev" -ne "$mine" ]; then
     echo "ABORT: $((ev - mine)) of the first $ev games do not involve $ENGINE_NAME." >&2
     echo "       That is not a gauntlet. Check -tournament and -seeds." >&2

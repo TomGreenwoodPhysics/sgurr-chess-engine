@@ -25,7 +25,7 @@ function initIntro() {
   if (introMotionEnabled()) {
     spawnIntroMotes();
   }
-  refs.introState.textContent = "Sgurr v8.2";
+  refs.introState.textContent = "Sgurr v9.0";
   refs.introCore.classList.add("dormant");
   refs.introCore.classList.remove("ready", "thinking");
   refs.introCoreTrigger.disabled = false;
@@ -149,6 +149,7 @@ function finishIntro() {
   window.clearTimeout(app.intro.handoffTimer);
   window.clearTimeout(app.intro.revealTimer);
   app.intro.complete = true;
+  try { localStorage.setItem("sgurrIntroSeen", "1"); } catch { /* The intro still works without storage. */ }
   app.intro.waking = false;
   app.intro.revealing = false;
   refs.menuScreen.style.transition = "none";

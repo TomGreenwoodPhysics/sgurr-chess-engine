@@ -98,7 +98,7 @@ cache. Search is extremely branch-heavy, so PGO carries most of the win.
     $C $F -fprofile-generate=./pgo $S -o sgr_prof.exe
 
     # 2. run a representative workload (bench is exactly that)
-    SGR_EVALFILE=../nets/gen8.nnue ./sgr_prof.exe bench 13
+    SGR_EVALFILE=../nets/gen9.nnue ./sgr_prof.exe bench 13
 
     # 3. merge the raw profile
     /c/msys64/clang64/bin/llvm-profdata merge -output=pgo/sgurr.profdata pgo/*.profraw

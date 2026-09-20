@@ -4,6 +4,20 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars, never estimates.
 
+## v9.0 "Dearg" (Sgùrr Dearg), 2026-09-20
+
+Gen9 keeps the existing search and replaces the network. It was trained on
+102,011,689 self-play positions labelled by Gen8 at 150,000 nodes per move.
+
+- The final network uses lambda 0.8. In 1,000-game seed-0 matches it beat
+  lambda 0.9 by **18.1 ±16.9 Elo** and lambda 0.7 by **23.3 ±18.5 Elo**.
+- Pool calibration gives **3081.2 ±6.7** over 6,508 valid games
+  at 10+0.1. The score was +1515 =1578 -3415. Three games interrupted when
+  VS Code closed were excluded before the final solve. This is 69.1 Elo above
+  v8.2 on the same controlled scale.
+- The shipped network is `nets/gen9.nnue`, SHA-256
+  `92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1`.
+
 ## v8.2 "Thearlaich" (Sgùrr Thearlaich), 2026-08-04
 
 > **Rating corrected 2026-08-10: 3012 ±6, not 3058 ±7.** The engine is

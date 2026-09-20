@@ -1296,3 +1296,13 @@ is no version bump, ledger row or CHANGELOG entry.
 The run record, matched-data hashes, trained nets, logs and PGNs are under
 `runs/gen9_book_ab/20260902-180020`; the decision summary is
 `safety_check_result.json` in that directory.
+
+## 2026-09-20, v9.0 "Dearg" released
+
+Gen9 uses the existing 768 -> 384 -> 1 network on 102,011,689 new self-play
+positions. Gen8 supplied the labels at 150,000 nodes per move. A seed-0 playoff
+selected lambda 0.8 over 0.9 and 0.7.
+
+The final pool result is **3081.2 ±6.7** over 6,508 valid games
+(+1515 =1578 -3415). Three games broken by closing VS Code were removed before
+the solve. `nets/gen9.nnue` passed all 4,516 inference checks.

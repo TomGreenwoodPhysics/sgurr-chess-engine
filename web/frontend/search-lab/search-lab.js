@@ -847,7 +847,7 @@ async function runLiveSearch() {
     const response = await fetch(apiUrl("/api/search-trace"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fen: position.fen, engine: "v8.2", movetime_ms: 1500 }),
+      body: JSON.stringify({ fen: position.fen, engine: "v9.0", movetime_ms: 1500 }),
       signal: liveController.signal,
     });
     if (!response.ok) {
@@ -929,5 +929,10 @@ initLabPreferences();
 setPosition(POSITIONS.ruy);
 const requestedMode = new URLSearchParams(window.location.search).get("mode");
 setMode(requestedMode === "live" || requestedMode === "walkthrough" ? requestedMode : "network");
+const requestedFen = new URLSearchParams(window.location.search).get("fen");
+if (requestedFen) {
+  refs.customFenInput.value = requestedFen.slice(0, 129);
+  applyCustomFen();
+}
 tutorial.maybeStart();
 loadCapabilities();

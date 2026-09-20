@@ -50,7 +50,7 @@ function resetAnalysisState(fen, orientation) {
   app.analysis.stopped = false;
   app.analysis.error = "";
   app.analysis.status = "Validating position";
-  app.analysis.engineLabel = app.engineLabel || 'Sgurr v8.2 "Thearlaich"';
+  app.analysis.engineLabel = app.engineLabel || 'Sgurr v9.0 "Dearg"';
   app.analysis.movetimeMs = ANALYSIS_MOVETIME_MS;
   app.analysis.bestmove = null;
   app.analysis.bestmoveSan = null;
@@ -153,7 +153,7 @@ async function startPositionAnalysis(fen, { orientation = "white", validated = n
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fen: position.fen,
-        engine: "v8.2",
+        engine: "v9.0",
         movetime_ms: ANALYSIS_MOVETIME_MS,
       }),
       signal: controller.signal,

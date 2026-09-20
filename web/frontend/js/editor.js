@@ -2,6 +2,7 @@ import { syncClock } from "./clocks.js";
 import { startPositionAnalysis } from "./analysis.js";
 import { CHECKMATE_DRILLS, EDIT_RETURN_SIDES, ODDS_PRESETS, ODDS_RECIPIENTS, START_FEN, apiUrl } from "./config.js";
 import { startFromFen } from "./game.js";
+import { saveCurrentGame } from "./saved-game.js";
 import { app, refs } from "./state.js";
 import { render, setStatus } from "./ui.js";
 import { clonePieces, parseFenPieces, pieceForColour, pieceLabel, piecesToBoardFen, startingPieces, title } from "./utils.js";
@@ -166,6 +167,7 @@ function enterPositionLab(sourceFen = null) {
   }
 
   syncClock();
+  saveCurrentGame();
   clearTimeout(app.watchTimer);
   const previousMode = app.mode === "editor" ? app.editor.previousMode : app.mode;
 

@@ -94,6 +94,15 @@ TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # `rating` supplies both the subtitle and the frontend ladder.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
+        # Controlled pool calibration: 3081.2 +/-6.7 over 6,508 games.
+        "id": "v9.0",
+        "exe": CPP_DIR / "sgr_v9_0.exe",
+        "net": NETS_DIR / "gen9.nnue",
+        "label": 'Sgurr v9.0 "Dearg"',
+        "tech": "GEN9 NNUE (102M SELF-PLAY)",
+        "rating": 3081,
+    },
+    {
         # v8.2 keeps the v8.1 net and search but is about 15% faster.
         # Recalibration: 3012.1 +/-5.8 over 9,890 games. The old 3058 estimate
         # mixed hash sizes, a filtered book, and promotion forfeits (METHODOLOGY 9).
@@ -246,8 +255,8 @@ DEMO_TRACE_REQUESTS_PER_MINUTE = bounded_env_int(
     "SGURR_TRACE_REQUESTS_PER_MINUTE", 6, 1, 60
 )
 MAX_REQUEST_BYTES = 65_536
-EXPECTED_NET_SHA256 = "896eb832d74776a42375e7fa152b4e032fff1cf85ba2e529b420fe2d1b4b74bf"
-NNUE_ASSET_ROUTE = f"/api/nnue/gen8/{EXPECTED_NET_SHA256}.nnue"
+EXPECTED_NET_SHA256 = "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1"
+NNUE_ASSET_ROUTE = f"/api/nnue/gen9/{EXPECTED_NET_SHA256}.nnue"
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
     "true",
@@ -514,7 +523,7 @@ def engine_availability(
     if PUBLIC_DEMO and engine_id != DEFAULT_ENGINE_ID:
         return (
             False,
-            "Available locally; the free demo includes Sgurr v8.2 only.",
+            "Available locally; the free demo includes Sgurr v9.0 only.",
             "LOCAL ONLY",
         )
     if not Path(entry["exe"]).is_file():
@@ -1196,6 +1205,12 @@ def load_fen(request: LoadFenRequest) -> dict[str, object]:
     if not PUBLIC_DEMO:
         engine.mark_new_game()
     return state_payload(board, [], start_fen=board.fen())
+
+
+@app.post("/api/resume")
+def resume_game(request: GameRequest) -> dict[str, object]:
+    board = board_from_history(request.fen, request.start_fen, request.moves)
+    return state_payload(board, request.moves, start_fen=request.start_fen)
 
 
 @app.post("/api/player-move")

@@ -17,7 +17,7 @@ copyright Tom Greenwood under the terms in [`../LICENSE`](../LICENSE).
 ## Shipped network
 
 [`../nets/README.md`](../nets/README.md) records the SHA-256, dataset manifest,
-training configuration, labeller and source commit for `gen8.nnue`. The model
+training configuration, labeller and source commit for `gen9.nnue`. The model
 was trained from Sgurr self-play data. No external game database or model
 weights entered the training pipeline.
 

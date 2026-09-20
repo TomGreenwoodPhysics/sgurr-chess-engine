@@ -47,6 +47,7 @@ function userModals() {
     refs.settingsModal,
     refs.helpModal,
     refs.demoLimitsModal,
+    document.querySelector("#exploreModal"),
   ];
 }
 

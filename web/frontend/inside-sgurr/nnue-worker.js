@@ -19,7 +19,7 @@ self.addEventListener("message", async (event) => {
       const buffer = await response.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", buffer);
       if (hex(digest) !== EXPECTED_NETWORK.sha256) {
-        throw new Error("Evaluator checksum does not match Gen8");
+        throw new Error("Evaluator checksum does not match Gen9");
       }
       network = parseNnue(buffer);
       self.postMessage({
@@ -62,7 +62,7 @@ self.addEventListener("message", async (event) => {
         || whiteIndex >= network.input
         || blackIndex >= network.input
       ) {
-        throw new Error("Feature index is outside the Gen8 input table");
+        throw new Error("Feature index is outside the Gen9 input table");
       }
       const whiteWeights = network.featureWeights.slice(
         whiteIndex * network.hidden,

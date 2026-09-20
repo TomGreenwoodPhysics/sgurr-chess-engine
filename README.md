@@ -7,8 +7,8 @@
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
 Sgurr is a C++20 UCI chess engine with an NNUE trained on its own self-play
-games. The current release is **v8.2 "Thearlaich"**, measured at an estimated
-**3012** on a CCRL-Blitz-anchored scale.
+games. The current release is **v9.0 "Dearg"**, measured at an estimated
+**3081** on a CCRL-Blitz-anchored scale.
 
 The hosted site runs the real Sgurr executable. It is on Render's free tier,
 so the first visit after a quiet period can take 30 to 60 seconds to start.
@@ -16,8 +16,8 @@ so the first visit after a quiet period can take 30 to 60 seconds to start.
 <details>
 <summary><strong>About the hosted demo</strong></summary>
 
-This is the real Sgurr v8.2 C++ engine, not a static or prerecorded version of
-the site. The Evaluation Lab also runs the shipped Gen8 NNUE directly in your
+This is the real Sgurr v9.0 C++ engine, not a static or prerecorded version of
+the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
 I host the demo on Render's free tier. If nobody has visited for a while, the
@@ -27,7 +27,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v8.2 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.0 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -72,7 +72,7 @@ application that exposes the parts normally hidden behind `bestmove`.
 [The main site](https://sgurr-chess-engine.onrender.com/) lets you play the
 current engine, build a position, analyse it and review a finished game. The
 local version can also load every release from the classical evaluation to
-v8.2.
+v9.0.
 
 ### Search Lab
 
@@ -95,7 +95,7 @@ for readers who have not met alpha-beta search before.
 ### Evaluation Lab
 
 [The Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)
-loads the shipped Gen8 network in a browser worker and verifies its SHA-256.
+loads the shipped Gen9 network in a browser worker and verifies its SHA-256.
 It then reproduces the engine's quantised integer forward pass exactly.
 
 <p align="center">
@@ -154,7 +154,7 @@ is still useful as a readable reference.
 An isolated experimental [Sgurr-StockfishTeacher workflow](docs/STOCKFISH_TEACHER.md)
 trains Sgurr's own network on public external Stockfish-labelled data. That
 edition is not self-contained. It does not replace the normal self-play line
-or the canonical Gen8 network.
+or the canonical Gen9 network.
 
 The training loop is built in this repository. Sgurr generates self-play
 positions, labels them with the previous network generation, trains a new
@@ -192,11 +192,12 @@ split-frontend development setup.
 
 ## Strength
 
-Sgurr v8.2 was measured under controlled conditions matching CCRL's published
+Sgurr v9.0 was measured under controlled conditions matching CCRL's published
 requirements for hash, book, pondering and thread count.
 
 | engine | rating | pool | games |
 |---|---|---|---|
+| **Sgurr v9.0 "Dearg"** | **3081.2 ±6.7** sampling, **about ±25** systematic | pool-2026-08-D | 6,508 |
 | **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **about ±25** systematic | pool-2026-08-D | 9,890 |
 
 This is an internal estimate, not an official CCRL rating. Sgurr has not been
@@ -206,11 +207,10 @@ CCRL Blitz ratings.
 
 The small error bar measures sampling noise. The larger one reflects the fact
 that the anchors do not transfer perfectly to another machine and time control.
-Solved separately, they place Sgurr at 3004, 3036, 3001, 2986 and 3034. More
-games would narrow the first uncertainty, but not the 50 Elo spread between
-those answers.
+The five opponents place v9.0 between roughly 3072 and 3118. More games would
+narrow the first uncertainty, but not that spread.
 
-The current figure replaced an earlier estimate of 3058. The engine did not
+The v8.2 figure replaced an earlier estimate of 3058. The engine did not
 change. The measurement did. The old setup left hash sizes uncontrolled, used
 an opening book filtered by Sgurr's own evaluation and included two opponents
 that forfeited many games on illegal promotion moves. The full correction is
@@ -308,7 +308,7 @@ blocking a freshly linked unsigned binary before it silently forfeits a match.
 Run the engine over UCI.
 
 ```bash
-SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe
+SGR_EVALFILE=../nets/gen9.nnue ./sgr.exe
 ```
 
 ```text
@@ -342,13 +342,13 @@ variables are covered in [web/README.md](web/README.md).
 From `sgurr_cpp/`, the main engine checks are straightforward.
 
 ```bash
-SGR_EVALFILE=../nets/gen8.nnue ./sgr.exe bench
+SGR_EVALFILE=../nets/gen9.nnue ./sgr.exe bench
 ./sgr.exe bench
 ./sgr.exe test
 ./sgr.exe seetest
 ```
 
-The expected MSYS2 clang fingerprints are 3,601,424 nodes with Gen8 and
+The expected MSYS2 clang fingerprints are 3,337,275 nodes with Gen9 and
 4,616,415 with the hand-written evaluation. Move generation reaches perft 4 at
 197,281 nodes, and the static exchange suite contains nine hand-checked cases.
 
@@ -397,6 +397,7 @@ canonical and the peak names are codenames.
 
 | version | change | measured result |
 |---|---|---|
+| v9.0 "Dearg" | Gen9 NNUE trained on 102.0 million self-play positions | 3081 ±7 in the controlled pool |
 | v8.0 "Thearlaich" | Gen8 NNUE trained on 55.9 million clean positions | +126.5 ±26.6 against v7.0 |
 | v8.1 "Thearlaich" | PGO, ThinLTO and nine node-identical optimisations | about 20% faster and +21.2 ±8.7 against v8.0 |
 | v8.2 "Thearlaich" | packed transposition entries and a lazy move picker | 15.4% faster and +31.5 against v8.1 in the pool |

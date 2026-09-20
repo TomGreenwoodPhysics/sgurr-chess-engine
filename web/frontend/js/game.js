@@ -1,13 +1,14 @@
 import { playMoveSound, playSound } from "./audio.js";
 import { animationPieceForMove, boardInteractionAvailable, canQueuePremove, cleanupDrag, clearGameOverRevealTimer, clearMoveAnimations, clearPremoveQueueState, engineToMove, engineTurnAvailable, hasPremoves, hidePromotion, humanCanMove, humanMoveAnimationDurationMs, legalFrom, moveAnimationDurationMs, preparePendingMoveAnimation, projectPremovePieces, queueMoveAnimation, showPromotion, startActiveMoveAnimation, triggerCaptureAbsorb } from "./board.js";
 import { applyIncrement, currentTimeControl, resetClocks, syncClock } from "./clocks.js";
-import { START_FEN } from "./config.js";
+import { START_FEN, TIME_CONTROLS } from "./config.js";
 import { handleEditorSquare } from "./editor.js";
-import { apiPost, applyServerState, selectedEngineId, setBusy, setError } from "./engine.js";
+import { apiPost, applyServerState, applyEngineSelection, selectedEngineId, setBusy, setError } from "./engine.js";
 import { applySnapshot, recordSnapshot } from "./history.js";
 import { blobMemoryGreeting } from "./memory.js";
 import { coreMoveLine, setThinkingState } from "./personality.js";
 import { resetReview } from "./review.js";
+import { readSavedGame, saveCurrentGame } from "./saved-game.js";
 import { app, refs } from "./state.js";
 import { render, setStatus } from "./ui.js";
 import { parseFenPieces, pieceColor, title } from "./utils.js";
@@ -27,6 +28,7 @@ function cancelLiveGameWork() {
 
 function returnToMainMenu() {
   syncClock();
+  saveCurrentGame();
   if (app.analysis.controller) {
     app.analysis.runId += 1;
     app.analysis.controller.abort();
@@ -39,6 +41,51 @@ function returnToMainMenu() {
   app.selected = null;
   app.error = "";
   render();
+}
+
+async function resumeGame() {
+  const saved = readSavedGame();
+  if (!saved || app.busy || !app.backendOk || !app.engineExists) return;
+  const engineIndex = app.engines.findIndex((entry) => entry.id === saved.engineId && entry.available !== false);
+  if (engineIndex < 0 || (app.publicDemo && saved.side === null)) {
+    app.menuMessage = "This saved game's opponent or self-play mode is unavailable here.";
+    render();
+    return;
+  }
+  app.restoringGame = true;
+  setBusy(true, false);
+  try {
+    const data = await apiPost("/api/resume", {
+      fen: saved.snapshot.fen, start_fen: saved.snapshot.startFen, moves: saved.snapshot.moves,
+    });
+    cancelLiveGameWork();
+    app.timeIndex = TIME_CONTROLS.findIndex((control) => control.key === saved.timeKey);
+    app.selectedEngineIndex = engineIndex;
+    applyEngineSelection();
+    resetLocalGame(saved.side);
+    app.mode = "game";
+    applySnapshot(saved.snapshot);
+    applyServerState(data, { keepEval: true });
+    app.history = saved.history.length ? saved.history : [saved.snapshot];
+    app.redoStack = saved.redo;
+    // Older positions are useful for review; the resumed position is server-validated.
+    if (Array.isArray(saved.review)) app.review.plies = saved.review.filter((entry) => entry && typeof entry.fen === "string" && Number.isInteger(entry.ply));
+    app.manualFlip = Boolean(saved.manualFlip);
+    app.gameOrigin = saved.origin === "editor" ? "editor" : "standard";
+    app.watchPaused = Boolean(saved.watchPaused);
+    app.engineAutoPaused = Boolean(saved.engineAutoPaused);
+    app.clockLastTick = performance.now();
+    app.menuMessage = "";
+    app.status = "Game resumed";
+    app.restoringGame = false;
+    render();
+    if (engineToMove()) saved.side === null ? scheduleWatchMove(150) : await requestEngineMove();
+  } catch (error) {
+    app.restoringGame = false;
+    app.mode = "menu";
+    app.menuMessage = `Could not resume: ${error.message}`;
+    setError(error);
+  }
 }
 
 function resetLocalGame(side) {
@@ -192,8 +239,6 @@ async function makePlayerMove(
       parseFenPieces(data.fen),
     );
     if (token !== app.searchToken || app.mode !== "game") {
-      setBusy(false, false);
-      render();
       return;
     }
     applyServerState(data, { keepEval: true });
@@ -277,7 +322,8 @@ async function requestEngineMove(force = false) {
       ...engineClockPayload(),
     });
     syncClock();
-    if (token !== app.searchToken || app.mode !== "game" || app.gameOver) {
+    if (token !== app.searchToken || app.mode !== "game") return;
+    if (app.gameOver) {
       setBusy(false, false);
       render();
       return;
@@ -671,6 +717,7 @@ function toggleFocusMode(force) {
 }
 
 export {
+  resumeGame,
   cancelLiveGameWork,
   returnToMainMenu,
   resetLocalGame,

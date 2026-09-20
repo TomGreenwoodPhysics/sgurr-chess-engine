@@ -1,13 +1,14 @@
 import { playResultSound, syncGameMusic, syncMenuMusic } from "./audio.js";
 import { boardOrientation, checkmateRevealPending, engineTurnAvailable, hasPremoves, humanCanMove, materialFromPieces, renderBoard, renderCheckmateEffect } from "./board.js";
 import { activeClockColour, colourIsEngine, currentTimeControl, playerCardMarkup, syncClock, visibleClock } from "./clocks.js";
-import { CAPTURED_PIECE_CODES, CHECKMATE_DRILLS, EDIT_PALETTE, ODDS_PRESETS, PIECES, THEMES, apiBaseLabel } from "./config.js";
+import { CAPTURED_PIECE_CODES, CHECKMATE_DRILLS, EDIT_PALETTE, ODDS_PRESETS, PIECES, THEMES, TIME_CONTROLS, apiBaseLabel } from "./config.js";
 import { setDemoReason } from "./demo-tooltip.js";
 import { composeEditorFen, editorOddsLabel, editorReturnLabel, loadCheckmateDrill, loadOddsPreset, toggleEditorBrush } from "./editor.js";
 import { favoriteMemoryOpening } from "./memory.js";
 import { applyCoreMood, coreLineText } from "./personality.js";
 import { plyMoveText, reviewCurrent, reviewEntries, reviewEvalAt, reviewEvalSeries, reviewSwing } from "./review.js";
 import { app, refs } from "./state.js";
+import { readSavedGame, saveCurrentGame } from "./saved-game.js";
 import { renderSettings, renderThemeGallery, renderTimeGallery } from "./themes.js";
 import { decoratePieceNode, formatClock, pieceColor, pieceLabel, title } from "./utils.js";
 
@@ -1041,12 +1042,14 @@ function engineCodename(label) {
 }
 
 function renderMenu() {
+  document.body.dataset.engineDetails = String(app.showEngineInfo);
+  document.querySelector("#exploreEditorButton").disabled = app.busy || app.thinking;
   refs.menuScreen.hidden = app.mode !== "menu";
   refs.demoLimitsButton.hidden = !app.publicDemo;
   refs.menuTimeButton.textContent = currentTimeControl().label;
   refs.menuThemeButton.textContent = THEMES[app.themeKey]?.label || THEMES.wood.label;
-  const engineLabel = app.engineLabel || 'Sgurr v8.2 "Thearlaich"';
-  const engineSubtitle = app.engineSubtitle || "GEN8 NNUE + PACKED TT · ~3012";
+  const engineLabel = app.engineLabel || 'Sgurr v9.0 "Dearg"';
+  const engineSubtitle = app.engineSubtitle || "GEN9 NNUE (102M SELF-PLAY) · ~3081";
   refs.menuEngineButton.textContent = engineLabel;
   if (refs.menuEngineCaption) {
     refs.menuEngineCaption.textContent = engineSubtitle;
@@ -1066,12 +1069,21 @@ function renderMenu() {
   renderBlobMemory();
 
   const canStart = app.backendOk && app.engineExists && !app.busy && !app.thinking;
+  const saved = readSavedGame();
+  const resumeButton = document.querySelector("#resumeGameButton");
+  resumeButton.hidden = !saved;
+  resumeButton.disabled = !canStart || !app.engines.length;
+  if (saved) {
+    const side = saved.side ? `You play ${saved.side}` : "Self-play";
+    document.querySelector("#resumeGameDetail").textContent = `${side} · ${TIME_CONTROLS.find((control) => control.key === saved.timeKey).label} · ${saved.snapshot.moves.length} ply`;
+  }
+  document.querySelectorAll("[data-engine-details]").forEach((button) => button.setAttribute("aria-pressed", String(app.showEngineInfo)));
   const availableEngines = app.engines.filter((entry) => entry.available !== false).length;
   const selfPlayReason = app.publicDemo
     ? "Self-play runs continuously and is available when running Sgurr locally."
     : "";
   const historicalReason = app.publicDemo
-    ? "Historical Sgurr builds are available locally; the free demo runs v8.2 only."
+    ? "Historical Sgurr builds are available locally; the free demo runs v9.0 only."
     : "";
   refs.playWhiteButton.disabled = !canStart;
   refs.playBlackButton.disabled = !canStart;
@@ -1110,6 +1122,7 @@ function renderMenu() {
 
 function render() {
   syncClock();
+  saveCurrentGame();
   renderMenu();
   renderBoard();
   renderCheckmateEffect();

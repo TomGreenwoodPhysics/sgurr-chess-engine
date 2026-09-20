@@ -6,11 +6,12 @@ import { ANIMATION_MODES, TIME_CONTROLS } from "./config.js";
 import { initDemoTooltips } from "./demo-tooltip.js";
 import { analyseEditorPosition, clearEditorBoard, copyEditorFen, cycleEditorOddsRecipient, cycleEditorPlayer, cycleEditorTurn, enterPositionLab, exitBoardEditor, finishBoardEditor, loadEditorStartPosition, loadFenIntoEditor } from "./editor.js";
 import { cycleEngine, fetchEngines, refreshHealth, renderEngineGallery } from "./engine.js";
-import { cancelPremoves, copyFen, exportPgn, redoPly, rematchGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
+import { cancelPremoves, copyFen, exportPgn, redoPly, rematchGame, resumeGame, returnToMainMenu, scheduleWatchMove, startGame, toggleFocusMode, triggerEngineMove, undoMove, undoPly } from "./game.js";
 import { finishIntro, initIntro, wakeSgurr } from "./intro.js";
 import { initMenuCore } from "./menu-core.js";
 import { defaultBlobMemory } from "./memory.js";
-import { enterReview, exitReview, reviewEntries, reviewGoto, reviewIndexForPly, reviewStep, reviewSwing } from "./review.js";
+import { enterReview, exitReview, reviewCurrent, reviewEntries, reviewGoto, reviewIndexForPly, reviewStep, reviewSwing } from "./review.js";
+import { saveCurrentGame, clearSavedGame } from "./saved-game.js";
 import { app, refs } from "./state.js";
 import { applyAnimationMode, applyTheme, closeAllModals, cycleTheme, cycleTime, openModal, renderSettings, saveSettings } from "./themes.js";
 import { render, renderClockUi } from "./ui.js";
@@ -32,6 +33,35 @@ refs.watchButton.addEventListener("click", () => {
 });
 refs.timeDownButton.addEventListener("click", () => cycleTime(-1));
 refs.timeUpButton.addEventListener("click", () => cycleTime(1));
+document.querySelector("#resumeGameButton").addEventListener("click", resumeGame);
+document.querySelector("#replayIntroButton").addEventListener("click", () => {
+  syncClock();
+  saveCurrentGame();
+  const url = new URL(location.href);
+  url.searchParams.set("view", "intro");
+  window.location.assign(url.href);
+});
+document.querySelectorAll("[data-engine-details]").forEach((button) => button.addEventListener("click", () => {
+  app.showEngineInfo = !app.showEngineInfo;
+  saveSettings();
+  render();
+}));
+const currentPositionFen = () => app.review.active ? reviewCurrent()?.fen || app.fen : app.fen;
+document.querySelector("#explorePositionButton").addEventListener("click", () => openModal(document.querySelector("#exploreModal")));
+document.querySelectorAll("[data-position-lab]").forEach((link) => link.addEventListener("click", (event) => {
+  event.preventDefault();
+  const url = new URL(link.getAttribute("href"), location.href);
+  url.searchParams.set("fen", currentPositionFen());
+  returnToMainMenu();
+  location.assign(url.href);
+}));
+document.querySelector("#exploreEditorButton").addEventListener("click", () => {
+  const fen = currentPositionFen();
+  closeAllModals();
+  enterPositionLab(fen);
+});
+window.addEventListener("pagehide", () => { syncClock(); saveCurrentGame(); });
+setInterval(() => { syncClock(); saveCurrentGame(); }, 2000);
 refs.menuTimeButton.addEventListener("click", () => openModal(refs.timeModal));
 refs.themeDownButton.addEventListener("click", () => cycleTheme(-1));
 refs.themeUpButton.addEventListener("click", () => cycleTheme(1));
@@ -182,7 +212,7 @@ refs.clearPreferencesButton.addEventListener("click", () => {
   app.themeKey = "wood";
   app.timeIndex = 2;
   app.autoFlipAsBlack = true;
-  app.showEngineInfo = true;
+  app.showEngineInfo = false;
   app.animationMode = "On";
   app.masterVolume = 0.7;
   app.soundVolume = 0.8;
@@ -198,6 +228,7 @@ refs.clearMemoryButton.addEventListener("click", () => {
   app.memory = defaultBlobMemory();
   app.memoryRecorded = false;
   localStorage.removeItem("sgurrBlobMemory");
+  clearSavedGame();
   render();
 });
 document.querySelectorAll("[data-close-modal]").forEach((button) => {
@@ -387,7 +418,7 @@ initDemoTooltips();
 applyTheme();
 applyAnimationMode();
 // Skip constructing the intro when opening directly on the menu.
-if (new URLSearchParams(window.location.search).get("view") === "menu") {
+if (document.documentElement.dataset.view === "menu") {
   finishIntro();
 } else {
   initIntro();

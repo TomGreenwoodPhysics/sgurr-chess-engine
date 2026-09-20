@@ -1,0 +1,16 @@
+{
+  "positions": 102011689,
+  "dataset_sha256": "fb42bb334652ed60b702a53553a976ea5e5fdd6af1930bbd43dfe700ce339f60",
+  "seed": 0,
+  "architecture": "768 -> 384 -> 1",
+  "lambda": 0.8,
+  "epochs": 8,
+  "batch_size": 16384,
+  "optimizer": "Adam",
+  "learning_rate": "cosine, 1e-3 to 1e-5",
+  "validation_fraction": 0,
+  "train_loss_by_epoch": [0.01340, 0.01172, 0.01148, 0.01133, 0.01122, 0.01113, 0.01107, 0.01103],
+  "network": "nets/gen9.nnue",
+  "network_sha256": "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1",
+  "note": "The release network was selected by games, not by training loss."
+}

@@ -23,14 +23,17 @@
       })();
     </script>
     <script>
-      // Skip the intro frame when returning from a lab.
-      if (new URLSearchParams(location.search).get("view") === "menu") {
-        document.documentElement.dataset.view = "menu";
-      }
+      // Decide before first paint so returning visitors never see an intro flash.
+      try {
+        var requestedView = new URLSearchParams(location.search).get("view");
+        if (requestedView === "menu" || (requestedView !== "intro" && localStorage.getItem("sgurrIntroSeen") === "1")) {
+          document.documentElement.dataset.view = "menu";
+        }
+      } catch (_) { /* Show the entrance when storage is unavailable. */ }
     </script>
 
     <title>Sgurr | A home-grown chess engine from the Scottish hills</title>
-    <meta name="description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
+    <meta name="description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen9 NNUE evaluation.">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#251a16">
     <link rel="canonical" href="https://sgurr-chess-engine.onrender.com/">
@@ -40,14 +43,14 @@
     <meta property="og:site_name" content="Sgurr">
     <meta property="og:url" content="https://sgurr-chess-engine.onrender.com/">
     <meta property="og:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
-    <meta property="og:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
+    <meta property="og:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen9 NNUE evaluation.">
     <meta property="og:image" content="https://sgurr-chess-engine.onrender.com/assets/intro/sgurr-social-card.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A vaulted stone chamber deep under the hills, a carved ring portal standing above a circular dais.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Sgurr | A home-grown chess engine from the Scottish hills">
-    <meta name="twitter:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen8 NNUE evaluation.">
+    <meta name="twitter:description" content="Play Sgurr in your browser, analyse positions, and inspect its C++ search and Gen9 NNUE evaluation.">
     <meta name="twitter:image" content="https://sgurr-chess-engine.onrender.com/assets/intro/sgurr-social-card.jpg">
     <meta name="twitter:image:alt" content="Sgurr chess engine">
 
@@ -58,6 +61,7 @@
   </head>
   <body class="intro-pending">
     <section class="intro-screen" id="introScreen" aria-labelledby="introTitle">
+      <div class="intro-masthead"><span>SGURR <span class="brand-divider">/</span> CHESS ENGINE</span></div>
       <div class="intro-cave" aria-hidden="true"></div>
       <div class="intro-fog" aria-hidden="true">
         <span></span>
@@ -102,8 +106,7 @@
       </div>
 
       <div class="intro-copy">
-        <p class="intro-eyebrow">From the Scottish Highlands</p>
-        <p class="intro-state" id="introState" aria-live="polite">Sgurr v8.2</p>
+        <p class="intro-state" id="introState" aria-live="polite">Sgurr v9.0</p>
         <button class="intro-wake-button" id="wakeSgurrButton" type="button" data-sound="none">
           Enter
         </button>
@@ -112,6 +115,7 @@
     </section>
 
     <section class="menu-screen" id="menuScreen" aria-label="Sgurr main menu">
+      <div class="menu-brand"><span class="brand-emblem" aria-hidden="true">S</span><span>SGURR <span class="brand-divider">/</span> CHESS ENGINE</span></div>
       <div class="menu-actions">
         <button class="ghost-button" type="button" id="menuSettingsButton">Settings</button>
         <button class="ghost-button" type="button" id="demoLimitsButton" hidden>Hosted demo limits</button>
@@ -121,7 +125,6 @@
       <div class="menu-title">
         <span class="sgurr-core menu-core" id="menuCore" aria-hidden="true"></span>
         <h1>SGURR</h1>
-        <p>A home-grown chess engine from the Scottish hills</p>
       </div>
 
       <section class="menu-card">
@@ -129,27 +132,21 @@
 
         <!-- Keep fixed accents outside the scrolling controls so they are not clipped. -->
         <div class="menu-card-scroll">
+          <button class="resume-game" id="resumeGameButton" type="button" hidden><strong>Resume game <span aria-hidden="true">&rarr;</span></strong><span id="resumeGameDetail"></span><small>Clocks pause while away.</small></button>
           <p class="menu-section-label">Game mode</p>
           <div class="selector-row large-selector">
-            <button type="button" id="timeDownButton">&lt;</button>
-            <button type="button" class="selector-value" id="menuTimeButton">Rapid demo</button>
-            <button type="button" id="timeUpButton">&gt;</button>
+            <button type="button" id="timeDownButton" aria-label="Previous time control">&lt;</button>
+            <button type="button" class="selector-value" id="menuTimeButton">Blitz 3+0</button>
+            <button type="button" id="timeUpButton" aria-label="Next time control">&gt;</button>
           </div>
 
-          <p class="menu-section-label">Opponent</p>
+          <div class="opponent-heading"><p class="menu-section-label">Opponent</p><button type="button" data-engine-details aria-pressed="false">Engine info</button></div>
           <div class="selector-row">
             <button type="button" id="engineDownButton">&lt;</button>
             <button type="button" class="selector-value" id="menuEngineButton">Sgurr Engine</button>
             <button type="button" id="engineUpButton">&gt;</button>
           </div>
           <p class="selector-caption" id="menuEngineCaption"></p>
-
-          <p class="menu-section-label">Appearance</p>
-          <div class="selector-row">
-            <button type="button" id="themeDownButton">&lt;</button>
-            <button type="button" class="selector-value" id="menuThemeButton">Highland Heather</button>
-            <button type="button" id="themeUpButton">&gt;</button>
-          </div>
 
           <p class="menu-section-label">Play</p>
           <div class="menu-play-grid">
@@ -189,6 +186,7 @@
 
         <div class="menu-memory" id="menuMemory" hidden></div>
       </section>
+      <footer class="menu-footer"><a href="https://github.com/TomGreenwoodPhysics/sgurr-chess-engine" target="_blank" rel="noopener noreferrer">Source code <span aria-hidden="true">&nearr;</span></a></footer>
     </section>
 
     <main class="app-shell" id="appShell">
@@ -244,8 +242,8 @@
           <div class="normal-core-view">
             <div class="core-heading">
               <div>
-                <h2 id="coreEngineName">Sgurr v8.2 "Thearlaich"</h2>
-                <p class="engine-rating" id="coreEngineSubtitle">GEN8 NNUE + PACKED TT &middot; ~3012</p>
+                <h2 id="coreEngineName">Sgurr v9.0 "Dearg"</h2>
+                <p class="engine-rating" id="coreEngineSubtitle">GEN9 NNUE (102M SELF-PLAY) &middot; ~3081</p>
                 <p class="engine-time" id="sideTimeControl">BLITZ 3+0</p>
               </div>
               <span class="engine-dot sgurr-core header-core" id="engineDot" aria-hidden="true"></span>
@@ -354,9 +352,11 @@
         </section>
 
         <section class="side-actions">
+          <button id="explorePositionButton" type="button">Explore this position</button>
           <button id="mainMenuButton" type="button">Main menu</button>
           <button id="sideSettingsButton" type="button">Settings</button>
           <button id="sideHelpButton" type="button">? Shortcuts</button>
+          <button type="button" data-engine-details aria-pressed="false">Engine info</button>
         </section>
 
         <section class="panel-block review-block" id="reviewBlock" hidden>
@@ -493,7 +493,7 @@
         <section class="analysis-hero">
           <div class="analysis-hero-copy">
             <p class="eyebrow">Position analysis</p>
-            <h2 id="analysisEngineName">Sgurr v8.2</h2>
+            <h2 id="analysisEngineName">Sgurr v9.0</h2>
             <p id="analysisStatus" aria-live="polite">Preparing the position</p>
           </div>
           <div class="analysis-core-wrap" aria-hidden="true">
@@ -588,7 +588,7 @@
         <div class="modal-header">
           <div>
             <h2 id="engineModalTitle">Choose an opponent</h2>
-            <p>Every released Sgurr, strongest first. Older ratings are translated to the current scale using v8.2 as the bridge; all figures remain estimates.</p>
+            <p>Every released Sgurr, strongest first. Ratings use the current controlled pool scale and remain estimates.</p>
           </div>
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>
@@ -619,6 +619,15 @@
           <button class="square-button" type="button" data-close-modal aria-label="Close">×</button>
         </div>
         <div class="settings-list">
+          <section class="settings-section" aria-labelledby="appearanceSettingsTitle">
+            <h3 id="appearanceSettingsTitle">Appearance</h3>
+            <div class="selector-row settings-theme">
+              <button type="button" id="themeDownButton" aria-label="Previous theme">&lt;</button>
+              <button type="button" class="selector-value" id="menuThemeButton">Classic Wood</button>
+              <button type="button" id="themeUpButton" aria-label="Next theme">&gt;</button>
+            </div>
+            <button type="button" id="replayIntroButton">Replay entrance</button>
+          </section>
           <section class="settings-section" aria-labelledby="displaySettingsTitle">
             <h3 id="displaySettingsTitle">Display</h3>
             <label class="toggle-row">
@@ -688,6 +697,16 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="exploreModal" hidden>
+      <section class="modal-box" role="dialog" aria-modal="true" aria-labelledby="exploreTitle">
+        <div class="modal-header"><h2 id="exploreTitle">Explore this position</h2><button type="button" data-close-modal aria-label="Close">&times;</button></div>
+        <div class="explore-options">
+          <a href="search-lab/?mode=network" data-position-lab>Search Lab <span>Follow Sgurr's search</span></a>
+          <a href="inside-sgurr/evaluation.html" data-position-lab>Evaluation Lab <span>Inspect the position's evaluation</span></a>
+          <button type="button" id="exploreEditorButton">Position Lab <span>Edit or analyse the board</span></button>
+        </div>
+      </section>
+    </div>
     <div class="modal-backdrop" id="helpModal" hidden>
       <section class="modal-box wide-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
         <div class="modal-header">
@@ -727,11 +746,11 @@
         </div>
 
         <div class="demo-limits-copy">
-          <p>This is the real Sgurr v8.2 C++ engine, not a static or prerecorded version of the site. The Evaluation Lab also runs the shipped Gen8 NNUE directly in your browser.</p>
+          <p>This is the real Sgurr v9.0 C++ engine, not a static or prerecorded version of the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your browser.</p>
           <p>I host the demo on Render's free tier. If nobody has visited for a while, the server goes to sleep and the first visit can take 30 to 60 seconds to start. Once it is awake, the site should respond normally.</p>
           <p>I have put a few limits in place so that one visitor cannot occupy the whole server.</p>
           <ul>
-            <li>The hosted site runs Sgurr v8.2 only. The older releases shown in the engine picker are available when the project is run locally.</li>
+            <li>The hosted site runs Sgurr v9.0 only. The older releases shown in the engine picker are available when the project is run locally.</li>
             <li>Sgurr can think for up to two seconds when playing a move.</li>
             <li>Live analysis traces can run for up to five seconds.</li>
             <li>Search Network searches are limited to depth 12, 1.5 million nodes and 30 seconds. If a search reaches a limit, the completed part of the network is kept on screen.</li>

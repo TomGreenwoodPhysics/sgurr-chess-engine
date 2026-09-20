@@ -4,7 +4,7 @@ import { CortexVisual } from "./cortex.js";
 import { EXPECTED_NETWORK, featureIndex, parseFen } from "./nnue-model.js";
 import { initNnueTutorial } from "./tutorial.js";
 
-const NETWORK_PATH = `/api/nnue/gen8/${EXPECTED_NETWORK.sha256}.nnue`;
+const NETWORK_PATH = `/api/nnue/gen9/${EXPECTED_NETWORK.sha256}.nnue`;
 const POSITION_PRESETS = Object.freeze({
   start: START_FEN,
   ruy: "r1bqk2r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 5",
@@ -847,14 +847,14 @@ async function undoPosition() {
 async function loadModel(sequence) {
   makeWorker();
   refs.modelSignal.dataset.state = "loading";
-  refs.modelStatus.textContent = "Loading Gen8 evaluator";
+  refs.modelStatus.textContent = "Loading Gen9 evaluator";
   const result = await requestWorker("load", { url: apiUrl(NETWORK_PATH) });
   if (sequence !== bootSequence || refs.shell.dataset.state !== "loading") {
     throw new Error("Evaluator load was superseded");
   }
   modelReady = true;
   refs.modelSignal.dataset.state = "ready";
-  refs.modelStatus.textContent = `Gen8 v${result.architecture.version} loaded · exact integer inference`;
+  refs.modelStatus.textContent = `Gen9 v${result.architecture.version} loaded · exact integer inference`;
   return result;
 }
 
@@ -875,12 +875,12 @@ async function boot() {
   refs.shell.dataset.state = "loading";
   refs.retry.hidden = true;
   refs.loadingTitle.textContent = "Opening the evaluator";
-  refs.loadingDetail.textContent = "Verifying the shipped Gen8 network";
+  refs.loadingDetail.textContent = "Verifying the shipped Gen9 network";
   busy = true;
   try {
     const [model, nextPosition] = await Promise.all([
       loadModel(sequence),
-      postJson("/api/load-fen", { fen: position?.fen || START_FEN }),
+      postJson("/api/load-fen", { fen: position?.fen || new URLSearchParams(location.search).get("fen") || START_FEN }),
     ]);
     if (sequence !== bootSequence) return;
     if (!model.architecture || !nextPosition.fen) throw new Error("Evaluator response was incomplete");

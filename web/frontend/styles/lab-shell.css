@@ -2,6 +2,39 @@
 
 /* Shared layout for the overview and both labs. Loaded last to keep their geometry consistent. */
 
+/* Restrict the new visual treatment to navigation and the overview. The search
+   network and evaluation canvases retain their existing palette and geometry. */
+.lab-page .inside-header,
+.lab-page .lab-header { border-bottom: 1px solid color-mix(in srgb, var(--muted), transparent 78%); }
+
+.lab-page .lab-switch { border-radius: 4px; background: transparent; }
+.lab-page .lab-switch a { border-radius: 2px; font-weight: 500; }
+.lab-page .inside-brand strong,
+.lab-page .lab-brand strong { letter-spacing: 0.12em; }
+.lab-page .inside-header, .lab-page .lab-header, .lab-hub main { font-family: "Segoe UI", system-ui, sans-serif; }
+.lab-page .inside-footer,
+.lab-page .lab-footer { font-family: var(--font-data); font-size: 0.65rem; }
+.lab-hub { background: color-mix(in srgb, var(--bg), #101719 82%); }
+:root[data-theme="frost"] .lab-hub { background: #e9eeed; }
+.lab-hub .lab-masthead { padding-top: 64px; padding-bottom: 42px; }
+.lab-hub .lab-masthead h1 { font-weight: 400; line-height: 1.06; }
+.lab-hub .lab-masthead .eyebrow { font-family: var(--font-data); letter-spacing: 0.15em; color: var(--accent); }
+.lab-hub .hub-parts { gap: 0; border-top: 1px solid color-mix(in srgb, var(--muted), transparent 78%); border-bottom: 1px solid color-mix(in srgb, var(--muted), transparent 78%); padding: 14px 0; }
+.lab-hub .hub-parts article { background: transparent; border: 0; border-radius: 0; padding: 22px; }
+.lab-hub .hub-parts article + article { border-left: 1px solid color-mix(in srgb, var(--muted), transparent 78%); }
+.lab-hub .hub-parts h3 { font-weight: 500; margin: 5px 0; }
+.lab-hub .lab-choice { padding-top: 32px; gap: 24px; }
+.lab-hub .lab-choice-card { padding: 30px; border-radius: 6px; background: color-mix(in srgb, var(--surface), #192022 78%); border-color: color-mix(in srgb, var(--muted), transparent 78%); }
+:root[data-theme="frost"] .lab-hub .lab-choice-card { background: #f5f7f5; }
+.lab-hub .lab-choice-card h2 { font-weight: 400; font-size: 2.5rem; margin: 12px 0; }
+.lab-hub .lab-choice-card .lab-choice-go { margin-top: 20px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--muted), transparent 78%); }
+.lab-hub .lab-choice-card:hover { border-color: var(--accent); box-shadow: 0 16px 40px #00000020; }
+.lab-page a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 1000px) {
+  .lab-hub .hub-parts article + article { border-left: 0; border-top: 1px solid color-mix(in srgb, var(--muted), transparent 78%); }
+  .lab-hub .lab-masthead { padding-top: 32px; padding-bottom: 28px; }
+}
+
 .lab-page .inside-header,
 .lab-page .lab-header {
   width: min(1540px, calc(100% - 44px));

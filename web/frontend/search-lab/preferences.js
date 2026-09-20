@@ -1,4 +1,5 @@
 import { THEMES, THEME_ORDER, initialTheme } from "../js/config.js";
+import { preserveLabPosition } from "../js/lab-position.js";
 
 const refs = {
   theme: document.querySelector("#labThemeSelect"),
@@ -96,6 +97,7 @@ function initLabShortcuts() {
 }
 
 function initLabPreferences() {
+  preserveLabPosition();
   for (const key of THEME_ORDER) {
     const option = document.createElement("option");
     option.value = key;
