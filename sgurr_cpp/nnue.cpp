@@ -16,8 +16,12 @@
 #endif
 #include <immintrin.h>
 static_assert(nnue::HL % 16 == 0, "SGR_SIMD requires HL to be a multiple of 16");
-// HL <= 512 keeps vector lane sums within int32.
-static_assert(nnue::HL <= 512, "SGR_SIMD output sum needs int64 widening for HL>512");
+// Vector lane sums are int32. The theoretical worst case (every out_weight at
+// an int16 extreme) is x2.01 under the limit at HL=1024 on AVX-512 and exactly
+// x1.00 on AVX2, so 1024 is the last width that is safe without int64
+// widening. load() also bounds the sum from the weights actually loaded, which
+// is what makes this safe rather than merely probable.
+static_assert(nnue::HL <= 1024, "SGR_SIMD output sum needs int64 widening for HL>1024");
 #endif
 
 namespace nnue {
@@ -360,6 +364,24 @@ bool load(const std::string& path) {
 
     if (!in) {
         std::cerr << "nnue: truncated network file " << path << "\n";
+        g_active = false;
+        return false;
+    }
+
+    // The SIMD output sum accumulates into int32 lanes. Every activation is
+    // clipped to [0, QA], so no lane can exceed QA * sum|out_weight|. That
+    // assumes one lane takes every weight, which cannot happen, so passing
+    // this is sufficient rather than merely likely. Costs one pass at load.
+    std::int64_t worst = 0;
+    for (std::int16_t w : g_net.out_weight) {
+        worst += (w < 0) ? -static_cast<std::int64_t>(w) : w;
+    }
+    worst *= QA;
+
+    if (worst > 2147483647LL) {
+        std::cerr << "nnue: " << path << " can overflow the int32 output sum ("
+                  << worst << " > 2147483647). Rebuild with -DSGR_SIMD=0 for the"
+                  << " scalar path, or train a narrower net.\n";
         g_active = false;
         return false;
     }

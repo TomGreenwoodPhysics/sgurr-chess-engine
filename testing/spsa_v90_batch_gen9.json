@@ -1,0 +1,89 @@
+{
+  "name": "v90_batch_gen9",
+  "_why": [
+    "Supersedes runs/spsa/v90_guessed_params, which was configured against",
+    "sgr_v9_rc.exe and gen8 -- both pre-date the v9.0 release. It reached",
+    "iteration 275 before gen9 datagen took the machine.",
+    "",
+    "Not the shipped binary: sgr_v9_0.exe advertises all ten options but eight of",
+    "them are compiled out at HEAD (SGR_IIR, SGR_NMPSCALE, SGR_RAZOR, SGR_FUTILITY,",
+    "SGR_SEEPRUNE, SGR_HISTPRUNE, SGR_CAPHIST all 0). SPSA shares one match result",
+    "across every parameter, so eight dead dimensions would add noise to the two",
+    "live ones. The engine below is HEAD with all nine batch toggles on: bench 12",
+    "searches 4,606,811 nodes against the shipped 9,288,988.",
+    "",
+    "Hash pinned at 256 to match pool calibration. The earlier run left it at the",
+    "48 MB default -- symmetric, so unbiased, but METHODOLOGY 9 is a 45 Elo",
+    "correction caused by unpinned hash, so don't leave the gap.",
+    "",
+    "Time-management parameters excluded on purpose. METHODOLOGY 6: the v3.1 soft",
+    "limit measured +24.6 self-play and negative pooled."
+  ],
+  "engine": "sgurr_cpp/sgr_v90_batch_spsa.exe",
+  "net": "nets/gen9.nnue",
+  "book": "testing/8moves_v3.pgn",
+  "book_format": "pgn",
+  "tc": "8+0.08",
+  "hash": 256,
+  "concurrency": 7,
+  "games_per_iter": 8,
+  "iterations": 3000,
+  "seed": 1,
+  "params": [
+    {
+      "name": "HistLmrDiv",
+      "start": 128,
+      "c": 24,
+      "_note": "Suspect #1. Shipped inert at 400000 for four versions; 128 was picked off a measured |hist| distribution, never off games. Range is 16..2000000, so c is set by hand rather than from the range."
+    },
+    {
+      "name": "HistPruneMargin",
+      "start": 50,
+      "c": 12,
+      "_note": "Suspect #2. Never behaved like a pruner at any swept setting."
+    },
+    {
+      "name": "CapHistMax",
+      "start": 256,
+      "c": 48,
+      "_note": "The clamp that makes capture history structurally safe. 256 was reasoned from MVV-LVA tier spacing, not measured."
+    },
+    {
+      "name": "RazorMargin",
+      "start": 100,
+      "c": 25,
+      "_note": "Only value swept where razoring pruned at all; the neighbours went non-monotonic."
+    },
+    {
+      "name": "FutMargin",
+      "start": 120,
+      "c": 25
+    },
+    {
+      "name": "SeeQuietMargin",
+      "start": 50,
+      "c": 12
+    },
+    {
+      "name": "SeeCapMargin",
+      "start": 20,
+      "c": 6
+    },
+    {
+      "name": "NmpEvalDiv",
+      "start": 200,
+      "c": 40
+    },
+    {
+      "name": "IirMinDepth",
+      "start": 4,
+      "c": 1
+    },
+    {
+      "name": "LmrDivX100",
+      "start": 250,
+      "c": 30,
+      "_note": "Not new, and never swept either -- the 2.5 divisor has been hand-set since v1.0."
+    }
+  ]
+}

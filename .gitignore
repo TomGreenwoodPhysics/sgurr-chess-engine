@@ -35,6 +35,7 @@ stockfish/
 # Manifests and training logs remain tracked as provenance records.
 *.nnue
 *.bin
+*.zst
 data/**/*.zip
 data/stockfish_teacher/
 engines/

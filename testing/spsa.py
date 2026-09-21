@@ -116,6 +116,10 @@ class Spsa:
         self.log_path = self.run_dir / "spsa.log"
 
         self.tc = cfg.get("tc", "8+0.08")
+        # Pin Hash so the tune runs at the size the result is validated at.
+        # Omitted leaves every engine on its compiled default, which is what
+        # the v8.2 calibration did before METHODOLOGY 9.
+        self.hash_mb = cfg.get("hash")
         self.concurrency = int(cfg.get("concurrency", 7))
         self.games_per_iter = int(cfg.get("games_per_iter", 8))
         self.iterations = int(cfg.get("iterations", 3000))
@@ -199,6 +203,8 @@ class Spsa:
             "-engine", f"cmd={self.exe}", "name=plus", *self._opts(plus),
             "-engine", f"cmd={self.exe}", "name=minus", *self._opts(minus),
             "-each", f"tc={self.tc}",
+            *([f"option.Hash={int(self.hash_mb)}"]
+              if self.hash_mb is not None else []),
             "-rounds", str(rounds), "-repeat",
             "-concurrency", str(self.concurrency),
             "-srand", str(opening_seed),
@@ -331,7 +337,8 @@ class Spsa:
         opts = " ".join(f"option.{n}={v}" for n, v in moved) or "(nothing moved)"
         self.log(f"  -engine cmd=<exe> name=tuned {opts} \\")
         self.log(f"  -engine cmd=<exe> name=default \\")
-        self.log(f"  -each tc={self.tc} -rounds 3000 -repeat -concurrency {self.concurrency} \\")
+        hash_note = f" option.Hash={int(self.hash_mb)}" if self.hash_mb is not None else ""
+        self.log(f"  -each tc={self.tc}{hash_note} -rounds 3000 -repeat -concurrency {self.concurrency} \\")
         self.log(f"  -sprt elo0=0 elo1=5 alpha=0.05 beta=0.05")
         (self.run_dir / "tuned.json").write_text(
             json.dumps({n: v for n, v in moved}, indent=1), encoding="utf-8")
