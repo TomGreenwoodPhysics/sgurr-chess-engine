@@ -120,6 +120,9 @@ body[data-engine-details="false"] :is(#menuEngineCaption, #coreEngineSubtitle, .
 .menu-card .menu-card-mark { width: 24px; height: 24px; }
 .menu-card .menu-status { position: static; transform: none; width: 100%; margin: 20px 0 0; padding-top: 14px; min-height: 0; border-top: 1px solid var(--chrome-edge); text-align: left; font: 10px/1.5 var(--font-data); color: var(--muted); }
 .menu-card .menu-status[data-state="ready"] { opacity: 1; }
+.menu-card .connection-help { color: var(--muted); font: 12px/1.6 var(--font-data); }
+.menu-card .connection-help p { margin: 8px 0 12px; }
+.menu-card .connection-help button { min-height: 44px; padding: 10px 14px; }
 .menu-card .menu-status[data-state="ready"]::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 8px; border-radius: 50%; background: #8eaf99; }
 .menu-card .menu-memory { position: static; transform: none; width: 100%; margin-top: 14px; font-size: 11px; }
 .menu-footer { grid-column: 1 / -1; position: relative; z-index: 1; display: flex; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--chrome-edge); color: var(--muted); font: 10px var(--font-data); }

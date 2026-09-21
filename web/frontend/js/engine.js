@@ -10,8 +10,8 @@ import { app, refs } from "./state.js";
 import { closeAllModals } from "./themes.js";
 import { addEvalHistoryPoint, render, renderBackend, renderMenu } from "./ui.js";
 
-async function apiGet(path) {
-  const response = await fetch(apiUrl(path));
+async function apiGet(path, options) {
+  const response = await fetch(apiUrl(path), options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.detail || response.statusText);
@@ -256,13 +256,30 @@ async function fetchEngines() {
 }
 
 async function refreshHealth() {
+  // Polling and manual retries share one request, including during a cold start.
+  if (app.backendChecking) return false;
   const previousBackendOk = app.backendOk;
   const previousEngineExists = app.engineExists;
   const previousPublicDemo = app.publicDemo;
   const previousError = app.error;
+  app.backendChecking = true;
+  renderMenu();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let health = null;
   try {
-    const health = await apiGet("/health");
-    app.backendOk = Boolean(health.ok);
+    health = await apiGet("/health", { signal: controller.signal, cache: "no-store" });
+  } catch {
+    // A blocked request, timeout or server failure all need connection guidance.
+    // Rendering and game errors must not be mistaken for network failures.
+  } finally {
+    clearTimeout(timeout);
+    app.backendChecking = false;
+  }
+
+  if (health?.ok) {
+    app.backendOk = true;
+    app.backendFailures = 0;
     app.engineExists = Boolean(health.engine_exists);
     app.publicDemo = Boolean(health.public_demo);
     app.backendDetail = app.engineExists ? "engine found" : "build sgr_v9_0";
@@ -271,6 +288,7 @@ async function refreshHealth() {
       app.status = app.mode === "menu" ? "Choose a side" : "Backend reconnected";
       app.coreMessage = app.mode === "menu" ? "Opponent core online" : "Backend reconnected";
     }
+    if (!app.engines.length) await fetchEngines();
     const healthChanged = previousBackendOk !== app.backendOk
       || previousEngineExists !== app.engineExists
       || previousPublicDemo !== app.publicDemo
@@ -293,8 +311,9 @@ async function refreshHealth() {
     }
 
     return true;
-  } catch {
+  } else {
     app.backendOk = false;
+    app.backendFailures += 1;
     app.engineExists = false;
     app.backendDetail = "unavailable";
     if (app.mode === "game") {

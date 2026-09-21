@@ -1105,12 +1105,23 @@ function renderMenu() {
   setDemoReason(refs.engineUpButton, historicalReason);
   refs.positionLabButton.disabled = app.busy || app.thinking;
 
-  if (app.menuMessage) {
+  const connectionTrouble = app.backendFailures >= 3;
+  refs.connectionHelp.hidden = app.backendOk;
+  refs.connectionDetail.textContent = connectionTrouble
+    ? "An ad blocker or privacy extension may be blocking the connection. Try allowing this site or opening it in a private window."
+    : "The server may take up to a minute to wake up.";
+  refs.retryConnectionButton.hidden = !connectionTrouble || app.backendOk;
+  refs.retryConnectionButton.disabled = app.backendChecking;
+  refs.retryConnectionButton.textContent = app.backendChecking ? "Connecting…" : "Retry connection";
+
+  if (!app.backendOk) {
+    refs.menuStatus.textContent = connectionTrouble
+      ? "Having trouble connecting?"
+      : "Connecting to Sgurr…";
+    refs.menuStatus.dataset.state = "warning";
+  } else if (app.menuMessage) {
     refs.menuStatus.textContent = app.menuMessage;
     refs.menuStatus.dataset.state = "message";
-  } else if (!app.backendOk) {
-    refs.menuStatus.textContent = "Waiting for backend at 127.0.0.1:8000";
-    refs.menuStatus.dataset.state = "warning";
   } else if (!app.engineExists) {
     refs.menuStatus.textContent = "Build the current Sgurr engine before playing";
     refs.menuStatus.dataset.state = "warning";

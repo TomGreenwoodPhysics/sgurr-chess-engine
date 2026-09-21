@@ -406,6 +406,66 @@ test("wakes into the default Classic Wood menu with playable controls", async ({
   await expect(page.locator(".inside-sgurr-link")).toHaveAttribute("href", "inside-sgurr/");
 });
 
+test("explains repeated connection failures and retries into a playable game", async ({ page }) => {
+  await installMockBackend(page);
+  await page.clock.install();
+  let online = false;
+  let attempts = 0;
+  await page.route(`${API_BASE}/health`, async (route) => {
+    attempts += 1;
+    if (online) await route.fallback();
+    else await route.abort("blockedbyclient");
+  });
+  await page.route(`${API_BASE}/api/engines`, async (route) => {
+    if (online) await route.fallback();
+    else await route.abort("blockedbyclient");
+  });
+  await page.goto("/?view=menu");
+  await expect.poll(() => attempts).toBe(1);
+  await expect(page.locator("#menuStatus")).toHaveText("Connecting to Sgurr…");
+  await expect(page.locator("#connectionDetail")).toContainText("up to a minute");
+  await expect(page.locator("#retryConnectionButton")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeDisabled();
+
+  for (const count of [2, 3]) {
+    await page.clock.fastForward(4000);
+    await expect.poll(() => attempts).toBe(count);
+  }
+  await expect(page.locator("#menuStatus")).toHaveText("Having trouble connecting?");
+  await expect(page.locator("#connectionDetail")).toContainText("An ad blocker or privacy extension may be blocking");
+  await expect(page.locator("#connectionDetail")).toContainText("private window");
+  await expect(page.locator("#retryConnectionButton")).toBeEnabled();
+
+  online = true;
+  await page.locator("#retryConnectionButton").click();
+  await expect(page.locator("#menuStatus")).toHaveText("Ready");
+  await expect(page.locator("#connectionHelp")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+  await expect(page.locator("#playBlackButton")).toBeEnabled();
+  await page.locator("#playWhiteButton").click();
+  await expect(page.locator("#appShell")).toBeVisible();
+  await expect(page.locator('[data-square="e2"]')).toBeVisible();
+});
+
+test("times out a stalled health check without overlapping requests", async ({ page }) => {
+  await installMockBackend(page);
+  await page.clock.install();
+  let attempts = 0;
+  await page.route(`${API_BASE}/health`, () => { attempts += 1; });
+  await page.goto("/?view=menu");
+  await expect.poll(() => attempts).toBe(1);
+  await page.clock.fastForward(8000);
+  expect(attempts).toBe(1);
+  await expect(page.locator("#menuStatus")).toHaveText("Connecting to Sgurr…");
+  await page.clock.fastForward(7000);
+  await expect.poll(() => page.evaluate(async () => {
+    const { app } = await import("/js/state.js");
+    return app.backendFailures;
+  })).toBe(1);
+  await page.clock.fastForward(1000);
+  await expect.poll(() => attempts).toBe(2);
+});
+
 test("shows the Enter prompt promptly with intro animations enabled", async ({ page }, testInfo) => {
   await installMockBackend(page);
   await page.addInitScript(() => localStorage.setItem("sgurrAnimationMode", "On"));

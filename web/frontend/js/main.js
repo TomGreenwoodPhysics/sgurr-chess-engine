@@ -23,6 +23,7 @@ refs.introCoreTrigger.addEventListener("click", wakeSgurr);
 refs.wakeSgurrButton.addEventListener("click", wakeSgurr);
 refs.playWhiteButton.addEventListener("click", () => startGame("white"));
 refs.playBlackButton.addEventListener("click", () => startGame("black"));
+refs.retryConnectionButton.addEventListener("click", refreshHealth);
 refs.watchButton.addEventListener("click", () => {
   if (app.publicDemo) {
     app.menuMessage = "Self-play is available locally; continuous play is disabled on the free demo.";
