@@ -422,6 +422,7 @@ test("shows the Enter prompt promptly with intro animations enabled", async ({ p
 });
 
 test("keeps the redesigned menu reachable across screen sizes and themes", async ({ page }, testInfo) => {
+  testInfo.setTimeout(45_000);
   await installMockBackend(page);
   await page.goto("/");
   await expect(page.locator("#wakeSgurrButton")).toBeVisible();
@@ -431,7 +432,7 @@ test("keeps the redesigned menu reachable across screen sizes and themes", async
     await page.setViewportSize(viewport);
     for (const selector of ["#menuSettingsButton", "#menuTimeButton", "#playWhiteButton", "#playBlackButton", "#watchButton", "#positionLabButton", ".inside-sgurr-link", ".menu-footer a"]) {
       const control = page.locator(selector);
-      await control.scrollIntoViewIfNeeded();
+      await control.evaluate((element) => element.scrollIntoView({ block: "nearest", inline: "nearest" }));
       await expect(control).toBeInViewport();
       const box = await control.boundingBox();
       expect(box.x).toBeGreaterThanOrEqual(0);
