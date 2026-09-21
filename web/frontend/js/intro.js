@@ -149,7 +149,10 @@ function finishIntro() {
   window.clearTimeout(app.intro.handoffTimer);
   window.clearTimeout(app.intro.revealTimer);
   app.intro.complete = true;
-  try { localStorage.setItem("sgurrIntroSeen", "1"); } catch { /* The intro still works without storage. */ }
+  // A direct menu/lab return also calls finishIntro, but has not played it.
+  if (app.intro.waking) {
+    try { localStorage.setItem("sgurrIntroSeen", "1"); } catch { /* The intro still works without storage. */ }
+  }
   app.intro.waking = false;
   app.intro.revealing = false;
   refs.menuScreen.style.transition = "none";

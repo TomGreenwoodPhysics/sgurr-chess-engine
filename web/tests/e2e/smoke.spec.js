@@ -525,6 +525,38 @@ test("keeps the redesigned menu reachable across screen sizes and themes", async
   await page.screenshot({ path: testInfo.outputPath("overview.png") });
 });
 
+test("a direct menu visit does not consume the first-visit intro", async ({ page }) => {
+  await installMockBackend(page);
+  await page.goto("/?view=menu");
+  await expect(page.locator("#introScreen")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+  expect(await page.evaluate(() => localStorage.getItem("sgurrIntroSeen"))).toBeNull();
+
+  await page.goto("/");
+  await expect(page.locator("#wakeSgurrButton")).toBeVisible();
+  await page.locator("#wakeSgurrButton").click();
+  await expect(page.locator("#introScreen")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("sgurrIntroSeen"))).toBe("1");
+  await page.reload();
+  await expect(page.locator("#introScreen")).toBeHidden();
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+});
+
+test("plays the full first-visit intro with default animation settings", async ({ page }) => {
+  test.setTimeout(20_000);
+  await installMockBackend(page);
+  await page.addInitScript(() => localStorage.removeItem("sgurrAnimationMode"));
+  await page.goto("/");
+  await expect(page.locator("#introScreen")).toHaveAttribute("data-motion", "on");
+  await page.locator("#wakeSgurrButton").click();
+  await expect(page.locator("#introScreen")).toHaveAttribute("data-state", "waking");
+  expect(await page.evaluate(() => localStorage.getItem("sgurrIntroSeen"))).toBeNull();
+  await expect(page.locator("#introScreen")).toHaveAttribute("data-state", "naming");
+  await expect(page.locator("#introScreen")).toBeHidden({ timeout: 12_000 });
+  expect(await page.evaluate(() => localStorage.getItem("sgurrIntroSeen"))).toBe("1");
+  await expect(page.locator("#playWhiteButton")).toBeEnabled();
+});
+
 test("skips the entrance on return and can replay it from Settings", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
