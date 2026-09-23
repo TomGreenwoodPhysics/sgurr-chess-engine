@@ -136,11 +136,14 @@ if __name__ == "__main__":
 
 
 # Quantise and export a net for the engine.
-def export(path, ftw, ftb, ow, ob, bucket_map=None):
+def export(path, ftw, ftb, ow, ob, bucket_map=None, qa=None):
     """ftw: (n_features,HL) float; ftb: (HL,) float; ow: (2*HL,) float; ob: scalar.
     Quantises with the engine's QA/QB scales and writes the RUKN format.
     bucket_map None -> version-1 (n_features must be INPUT); otherwise a
-    64-entry uint8 map -> version-2 with the map embedded after the header."""
+    64-entry uint8 map -> version-2 with the map embedded after the header.
+    qa overrides the accumulator scale; screlu nets want 181, not 255, and the
+    engine must be built with a matching SGR_QA or load() rejects the file."""
+    QA = globals()["QA"] if qa is None else int(qa)
     ftw = np.asarray(ftw)
     n_features = ftw.shape[0] if ftw.ndim == 2 else ftw.size // HL
     ftw_q = np.clip(np.round(ftw * QA), -32768, 32767).astype(np.int16).reshape(n_features, HL)

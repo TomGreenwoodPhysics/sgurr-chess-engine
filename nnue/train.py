@@ -20,6 +20,9 @@ import torch
 import torch.nn as nn
 
 INPUT, HL, SCALE = nt.INPUT, nt.HL, nt.SCALE
+# Set from --screlu before any model is built.
+SCRELU = False
+SCRELU_QA = 181
 PAD = INPUT            # Padding feature with a forced-zero embedding row
 MAXP = 32             # Maximum pieces on the board
 
@@ -250,7 +253,10 @@ class FactorizedNNUE(nn.Module):
         m = (stm == 0).unsqueeze(1)
         us = torch.where(m, accw, accb)
         them = torch.where(m, accb, accw)
-        x = torch.cat([torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)], dim=1)
+        cu, ct = torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)
+        if SCRELU:
+            cu, ct = cu * cu, ct * ct
+        x = torch.cat([cu, ct], dim=1)
         return self.out(x).squeeze(1)
 
 
@@ -273,7 +279,10 @@ class NNUE(nn.Module):
         m = (stm == 0).unsqueeze(1)
         us = torch.where(m, accw, accb)
         them = torch.where(m, accb, accw)
-        x = torch.cat([torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)], dim=1)
+        cu, ct = torch.clamp(us, 0, 1), torch.clamp(them, 0, 1)
+        if SCRELU:
+            cu, ct = cu * cu, ct * ct
+        x = torch.cat([cu, ct], dim=1)
         return self.out(x).squeeze(1)                  # Multiply by SCALE for centipawns
 
 
@@ -327,6 +336,9 @@ def main():
                     help="final lr for --schedule cosine")
     ap.add_argument("--lambda_", type=float, default=0.7,
                     help="target = lambda*eval_winprob + (1-lambda)*game_result")
+    ap.add_argument("--screlu", action="store_true",
+                    help="square the clipped activation; exports at QA=181 and "
+                         "needs an engine built -DSGR_SCRELU=1 -DSGR_QA=181")
     ap.add_argument("--wclip", type=float, default=127.0 / nt.QA,
                     help="clamp |ft weights| so the int16 accumulator can't overflow")
     ap.add_argument("--buckets", type=int, default=1, choices=[1, nt.BUCKETS],
@@ -350,6 +362,19 @@ def main():
     ap.add_argument("--seed", type=int, default=0,
                     help="seed for the train/val split and weight init")
     args = ap.parse_args()
+
+    global SCRELU
+    SCRELU = args.screlu
+    if SCRELU:
+        # Squaring costs an extra factor of QA, so the engine divides the sum
+        # by QA before the bias. The a*w step there is int16: QA * |out_weight|
+        # must stay under 32767, which nothing in this trainer enforced before.
+        ow_clip = 32767.0 / (SCRELU_QA * nt.QB)
+        args.wclip = min(args.wclip, 127.0 / SCRELU_QA)
+        print(f"screlu: export QA={SCRELU_QA}, ft clip {args.wclip:.4f}, "
+              f"out clip {ow_clip:.4f}")
+    else:
+        ow_clip = None
 
     # Set the module value before construction and export so --hl stays consistent.
     global HL
@@ -436,6 +461,8 @@ def main():
                     model.ft_delta.weight[:n_features].clamp_(-args.wclip * 0.25, args.wclip * 0.25)
                 else:
                     model.ft.weight[:n_features].clamp_(-args.wclip, args.wclip)
+                if ow_clip is not None:
+                    model.out.weight.clamp_(-ow_clip, ow_clip)
             total += loss.item() * sel.numel()
         train_loss = total / n_train
 
@@ -461,7 +488,8 @@ def main():
     ow = model.out.weight.detach().cpu().numpy().reshape(-1)    # (2*HL,)
     ob = float(model.out.bias.detach().cpu().numpy()[0])
     nt.export(args.out, ftw, ftb, ow, ob,
-              bucket_map=(nt.KING_BUCKET_MAP if args.buckets > 1 else None))
+              bucket_map=(nt.KING_BUCKET_MAP if args.buckets > 1 else None),
+              qa=(SCRELU_QA if SCRELU else None))
     print("wrote", args.out)
 
 
