@@ -84,6 +84,18 @@ inline void vec_sub(AccT* acc, const std::int16_t* w) {
 }
 
 // Clamp and multiply both perspectives before reducing to one int32.
+// One vector of output terms. Clipped ReLU multiplies the activation by its
+// weight; squared clipped ReLU multiplies by the activation a second time.
+// The a*w product stays in int16 only because load() checks
+// QA * max|out_weight| against 32767 -- at QA=255 that leaves ~2% headroom.
+inline __m512i out_term(__m512i a, __m512i wv) {
+#if SGR_SCRELU
+    return _mm512_madd_epi16(_mm512_mullo_epi16(a, wv), a);
+#else
+    return _mm512_madd_epi16(a, wv);
+#endif
+}
+
 inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     const __m512i zero = _mm512_setzero_si512();
     const __m512i vqa  = _mm512_set1_epi16(static_cast<short>(QA));
@@ -92,12 +104,12 @@ inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     for (int k = 0; k < HL; k += 32) {
         __m512i a = _mm512_loadu_si512(us + k);
         a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);   // Clipped ReLU.
-        sum = _mm512_add_epi32(sum, _mm512_madd_epi16(a, _mm512_loadu_si512(w + k)));
+        sum = _mm512_add_epi32(sum, out_term(a, _mm512_loadu_si512(w + k)));
     }
     for (int k = 0; k < HL; k += 32) {
         __m512i a = _mm512_loadu_si512(them + k);
         a = _mm512_min_epi16(_mm512_max_epi16(a, zero), vqa);
-        sum = _mm512_add_epi32(sum, _mm512_madd_epi16(a, _mm512_loadu_si512(w + HL + k)));
+        sum = _mm512_add_epi32(sum, out_term(a, _mm512_loadu_si512(w + HL + k)));
     }
     return _mm512_reduce_add_epi32(sum);
 }
@@ -129,6 +141,15 @@ inline std::int32_t hsum_epi32(__m256i v) {
     return _mm_cvtsi128_si32(s);
 }
 
+// See the AVX-512 out_term above for why a*w is safe in int16.
+inline __m256i out_term(__m256i a, __m256i wv) {
+#if SGR_SCRELU
+    return _mm256_madd_epi16(_mm256_mullo_epi16(a, wv), a);
+#else
+    return _mm256_madd_epi16(a, wv);
+#endif
+}
+
 inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     const __m256i zero = _mm256_setzero_si256();
     const __m256i vqa  = _mm256_set1_epi16(static_cast<short>(QA));
@@ -137,13 +158,13 @@ inline std::int32_t forward_sum(const AccT* us, const AccT* them) {
     for (int k = 0; k < HL; k += 16) {
         __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(us + k));
         a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);   // Clipped ReLU.
-        sum = _mm256_add_epi32(sum, _mm256_madd_epi16(
+        sum = _mm256_add_epi32(sum, out_term(
                   a, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + k))));
     }
     for (int k = 0; k < HL; k += 16) {
         __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(them + k));
         a = _mm256_min_epi16(_mm256_max_epi16(a, zero), vqa);
-        sum = _mm256_add_epi32(sum, _mm256_madd_epi16(
+        sum = _mm256_add_epi32(sum, out_term(
                   a, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + HL + k))));
     }
     return hsum_epi32(sum);
@@ -217,16 +238,33 @@ inline bool crosses_bucket(const UndoInfo& undo) {
 std::int64_t output_from_acc(int side_to_move) {
     const AccT* us   = g_acc[side_to_move == WHITE ? 0 : 1];
     const AccT* them = g_acc[side_to_move == WHITE ? 1 : 0];
+    // Squaring leaves the sum with an extra factor of QA, so it is divided out
+    // before the bias, which is stored at QA*QB either way.
 #if SGR_SIMD
-    return static_cast<std::int64_t>(forward_sum(us, them)) + g_net.out_bias;
+    std::int64_t sum = forward_sum(us, them);
 #else
     std::int64_t sum = 0;
-    for (int k = 0; k < HL; ++k)
-        sum += static_cast<std::int64_t>(crelu(us[k])) * g_net.out_weight[k];
-    for (int k = 0; k < HL; ++k)
-        sum += static_cast<std::int64_t>(crelu(them[k])) * g_net.out_weight[HL + k];
-    return sum + g_net.out_bias;
+    for (int k = 0; k < HL; ++k) {
+        std::int64_t v = crelu(us[k]);
+#if SGR_SCRELU
+        sum += v * v * g_net.out_weight[k];
+#else
+        sum += v * g_net.out_weight[k];
 #endif
+    }
+    for (int k = 0; k < HL; ++k) {
+        std::int64_t v = crelu(them[k]);
+#if SGR_SCRELU
+        sum += v * v * g_net.out_weight[HL + k];
+#else
+        sum += v * g_net.out_weight[HL + k];
+#endif
+    }
+#endif
+#if SGR_SCRELU
+    sum /= QA;
+#endif
+    return sum + g_net.out_bias;
 }
 
 }  // namespace
@@ -319,9 +357,18 @@ bool load(const std::string& path) {
     if (header[2] != HL || header[3] != QA
         || header[4] != QB || header[5] != SCALE) {
         std::cerr << "nnue: architecture mismatch in " << path
-                  << " (input=" << header[1] << " hl=" << header[2]
+                  << " (net wants input=" << header[1] << " hl=" << header[2]
                   << " qa=" << header[3] << " qb=" << header[4]
-                  << " scale=" << header[5] << ")\n";
+                  << " scale=" << header[5] << "; this build has hl=" << HL
+                  << " qa=" << QA << " qb=" << QB << " scale=" << SCALE << ")\n";
+        if (header[3] != QA) {
+            // QA also separates the two activations: crelu nets are 255,
+            // screlu nets 181. Loading one in the other build plays badly with
+            // nothing in the logs to explain it, so say what to rebuild with.
+            std::cerr << "nnue: rebuild with -DSGR_QA=" << header[3]
+                      << (header[3] == 255 ? " -DSGR_SCRELU=0" : " -DSGR_SCRELU=1")
+                      << " to use this network\n";
+        }
         return false;
     }
 
@@ -368,15 +415,31 @@ bool load(const std::string& path) {
         return false;
     }
 
-    // The SIMD output sum accumulates into int32 lanes. Every activation is
-    // clipped to [0, QA], so no lane can exceed QA * sum|out_weight|. That
-    // assumes one lane takes every weight, which cannot happen, so passing
-    // this is sufficient rather than merely likely. Costs one pass at load.
-    std::int64_t worst = 0;
-    for (std::int16_t w : g_net.out_weight) {
-        worst += (w < 0) ? -static_cast<std::int64_t>(w) : w;
+#if SGR_SIMD
+    // The SIMD output sum accumulates into int32 lanes, so bound it from the
+    // weights actually loaded rather than trusting the width alone. madd pairs
+    // elements, so array index i lands in lane (i % kStep) / 2; summing |w| per
+    // lane and scaling by the largest possible activation gives the exact
+    // worst case. Costs one pass at load.
+#if defined(__AVX512BW__)
+    constexpr int kStep = 32;
+#else
+    constexpr int kStep = 16;
+#endif
+    std::int64_t lane[kStep / 2] = {};
+    std::int64_t max_abs_w = 0;
+
+    for (std::size_t i = 0; i < g_net.out_weight.size(); ++i) {
+        std::int16_t w = g_net.out_weight[i];
+        std::int64_t aw = (w < 0) ? -static_cast<std::int64_t>(w) : w;
+        lane[(i % kStep) / 2] += aw;
+        if (aw > max_abs_w) max_abs_w = aw;
     }
-    worst *= QA;
+
+    std::int64_t worst = 0;
+    for (std::int64_t v : lane) if (v > worst) worst = v;
+    // Squaring costs another factor of QA per term.
+    worst *= SGR_SCRELU ? static_cast<std::int64_t>(QA) * QA : QA;
 
     if (worst > 2147483647LL) {
         std::cerr << "nnue: " << path << " can overflow the int32 output sum ("
@@ -385,6 +448,19 @@ bool load(const std::string& path) {
         g_active = false;
         return false;
     }
+
+#if SGR_SCRELU
+    // screlu multiplies the activation by its weight in int16 before squaring.
+    // QA=255 leaves only ~2% headroom here, so check it rather than assume it.
+    if (static_cast<std::int64_t>(QA) * max_abs_w > 32767) {
+        std::cerr << "nnue: " << path << " overflows the int16 a*w step of screlu"
+                  << " (QA * " << max_abs_w << " > 32767). This net needs a"
+                  << " smaller QB or a crelu build.\n";
+        g_active = false;
+        return false;
+    }
+#endif
+#endif
 
     g_active = true;
     return true;
