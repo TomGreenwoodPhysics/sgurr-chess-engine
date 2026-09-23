@@ -25,7 +25,7 @@ function initIntro() {
   if (introMotionEnabled()) {
     spawnIntroMotes();
   }
-  refs.introState.textContent = "Sgurr v9.0";
+  refs.introState.textContent = "Sgurr v9.1";
   refs.introCore.classList.add("dormant");
   refs.introCore.classList.remove("ready", "thinking");
   refs.introCoreTrigger.disabled = false;

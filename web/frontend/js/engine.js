@@ -282,7 +282,7 @@ async function refreshHealth() {
     app.backendFailures = 0;
     app.engineExists = Boolean(health.engine_exists);
     app.publicDemo = Boolean(health.public_demo);
-    app.backendDetail = app.engineExists ? "engine found" : "build sgr_v9_0";
+    app.backendDetail = app.engineExists ? "engine found" : "build sgr_v9_1";
     if (app.error === "Backend unavailable" || /fetch/i.test(app.error)) {
       app.error = "";
       app.status = app.mode === "menu" ? "Choose a side" : "Backend reconnected";

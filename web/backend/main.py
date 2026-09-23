@@ -94,6 +94,17 @@ TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # `rating` supplies both the subtitle and the frontend ladder.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
+        # Controlled pool calibration: 3206.2 +/-11.8 over 1,724 games.
+        # Same training data as v9.0. The gain is a tuned search batch plus a
+        # SCReLU network, which needs its own net and its own QA.
+        "id": "v9.1",
+        "exe": CPP_DIR / "sgr_v9_1.exe",
+        "net": NETS_DIR / "gen9_screlu.nnue",
+        "label": 'Sgurr v9.1 "Dearg"',
+        "tech": "GEN9 SCRELU NNUE (102M SELF-PLAY)",
+        "rating": 3206,
+    },
+    {
         # Controlled pool calibration: 3081.2 +/-6.7 over 6,508 games.
         "id": "v9.0",
         "exe": CPP_DIR / "sgr_v9_0.exe",
@@ -255,7 +266,7 @@ DEMO_TRACE_REQUESTS_PER_MINUTE = bounded_env_int(
     "SGURR_TRACE_REQUESTS_PER_MINUTE", 6, 1, 60
 )
 MAX_REQUEST_BYTES = 65_536
-EXPECTED_NET_SHA256 = "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1"
+EXPECTED_NET_SHA256 = "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e"
 NNUE_ASSET_ROUTE = f"/api/nnue/gen9/{EXPECTED_NET_SHA256}.nnue"
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
@@ -523,7 +534,7 @@ def engine_availability(
     if PUBLIC_DEMO and engine_id != DEFAULT_ENGINE_ID:
         return (
             False,
-            "Available locally; the free demo includes Sgurr v9.0 only.",
+            "Available locally; the free demo includes Sgurr v9.1 only.",
             "LOCAL ONLY",
         )
     if not Path(entry["exe"]).is_file():

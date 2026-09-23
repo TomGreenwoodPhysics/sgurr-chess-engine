@@ -7,10 +7,10 @@ const EXPECTED_NETWORK = Object.freeze({
   version: 1,
   input: 768,
   hidden: 384,
-  qa: 255,
+  qa: 181,
   qb: 64,
   scale: 400,
-  sha256: "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1",
+  sha256: "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e",
 });
 
 function readInt16Array(view, offset, count) {
@@ -165,7 +165,7 @@ function evaluateFen(network, fen) {
   );
   const whiteContribution = new Int32Array(network.hidden);
   const blackContribution = new Int32Array(network.hidden);
-  let raw = network.outputBias;
+  let sum = 0;
   let clippedLow = 0;
   let clippedHigh = 0;
 
@@ -178,11 +178,15 @@ function evaluateFen(network, fen) {
     if (blackAccumulator[lane] <= 0) clippedLow += 1;
     if (whiteAccumulator[lane] >= network.qa) clippedHigh += 1;
     if (blackAccumulator[lane] >= network.qa) clippedHigh += 1;
-    whiteContribution[lane] = whiteValue * whiteOutputWeights[lane];
-    blackContribution[lane] = blackValue * blackOutputWeights[lane];
-    raw += whiteContribution[lane] + blackContribution[lane];
+    // Squared clipped ReLU: the activation multiplies itself before the
+    // weight. Squaring leaves an extra factor of qa in the sum, divided out
+    // below before the bias is added.
+    whiteContribution[lane] = whiteValue * whiteValue * whiteOutputWeights[lane];
+    blackContribution[lane] = blackValue * blackValue * blackOutputWeights[lane];
+    sum += whiteContribution[lane] + blackContribution[lane];
   }
 
+  const raw = Math.trunc(sum / network.qa) + network.outputBias;
   const centipawns = Math.max(
     -29000,
     Math.min(29000, Math.trunc((raw * network.scale) / (network.qa * network.qb))),
