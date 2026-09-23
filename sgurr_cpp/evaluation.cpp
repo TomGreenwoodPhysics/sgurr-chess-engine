@@ -549,6 +549,10 @@ U64 mix64(U64 x) {
 
 } // namespace
 
+U64 Board::pawn_key() const {
+    return mix64(bitboards[WP] ^ mix64(bitboards[BP]));
+}
+
 int Board::evaluate_pawn_structure() const {
     U64 wp = bitboards[WP];
     U64 bp = bitboards[BP];

@@ -81,47 +81,64 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 
 // Internal iterative reduction for nodes without a TT move.
 #ifndef SGR_IIR
-#define SGR_IIR 0
+#define SGR_IIR 1
 #endif
 
 // Scale null-move reduction by depth and the eval surplus over beta.
 #ifndef SGR_NMPSCALE
-#define SGR_NMPSCALE 0
+#define SGR_NMPSCALE 1
 #endif
 
 // Verified razoring at deeper shallow nodes.
 #ifndef SGR_RAZOR
-#define SGR_RAZOR 0
+#define SGR_RAZOR 1
 #endif
 
 // Skip shallow quiets that cannot overcome the futility margin.
 #ifndef SGR_FUTILITY
-#define SGR_FUTILITY 0
+#define SGR_FUTILITY 1
 #endif
 
 // Prune moves below a depth-scaled SEE allowance.
 #ifndef SGR_SEEPRUNE
-#define SGR_SEEPRUNE 0
+#define SGR_SEEPRUNE 1
 #endif
 
 // Prune shallow quiets with strongly negative history.
 #ifndef SGR_HISTPRUNE
-#define SGR_HISTPRUNE 0
+#define SGR_HISTPRUNE 1
 #endif
 
 // Capture history indexed by mover, destination and victim type.
 #ifndef SGR_CAPHIST
-#define SGR_CAPHIST 0
+#define SGR_CAPHIST 1
 #endif
 
 // Principal variation search at the root.
 #ifndef SGR_ROOTPVS
-#define SGR_ROOTPVS 0
+#define SGR_ROOTPVS 1
 #endif
 
 // Scale evaluation toward zero as the halfmove clock nears a draw.
 #ifndef SGR_EVALSCALE
-#define SGR_EVALSCALE 0
+#define SGR_EVALSCALE 1
+#endif
+
+// Correct the static eval by how wrong it has proved before in positions with
+// the same pawn structure. Needs SGR_IMPROVING, which is where the per-node
+// static eval is computed.
+#ifndef SGR_CORRHIST
+#define SGR_CORRHIST 0
+#endif
+#if SGR_CORRHIST && !SGR_IMPROVING
+#error "SGR_CORRHIST needs SGR_IMPROVING for the per-node static eval"
+#endif
+
+// Scale evaluation by the material left on the board. akimbo measured a scalar
+// term like this beating its own eight output buckets by +4.34 over 24,720
+// games, for a fraction of the work.
+#ifndef SGR_MATSCALE
+#define SGR_MATSCALE 0
 #endif
 
 
@@ -143,9 +160,9 @@ struct SearchParams {
     int null_move_reduction     = 2;
     int lmr_min_depth           = 3;
     int lmr_full_depth_moves    = 2;
-    int lmr_div_x100            = 250;   // Scaled form of the 2.5 LMR divisor.
+    int lmr_div_x100            = 241;   // SPSA 250 -> 241   // Scaled form of the 2.5 LMR divisor.
     // Near-inert until history scaling is validated in games.
-    int histlmr_div             = 400'000;
+    int histlmr_div             = 228;   // SPSA 400000 -> 228
     int histlmr_max             = 2;
 
     // Extensions
@@ -153,33 +170,36 @@ struct SearchParams {
     int singular_tt_depth_slack = 3;
     int singular_margin         = 2;
     int check_ext_max_depth     = 4;
+    // score * (base + phase) / div, phase 0..24. Neutral at full material.
+    int matscale_base           = 104;
+    int matscale_div            = 128;
 
     // Windows
     int aspiration_window       = 50;
     int delta_margin            = 200;
 
     // Version 9 experiments
-    int iir_min_depth           = 4;     // Reduce nodes without a TT move from this depth.
+    int iir_min_depth           = 8;   // SPSA 4 -> 8     // Reduce nodes without a TT move from this depth.
     int iir_reduction           = 1;
     int nmp_depth_div           = 6;     // Depth divisor for null-move reduction.
-    int nmp_eval_div            = 200;   // Eval-surplus divisor for null-move reduction.
+    int nmp_eval_div            = 71;   // SPSA 200 -> 71   // Eval-surplus divisor for null-move reduction.
     int nmp_eval_max            = 3;     // Maximum eval-based reduction.
     int razor_max_depth         = 4;     // Maximum depth for verified razoring.
     // Centipawns per ply in the razoring margin.
-    int razor_margin            = 100;
+    int razor_margin            = 500;   // SPSA 100 -> 500
 
     int fut_max_depth           = 6;     // Maximum move-loop futility depth.
-    int fut_margin              = 120;   // Centipawns per remaining ply.
+    int fut_margin              = 144;   // SPSA 120 -> 144   // Centipawns per remaining ply.
     int see_max_depth           = 8;     // Maximum SEE pruning depth.
-    int see_quiet_margin        = 50;    // Linear quiet-move SEE margin.
-    int see_cap_margin          = 20;    // Quadratic capture SEE margin.
+    int see_quiet_margin        = 46;   // SPSA 50 -> 46    // Linear quiet-move SEE margin.
+    int see_cap_margin          = 26;   // SPSA 20 -> 26    // Quadratic capture SEE margin.
     int histprune_max_depth     = 3;
     // Prune quiets below the negative history margin times depth.
-    int histprune_margin        = 50;
+    int histprune_margin        = 75;   // SPSA 50 -> 75
 
     // Keep capture history within its MVV-LVA tier.
     int caphist_div             = 1;
-    int caphist_max             = 256;
+    int caphist_max             = 87;   // SPSA 256 -> 87
     // Start and floor for halfmove-clock evaluation scaling.
     int evalscale_start         = 40;
     int evalscale_min_pct       = 40;    // Minimum retained evaluation percentage.
@@ -248,6 +268,21 @@ public:
 #if SGR_EVALSCALE
     // Damp non-mate evaluations as the fifty-move clock rises.
     int scale_for_fifty_move(const Board& board, int score) const;
+#endif
+#if SGR_MATSCALE
+    // Damp evaluations as material comes off.
+    int scale_for_material(const Board& board, int score) const;
+#endif
+#if SGR_CORRHIST
+    static constexpr int CORRHIST_SIZE  = 1 << 14;
+    static constexpr int CORRHIST_MASK  = CORRHIST_SIZE - 1;
+    static constexpr int CORRHIST_GRAIN = 256;   // fixed point, keeps sub-cp detail
+    static constexpr int CORRHIST_MAX   = CORRHIST_GRAIN * 32;
+    std::array<std::array<int, CORRHIST_SIZE>, 2> pawn_corrhist{};
+
+    int corrected_eval(const Board& board, int raw) const;
+    void update_corrhist(const Board& board, int depth, int score, int static_eval);
+    void reset_corrhist();
 #endif
     int evaluate_quiet_position(const Board& board) const;
     MoveList generate_moves(Board& board) const;

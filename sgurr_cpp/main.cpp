@@ -60,6 +60,8 @@ const Tunable TUNABLES[] = {
     {"SingularTtDepthSlack",  &SearchParams::singular_tt_depth_slack,   0,       8},
     {"SingularMargin",        &SearchParams::singular_margin,           1,      20},
     {"CheckExtMaxDepth",      &SearchParams::check_ext_max_depth,       0,      16},
+    {"MatScaleBase",          &SearchParams::matscale_base,            32,     256},
+    {"MatScaleDiv",           &SearchParams::matscale_div,             64,     512},
     // Windows
     {"AspirationWindow",      &SearchParams::aspiration_window,        10,     300},
     {"DeltaMargin",           &SearchParams::delta_margin,             50,     600},

@@ -144,6 +144,8 @@ public:
 
     int game_phase() const;
     int non_pawn_material_total() const;
+    // Hash of the pawn structure alone, for correction history.
+    U64 pawn_key() const;
     bool opening_phase_active() const;
     int evaluate_opening_principles_for_colour(int colour) const;
     int evaluate_opening_principles() const;

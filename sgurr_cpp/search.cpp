@@ -485,6 +485,9 @@ void Engine::clear_transposition_table() {
 void Engine::clear_search_heuristics() {
     reset_killers();
     reset_history();
+#if SGR_CORRHIST
+    reset_corrhist();
+#endif
 }
 
 void Engine::clear_for_new_position() {
@@ -726,13 +729,66 @@ bool Engine::time_is_up() const {
     return elapsed_seconds(start_time) >= *time_limit;
 }
 
-int Engine::evaluate_position(const Board& board) const {
-#if SGR_EVALSCALE
-    return scale_for_fifty_move(board, board.evaluate());
-#else
-    return board.evaluate();
-#endif
+#if SGR_CORRHIST
+// Nudge the static eval by how wrong it has proved in positions sharing this
+// pawn structure. Pawn structure changes slowly, so one correction stays
+// useful across many nodes -- which is why pawn-indexed correction measures
+// larger than the material- or move-indexed variants in other engines.
+int Engine::corrected_eval(const Board& board, int raw) const {
+    if (raw == NO_STATIC_EVAL) {
+        return raw;
+    }
+    int c = pawn_corrhist[board.side_to_move][board.pawn_key() & CORRHIST_MASK];
+    int adjusted = raw + c / CORRHIST_GRAIN;
+    return std::clamp(adjusted, -MATE_THRESHOLD + 1, MATE_THRESHOLD - 1);
 }
+
+// Blend the observed error into the entry, weighted by depth: a deep search
+// disagreeing with the static eval is better evidence than a shallow one.
+void Engine::update_corrhist(const Board& board, int depth, int score,
+                             int static_eval) {
+    if (static_eval == NO_STATIC_EVAL || std::abs(score) >= MATE_THRESHOLD) {
+        return;
+    }
+    int& entry = pawn_corrhist[board.side_to_move][board.pawn_key() & CORRHIST_MASK];
+    int diff = (score - static_eval) * CORRHIST_GRAIN;
+    int weight = std::min(depth + 1, 16);
+    entry = (entry * (256 - weight) + diff * weight) / 256;
+    entry = std::clamp(entry, -CORRHIST_MAX, CORRHIST_MAX);
+}
+
+void Engine::reset_corrhist() {
+    for (auto& side : pawn_corrhist) {
+        side.fill(0);
+    }
+}
+#endif
+
+int Engine::evaluate_position(const Board& board) const {
+    int score = board.evaluate();
+#if SGR_MATSCALE
+    score = scale_for_material(board, score);
+#endif
+#if SGR_EVALSCALE
+    score = scale_for_fifty_move(board, score);
+#endif
+    return score;
+}
+
+#if SGR_MATSCALE
+// The same raw score means less once the board simplifies, so shrink it toward
+// zero as material leaves. game_phase() runs 24 (full) down to 0 (bare kings),
+// and the defaults are neutral at 24.
+int Engine::scale_for_material(const Board& board, int score) const {
+    if (std::abs(score) > MATE_THRESHOLD) {
+        return score;
+    }
+    int phase = board.game_phase();
+    return static_cast<int>(
+        static_cast<long long>(score) * (params.matscale_base + phase)
+        / params.matscale_div);
+}
+#endif
 
 #if SGR_EVALSCALE
 // Scale non-mate evaluations down as the halfmove clock approaches 100.
@@ -1110,6 +1166,9 @@ int Engine::negamax(
 
     if (!in_check_node) {
         node_static_eval = evaluate_position(board);
+#if SGR_CORRHIST
+        node_static_eval = corrected_eval(board, node_static_eval);
+#endif
         improving = ply >= 2
             && ss_static_eval[ply - 2] != NO_STATIC_EVAL
             && node_static_eval > ss_static_eval[ply - 2];
@@ -1637,6 +1696,15 @@ int Engine::negamax(
     if (!excluded.has_value()) {
         store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
     }
+
+#if SGR_CORRHIST
+    // Learn only from quiet best moves. A capture's score reflects tactics
+    // rather than the static eval having misjudged the position.
+    if (!excluded.has_value() && !in_check_node
+        && (best_move_key == NO_MOVE || !is_noisy_move(board, best_move_key))) {
+        update_corrhist(board, depth, best_score, node_static_eval);
+    }
+#endif
 
 #if SGR_TRACE_SEARCH
     trace_end(trace_scope.id, "complete", best_score);
