@@ -4,6 +4,37 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars, never estimates.
 
+## v9.1 "Dearg" (Sgùrr Dearg), 2026-09-23
+
+The largest single-version gain the project has measured. Same network data as
+v9.0, same 102,011,689 self-play positions: everything here came from search
+and from the shape of the evaluation, not from new data.
+
+- **Pool calibration gives 3206.2 ±11.8** over 1,724 games at 10+0.1, against
+  the same pool-2026-08-D as v9.0. That is **+124.5 in the same solve**, close
+  to double the previous record (v9.0's +69 over v8.2).
+- **The ten-item v9.0 search batch is now on by default.** Held back in v9.0 at
+  −1.0 ±21.1, it measures **+90.2 ±16.7** once its constants are tuned. The
+  batch was never the problem; the settings were. `HistLmrDiv` alone had shipped
+  at 400,000 against a tuned value of 228.
+- **SPSA tune over 24,000 games** at 8+0.08, ten parameters. The values are now
+  compiled in as defaults rather than passed as flags, so a plain release build
+  is the engine that was measured.
+- **SCReLU activation, +22.6 ±17.1.** The hidden layer squares its clipped
+  output instead of using it directly. This needs a matching network, so gen9
+  was retrained on the identical data as `nets/gen9_screlu.nnue`.
+- **QA is 181, not 255.** Squaring moves where the useful precision sits. At
+  QA=255 the same change measured +5.9 ±16.9, which is to say nothing; at 181 it
+  measures +22.6. One integer separated a shipped feature from a wasted one.
+- **The bundle beats the sum of its parts.** Batch+tune and SCReLU measured
+  +90.2 and +22.6 alone, and **+142.3 ±18.7** together, against a prior worry
+  that eval-threshold pruning tuned on one activation would misfire on another.
+- The shipped network is `nets/gen9_screlu.nnue`. A v9.0-compatible binary still
+  builds with `-DSGR_SCRELU=0 -DSGR_QA=255`.
+
+**Measured and rejected:** pawn correction history (−1.4 ±16.3) and material
+scaling (−10.1 ±17.2). Both remain in the tree behind default-off toggles.
+
 ## v9.0 "Dearg" (Sgùrr Dearg), 2026-09-20
 
 Gen9 keeps the existing search and replaces the network. It was trained on

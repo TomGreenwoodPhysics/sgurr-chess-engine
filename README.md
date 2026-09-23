@@ -7,8 +7,8 @@
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
 Sgurr is a C++20 UCI chess engine with an NNUE trained on its own self-play
-games. The current release is **v9.0 "Dearg"**, measured at an estimated
-**3081** on a CCRL-Blitz-anchored scale.
+games. The current release is **v9.1 "Dearg"**, measured at an estimated
+**3206** on a CCRL-Blitz-anchored scale.
 
 The hosted site runs the real Sgurr executable. It is on Render's free tier,
 so the first visit after a quiet period can take 30 to 60 seconds to start.
@@ -16,7 +16,7 @@ so the first visit after a quiet period can take 30 to 60 seconds to start.
 <details>
 <summary><strong>About the hosted demo</strong></summary>
 
-This is the real Sgurr v9.0 C++ engine, not a static or prerecorded version of
+This is the real Sgurr v9.1 C++ engine, not a static or prerecorded version of
 the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
@@ -27,7 +27,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v9.0 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.1 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -192,11 +192,12 @@ split-frontend development setup.
 
 ## Strength
 
-Sgurr v9.0 was measured under controlled conditions matching CCRL's published
+Sgurr v9.1 was measured under controlled conditions matching CCRL's published
 requirements for hash, book, pondering and thread count.
 
 | engine | rating | pool | games |
 |---|---|---|---|
+| **Sgurr v9.1 "Dearg"** | **3206.2 ±11.8** sampling, **about ±25** systematic | pool-2026-08-D | 1,724 |
 | **Sgurr v9.0 "Dearg"** | **3081.2 ±6.7** sampling, **about ±25** systematic | pool-2026-08-D | 6,508 |
 | **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **about ±25** systematic | pool-2026-08-D | 9,890 |
 
@@ -207,8 +208,12 @@ CCRL Blitz ratings.
 
 The small error bar measures sampling noise. The larger one reflects the fact
 that the anchors do not transfer perfectly to another machine and time control.
-The five opponents place v9.0 between roughly 3072 and 3118. More games would
+The five opponents place v9.1 between roughly 3187 and 3248. More games would
 narrow the first uncertainty, but not that spread.
+
+Version-to-version gaps are the firmer number. Both versions are measured
+against the same anchors in one solve, so the transfer bias cancels: v9.1 is
+**+124.5 ±13.6** over v9.0, and that figure carries no systematic term.
 
 The v8.2 figure replaced an earlier estimate of 3058. The engine did not
 change. The measurement did. The old setup left hash sizes uncontrolled, used
@@ -266,7 +271,10 @@ speed without changing search behaviour.
 
 Negative results stay in the repository. v3.1 rates below v3.0. Eight king
 buckets reduced training loss but measured −10.7 ±16 Elo, so the plain network
-shipped. A ten-item v9.0 search batch measured −1.0 ±21.1 and was held back.
+shipped. A ten-item v9.0 search batch measured −1.0 ±21.1 and was held back; tuning its
+constants a month later turned the same code into +90.2 ±16.7, so the batch was
+never the problem. Pawn correction history (−1.4 ±16.3) and material scaling
+(−10.1 ±17.2) are in the tree and switched off.
 
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md) has the complete account, including
 the findings that were later withdrawn.
@@ -308,7 +316,7 @@ blocking a freshly linked unsigned binary before it silently forfeits a match.
 Run the engine over UCI.
 
 ```bash
-SGR_EVALFILE=../nets/gen9.nnue ./sgr.exe
+SGR_EVALFILE=../nets/gen9_screlu.nnue ./sgr.exe
 ```
 
 ```text
@@ -342,7 +350,7 @@ variables are covered in [web/README.md](web/README.md).
 From `sgurr_cpp/`, the main engine checks are straightforward.
 
 ```bash
-SGR_EVALFILE=../nets/gen9.nnue ./sgr.exe bench
+SGR_EVALFILE=../nets/gen9_screlu.nnue ./sgr.exe bench
 ./sgr.exe bench
 ./sgr.exe test
 ./sgr.exe seetest
@@ -397,6 +405,7 @@ canonical and the peak names are codenames.
 
 | version | change | measured result |
 |---|---|---|
+| v9.1 "Dearg" | SPSA-tuned search batch and a SCReLU network on the same data | 3206 ±12 in the controlled pool |
 | v9.0 "Dearg" | Gen9 NNUE trained on 102.0 million self-play positions | 3081 ±7 in the controlled pool |
 | v8.0 "Thearlaich" | Gen8 NNUE trained on 55.9 million clean positions | +126.5 ±26.6 against v7.0 |
 | v8.1 "Thearlaich" | PGO, ThinLTO and nine node-identical optimisations | about 20% faster and +21.2 ±8.7 against v8.0 |

@@ -98,7 +98,7 @@ cache. Search is extremely branch-heavy, so PGO carries most of the win.
     $C $F -fprofile-generate=./pgo $S -o sgr_prof.exe
 
     # 2. run a representative workload (bench is exactly that)
-    SGR_EVALFILE=../nets/gen9.nnue ./sgr_prof.exe bench 13
+    SGR_EVALFILE=../nets/gen9_screlu.nnue ./sgr_prof.exe bench 13
 
     # 3. merge the raw profile
     /c/msys64/clang64/bin/llvm-profdata merge -output=pgo/sgurr.profdata pgo/*.profraw
@@ -133,6 +133,22 @@ a number measured in games).
 
 The `bench` fingerprint is byte-identical between the two builds, which is
 what makes the speedup free rather than a behaviour change (see below).
+
+## Networks and the build that matches them
+
+A network is tied to the build that trained it. v9.1 uses SCReLU at QA=181;
+v9.0 and earlier use plain clipped ReLU at QA=255. The header records `qa` and
+`load()` refuses a mismatch rather than evaluating a net with the wrong
+activation, which would play badly with nothing in the logs to say why.
+
+| release | network | build |
+|---|---|---|
+| v9.1 and later | `nets/gen9_screlu.nnue` | defaults, no flags needed |
+| v9.0 and earlier | `nets/gen9.nnue`, `nets/gen8.nnue` | `-DSGR_SCRELU=0 -DSGR_QA=255` |
+
+So a v9.0-compatible binary is still one command:
+
+    ./build.sh -r -o sgr_v9_0.exe --version 9.0 -DSGR_SCRELU=0 -DSGR_QA=255
 
 ## Datagen
 
