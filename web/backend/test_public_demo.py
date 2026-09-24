@@ -22,6 +22,7 @@ class PublicDemoTest(unittest.TestCase):
         self.assertEqual(
             ratings,
             {
+                "v9.1": 3206,
                 "v9.0": 3081,
                 "v8.2": 3012,
                 "v8.1": 2981,
