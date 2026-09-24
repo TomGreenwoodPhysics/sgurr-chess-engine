@@ -329,7 +329,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=16384)
     ap.add_argument("--lr", type=float, default=1e-3)
-    ap.add_argument("--schedule", choices=["constant", "cosine"], default="constant",
+    ap.add_argument("--schedule", choices=["constant", "cosine"], default="cosine",
                     help="cosine decays lr to --lr_min over the whole run; "
                          "constant lr degrades the net past ~2k steps")
     ap.add_argument("--lr_min", type=float, default=1e-5,
@@ -441,6 +441,10 @@ def main():
         steps_per_epoch = (n_train + args.batch - 1) // args.batch
         sched = torch.optim.lr_scheduler.CosineAnnealingLR(
             opt, T_max=args.epochs * steps_per_epoch, eta_min=args.lr_min)
+    # Logged so a run's recipe can be read back from its log alone.
+    print(f"schedule: {args.schedule}, lr {args.lr:g}"
+          + (f" -> {args.lr_min:g}" if sched is not None else "")
+          + f", {args.epochs} epochs, lambda {args.lambda_}")
 
     for epoch in range(args.epochs):
         order = torch.randperm(n_train)        # Shuffle only training indices
