@@ -1,0 +1,43 @@
+{
+  "name": "v91_untuned",
+  "_why": [
+    "The 17 search parameters no tune has touched: hand-set since they were",
+    "written. Time management stays out (tune it against the pool, METHODOLOGY 6)",
+    "and razoring stays out (the batch tune already moved it to 500, effectively off).",
+    "tools/seedcheck_spsa.sh copies this into runs/spsa/v91_untuned/config.json and",
+    "points net at whichever net won the cosine run. This file keeps the v9.1 net so",
+    "it is safe to run as it stands.",
+    "",
+    "c is at least 1.5 on small integers: c_k decays to c/2.36 by iteration 5000, and",
+    "below 0.5 both perturbations round to the same value and the step is pure noise."
+  ],
+  "engine": "sgurr_cpp/sgr_v91_spsa.exe",
+  "net": "nets/gen9_screlu.nnue",
+  "book": "testing/8moves_v3.pgn",
+  "book_format": "pgn",
+  "tc": "8+0.08",
+  "hash": 256,
+  "concurrency": 7,
+  "games_per_iter": 8,
+  "iterations": 5000,
+  "seed": 2,
+  "params": [
+    {"name": "RfpMargin",            "c": 12},
+    {"name": "RfpMaxDepth",          "c": 1.5},
+    {"name": "LmpCount1",            "c": 1.5},
+    {"name": "LmpCount2",            "c": 2},
+    {"name": "LmpCount3",            "c": 3},
+    {"name": "FutilityMargin1",      "c": 15},
+    {"name": "FutilityMargin2",      "c": 25},
+    {"name": "NullMoveReduction",    "c": 1.5},
+    {"name": "NmpDepthDiv",          "c": 1.5},
+    {"name": "LmrMinDepth",          "c": 1.5},
+    {"name": "LmrFullDepthMoves",    "c": 1.5},
+    {"name": "SingularMinDepth",     "c": 1.5},
+    {"name": "SingularTtDepthSlack", "c": 1.5},
+    {"name": "SingularMargin",       "c": 1.5},
+    {"name": "CheckExtMaxDepth",     "c": 1.5},
+    {"name": "AspirationWindow",     "c": 8},
+    {"name": "DeltaMargin",          "c": 25}
+  ]
+}
