@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Measure a release against the anchored calibration pool at 10+0.1.
-# Ordo combines every calibration PGN to keep releases on one rating scale.
+# Measure a release against the anchored calibration pool in pool.json.
+# Ordo solves every calibration PGN from that pool, so versions measured on it
+# share one scale. Games from earlier pools are never mixed in.
 #
 # The monitor stops the gauntlet once the 95% interval reaches TARGET_ERR.
 # Error falls with the square root of games, so tight targets can take hours.
@@ -55,24 +56,35 @@ TARGET_ERR="${5:-5}"
 
 STAMP=$(date +%Y-%m-%d_%H%M)
 OUT="$ROOT/runs/calibrate/${VERSION}_$STAMP"
+
+# Time control, hash and games directory come from pool.json, so a pool is
+# defined in one place. Hash is the same for every engine, as CCRL requires.
+# Each pool keeps its games in its own directory and is solved on those alone:
+# mixing pools mixes conditions. CALIB_GAMES_DIR redirects smoke tests.
+read -r POOL_ID TC HASH GAMES_DIR <<< "$(python -c "
+import json
+p=json.load(open(r'$WIN_BM/pool.json'))
+print(p['pool_id'], p['time_control'], p['hash_mb'], p['games_dir'])
+" | tr -d '\r')"
+[ -n "${GAMES_DIR:-}" ] || { echo "ABORT: pool.json has no games_dir" >&2; exit 1; }
+GAMES="$BM/${CALIB_GAMES_DIR:-$GAMES_DIR}"
 # Keep every interrupted or resumed run as a separate append-only input to
 # Ordo. A date-only filename could overwrite an earlier run from the same day.
-PGN="$BM/games/calib-$VERSION-$STAMP.pgn"
-
-# Run settings
-TC=10+0.1              # Pool control used since pool-2026-07-A
+PGN="$GAMES/calib-$VERSION-$STAMP.pgn"
 CONCURRENCY=7
+ROUNDS="${4:-500}"     # Each round is two games against every pool engine
+CHECK_EVERY="${CALIB_CHECK_EVERY:-1800}"   # Seconds between solves, plus solve time
+MIN_GAMES="${CALIB_MIN_GAMES:-400}"        # Wait for this many games before solving
 
-# Give every engine the same 256 MB hash to match CCRL conditions.
-# Engine defaults vary enough to distort ratings against the anchors.
-# All pool engines advertise support for this value.
-HASH=256
-ROUNDS="${4:-500}"     # Five opponents make 10 games per round
-CHECK_EVERY=1800       # Seconds between checks, plus Ordo solve time
-MIN_GAMES=400          # Wait for this many games before solving
-
-mkdir -p "$OUT" "$BM/games"
+mkdir -p "$OUT" "$GAMES"
 export SGR_EVALFILE="$NET"
+
+# Anchor every pool engine at its rating in pool.json, and nothing else.
+python - "$WIN_BM/pool.json" <<'EOF' | tr -d '\r' > "$OUT/anchors.txt"
+import json, sys
+for e in json.load(open(sys.argv[1]))["engines"]:
+    print(f'"{e["name"]}",{e["ccrl_blitz"]}')
+EOF
 
 # shellcheck source=testing/gauntlet_lib.sh
 . "$ROOT/testing/gauntlet_lib.sh"
@@ -135,14 +147,13 @@ echo
     echo "commit    : $(cd "$ROOT" && git rev-parse HEAD)"
     echo "engine    : $REL_EXE  ($(printf 'uci\nquit\n' | "$REL_EXE" 2>/dev/null | sed -n 's/^id name //p'))"
     echo "net       : $NET"
-    echo "pool      : $(python -c "import json;print(json.load(open(r'$WIN_BM/pool.json'))['pool_id'])")"
-    echo "tc        : $TC   concurrency $CONCURRENCY"
+    echo "pool      : $POOL_ID   games in $GAMES"
+    echo "tc        : $TC   hash $HASH   concurrency $CONCURRENCY"
     echo "stop when : +/-$TARGET_ERR   (checked every $((CHECK_EVERY/60)) min after $MIN_GAMES games)"
     echo "pgn       : $PGN"
     echo "seed      : $SEED   (openings shuffle; change it when continuing a run)"
     echo
     echo "bench 13  : $("$REL_EXE" bench 13 2>/dev/null | grep '^nodes')"
-    echo "(v8.0/v8.1 are the same node tree: 13614729)"
 } | tee "$OUT/manifest.txt"
 echo
 
@@ -153,14 +164,14 @@ solve() {
     local threads="${1:-2}"
     local combined="$OUT/all_calib.pgn"
     : > "$combined"
-    for p in "$BM"/games/calib-*.pgn; do
+    for p in "$GAMES"/calib-*.pgn; do
         [ -f "$p" ] && cat "$p" >> "$combined"
     done
 
     # Write to a scratch file because Ordo truncates its output before solving.
     # Replace the last table only after a successful solve.
     local new="$OUT/ordo.new"
-    "$ORDO" -Q -p "$combined" -m "$BM/anchors.txt" -W -s 1500 -n "$threads" -N 1 \
+    "$ORDO" -Q -p "$combined" -m "$OUT/anchors.txt" -W -s 1500 -n "$threads" -N 1 \
             -o "$new" >/dev/null 2>&1 &
     local opid=$!
     ( sleep 1
@@ -176,7 +187,7 @@ solve() {
 games_so_far() {
     # The gauntlet engine appears once per game as White or Black.
     # Count all PGNs for this version so resumed runs match the Ordo input.
-    grep -ch "\"$ENGINE_NAME\"" "$BM"/games/calib-"$VERSION"-*.pgn 2>/dev/null \
+    grep -ch "\"$ENGINE_NAME\"" "$GAMES"/calib-"$VERSION"-*.pgn 2>/dev/null \
         | awk '{s+=$1} END{print s+0}'
 }
 
@@ -230,7 +241,13 @@ echo
 
 # Monitor
 while kill -0 "$FC_PID" 2>/dev/null; do
-    sleep "$CHECK_EVERY"
+    # Wake often enough that a finished gauntlet does not leave the machine
+    # idle for the rest of a solve interval.
+    waited=0
+    while [ "$waited" -lt "$CHECK_EVERY" ] && kill -0 "$FC_PID" 2>/dev/null; do
+        sleep 10
+        waited=$((waited + 10))
+    done
     kill -0 "$FC_PID" 2>/dev/null || break
 
     n=$(games_so_far)
@@ -278,7 +295,6 @@ n=$(games_so_far)
     echo "Full Ordo table: $OUT/ordo.txt"
     sed -n '1,20p' "$OUT/ordo.txt" 2>/dev/null
     echo
-    echo "For the ledger row, compare against v8.0 IN THIS SAME SOLVE -- the"
-    echo "gap is anchor-independent, the absolute is only as good as the"
-    echo "anchors. The self-play measurement was +21.2 +/-8.7."
+    echo "Compare versions within this solve only. The gap between two versions"
+    echo "is anchor-independent; the absolute is only as good as the anchors."
 } | tee "$OUT/RESULT.txt"
