@@ -11,19 +11,19 @@ COPY sgurr_cpp/build_linux.sh sgurr_cpp/main.cpp sgurr_cpp/board.cpp \
     sgurr_cpp/board.hpp sgurr_cpp/evaluation.cpp sgurr_cpp/evaluation.hpp \
     sgurr_cpp/search.cpp sgurr_cpp/search.hpp sgurr_cpp/nnue.cpp \
     sgurr_cpp/nnue.hpp sgurr_cpp/move.hpp sgurr_cpp/
-COPY nets/gen9.nnue nets/gen9.nnue
+COPY nets/gen9_screlu.nnue nets/gen9_screlu.nnue
 
-RUN echo "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1  nets/gen9.nnue" \
+RUN echo "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e  nets/gen9_screlu.nnue" \
         | sha256sum --check --strict \
     && bash sgurr_cpp/build_linux.sh /out \
     && output="$(printf 'uci\nisready\nposition startpos\ngo depth 2\nquit\n' \
-        | SGR_EVALFILE=/src/nets/gen9.nnue timeout 20s /out/sgr_v9_0 2>&1)" \
+        | SGR_EVALFILE=/src/nets/gen9_screlu.nnue timeout 20s /out/sgr_v9_1 2>&1)" \
     && printf '%s\n' "$output" | grep -q 'info string nnue: loaded' \
     && printf '%s\n' "$output" | grep -q '^uciok$' \
     && printf '%s\n' "$output" | grep -q '^readyok$' \
     && printf '%s\n' "$output" | grep -q '^bestmove ' \
     && trace="$(printf 'uci\nisready\nposition startpos\ngo depth 2\nquit\n' \
-        | SGR_EVALFILE=/src/nets/gen9.nnue timeout 20s /out/sgr_trace 2>&1)" \
+        | SGR_EVALFILE=/src/nets/gen9_screlu.nnue timeout 20s /out/sgr_trace 2>&1)" \
     && printf '%s\n' "$trace" | grep -q 'info string nnue: loaded' \
     && printf '%s\n' "$trace" | grep -q 'info string trace {"e":"start"' \
     && printf '%s\n' "$trace" | grep -q '^bestmove '
@@ -32,7 +32,7 @@ FROM python:3.11-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    SGURR_ENGINE_EXE=/app/sgurr_cpp/sgr_v9_0 \
+    SGURR_ENGINE_EXE=/app/sgurr_cpp/sgr_v9_1 \
     SGURR_TRACE_ENGINE_EXE=/app/sgurr_cpp/sgr_trace \
     SGURR_ALLOWED_ORIGINS=none \
     SGURR_PUBLIC_DEMO=1 \
@@ -53,8 +53,8 @@ RUN python -m pip install --no-cache-dir -r web/backend/requirements.lock.txt
 COPY web/backend/ web/backend/
 COPY web/frontend/ web/frontend/
 COPY web/licenses/ web/licenses/
-COPY nets/gen9.nnue nets/gen9.nnue
-COPY --from=engine-build /out/sgr_v9_0 sgurr_cpp/sgr_v9_0
+COPY nets/gen9_screlu.nnue nets/gen9_screlu.nnue
+COPY --from=engine-build /out/sgr_v9_1 sgurr_cpp/sgr_v9_1
 COPY --from=engine-build /out/sgr_trace sgurr_cpp/sgr_trace
 COPY assets/music/menu-theme.ogg assets/music/game-pulse.mp3 assets/music/game-urgent.mp3 assets/music/
 COPY assets/sounds/clock-flag.ogg assets/sounds/clock-warning.ogg \
