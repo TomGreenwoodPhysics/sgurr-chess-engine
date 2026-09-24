@@ -34,6 +34,7 @@ sgurr_cpp/pgo2
 nets/*
 !nets/gen8.nnue
 !nets/gen9.nnue
+!nets/gen9_screlu.nnue
 
 assets/*
 !assets/music/

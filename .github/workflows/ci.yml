@@ -15,7 +15,7 @@ env:
   # Only EVALSUM is portable across toolchains.
   BENCH_NNUE: "2199384"   # 19 positions at depth 11, gen9 screlu net
   BENCH_HCE: "4616415"    # same, hand-crafted eval (no network loaded)
-  EVALSUM: "-10123"        # nnue_selfcheck checksum, identical on all paths
+  EVALSUM: "156878"        # nnue_selfcheck checksum, identical on all paths
 
 jobs:
   engine:
