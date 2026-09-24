@@ -1,3 +1,5 @@
+import { EXPECTED_NETWORK, LANE_DIVISOR } from "./nnue-model.js";
+
 const RAMP_STEPS = 32;
 const INTENSITY_STEPS = 24;
 const SETTLE_EPSILON = 0.003;
@@ -6,8 +8,6 @@ const NODE_TAU = 88;
 const AMBIENT_TAU = 150;
 const CORE_TAU = 105;
 const FEATURE_TRACE_DURATION = 2200;
-const NNUE_SCALE = 400;
-const NNUE_DIVISOR = 255 * 64;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -622,7 +622,7 @@ class CortexVisual {
     const after = this.transition.after;
     const snapshot = this.phase === "before" ? before : after;
     const white = perspective === "white";
-    const signed = new Float32Array(384);
+    const signed = new Float64Array(384);
     if (this.phase === "delta" && this.transition.before) {
       const beforeContribution = white ? before.whiteContribution : before.blackContribution;
       const afterContribution = white ? after.whiteContribution : after.blackContribution;
@@ -662,16 +662,16 @@ class CortexVisual {
     if (this.displayMode === "activation") {
       const value = values.activation[index];
       out.value = value;
-      out.intensity = value / 255;
+      out.intensity = value / EXPECTED_NETWORK.qa;
       out.activity = value > 0 ? 1 : 0;
       out.polarity = perspective === "white" ? 1 : -1;
-      out.saturation = value >= 255 ? 1 : 0;
+      out.saturation = value >= EXPECTED_NETWORK.qa ? 1 : 0;
       out.dead = value === 0 ? 1 : 0;
       return out;
     }
     if (this.displayMode === "clipped") {
       const raw = values.accumulator[index];
-      const high = raw >= 255;
+      const high = raw >= EXPECTED_NETWORK.qa;
       const low = raw <= 0;
       out.value = high ? 1 : low ? -1 : 0;
       out.intensity = high || low ? 1 : 0;
@@ -689,7 +689,7 @@ class CortexVisual {
     out.intensity = clamp(Math.abs(value) / scale, 0, 1);
     out.activity = values.activation[index] > 0 || (this.phase === "delta" && value !== 0) ? 1 : 0;
     out.polarity = value >= 0 ? 1 : -1;
-    out.saturation = values.activation[index] >= 255 ? 1 : 0;
+    out.saturation = values.activation[index] >= EXPECTED_NETWORK.qa ? 1 : 0;
     out.dead = values.activation[index] === 0 ? 1 : 0;
     return out;
   }
@@ -712,7 +712,7 @@ class CortexVisual {
       const weight = white ? snapshot.whiteOutputWeights[target.index] : snapshot.blackOutputWeights[target.index];
       const whiteSign = snapshot.sideToMove === 0 ? 1 : -1;
       const signedWeight = weight * whiteSign;
-      const product = activation * signedWeight;
+      const product = activation * activation * signedWeight;
       const sideToMoveHalf = white
         ? snapshot.sideToMove === 0
         : snapshot.sideToMove === 1;
@@ -745,13 +745,13 @@ class CortexVisual {
       product: shown.product,
       contribution,
       outputHalf: shown.outputHalf,
-      centipawns: contribution * NNUE_SCALE / NNUE_DIVISOR,
+      centipawns: contribution * EXPECTED_NETWORK.scale / LANE_DIVISOR,
       equation: {
         kind: before ? "delta" : "lane",
         before,
         after,
-        scale: NNUE_SCALE,
-        divisor: NNUE_DIVISOR,
+        scale: EXPECTED_NETWORK.scale,
+        divisor: LANE_DIVISOR,
       },
     };
   }

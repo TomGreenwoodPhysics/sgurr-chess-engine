@@ -1,7 +1,7 @@
 import { apiUrl, START_FEN } from "../js/config.js";
 import { initLabPreferences } from "../search-lab/preferences.js";
 import { CortexVisual } from "./cortex.js";
-import { EXPECTED_NETWORK, featureIndex, parseFen } from "./nnue-model.js";
+import { EXPECTED_NETWORK, LANE_DIVISOR, featureIndex, parseFen } from "./nnue-model.js";
 import { initNnueTutorial } from "./tutorial.js";
 
 const NETWORK_PATH = `/api/nnue/gen9/${EXPECTED_NETWORK.sha256}.nnue`;
@@ -25,13 +25,13 @@ const DISPLAY_MODES = Object.freeze({
     cyan: "Delta below zero",
   },
   activation: {
-    note: "Every lane after clipping, from 0 to 255, whatever it does to the score.",
+    note: `Every lane after clipping, from 0 to ${EXPECTED_NETWORK.qa}, before squaring for the output.`,
     gold: "White-view activation",
     cyan: "Black-view activation",
   },
   clipped: {
     note: "Only the lanes held at an end of the clipped range.",
-    gold: "Held at 255",
+    gold: `Held at ${EXPECTED_NETWORK.qa}`,
     cyan: "Held at 0",
   },
 });
@@ -437,7 +437,7 @@ function buildAutopsy() {
         perspective,
         index,
         raw,
-        centipawns: raw * 400 / (255 * 64),
+        centipawns: raw * EXPECTED_NETWORK.scale / LANE_DIVISOR,
         beforeActivation: beforeActivation[index],
         afterActivation: afterActivation[index],
       });
@@ -452,7 +452,7 @@ function buildAutopsy() {
   refs.moveAutopsy.dataset.state = "ready";
   refs.autopsyTitle.textContent = describeTransition();
   refs.autopsyNet.textContent = `${formatSigned(scoreDelta / 100)} eval`;
-  refs.autopsyNote.textContent = "Click a lane to open its exact calculation.";
+  refs.autopsyNote.textContent = "Click a lane to see its contribution before shared output rounding and bias.";
   renderAutopsyList();
 }
 
@@ -512,32 +512,32 @@ function renderLane(details) {
     refs.laneEquation.dataset.state = "idle";
     refs.laneEquationFormula.textContent = "Select a lane";
     refs.laneEquationResult.textContent = "-";
-    refs.laneEquationNote.textContent = "Raw accumulator values are clipped before the output weight is applied.";
+    refs.laneEquationNote.textContent = "Accumulator values are clipped and squared before the output weight is applied.";
     refs.laneNote.textContent = "Hover, tap or use the arrow keys on the display.";
     return;
   }
   const perspective = details.perspective === "white" ? "White" : "Black";
   refs.laneTitle.textContent = `${perspective}-view lane`;
   refs.laneAddress.textContent = `${perspective[0]}:${String(details.index).padStart(3, "0")}`;
-  refs.laneMeter.style.width = `${Math.max(1, Math.min(100, details.clipped / 2.55))}%`;
+  refs.laneMeter.style.width = `${Math.max(0, Math.min(100, details.clipped * 100 / EXPECTED_NETWORK.qa))}%`;
   refs.laneRaw.textContent = formatInteger(details.raw);
-  refs.laneClipped.textContent = `${details.clipped} / 255`;
+  refs.laneClipped.textContent = `${details.clipped} / ${EXPECTED_NETWORK.qa}`;
   refs.laneDelta.textContent = `${details.delta >= 0 ? "+" : "−"}${formatInteger(Math.abs(details.delta))}`;
-  refs.laneWeight.textContent = formatSigned(details.weight, 0);
+  refs.laneWeight.textContent = formatSigned(details.signedWeight, 0);
   refs.laneProduct.textContent = formatSigned(details.product, 0);
   refs.laneContributionLabel.textContent = details.phase === "delta" ? "White output change" : "White contribution";
   refs.laneContribution.textContent = `${formatSigned(details.centipawns)} cp`;
   refs.laneEquation.dataset.state = "ready";
   if (details.equation.kind === "delta") {
     const { before, after, scale, divisor } = details.equation;
-    refs.laneEquationFormula.textContent = `[(${after.activation} × ${formatSigned(after.signedWeight, 0)}) − (${before.activation} × ${formatSigned(before.signedWeight, 0)})] × ${scale} ÷ ${formatInteger(divisor)}`;
+    refs.laneEquationFormula.textContent = `[(${after.activation}² × ${formatSigned(after.signedWeight, 0)}) − (${before.activation}² × ${formatSigned(before.signedWeight, 0)})] × ${scale} ÷ ${formatInteger(divisor)}`;
     refs.laneEquationResult.textContent = `${formatSigned(details.centipawns)} cp`;
-    refs.laneEquationNote.textContent = `${formatSigned(after.product, 0)} − ${formatSigned(before.product, 0)} = ${formatSigned(details.contribution, 0)} before network scaling.`;
+    refs.laneEquationNote.textContent = `${formatSigned(after.product, 0)} − ${formatSigned(before.product, 0)} = ${formatSigned(details.contribution, 0)} before scaling. Lane contributions exclude shared output rounding and bias.`;
   } else {
     const { after, scale, divisor } = details.equation;
-    refs.laneEquationFormula.textContent = `${after.activation} × ${formatSigned(after.signedWeight, 0)} × ${scale} ÷ ${formatInteger(divisor)}`;
+    refs.laneEquationFormula.textContent = `${after.activation}² × ${formatSigned(after.signedWeight, 0)} × ${scale} ÷ ${formatInteger(divisor)}`;
     refs.laneEquationResult.textContent = `${formatSigned(details.centipawns)} cp`;
-    refs.laneEquationNote.textContent = `${formatInteger(after.raw)} clips to ${after.activation}; the signed weight is White-relative.`;
+    refs.laneEquationNote.textContent = `${formatInteger(after.raw)} clips to ${after.activation}, then is squared; the weight is White-relative. Before shared output rounding and bias.`;
   }
   refs.laneNote.textContent = details.phase === "delta"
     ? "The value includes the side-to-move output swap."

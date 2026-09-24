@@ -1,11 +1,12 @@
 # Networks
 
 Trained NNUE files are build artefacts, so only shipped networks are committed.
-`gen9.nnue` is the current network. `gen8.nnue` remains for older releases.
+`gen9_screlu.nnue` is the current v9.1 network. `gen9.nnue` and `gen8.nnue`
+remain for older releases and require `-DSGR_SCRELU=0 -DSGR_QA=255` builds.
 
 ```bash
-SGR_EVALFILE=nets/gen9.nnue sgurr_cpp/sgr.exe bench
-#   -> nodes 3337275
+SGR_EVALFILE=nets/gen9_screlu.nnue sgurr_cpp/sgr.exe bench
+#   -> nodes 2199384 on the reference MSYS2 clang64 build
 ```
 
 The engine reads `$SGR_EVALFILE`, defaulting to `sgurr.nnue` in the working
@@ -14,7 +15,34 @@ stdout, so a missing net is visible rather than silent.
 
 ---
 
+## Model release record: gen9_screlu.nnue
+
+| | |
+|---|---|
+| file | `gen9_screlu.nnue` |
+| SHA-256 | `966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e` |
+| size | 592,160 bytes |
+| architecture | `768 -> 384 -> 1`, squared clipped ReLU, QA 181, QB 64, output scale 400 |
+| shipped in | v9.1 "Dearg" |
+| build | Current defaults: `SGR_SCRELU=1`, `SGR_QA=181` |
+
+The dataset is the same 102,011,689 self-play positions used by gen9.
+The network is trained for SCReLU and must be paired with the matching build;
+changing the activation at inference alone does not convert an older network.
+
+```bash
+sha256sum nets/gen9_screlu.nnue
+# 966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e
+
+cd sgurr_cpp && ./nnue_selfcheck.exe ../nets/gen9_screlu.nnue
+# checks=4516 fails=0 evalsum=156878 -> PASS
+```
+
+---
+
 ## Model release record: gen9.nnue
+
+The self-check below requires a build with `-DSGR_SCRELU=0 -DSGR_QA=255`.
 
 | | |
 |---|---|
@@ -43,6 +71,8 @@ cd sgurr_cpp && ./nnue_selfcheck.exe ../nets/gen9.nnue
 ---
 
 ## Model release record: gen8.nnue
+
+The self-check below requires a build with `-DSGR_SCRELU=0 -DSGR_QA=255`.
 
 Recorded per the checklist in
 [../docs/PROJECT_PROVENANCE.md](../docs/PROJECT_PROVENANCE.md).

@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 BASE_URL = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-NNUE_SHA256 = "92c925ce1036035119e5921248a8b48a34304d1834be07cfa27924e787632ce1"
+NNUE_SHA256 = "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e"
 NNUE_ROUTE = f"/api/nnue/gen9/{NNUE_SHA256}.nnue"
 
 
@@ -59,7 +59,7 @@ assert network[:4] == b"RUKN"
 assert hashlib.sha256(network).hexdigest() == NNUE_SHA256
 
 try:
-    get_bytes("/nets/gen9.nnue")
+    get_bytes("/nets/gen9_screlu.nnue")
     raise AssertionError("repository NNUE path was exposed")
 except HTTPError as exc:
     assert exc.code == 404
@@ -71,11 +71,11 @@ if (inside_sgurr / "index.html").is_file():
 
 engines = get("/api/engines")
 available = [entry["id"] for entry in engines["engines"] if entry["available"]]
-assert available == ["v9.0"]
+assert available == ["v9.1"]
 
 with post(
     "/api/search-trace",
-    {"fen": START_FEN, "engine": "v9.0", "movetime_ms": 2_000},
+    {"fen": START_FEN, "engine": "v9.1", "movetime_ms": 2_000},
 ) as trace:
     assert json.loads(trace.readline())["type"] == "started"
 

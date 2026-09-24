@@ -166,7 +166,7 @@
           <p class="stage-legend">
             <span><i class="key-dot key-warm"></i><b id="goldKeyText">Raises White's score</b></span>
             <span><i class="key-dot key-cool"></i><b id="cyanKeyText">Lowers White's score</b></span>
-            <span class="state-key state-key-high"><i class="key-dot key-hot"></i><b>Held at 255</b></span>
+            <span class="state-key state-key-high"><i class="key-dot key-hot"></i><b>Held at 181</b></span>
             <span class="state-key state-key-low"><i class="key-dot key-dead"></i><b>Held at 0</b></span>
             <em id="displayModeNote">Colour shows whether each lane raises or lowers White's score.</em>
           </p>
@@ -254,17 +254,17 @@
             <div class="lane-meter"><i id="laneMeter"></i></div>
             <dl>
               <div><dt>Raw accumulator</dt><dd id="laneRaw">-</dd></div>
-              <div><dt>Clipped ReLU</dt><dd id="laneClipped">-</dd></div>
+              <div><dt>Clipped activation</dt><dd id="laneClipped">-</dd></div>
               <div><dt>Move delta</dt><dd id="laneDelta">-</dd></div>
-              <div><dt>Output weight</dt><dd id="laneWeight">-</dd></div>
+              <div><dt>White-relative weight</dt><dd id="laneWeight">-</dd></div>
               <div><dt>White-relative term</dt><dd id="laneProduct">-</dd></div>
               <div><dt id="laneContributionLabel">Output contribution</dt><dd id="laneContribution">-</dd></div>
             </dl>
             <div class="lane-equation" id="laneEquation" data-state="idle" aria-live="polite">
-              <span>Exact lane equation</span>
+              <span>Lane contribution before rounding</span>
               <code id="laneEquationFormula">Select a lane</code>
               <strong id="laneEquationResult">-</strong>
-              <small id="laneEquationNote">Raw accumulator values are clipped before the output weight is applied.</small>
+              <small id="laneEquationNote">Accumulator values are clipped and squared before the output weight is applied.</small>
             </div>
             <p id="laneNote">Hover, tap or use the arrow keys on the display.</p>
           </section>
@@ -279,7 +279,7 @@
         <div class="under-hood-grid">
           <article><span>01</span><h3>Board features</h3><p>Each piece and square selects one row from a 768-row table.</p></article>
           <article><span>02</span><h3>Two views</h3><p>The selected rows are added into two 384-value arrays. Black's view mirrors the board vertically.</p></article>
-          <article><span>03</span><h3>Clipping</h3><p>Values below 0 become 0. Values above 255 become 255.</p></article>
+          <article><span>03</span><h3>SCReLU</h3><p>Values are clipped to 0–181, then squared before the output weights are applied.</p></article>
           <article><span>04</span><h3>Output</h3><p>The two arrays use separate output weights. Their order follows the side to move.</p></article>
         </div>
       </section>

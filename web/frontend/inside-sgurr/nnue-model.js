@@ -13,6 +13,10 @@ const EXPECTED_NETWORK = Object.freeze({
   sha256: "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e",
 });
 
+// Per-lane contributions are shown before the shared integer divisions and
+// output bias. SCReLU squares the activation, adding a second factor of QA.
+const LANE_DIVISOR = EXPECTED_NETWORK.qa ** 2 * EXPECTED_NETWORK.qb;
+
 function readInt16Array(view, offset, count) {
   const values = new Int16Array(count);
   for (let index = 0; index < count; index += 1) {
@@ -266,6 +270,7 @@ function evaluateTransition(network, beforeFen, afterFen) {
 
 export {
   EXPECTED_NETWORK,
+  LANE_DIVISOR,
   evaluateFen,
   evaluateTransition,
   featureIndex,

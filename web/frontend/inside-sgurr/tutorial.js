@@ -39,7 +39,7 @@ const STEPS = Object.freeze([
     placement: "bottom",
     kicker: "Change the reading",
     title: "Four ways to read the lanes",
-    text: "Contribution shows effect on the score. Move change isolates one move. Activation shows values after clipping. Clipped shows values held at 0 or 255.",
+    text: "Contribution shows effect on the score. Move change isolates one move. Activation shows values clipped to 0–181, before squaring for the output. Clipped shows values held at 0 or 181.",
   },
   {
     key: "timeline",
