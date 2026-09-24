@@ -45,6 +45,7 @@ engines/
 nets/*
 !nets/gen8.nnue
 !nets/gen9.nnue
+!nets/gen9_screlu.nnue
 !nets/README.md
 
 # Benchmark downloads and run output
