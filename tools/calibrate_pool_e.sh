@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Validate pool-2026-09-E: calibrate v9.1, then v9.0, with the binaries and nets
-# they were calibrated with on pool-D and the same opening seed, then read the
-# gap from one solve. Prediction: benchmarks/pool_e_prediction.md.
+# Calibrate v9.1 on pool-2026-09-E to about +/-12, as the baseline later releases
+# are compared against, with the binary and net it was calibrated with on pool-D.
+# Why +/-12 and not tighter, and why v9.0 was dropped: benchmarks/pool_e_prediction.md.
 #
 #   tools/calibrate_pool_e.sh          start, or carry on after a pause
 #   tools/calibrate_pool_e.sh --stop   pause: stop everything, keep every finished game
@@ -15,7 +15,7 @@ ROOT=/c/coding/Sgurr
 RUN=$ROOT/runs/pool_e
 LOG=$RUN/driver.log
 GAMES=$ROOT/benchmarks/games/pool-2026-09-E
-TARGET=8          # Ordo +/- per version
+TARGET=12         # Ordo +/- per version: enough to confirm a gain carries over
 ROUNDS=230        # 18 games a round, so at most 4,140 games per version per run
 SEED=1
 
@@ -24,7 +24,7 @@ unset SGR_EVALFILE
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 die() { say "STOP: $*"; say "=== stopped, needs a human ==="; exit 1; }
 
-POOL_PROCS="sprt_bundle sgr_v9_0 bit-genie-9 bitfox-2.5.0 monolith-3 drofa-4.1.0 mantissa-3.7.2 nalwald-19 counter-5.5 Lynx.Cli frozenight-6.0.0 ordo"
+POOL_PROCS="sprt_bundle bit-genie-9 bitfox-2.5.0 monolith-3 drofa-4.1.0 mantissa-3.7.2 nalwald-19 counter-5.5 Lynx.Cli frozenight-6.0.0 ordo"
 
 # Windows processes whose command line contains $1, minus this shell and any
 # shell running --stop.
@@ -47,15 +47,6 @@ if [ "${1:-}" = "--stop" ]; then
     exit 0
 fi
 
-# Games that did not end in a mate or a draw by rule: forfeits, time losses,
-# crashes, disconnects. Prints "total abnormal".
-endings() {
-    local f=$1 tmp=$RUN/endings.tmp
-    grep -aoE 'Finished game [0-9]+ \([^)]*\): [^{]*\{[^}]*\}' "$f" \
-        | sed -E 's/.*\{(.*)\}$/\1/' > "$tmp"
-    echo "$(wc -l < "$tmp" | tr -d ' ') $(grep -cvE 'mates$|^Draw by ' "$tmp")"
-}
-
 calibrate() {  # version exe net
     if [ -f "$RUN/done_$1" ]; then
         say "$1 already finished, skipping"
@@ -63,8 +54,7 @@ calibrate() {  # version exe net
         return
     fi
     # Earlier partial runs of this version: carry on with a fresh seed so the
-    # new games do not replay their openings. The first run of every version
-    # uses the same seed, which pairs v9.0 and v9.1 opening for opening.
+    # new games do not replay their openings.
     local prior seed
     prior=$(ls "$GAMES"/calib-"$1"-*.pgn 2>/dev/null | wc -l | tr -d ' ')
     seed=$((SEED + 1000 * prior))
@@ -76,15 +66,16 @@ calibrate() {  # version exe net
     dir=$(ls -td "$ROOT"/runs/calibrate/${1}_* 2>/dev/null | head -1)
     [ -n "$dir" ] && [ -f "$dir/RESULT.txt" ] || die "$1 calibration did not finish, see $RUN/calibrate_$1.log"
     echo "$dir" > "$RUN/done_$1"
-    read -r total bad <<< "$(endings "$dir/gauntlet.log")"
+    # Endings across every pool-E game of this version, not just this run's.
+    python "$ROOT/testing/pgn_endings.py" "$GAMES"/calib-"$1"-*.pgn | tr -d '\r' > "$RUN/endings_$1.txt"
+    read -r total bad < "$RUN/endings_$1.txt"
     say "$1: $(grep -a "Sgurr-$1 " "$dir/RESULT.txt" | head -1 | tr -s ' ')"
-    say "$1: $total games in $(( (SECONDS - t0) / 60 )) min, $bad abnormal endings"
-    [ "$bad" -eq 0 ] || grep -aoE 'Finished game [0-9]+ \([^)]*\): [^{]*\{[^}]*\}' "$dir/gauntlet.log" \
-        | grep -avE 'mates\}$|\{Draw by ' | head -20 | tee -a "$LOG"
+    say "$1: this run $(( (SECONDS - t0) / 60 )) min; $total pool-E games in all, $bad abnormal endings"
+    [ "$bad" -eq 0 ] || tail -n +2 "$RUN/endings_$1.txt" | head -20 | tee -a "$LOG"
     LAST_DIR=$dir
 }
 
-say "=== pool-E validation ==="
+say "=== pool-E v9.1 baseline ==="
 pool=$(python -c "import json;print(json.load(open(r'C:/coding/Sgurr/benchmarks/pool.json'))['pool_id'])" | tr -d '\r')
 [ "$pool" = "pool-2026-09-E" ] || die "pool.json is $pool, not pool-2026-09-E"
 busy=$(powershell -NoProfile -Command "(Get-Process fastchess,datagen -ErrorAction SilentlyContinue | Measure-Object).Count" 2>/dev/null | tr -d '\r ')
@@ -93,21 +84,15 @@ spsa=$(powershell -NoProfile -Command "(Get-CimInstance Win32_Process | Where-Ob
 [ "${spsa:-0}" = "0" ] || die "an SPSA tune is running"
 
 calibrate v9.1 sprt_bundle.exe "$ROOT/nets/gen9_screlu.nnue"
-calibrate v9.0 sgr_v9_0.exe "$ROOT/nets/gen9.nnue"
 
-# The v9.0 run's final solve covers every pool-E game, so both versions are in it.
 ORDO="$LAST_DIR/ordo.txt"; [ -s "$ORDO" ] || ORDO="$LAST_DIR/ordo.new"
 {
-    echo "pool-2026-09-E validation, $(date '+%Y-%m-%d %H:%M')"
-    echo "Prediction: benchmarks/pool_e_prediction.md (gap +120, band +100 to +140)"
-    echo "pool-D, same binaries: v9.1 3206.2 +/-11.8, v9.0 3081.2 +/-6.7, gap +124.5 +/-13.6"
+    echo "pool-2026-09-E v9.1 baseline, $(date '+%Y-%m-%d %H:%M')"
+    echo "pool-D, same binary and net: v9.1 3206.2 +/-11.8 (systematic about +/-25)"
     echo
-    sed -n '1,14p' "$ORDO"
+    sed -n '1,12p' "$ORDO"
     echo
-    awk '/ Sgurr-v9\.1 /{a=$4; ea=$5} / Sgurr-v9\.0 /{b=$4; eb=$5}
-         END{ if (a && b) printf "pool-E gap v9.0 -> v9.1: %+.1f  (joint +/-%.1f)\n", a-b, sqrt(ea*ea+eb*eb) }' "$ORDO"
-    echo
-    grep -a 'v9\.[01]:' "$LOG" | grep -a 'games in'
+    echo "endings: $(head -1 "$RUN/endings_v9.1.txt" | awk '{print $1" games, "$2" abnormal"}')"
 } > "$RUN/SUMMARY.txt"
 tee -a "$LOG" < "$RUN/SUMMARY.txt"
 say "=== done ==="

@@ -26,3 +26,19 @@ of binaries, and pool-E does not get used for version gaps until that is
 explained.
 
 Games are checked for forfeits and time losses before any of this is read.
+
+## Changed before the test ran, 2026-09-25
+
+The gap test above was dropped with v9.1 at 541 of its games and v9.0 not
+started, so this prediction is neither confirmed nor falsified.
+
+A +124 gap is too large to show whether pool-E resolves medium gains, and
+pool-E already looked sane (v9.1 at 3188 ±25 after 459 games against 3206 on
+pool-D). Tighter absolute numbers buy little: with systematic error near ±25,
+total uncertainty is about ±26 at ±8 sampling and ±28 at ±12. For gaps the pool
+is the expensive instrument: pool-D spent 8,232 games on a ±13.6 gap that a
+direct match reaches in about 1,650.
+
+So v9.1 is calibrated to ±12 as a baseline only. Gains are decided and sized
+by SPRT; each release gets one pool run at ±12 to confirm the gain carries over
+to other engines, the METHODOLOGY 6 question.
