@@ -141,6 +141,21 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #define SGR_MATSCALE 0
 #endif
 
+// Try a null move only when the static eval is already at or above beta. Below
+// it, the reduced search almost always fails and its nodes are wasted.
+#ifndef SGR_NMP_EVAL
+#define SGR_NMP_EVAL 1
+#endif
+#if SGR_NMP_EVAL && !SGR_IMPROVING
+#error "SGR_NMP_EVAL needs SGR_IMPROVING for the per-node static eval"
+#endif
+
+// Fail-low nodes store no TT move, since none of their moves proved anything,
+// and a store without a move keeps the move already held for that position.
+#ifndef SGR_TTMOVE_KEEP
+#define SGR_TTMOVE_KEEP 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.

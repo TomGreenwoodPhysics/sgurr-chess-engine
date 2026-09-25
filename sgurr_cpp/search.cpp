@@ -1250,7 +1250,11 @@ int Engine::negamax(
 #endif
 
     // Excluded-move searches must test the remaining moves directly.
-    if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)) {
+    if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)
+#if SGR_NMP_EVAL
+        && node_static_eval >= beta   // in-check nodes never reach here
+#endif
+    ) {
         NullMoveUndo undo = board.make_null_move();
 #if SGR_CONTHIST
         ss_piece[ply] = -1;   // Null moves provide no continuation context.
@@ -1694,7 +1698,12 @@ int Engine::negamax(
 
     // Do not store scores from an excluded-move search.
     if (!excluded.has_value()) {
-        store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, best_move_key);
+#if SGR_TTMOVE_KEEP
+        Move tt_store_move = flag == TT_UPPER ? NO_MOVE : best_move_key;
+#else
+        Move tt_store_move = best_move_key;
+#endif
+        store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, tt_store_move);
     }
 
 #if SGR_CORRHIST
@@ -2160,6 +2169,11 @@ void Engine::store_tt(
 
     // Replace collisions or entries no deeper than this search.
     if (slot.key != board_hash || depth >= slot.depth) {
+#if SGR_TTMOVE_KEEP
+        if (best_move_key == NO_MOVE && slot.key == board_hash) {
+            best_move_key = slot.best_move;
+        }
+#endif
         // Depth and flag are bounded to their packed field widths.
         slot = TTEntry{
             board_hash,
