@@ -37,3 +37,9 @@ percent. An effect this size may not reach a bound within the cap.
 
 H0 accepted. For a change that cannot alter the tree, that would say speed
 converts to nothing at this margin.
+
+## Result, 2026-09-25
+
+Not tested in games. The SPRT was stopped early by decision: a change that
+cannot alter the tree is accepted on its fingerprint and measured speed, and
+its Elo is carried into the next pool calibration with everything else.
