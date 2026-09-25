@@ -26,7 +26,7 @@ unset SGR_EVALFILE
 say() { echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 die() { say "STOP: $*"; say "=== stopped, needs a human ==="; exit 1; }
 
-POOL_PROCS="sprt_bundle sgr_v92rc bit-genie-9 bitfox-2.5.0 monolith-3 drofa-4.1.0 mantissa-3.7.2 nalwald-19 counter-5.5 Lynx.Cli frozenight-6.0.0 ordo"
+POOL_PROCS="sprt_bundle sgr_v92rc sprt_batch_d bit-genie-9 bitfox-2.5.0 monolith-3 drofa-4.1.0 mantissa-3.7.2 nalwald-19 counter-5.5 Lynx.Cli frozenight-6.0.0 ordo"
 
 # Windows processes whose command line contains $1, minus this shell and any
 # shell running --stop.
