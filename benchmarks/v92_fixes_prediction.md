@@ -19,7 +19,7 @@ null-move gate alone 2,125,441. Perft 4 = 197,281 and SEE 9/9 still pass.
 
 `sprt_fixes.exe` against `sprt_v91_ref.exe`, same commit apart from the two
 toggles, both with `gen9_screlu.nnue` baked in. 8+0.08, Hash 256,
-`8moves_v3.pgn`, elo0=0 elo1=5, capped at 8,000 games.
+`8moves_v3.pgn`, elo0=0 elo1=5, capped at 5,000 games.
 
 ## Prediction
 
