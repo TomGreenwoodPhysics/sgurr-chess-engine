@@ -156,6 +156,25 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #define SGR_TTMOVE_KEEP 1
 #endif
 
+// Quiescence probes the transposition table for a cutoff and a capture to try
+// first, and stores its own results. Its stores never evict a main-search
+// entry for another position: quiescence nodes far outnumber main-search ones
+// and would flush the deep results out of a one-slot table.
+#ifndef SGR_QS_TT
+#define SGR_QS_TT 1
+#endif
+
+// Principal-variation nodes (open window) take no TT cutoffs, so the line the
+// engine plays is always searched rather than read back from the table.
+#ifndef SGR_PV_TTCUT
+#define SGR_PV_TTCUT 1
+#endif
+
+// Principal-variation nodes reduce late moves one ply less.
+#ifndef SGR_PV_LMR
+#define SGR_PV_LMR 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.
@@ -457,4 +476,9 @@ private:
     );
 
     Move get_tt_move(U64 board_hash) const;
+
+#if SGR_QS_TT
+    // Depth-0 store that never evicts a main-search entry for another position.
+    void store_tt_qs(U64 board_hash, int score, int flag, Move best_move_key);
+#endif
 };

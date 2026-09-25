@@ -1109,11 +1109,20 @@ int Engine::negamax(
 
     U64 board_hash = board.hash_key;
     int original_alpha = alpha;
+#if SGR_PV_TTCUT || SGR_PV_LMR
+    // An open window marks a principal-variation node. Read it before the
+    // table can narrow the window.
+    const bool pv_node = beta - alpha > 1;
+#endif
 
     const TTEntry& tt_slot = transposition_table[board_hash & tt_mask];
 
     // Excluded-move searches may read the TT but cannot cut off or store.
-    if (!excluded.has_value() && tt_slot.key == board_hash && tt_slot.depth >= depth) {
+    if (!excluded.has_value() && tt_slot.key == board_hash && tt_slot.depth >= depth
+#if SGR_PV_TTCUT
+            && !pv_node
+#endif
+    ) {
         const TTEntry& entry = tt_slot;
         tt_hits += 1;
 
@@ -1553,6 +1562,12 @@ int Engine::negamax(
                 reduction = std::max(0, std::min(reduction, next_depth - 1));
             }
 #endif
+#if SGR_PV_LMR
+            // Principal-variation nodes search late moves one ply deeper.
+            if (pv_node && reduction > 0) {
+                reduction -= 1;
+            }
+#endif
             int reduced_depth = std::max(0, next_depth - reduction);
 
 #if SGR_TRACE_SEARCH
@@ -1740,9 +1755,32 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
     int us = board.side_to_move;
 
+#if SGR_QS_TT
+    // Every stored entry is at least as deep as quiescence, so depth is not
+    // checked. Open-window (PV) nodes take no cutoff. Values here are
+    // fail-hard, so what is stored is exactly what is returned.
+    const U64 qs_key = board.hash_key;
+    const int qs_alpha = alpha;
+    const TTEntry& qs_slot = transposition_table[qs_key & tt_mask];
+    if (beta - alpha == 1 && qs_slot.key == qs_key) {
+        const int tt_score = score_from_tt(qs_slot.score, ply);
+        if (qs_slot.flag == TT_EXACT
+                || (qs_slot.flag == TT_LOWER && tt_score >= beta)
+                || (qs_slot.flag == TT_UPPER && tt_score <= alpha)) {
+            tt_hits += 1;
+            return tt_score;
+        }
+    }
+    Move qs_best = NO_MOVE;
+#endif
+
     if (board.in_check(us)) {
         MoveList moves = generate_moves(board);
+#if SGR_QS_TT
+        MovePicker qpicker(*this, board, moves, valid_tt_move_key(qs_key, moves), ply, false);
+#else
         MovePicker qpicker(*this, board, moves, std::nullopt, ply, false);
+#endif
         LegalityInfo li = board.legality_info();
 
         bool legal_found = false;
@@ -1755,6 +1793,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
             legal_found = true;
             UndoInfo undo = board.make_move(move);
+#if SGR_QS_TT
+            __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#endif
             int score = -quiescence(board, -beta, -alpha, ply + 1);
             board.unmake_move(undo);
 
@@ -1763,16 +1804,31 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
             }
 
             if (score >= beta) {
+#if SGR_QS_TT
+                store_tt_qs(qs_key, score_to_tt(beta, ply), TT_LOWER, move);
+#endif
                 return beta;
             }
 
+#if SGR_QS_TT
+            if (score > alpha) {
+                qs_best = move;
+            }
+#endif
             alpha = std::max(alpha, score);
         }
 
         if (!legal_found) {
+#if SGR_QS_TT
+            store_tt_qs(qs_key, score_to_tt(-MATE + ply, ply), TT_EXACT, NO_MOVE);
+#endif
             return -MATE + ply;
         }
 
+#if SGR_QS_TT
+        store_tt_qs(qs_key, score_to_tt(alpha, ply),
+                    alpha > qs_alpha ? TT_EXACT : TT_UPPER, qs_best);
+#endif
         return alpha;
     }
 
@@ -1784,6 +1840,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 #endif
 
     if (stand_pat >= beta) {
+#if SGR_QS_TT
+        store_tt_qs(qs_key, score_to_tt(beta, ply), TT_LOWER, NO_MOVE);
+#endif
         return beta;
     }
 
@@ -1796,7 +1855,12 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     // Generate noisy moves directly while preserving their original order.
     MoveList noisy_moves = board.generate_noisy_moves();
 
+#if SGR_QS_TT
+    // Only a stored move that is itself a capture or promotion can be tried.
+    MovePicker npicker(*this, board, noisy_moves, valid_tt_move_key(qs_key, noisy_moves), ply, false);
+#else
     MovePicker npicker(*this, board, noisy_moves, std::nullopt, ply, false);
+#endif
     LegalityInfo li = board.legality_info();
 
     Move move;
@@ -1821,16 +1885,40 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         }
 
         UndoInfo undo = board.make_move(move);
+#if SGR_QS_TT
+        __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#endif
         int score = -quiescence(board, -beta, -alpha, ply + 1);
         board.unmake_move(undo);
 
+#if SGR_QS_TT
+        // A stopped child returns 0, which must never reach the table.
+        if (stop_search) {
+            return 0;
+        }
+#endif
+
         if (score >= beta) {
+#if SGR_QS_TT
+            store_tt_qs(qs_key, score_to_tt(beta, ply), TT_LOWER, move);
+#endif
             return beta;
         }
 
+#if SGR_QS_TT
+        if (score > alpha) {
+            qs_best = move;
+        }
+#endif
         alpha = std::max(alpha, score);
     }
 
+#if SGR_QS_TT
+    // alpha above its entry value is the exact quiescence value, whether a
+    // capture or the stand-pat raised it.
+    store_tt_qs(qs_key, score_to_tt(alpha, ply),
+                alpha > qs_alpha ? TT_EXACT : TT_UPPER, qs_best);
+#endif
     return alpha;
 }
 
@@ -2184,6 +2272,20 @@ void Engine::store_tt(
         };
     }
 }
+
+#if SGR_QS_TT
+void Engine::store_tt_qs(U64 board_hash, int score, int flag, Move best_move_key) {
+    const TTEntry& slot = transposition_table[board_hash & tt_mask];
+
+    // Leave a main-search entry for another position alone. For the same
+    // position, store_tt already keeps anything deeper than depth 0.
+    if (slot.key != board_hash && slot.depth > 0) {
+        return;
+    }
+
+    store_tt(board_hash, 0, score, flag, best_move_key);
+}
+#endif
 
 Move Engine::get_tt_move(U64 board_hash) const {
     const TTEntry& slot = transposition_table[board_hash & tt_mask];
