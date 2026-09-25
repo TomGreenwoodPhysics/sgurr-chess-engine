@@ -190,6 +190,19 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #define SGR_SE_NEGATIVE 1
 #endif
 
+// Principal-variation nodes skip the early exits that stand in for a search:
+// reverse futility, the shallow drop into quiescence, razoring and null move.
+// They are a small part of the tree, and they decide the line that is played.
+#ifndef SGR_PV_PRUNE
+#define SGR_PV_PRUNE 1
+#endif
+// Mate-distance pruning. No line through a node can mate sooner than the next
+// ply or be mated sooner than now, so the window is bounded to that range, and
+// a node that cannot beat a mate already found returns at once.
+#ifndef SGR_MDP
+#define SGR_MDP 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.

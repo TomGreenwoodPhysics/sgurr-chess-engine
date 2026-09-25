@@ -1114,12 +1114,26 @@ int Engine::negamax(
     }
 
     U64 board_hash = board.hash_key;
-    int original_alpha = alpha;
-#if SGR_PV_TTCUT || SGR_PV_LMR || SGR_SE_DOUBLE
-    // An open window marks a principal-variation node. Read it before the
-    // table can narrow the window.
+#if SGR_PV_TTCUT || SGR_PV_LMR || SGR_SE_DOUBLE || SGR_PV_PRUNE
+    // An open window marks a principal-variation node. Read it before mate
+    // distance or the table can narrow the window.
     const bool pv_node = beta - alpha > 1;
 #endif
+
+#if SGR_MDP
+    // Being mated here scores -MATE + ply and mating at the next ply scores
+    // MATE - ply - 1, so nothing below can fall outside that range. If a mate
+    // at least this fast is already in hand, this node cannot matter.
+    alpha = std::max(alpha, -MATE + ply);
+    beta = std::min(beta, MATE - ply - 1);
+    if (alpha >= beta) {
+#if SGR_TRACE_SEARCH
+        trace_end(trace_scope.id, "mate-distance", alpha);
+#endif
+        return alpha;
+    }
+#endif
+    int original_alpha = alpha;
 
     const TTEntry& tt_slot = transposition_table[board_hash & tt_mask];
 
@@ -1197,6 +1211,9 @@ int Engine::negamax(
     if (
         depth <= params.rfp_max_depth
         && !in_check_node
+#if SGR_PV_PRUNE
+        && !pv_node
+#endif
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
     ) {
@@ -1221,6 +1238,9 @@ int Engine::negamax(
     if (
         depth <= 2
         && !in_check_node
+#if SGR_PV_PRUNE
+        && !pv_node
+#endif
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
     ) {
@@ -1244,6 +1264,9 @@ int Engine::negamax(
         depth > 2
         && depth <= params.razor_max_depth
         && !in_check_node
+#if SGR_PV_PRUNE
+        && !pv_node
+#endif
         && std::abs(alpha) < MATE - 1000
         && std::abs(beta) < MATE - 1000
     ) {
@@ -1265,7 +1288,11 @@ int Engine::negamax(
 #endif
 
     // Excluded-move searches must test the remaining moves directly.
-    if (!excluded.has_value() && can_try_null_move(board, depth, beta, ply)
+    if (!excluded.has_value()
+#if SGR_PV_PRUNE
+        && !pv_node
+#endif
+        && can_try_null_move(board, depth, beta, ply)
 #if SGR_NMP_EVAL
         && node_static_eval >= beta   // in-check nodes never reach here
 #endif
