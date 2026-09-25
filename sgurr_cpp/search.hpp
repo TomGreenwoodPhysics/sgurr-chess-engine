@@ -175,6 +175,21 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #define SGR_PV_LMR 1
 #endif
 
+// Singular refinements. Double (and triple) extensions when the alternatives
+// fall far short of the TT move, capped per line so the search cannot explode.
+#ifndef SGR_SE_DOUBLE
+#define SGR_SE_DOUBLE 1
+#endif
+// Multicut: when the reduced search without the TT move already beats beta,
+// another move refutes this node too, so it fails high without searching.
+#ifndef SGR_SE_MULTICUT
+#define SGR_SE_MULTICUT 1
+#endif
+// Negative extensions: a TT move that is not singular is searched less.
+#ifndef SGR_SE_NEGATIVE
+#define SGR_SE_NEGATIVE 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.
@@ -203,6 +218,9 @@ struct SearchParams {
     int singular_min_depth      = 7;
     int singular_tt_depth_slack = 3;
     int singular_margin         = 2;
+    int se_double_margin        = 16;    // Shortfall below singular beta for +2.
+    int se_triple_margin        = 80;    // Shortfall for +3 on a quiet TT move.
+    int se_double_limit         = 8;     // Double extensions allowed per line.
     int check_ext_max_depth     = 4;
     // score * (base + phase) / div, phase 0..24. Neutral at full material.
     int matscale_base           = 104;
@@ -337,6 +355,11 @@ private:
 #if SGR_IMPROVING
     // Static eval stack used by the improving heuristic.
     std::array<int, MAX_PLY> ss_static_eval{};
+#endif
+
+#if SGR_SE_DOUBLE
+    // Double extensions taken on the line to each ply.
+    std::array<int, MAX_PLY + 1> ss_double_ext{};
 #endif
 
 #if SGR_CONTHIST

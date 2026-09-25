@@ -855,6 +855,11 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
     bool legal_found_any = false;   // First searched root move gets a full window.
 #endif
 
+#if SGR_SE_DOUBLE
+    ss_double_ext[0] = 0;
+    ss_double_ext[1] = 0;
+#endif
+
 #if SGR_IMPROVING
     // Seed ply 0 for improving checks at ply 2.
     ss_static_eval[0] = board.in_check(us)
@@ -1110,7 +1115,7 @@ int Engine::negamax(
 
     U64 board_hash = board.hash_key;
     int original_alpha = alpha;
-#if SGR_PV_TTCUT || SGR_PV_LMR
+#if SGR_PV_TTCUT || SGR_PV_LMR || SGR_SE_DOUBLE
     // An open window marks a principal-variation node. Read it before the
     // table can narrow the window.
     const bool pv_node = beta - alpha > 1;
@@ -1266,6 +1271,9 @@ int Engine::negamax(
 #endif
     ) {
         NullMoveUndo undo = board.make_null_move();
+#if SGR_SE_DOUBLE
+        ss_double_ext[ply + 1] = ss_double_ext[ply];
+#endif
 #if SGR_CONTHIST
         ss_piece[ply] = -1;   // Null moves provide no continuation context.
 #endif
@@ -1361,9 +1369,43 @@ int Engine::negamax(
                 tt_move_key
             );
 
-            if (!stop_search && singular_score < singular_beta) {
+            if (stop_search) {
+                // A stopped search proves nothing: no extension either way.
+            } else if (singular_score < singular_beta) {
                 singular_extension = 1;
+#if SGR_SE_DOUBLE
+                // Far short of the TT move: extend it twice, or three times for
+                // a quiet move far shorter still. Capped per line.
+                if (!pv_node
+                        && singular_score < singular_beta - params.se_double_margin
+                        && ss_double_ext[ply] < params.se_double_limit) {
+                    singular_extension = 2;
+                    if (singular_score < singular_beta - params.se_triple_margin
+                            && !is_noisy_move(board, *tt_move_key)) {
+                        singular_extension = 3;
+                    }
+                }
+#endif
             }
+#if SGR_SE_MULTICUT
+            else if (singular_beta >= beta) {
+                // Another move beats beta as well: this node fails high even
+                // without the TT move.
+#if SGR_TRACE_SEARCH
+                trace_end(trace_scope.id, "multicut", singular_beta);
+#endif
+                return singular_beta;
+            }
+#endif
+#if SGR_SE_NEGATIVE
+            else if (tt_score >= beta) {
+                // Not singular, and its stored score already beats beta.
+                singular_extension = -2;
+            } else if (tt_score <= singular_score) {
+                // Not singular: an alternative does as well as the TT move.
+                singular_extension = -1;
+            }
+#endif
         }
     }
 #endif
@@ -1528,10 +1570,15 @@ int Engine::negamax(
             && tt_move_key.has_value()
             && move == *tt_move_key
         ) {
-            extension = std::max(extension, singular_extension);
+            extension = singular_extension > 0
+                ? std::max(extension, singular_extension)
+                : singular_extension;
         }
 #endif
         int next_depth = depth - 1 + extension;
+#if SGR_SE_DOUBLE
+        ss_double_ext[ply + 1] = ss_double_ext[ply] + (extension >= 2 ? 1 : 0);
+#endif
 
         int score;
 
