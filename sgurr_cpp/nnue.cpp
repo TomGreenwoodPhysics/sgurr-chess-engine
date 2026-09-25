@@ -229,6 +229,19 @@ std::int64_t output_from_acc(const AccT* white, const AccT* black, int side_to_m
     return sum + g_net.out_bias;
 }
 
+#if SGR_EVAL_CACHE
+struct EvalEntry {
+    U64 key = 0;        // Zero marks an empty entry.
+    int score = 0;
+};
+constexpr std::size_t EVAL_CACHE_SIZE = std::size_t{1} << SGR_EVAL_CACHE_BITS;
+EvalEntry g_eval_cache[EVAL_CACHE_SIZE];
+
+inline void clear_eval_cache() {
+    for (auto& e : g_eval_cache) e = EvalEntry{};
+}
+#endif
+
 inline int to_cp(std::int64_t output) {
     std::int64_t cp = output * SCALE / (static_cast<std::int64_t>(QA) * QB);
 
@@ -530,8 +543,17 @@ long long evaluate_raw(const Board& board) {
 }
 
 int evaluate(const Board& board) {
+#if SGR_EVAL_CACHE
+    EvalEntry& e = g_eval_cache[board.hash_key & (EVAL_CACHE_SIZE - 1)];
+    if (e.key == board.hash_key) return e.score;
+#endif
     const Level& L = current(board);
-    return to_cp(output_from_acc(L.acc[0], L.acc[1], board.side_to_move));
+    int score = to_cp(output_from_acc(L.acc[0], L.acc[1], board.side_to_move));
+#if SGR_EVAL_CACHE
+    e.key = board.hash_key;
+    e.score = score;
+#endif
+    return score;
 }
 #else
 void refresh(const Board& board) {
@@ -596,13 +618,25 @@ long long evaluate_raw(const Board& board) {
 }
 
 int evaluate(const Board& board) {
+#if SGR_EVAL_CACHE
+    EvalEntry& e = g_eval_cache[board.hash_key & (EVAL_CACHE_SIZE - 1)];
+    if (e.key == board.hash_key) return e.score;
+#endif
     if (!g_acc_valid || g_acc_hash != board.hash_key) refresh(board);
-    return to_cp(output_from_acc(g_acc[0], g_acc[1], board.side_to_move));
+    int score = to_cp(output_from_acc(g_acc[0], g_acc[1], board.side_to_move));
+#if SGR_EVAL_CACHE
+    e.key = board.hash_key;
+    e.score = score;
+#endif
+    return score;
 }
 #endif
 
 bool load(const std::string& path) {
-    // Old-weight accumulators are stale.
+    // Old-weight accumulators and scores are stale.
+#if SGR_EVAL_CACHE
+    clear_eval_cache();
+#endif
 #if SGR_NNUE_STACK
     g_top = 0;
     mark_stale(g_stack[0], 0);
