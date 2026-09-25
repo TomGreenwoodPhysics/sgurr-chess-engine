@@ -52,3 +52,9 @@ corrected for.
 
 H0 accepted. Then split it: quiescence TT alone, then the two PV changes as a
 pair.
+
+## Result, 2026-09-25
+
+Stopped by decision at 1,142 games, before a bound was crossed: **+16.4
+±12.9**, LLR 1.09 of 2.94, W 288 L 234 D 620, 0 abnormal endings. Inside the
+predicted band.

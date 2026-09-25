@@ -42,18 +42,11 @@ struct Network {
 Network g_net;
 bool g_active = false;
 
-// Current feature offset for each perspective's king bucket.
-int g_bucket_off[2] = {0, 0};
-
-// White and black accumulators tagged with their position key.
 #if SGR_SIMD
 using AccT = std::int16_t;
 #else
 using AccT = std::int32_t;
 #endif
-alignas(64) AccT g_acc[2][HL];
-bool g_acc_valid = false;
-U64 g_acc_hash = 0;
 
 // Map a piece to one perspective, mirroring and swapping colours for Black.
 inline int feature_index(int persp, int colour, int ptype, int sq) {
@@ -181,48 +174,6 @@ inline std::int32_t crelu(std::int32_t x) {
 const char* const kSimdKind = "scalar";
 #endif
 
-// Add or remove one piece from both accumulators.
-inline void edit_feature(int piece, int sq, int sign) {
-    int colour = piece / 6;
-    int ptype = piece % 6;
-    int iw = feature_index(WHITE, colour, ptype, sq);
-    int ib = feature_index(BLACK, colour, ptype, sq);
-    const std::int16_t* ww =
-        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[0] + iw) * HL];
-    const std::int16_t* wb =
-        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[1] + ib) * HL];
-#if SGR_SIMD
-    if (sign > 0) { vec_add(g_acc[0], ww); vec_add(g_acc[1], wb); }
-    else          { vec_sub(g_acc[0], ww); vec_sub(g_acc[1], wb); }
-#else
-    if (sign > 0) {
-        for (int k = 0; k < HL; ++k) { g_acc[0][k] += ww[k]; g_acc[1][k] += wb[k]; }
-    } else {
-        for (int k = 0; k < HL; ++k) { g_acc[0][k] -= ww[k]; g_acc[1][k] -= wb[k]; }
-    }
-#endif
-}
-
-// Apply move feature deltas, including en passant and castling.
-void apply_move(const UndoInfo& undo, int s) {
-    const Move& m = undo.move;
-    edit_feature(undo.moved_piece, m.from(), -s);
-    edit_feature(undo.placed_piece, m.to(), +s);
-    if (undo.captured_piece >= 0)
-        edit_feature(undo.captured_piece, undo.captured_square, -s);
-    if (m.is_castling()) {
-        int rook = -1, rf = 0, rt = 0;
-        switch (m.to()) {
-            case 6:  rook = WR; rf = 7;  rt = 5;  break;   // White kingside.
-            case 2:  rook = WR; rf = 0;  rt = 3;  break;   // White queenside.
-            case 62: rook = BR; rf = 63; rt = 61; break;   // Black kingside.
-            case 58: rook = BR; rf = 56; rt = 59; break;   // Black queenside.
-            default: break;
-        }
-        if (rook >= 0) { edit_feature(rook, rf, -s); edit_feature(rook, rt, +s); }
-    }
-}
-
 // Check whether the moving king crosses its perspective's bucket boundary.
 inline bool crosses_bucket(const UndoInfo& undo) {
     if (g_net.buckets <= 1) return false;
@@ -234,10 +185,21 @@ inline bool crosses_bucket(const UndoInfo& undo) {
     return false;
 }
 
+// Rook squares moved by castling, keyed by the king's destination.
+inline bool castling_rook(int king_to, int& rook, int& rf, int& rt) {
+    switch (king_to) {
+        case 6:  rook = WR; rf = 7;  rt = 5;  return true;   // White kingside.
+        case 2:  rook = WR; rf = 0;  rt = 3;  return true;   // White queenside.
+        case 62: rook = BR; rf = 63; rt = 61; return true;   // Black kingside.
+        case 58: rook = BR; rf = 56; rt = 59; return true;   // Black queenside.
+        default: return false;
+    }
+}
+
 // Clamp, multiply and sum both accumulators. All paths are bit-identical.
-std::int64_t output_from_acc(int side_to_move) {
-    const AccT* us   = g_acc[side_to_move == WHITE ? 0 : 1];
-    const AccT* them = g_acc[side_to_move == WHITE ? 1 : 0];
+std::int64_t output_from_acc(const AccT* white, const AccT* black, int side_to_move) {
+    const AccT* us   = side_to_move == WHITE ? white : black;
+    const AccT* them = side_to_move == WHITE ? black : white;
     // Squaring leaves the sum with an extra factor of QA, so it is divided out
     // before the bias, which is stored at QA*QB either way.
 #if SGR_SIMD
@@ -267,8 +229,311 @@ std::int64_t output_from_acc(int side_to_move) {
     return sum + g_net.out_bias;
 }
 
+inline int to_cp(std::int64_t output) {
+    std::int64_t cp = output * SCALE / (static_cast<std::int64_t>(QA) * QB);
+
+    // Keep the score well away from mate territory.
+    if (cp > 29000) cp = 29000;
+    if (cp < -29000) cp = -29000;
+    return static_cast<int>(cp);
+}
+
+#if SGR_NNUE_STACK
+// ---------------------------------------------------------------------------
+// Accumulator stack: one level per ply, computed lazily.
+
+// Deep enough for a search (under 128 plies) on top of a long game's moves.
+// Running out is handled by starting again from one level, so this is a
+// speed limit, not a correctness one.
+constexpr int STACK_LEVELS = 1024;
+
+// One ply. computed: acc holds the sums for the position tagged by hash.
+// stale: this level cannot be derived from its parent (a king crossed a bucket
+// boundary, or the stack fell out of step with the board) and is rebuilt from
+// the board when needed. Otherwise it records the features its move changed.
+struct alignas(64) Level {
+    AccT acc[2][HL];
+    U64 hash = 0;
+    int off[2] = {0, 0};   // King-bucket feature offsets, set when computed.
+    bool computed = false;
+    bool stale = true;
+    std::int8_t n_add = 0, n_sub = 0;
+    std::int8_t add_piece[2] = {}, add_sq[2] = {};
+    std::int8_t sub_piece[2] = {}, sub_sq[2] = {};
+};
+
+Level g_stack[STACK_LEVELS];
+int g_top = 0;
+
+inline const std::int16_t* feature_row(int persp, int off, int piece, int sq) {
+    int idx = feature_index(persp, piece / 6, piece % 6, sq);
+    return &g_net.ft_weight[static_cast<std::size_t>(off + idx) * HL];
+}
+
+inline void add_row(AccT* acc, const std::int16_t* w) {
+#if SGR_SIMD
+    vec_add(acc, w);
+#else
+    for (int k = 0; k < HL; ++k) acc[k] += w[k];
+#endif
+}
+
+// out = in + adds - subs in a single pass. int16 lanes wrap and int32 ones do
+// not overflow, so this is bit-identical to applying the rows one at a time.
+template <int NA, int NS>
+inline void acc_fused(AccT* out, const AccT* in,
+                      const std::int16_t* const* add, const std::int16_t* const* sub) {
+#if SGR_SIMD
+#if defined(__AVX512BW__)
+    for (int k = 0; k < HL; k += 32) {
+        __m512i v = _mm512_loadu_si512(in + k);
+        for (int i = 0; i < NA; ++i) v = _mm512_add_epi16(v, _mm512_loadu_si512(add[i] + k));
+        for (int i = 0; i < NS; ++i) v = _mm512_sub_epi16(v, _mm512_loadu_si512(sub[i] + k));
+        _mm512_storeu_si512(out + k, v);
+    }
+#else
+    for (int k = 0; k < HL; k += 16) {
+        __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(in + k));
+        for (int i = 0; i < NA; ++i)
+            v = _mm256_add_epi16(v, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(add[i] + k)));
+        for (int i = 0; i < NS; ++i)
+            v = _mm256_sub_epi16(v, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(sub[i] + k)));
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + k), v);
+    }
+#endif
+#else
+    for (int k = 0; k < HL; ++k) {
+        AccT v = in[k];
+        for (int i = 0; i < NA; ++i) v += add[i][k];
+        for (int i = 0; i < NS; ++i) v -= sub[i][k];
+        out[k] = v;
+    }
+#endif
+}
+
+// A legal move changes (adds, removes): quiet or promotion (1, 1), capture,
+// capture-promotion or en passant (1, 2), castling (2, 2).
+inline void acc_apply(AccT* out, const AccT* in, int na, const std::int16_t* const* add,
+                      int ns, const std::int16_t* const* sub) {
+    if (na == 1 && ns == 1)      acc_fused<1, 1>(out, in, add, sub);
+    else if (na == 1 && ns == 2) acc_fused<1, 2>(out, in, add, sub);
+    else if (na == 2 && ns == 2) acc_fused<2, 2>(out, in, add, sub);
+    else {
+        // Not reachable from a legal move; kept correct rather than assumed away.
+        std::memcpy(out, in, HL * sizeof(AccT));
+        for (int i = 0; i < na; ++i) add_row(out, add[i]);
+        for (int i = 0; i < ns; ++i) {
+#if SGR_SIMD
+            vec_sub(out, sub[i]);
+#else
+            for (int k = 0; k < HL; ++k) out[k] -= sub[i][k];
+#endif
+        }
+    }
+}
+
+// Rebuild one level from the board.
+void rebuild(Level& L, const Board& board) {
+    if (g_net.buckets > 1) {
+        int wk = __builtin_ctzll(board.bitboards[WK]);
+        int bk = __builtin_ctzll(board.bitboards[BK]);
+        L.off[0] = g_net.bucket_map[wk] * INPUT;
+        L.off[1] = g_net.bucket_map[bk ^ 56] * INPUT;
+    } else {
+        L.off[0] = L.off[1] = 0;
+    }
+    for (int persp = 0; persp < 2; ++persp) {
+#if SGR_SIMD
+        // Accumulator and stored bias types match in SIMD builds.
+        std::memcpy(L.acc[persp], g_net.ft_bias.data(), HL * sizeof(AccT));
+#else
+        for (int k = 0; k < HL; ++k) L.acc[persp][k] = g_net.ft_bias[k];
+#endif
+    }
+    for (int piece = 0; piece < 12; ++piece) {
+        std::uint64_t bb = board.bitboards[piece];
+        while (bb) {
+            int sq = __builtin_ctzll(bb);
+            bb &= bb - 1;
+            add_row(L.acc[0], feature_row(WHITE, L.off[0], piece, sq));
+            add_row(L.acc[1], feature_row(BLACK, L.off[1], piece, sq));
+        }
+    }
+    L.computed = true;
+    L.stale = false;
+    L.hash = board.hash_key;
+}
+
+// Compute level j from its computed parent. No king crossed a bucket boundary
+// between them, so the parent's offsets still apply.
+void derive(int j) {
+    Level& L = g_stack[j];
+    const Level& P = g_stack[j - 1];
+    L.off[0] = P.off[0];
+    L.off[1] = P.off[1];
+    for (int persp = 0; persp < 2; ++persp) {
+        const std::int16_t* add[2];
+        const std::int16_t* sub[2];
+        for (int i = 0; i < L.n_add; ++i)
+            add[i] = feature_row(persp, L.off[persp], L.add_piece[i], L.add_sq[i]);
+        for (int i = 0; i < L.n_sub; ++i)
+            sub[i] = feature_row(persp, L.off[persp], L.sub_piece[i], L.sub_sq[i]);
+        acc_apply(L.acc[persp], P.acc[persp], L.n_add, add, L.n_sub, sub);
+    }
+    L.computed = true;
+}
+
+// The current level, computed for this board.
+const Level& current(const Board& board) {
+    Level& top = g_stack[g_top];
+    if (top.hash != board.hash_key) {
+        // Out of step with the board: never trust it, rebuild.
+        rebuild(top, board);
+        return top;
+    }
+    if (top.computed) return top;
+
+    int i = g_top;
+    while (i > 0 && !g_stack[i].computed && !g_stack[i].stale) --i;
+    if (!g_stack[i].computed) {
+        // A stale level (or an unbuilt root) lies between: rebuild the top.
+        rebuild(top, board);
+        return top;
+    }
+    for (int j = i + 1; j <= g_top; ++j) derive(j);
+    return top;
+}
+
+void mark_stale(Level& L, U64 hash) {
+    L.hash = hash;
+    L.computed = false;
+    L.stale = true;
+}
+#else
+// ---------------------------------------------------------------------------
+// Single accumulator, updated on every make and unmake. Kept for comparison.
+
+// Current feature offset for each perspective's king bucket.
+int g_bucket_off[2] = {0, 0};
+
+// White and black accumulators tagged with their position key.
+alignas(64) AccT g_acc[2][HL];
+bool g_acc_valid = false;
+U64 g_acc_hash = 0;
+
+// Add or remove one piece from both accumulators.
+inline void edit_feature(int piece, int sq, int sign) {
+    int colour = piece / 6;
+    int ptype = piece % 6;
+    int iw = feature_index(WHITE, colour, ptype, sq);
+    int ib = feature_index(BLACK, colour, ptype, sq);
+    const std::int16_t* ww =
+        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[0] + iw) * HL];
+    const std::int16_t* wb =
+        &g_net.ft_weight[static_cast<std::size_t>(g_bucket_off[1] + ib) * HL];
+#if SGR_SIMD
+    if (sign > 0) { vec_add(g_acc[0], ww); vec_add(g_acc[1], wb); }
+    else          { vec_sub(g_acc[0], ww); vec_sub(g_acc[1], wb); }
+#else
+    if (sign > 0) {
+        for (int k = 0; k < HL; ++k) { g_acc[0][k] += ww[k]; g_acc[1][k] += wb[k]; }
+    } else {
+        for (int k = 0; k < HL; ++k) { g_acc[0][k] -= ww[k]; g_acc[1][k] -= wb[k]; }
+    }
+#endif
+}
+
+// Apply move feature deltas, including en passant and castling.
+void apply_move(const UndoInfo& undo, int s) {
+    const Move& m = undo.move;
+    edit_feature(undo.moved_piece, m.from(), -s);
+    edit_feature(undo.placed_piece, m.to(), +s);
+    if (undo.captured_piece >= 0)
+        edit_feature(undo.captured_piece, undo.captured_square, -s);
+    int rook, rf, rt;
+    if (m.is_castling() && castling_rook(m.to(), rook, rf, rt)) {
+        edit_feature(rook, rf, -s);
+        edit_feature(rook, rt, +s);
+    }
+}
+#endif
+
 }  // namespace
 
+#if SGR_NNUE_STACK
+void refresh(const Board& board) {
+    rebuild(g_stack[g_top], board);
+}
+
+void reset(const Board& board) {
+    g_top = 0;
+    rebuild(g_stack[0], board);
+}
+
+void on_make(const UndoInfo& undo, std::uint64_t new_hash) {
+    // A move follows on from the current level only if that level is this
+    // move's starting position and the king stays in its bucket.
+    const bool follows = g_stack[g_top].hash == undo.old_hash_key && !crosses_bucket(undo);
+
+    if (g_top + 1 >= STACK_LEVELS) {
+        // Out of levels: start again from one level, rebuilt when needed.
+        g_top = 0;
+        mark_stale(g_stack[0], new_hash);
+        return;
+    }
+
+    Level& L = g_stack[++g_top];
+    L.hash = new_hash;
+    L.computed = false;
+    L.stale = !follows;
+    if (!follows) return;
+
+    const Move& m = undo.move;
+    L.n_add = 0;
+    L.n_sub = 0;
+    L.sub_piece[L.n_sub] = static_cast<std::int8_t>(undo.moved_piece);
+    L.sub_sq[L.n_sub++]  = static_cast<std::int8_t>(m.from());
+    L.add_piece[L.n_add] = static_cast<std::int8_t>(undo.placed_piece);
+    L.add_sq[L.n_add++]  = static_cast<std::int8_t>(m.to());
+    if (undo.captured_piece >= 0) {
+        L.sub_piece[L.n_sub] = static_cast<std::int8_t>(undo.captured_piece);
+        L.sub_sq[L.n_sub++]  = static_cast<std::int8_t>(undo.captured_square);
+    }
+    int rook, rf, rt;
+    if (m.is_castling() && castling_rook(m.to(), rook, rf, rt)) {
+        L.sub_piece[L.n_sub] = static_cast<std::int8_t>(rook);
+        L.sub_sq[L.n_sub++]  = static_cast<std::int8_t>(rf);
+        L.add_piece[L.n_add] = static_cast<std::int8_t>(rook);
+        L.add_sq[L.n_add++]  = static_cast<std::int8_t>(rt);
+    }
+}
+
+void on_unmake(const UndoInfo& undo, std::uint64_t) {
+    if (g_top == 0) {
+        // Nothing to return to (the stack was restarted): rebuild when needed.
+        mark_stale(g_stack[0], undo.old_hash_key);
+        return;
+    }
+    --g_top;
+    Level& P = g_stack[g_top];
+    if (P.hash != undo.old_hash_key) mark_stale(P, undo.old_hash_key);
+}
+
+void note_hash(std::uint64_t hash) {
+    // Null moves leave every piece in place and only change the tagged key.
+    g_stack[g_top].hash = hash;
+}
+
+long long evaluate_raw(const Board& board) {
+    const Level& L = current(board);
+    return output_from_acc(L.acc[0], L.acc[1], board.side_to_move);
+}
+
+int evaluate(const Board& board) {
+    const Level& L = current(board);
+    return to_cp(output_from_acc(L.acc[0], L.acc[1], board.side_to_move));
+}
+#else
 void refresh(const Board& board) {
     // Set bucket offsets before adding features.
     if (g_net.buckets > 1) {
@@ -301,6 +566,10 @@ void refresh(const Board& board) {
     g_acc_hash = board.hash_key;
 }
 
+void reset(const Board& board) {
+    refresh(board);
+}
+
 void on_make(const UndoInfo& undo, std::uint64_t new_hash) {
     // Refresh later if the key is stale or the king changes buckets.
     if (!g_acc_valid || g_acc_hash != undo.old_hash_key) { g_acc_valid = false; return; }
@@ -323,22 +592,23 @@ void note_hash(std::uint64_t hash) {
 
 long long evaluate_raw(const Board& board) {
     if (!g_acc_valid || g_acc_hash != board.hash_key) refresh(board);
-    return output_from_acc(board.side_to_move);
+    return output_from_acc(g_acc[0], g_acc[1], board.side_to_move);
 }
 
 int evaluate(const Board& board) {
     if (!g_acc_valid || g_acc_hash != board.hash_key) refresh(board);
-    std::int64_t output = output_from_acc(board.side_to_move);
-    std::int64_t cp = output * SCALE / (static_cast<std::int64_t>(QA) * QB);
-
-    // Keep the score well away from mate territory.
-    if (cp > 29000) cp = 29000;
-    if (cp < -29000) cp = -29000;
-    return static_cast<int>(cp);
+    return to_cp(output_from_acc(g_acc[0], g_acc[1], board.side_to_move));
 }
+#endif
 
 bool load(const std::string& path) {
-    g_acc_valid = false;   // Old-weight accumulators are stale.
+    // Old-weight accumulators are stale.
+#if SGR_NNUE_STACK
+    g_top = 0;
+    mark_stale(g_stack[0], 0);
+#else
+    g_acc_valid = false;
+#endif
 
     std::ifstream in(path, std::ios::binary);
     if (!in) {

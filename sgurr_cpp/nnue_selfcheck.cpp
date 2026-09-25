@@ -67,6 +67,81 @@ static void check_chain(std::mt19937& rng, int max_ply) {
         printf("  CHAIN(unmake) mismatch inc=%lld ref=%lld\n", inc_root, ref_root); }
 }
 
+// Interleave makes, unmakes, null moves and evaluations the way a search does,
+// comparing each evaluation with a rebuild of the same position. A rebuild
+// that disagrees also corrects the level, so later checks stay independent.
+static long long g_walk_checks = 0, g_walk_fails = 0;
+
+static void walk_compare(Board& board, const char* what) {
+    long long inc = nnue::evaluate_raw(board);
+    nnue::refresh(board);
+    long long ref = nnue::evaluate_raw(board);
+    ++g_walk_checks;
+    if (inc != ref) { ++g_walk_fails; if (g_walk_fails <= 10)
+        printf("  WALK(%s) mismatch inc=%lld ref=%lld\n", what, inc, ref); }
+}
+
+static void check_walk(std::mt19937& rng, int steps) {
+    struct Step { bool null; UndoInfo move; NullMoveUndo nul; };
+    Board board(START_FEN);
+    nnue::reset(board);
+    std::vector<Step> path;
+    for (int s = 0; s < steps; ++s) {
+        int r = static_cast<int>(rng() % 100);
+        MoveList ms = board.generate_legal_moves();
+        bool can_make = ms.size() > 0 && path.size() < 120;
+        if (can_make && (r < 55 || path.empty())) {
+            if (r < 8 && !board.in_check(board.side_to_move)
+                    && (path.empty() || !path.back().null)) {
+                Step st{true, {}, board.make_null_move()};
+                path.push_back(st);
+            } else {
+                Step st{false, board.make_move(ms[rng() % ms.size()]), {}};
+                path.push_back(st);
+            }
+        } else if (!path.empty()) {
+            if (path.back().null) board.unmake_null_move(path.back().nul);
+            else board.unmake_move(path.back().move);
+            path.pop_back();
+        } else {
+            break;
+        }
+        if (rng() % 2) walk_compare(board, "step");
+    }
+    while (!path.empty()) {
+        if (path.back().null) board.unmake_null_move(path.back().nul);
+        else board.unmake_move(path.back().move);
+        path.pop_back();
+    }
+    walk_compare(board, "root");
+}
+
+// Knight moves back and forth, far past the accumulator stack's depth, then
+// all the way back: exercises the stack restarting when it runs out.
+static void check_deep_chain(int plies) {
+    Board board(START_FEN);
+    nnue::reset(board);
+    const int shuffle[4][2] = {{6, 21}, {62, 45}, {21, 6}, {45, 62}};  // Nf3 Nf6 Ng1 Ng8.
+    std::vector<UndoInfo> undos;
+    for (int p = 0; p < plies; ++p) {
+        MoveList ms = board.generate_legal_moves();
+        const int* want = shuffle[p % 4];
+        for (int i = 0; i < ms.size(); ++i) {
+            if (ms[i].from() == want[0] && ms[i].to() == want[1]) {
+                undos.push_back(board.make_move(ms[i]));
+                break;
+            }
+        }
+        if (p % 97 == 0) walk_compare(board, "deep make");
+    }
+    walk_compare(board, "deep leaf");
+    for (int i = static_cast<int>(undos.size()) - 1; i >= 0; --i) {
+        board.unmake_move(undos[i]);
+        if (i % 89 == 0) walk_compare(board, "deep unmake");
+    }
+    walk_compare(board, "deep root");
+}
+
 int main(int argc, char** argv) {
     const char* net = argc > 1 ? argv[1] : "../nets/gen1.nnue";
     if (!nnue::load(net)) { printf("failed to load net %s\n", net); return 1; }
@@ -101,6 +176,14 @@ int main(int argc, char** argv) {
 
     std::mt19937 rng(0xC0FFEE);
     for (int g = 0; g < 2000; ++g) check_chain(rng, 40 + (int)(rng() % 60));
+
+    // Search-like interleaving and a stack overrun. Reported on their own line
+    // so the checks and evalsum above stay comparable with earlier builds.
+    std::mt19937 walk_rng(0x5EED);
+    for (int w = 0; w < 400; ++w) check_walk(walk_rng, 300);
+    check_deep_chain(2500);
+    printf("walk checks=%lld fails=%lld\n", g_walk_checks, g_walk_fails);
+    g_fails += g_walk_fails;
 
     printf("checks=%lld fails=%lld evalsum=%lld -> %s\n", g_checks, g_fails,
            g_evalsum, g_fails == 0 ? "PASS" : "FAIL");

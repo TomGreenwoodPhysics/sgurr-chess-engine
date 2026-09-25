@@ -70,6 +70,14 @@ constexpr int SCALE = 400;
 #define SGR_SCRELU 1
 #endif
 
+// Keep one accumulator per ply. Make and unmake only push and pop; a level's
+// sums are computed when that position is evaluated, from its nearest computed
+// ancestor, one fused pass per ply. Scores are bit-identical to the single
+// accumulator it replaces, so the search tree does not change.
+#ifndef SGR_NNUE_STACK
+#define SGR_NNUE_STACK 1
+#endif
+
 // Load a network. Failure leaves the handcrafted evaluation active.
 bool load(const std::string& path);
 
@@ -90,7 +98,10 @@ long long evaluate_raw(const Board& board);
 
 // Maintain accumulators across moves. Key mismatches trigger a full refresh.
 // Null moves only retag the accumulator hash.
+// refresh() rebuilds the current accumulator from the board in place; reset()
+// also drops every earlier ply, and is called once at the root of a search.
 void refresh(const Board& board);
+void reset(const Board& board);
 void on_make(const UndoInfo& undo, std::uint64_t new_hash);
 void on_unmake(const UndoInfo& undo, std::uint64_t post_hash);
 void note_hash(std::uint64_t hash);

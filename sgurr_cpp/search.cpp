@@ -566,8 +566,9 @@ SearchResult Engine::search_best_move(
     search_trace.last_flush_at = search_trace.started_at;
 #endif
 
-    // Build root accumulators before incremental updates begin.
-    if (nnue::active()) nnue::refresh(board);
+    // Build the root accumulator and drop any plies left from setting up the
+    // position, before incremental updates begin.
+    if (nnue::active()) nnue::reset(board);
 
     reset_killers();
 
