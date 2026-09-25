@@ -1966,7 +1966,12 @@ Engine::MovePicker::MovePicker(
     int ply,
     bool split_bad_captures
 ) {
-    // Bucket eagerly so SEE classification happens in one predictable pass.
+    // Score eagerly: history changes while earlier moves are searched, and the
+    // order must not. SEE depends only on the position, so it waits for the
+    // capture stage (see next()).
+    board_ = &board;
+    split_bad_ = split_bad_captures;
+
     std::optional<Move> killer_key_one = std::nullopt;
     std::optional<Move> killer_key_two = std::nullopt;
 
@@ -1985,14 +1990,7 @@ Engine::MovePicker::MovePicker(
         }
 
         if (eng.is_noisy_move(board, move)) {
-            int cscore = eng.capture_score(board, move);
-
-            if (split_bad_captures && !move.is_promotion()
-                    && !board.see_ge(move, 0)) {
-                bad_captures_[n_bad_++] = {move, cscore};
-            } else {
-                captures_[n_cap_++] = {move, cscore};
-            }
+            captures_[n_cap_++] = {move.data, eng.capture_score(board, move)};
             continue;
         }
 
@@ -2021,9 +2019,9 @@ Engine::MovePicker::MovePicker(
 #endif
 
         if (hist > 0) {
-            good_quiets_[n_gq_++] = {move, hist};
+            good_quiets_[n_gq_++] = {move.data, hist};
         } else {
-            other_quiets_[n_oq_++] = {move, hist};
+            other_quiets_[n_oq_++] = {move.data, hist};
         }
     }
 }
@@ -2039,10 +2037,26 @@ bool Engine::MovePicker::next(Move& out) {
 
             case S_CAPTURES:
                 if (!sorted_cap_) {
+                    if (split_bad_) {
+                        // Losing captures move to their own bucket. Both keep
+                        // generation order, as when this ran in the constructor,
+                        // so the sorts below give the same sequence.
+                        int kept = 0;
+                        for (int i = 0; i < n_cap_; ++i) {
+                            Move m;
+                            m.data = captures_[i].move;
+                            if (!m.is_promotion() && !board_->see_ge(m, 0)) {
+                                bad_captures_[n_bad_++] = captures_[i];
+                            } else {
+                                captures_[kept++] = captures_[i];
+                            }
+                        }
+                        n_cap_ = kept;
+                    }
                     std::sort(captures_, captures_ + n_cap_, ByScoreDesc{});
                     sorted_cap_ = true;
                 }
-                if (index_ < n_cap_) { out = captures_[index_++].move; return true; }
+                if (index_ < n_cap_) { out.data = captures_[index_++].move; return true; }
                 stage_ = S_KILLER1;
                 break;
 
@@ -2062,7 +2076,7 @@ bool Engine::MovePicker::next(Move& out) {
                     std::sort(bad_captures_, bad_captures_ + n_bad_, ByScoreDesc{});
                     sorted_bad_ = true;
                 }
-                if (index_ < n_bad_) { out = bad_captures_[index_++].move; return true; }
+                if (index_ < n_bad_) { out.data = bad_captures_[index_++].move; return true; }
                 stage_ = S_GOOD_QUIET;
                 index_ = 0;
                 break;
@@ -2072,7 +2086,7 @@ bool Engine::MovePicker::next(Move& out) {
                     std::sort(good_quiets_, good_quiets_ + n_gq_, ByScoreDesc{});
                     sorted_gq_ = true;
                 }
-                if (index_ < n_gq_) { out = good_quiets_[index_++].move; return true; }
+                if (index_ < n_gq_) { out.data = good_quiets_[index_++].move; return true; }
                 stage_ = S_OTHER_QUIET;
                 index_ = 0;
                 break;
@@ -2085,7 +2099,7 @@ bool Engine::MovePicker::next(Move& out) {
                     sorted_oq_ = true;
                 }
 #endif
-                if (index_ < n_oq_) { out = other_quiets_[index_++].move; return true; }
+                if (index_ < n_oq_) { out.data = other_quiets_[index_++].move; return true; }
                 stage_ = S_DONE;
                 break;
 
