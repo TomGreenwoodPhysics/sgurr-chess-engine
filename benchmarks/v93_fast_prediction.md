@@ -37,3 +37,8 @@ from the speed.
 
 Below +20 with the interval excluding +40: the speed did not convert, or batch
 A's first measurement ran high.
+
+## Result, 2026-09-25
+
+Stopped by decision once clearly positive, before a bound was crossed:
+Elo: 25.97 +/- 16.16 over 764 games, 1.17 LLR. Inside the predicted band, at its low end. No abnormal endings.
