@@ -1,0 +1,37 @@
+{
+  "pool_id": "pool-2026-09-E",
+  "description": "CCRL-Blitz-anchored opponent pool for Sgurr calibration. Names must match fastchess PGN tags exactly. Anchors are the ccrl_blitz values below; the solve uses only this pool's games.",
+  "time_control": "10+0.1",
+  "hash_mb": 256,
+  "games_dir": "games/pool-2026-09-E",
+  "book": {
+    "file": "../testing/8moves_v3.pgn",
+    "format": "pgn",
+    "lines": 34700,
+    "plies": 16,
+    "sha256": "5835239f88cc2c7511b177c32392a69f3ede21819cf0616f80a7f907cd21d17e",
+    "source": "https://github.com/official-stockfish/books/blob/master/8moves_v3.pgn.zip",
+    "why": "Generic and engine-neutral, within CCRL's 12-moves-per-side limit. Unchanged from pool-D."
+  },
+  "engines": [
+    {"name": "Bit-Genie-9",      "cmd": "engines/bit-genie-9.exe",          "ccrl_blitz": 3087, "ccrl_error": 9,  "ccrl_games": 3969, "source": "https://github.com/Aryan1508/Bit-Genie/releases/tag/v9",            "build": "Bit-Genie-9-bmi2.exe",                          "sha256": "ee1bc0d98178626df49db325da71ab5be2bc70a5c4aad3b9eaa95eafbb0e59aa"},
+    {"name": "Bitfox-2.5.0",     "cmd": "engines/bitfox-2.5.0.exe",         "ccrl_blitz": 3231, "ccrl_error": 9,  "ccrl_games": 5763, "source": "https://github.com/Azeel1/bitfox-engine/releases/tag/v2.5.0",       "build": "bitfox.exe from bitfox-2.5.0-windows-x86_64.zip (zip matches its published sha256)", "sha256": "b75ca817384e9467be1c52563a5625834f7341d7a7b9145102b7dfa42e47f712"},
+    {"name": "Monolith-3",       "cmd": "engines/monolith-3.exe",           "ccrl_blitz": 3258, "ccrl_error": 16, "ccrl_games": 1119, "source": "https://github.com/cimarronOST/Monolith/releases/tag/v3",           "build": "Monolith-windows-x86-64-pext.exe",              "sha256": "56a698bd0a3c8923901bfb111fc9f15f0873db52c3ecf513b06892d974ad3f9b"},
+    {"name": "Drofa-4.1.0",      "cmd": "engines/drofa-4.1.0.exe",          "ccrl_blitz": 3286, "ccrl_error": 10, "ccrl_games": 2758, "source": "https://github.com/justNo4b/Drofa/releases/tag/4.1.0_fix",         "build": "Drofa_pext.exe from Drofa_fixed.zip",           "sha256": "cc91457015df09e062e08fb11e47c46ff0f7e9cc136682a9dc61298ef366afb4"},
+    {"name": "Mantissa-3.7.2",   "cmd": "engines/mantissa-3.7.2.exe",       "ccrl_blitz": 3311, "ccrl_error": 9,  "ccrl_games": 4160, "source": "https://github.com/jtheardw/mantissa/releases/tag/v3.7.2",         "build": "mantissa-3.7.2-windows-avx2.exe",               "sha256": "bd6a2c7acb1a71919c91247325c864b8a757b49893b1890b22acac3c8d4c7463"},
+    {"name": "Nalwald-19",       "cmd": "engines/nalwald-19.exe",           "ccrl_blitz": 3340, "ccrl_error": 10, "ccrl_games": 2800, "source": "https://github.com/tsoj/Nalwald/releases/tag/19",                   "build": "Nalwald-19-windows-amd64-modern.exe",           "sha256": "1a807247874c1fcfd54759d628e1f01f80d140eaeebaf1a0262a3d2b144638fa"},
+    {"name": "Counter-5.5",      "cmd": "engines/counter-5.5.exe",          "ccrl_blitz": 3360, "ccrl_error": 10, "ccrl_games": 3158, "source": "https://github.com/ChizhovVadim/CounterGo/releases/tag/v1.55.0",   "build": "counter-5.5-windows-amd64.exe",                 "sha256": "d9d24052f6ab123cee7bfb614437b1c41169a45373575f338ca748cb5445c0d0"},
+    {"name": "Lynx-1.11.0",      "cmd": "engines/lynx-1.11.0/Lynx.Cli.exe", "ccrl_blitz": 3361, "ccrl_error": 12, "ccrl_games": 1859, "source": "https://github.com/lynx-chess/Lynx/releases/tag/v1.11.0",         "build": "Lynx.Cli.exe from Lynx-1.11.0-win-x64.zip, with its appsettings.json (online tablebase off, 1 thread)", "sha256": "965ea77015d11466d951e70ba37ba18a0769b48d24c6904592b80a91b07a1ecd"},
+    {"name": "Frozenight-6.0.0", "cmd": "engines/frozenight-6.0.0.exe",     "ccrl_blitz": 3362, "ccrl_error": 9,  "ccrl_games": 4360, "source": "https://github.com/MinusKelvin/frozenight/releases/tag/v6.0.0",    "build": "frozenight-6.0.0-windows-x86-64-v3.exe",        "sha256": "e51521ed88881459ebfea1db5239f1bbef0a9db5c730baf853c0394503e00485"}
+  ],
+  "notes": [
+    "Built 2026-09-24 to measure version-to-version gains that carry over to CCRL, with enough resolution to see medium gains. Absolute accuracy is secondary.",
+    "Ratings are single-CPU CCRL Blitz from the live list updated 2026-09-21, checked twice. Every binary reports the exact rated version via `id name`, supports Hash, defaults to one thread, and has no own book or tablebases.",
+    "Nine families from 3087 to 3362. 4ku 5.1 (3059) is dropped: v9.1 scores about 70% against it and games that lopsided carry little information. Bit-Genie 9 stays as the one low anchor so v9.0 is bracketed from below. Four new anchors at 3340-3362 keep the next few versions bracketed from above.",
+    "Rejected: Pedantic (its repository stops at 0.6.2, CCRL rates 2.1.0), Stash 37.0 (source only; a local build is not the binary CCRL rated).",
+    "Adjudication was tested and rejected. Replayed on 8,168 pool-D games, resign adjudication (3 moves at 1000cp, both engines agreeing) saved 8% of time but turned 22 Sgurr draws into losses; draw adjudication saved 1% and turned 28 Sgurr wins into draws. A version-dependent bias is not worth 8%.",
+    "Time control stays 10+0.1. A CCRL-equivalent control (about 1'+0.6\" here) would cost about six times as much per game and could not resolve a medium gain in a night.",
+    "Solved on this pool's games only (games_dir). Earlier pools' PGNs stay in games/ and are not mixed in. pool-D is archived verbatim at pool-2026-08-D.json.",
+    "Every version is calibrated with the same opening seed, so two versions meet the same opponents on the same openings in the same order."
+  ]
+}

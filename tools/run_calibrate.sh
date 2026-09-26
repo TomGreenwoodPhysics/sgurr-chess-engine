@@ -68,6 +68,13 @@ print(p['pool_id'], p['time_control'], p['hash_mb'], p['games_dir'])
 " | tr -d '\r')"
 [ -n "${GAMES_DIR:-}" ] || { echo "ABORT: pool.json has no games_dir" >&2; exit 1; }
 GAMES="$BM/${CALIB_GAMES_DIR:-$GAMES_DIR}"
+# A pool that extends an earlier one under identical conditions lists the
+# earlier games directory in include_games, and the solve reads both.
+SOLVE_DIRS="$GAMES $(python -c "
+import json
+p=json.load(open(r'$WIN_BM/pool.json'))
+print(' '.join(r'$BM/'+d for d in p.get('include_games', [])))
+" | tr -d '\r')"
 # Keep every interrupted or resumed run as a separate append-only input to
 # Ordo. A date-only filename could overwrite an earlier run from the same day.
 PGN="$GAMES/calib-$VERSION-$STAMP.pgn"
@@ -164,8 +171,11 @@ solve() {
     local threads="${1:-2}"
     local combined="$OUT/all_calib.pgn"
     : > "$combined"
-    for p in "$GAMES"/calib-*.pgn; do
-        [ -f "$p" ] && cat "$p" >> "$combined"
+    local d p
+    for d in $SOLVE_DIRS; do
+        for p in "$d"/calib-*.pgn; do
+            [ -f "$p" ] && cat "$p" >> "$combined"
+        done
     done
 
     # Write to a scratch file because Ordo truncates its output before solving.
@@ -187,23 +197,43 @@ solve() {
 games_so_far() {
     # The gauntlet engine appears once per game as White or Black.
     # Count all PGNs for this version so resumed runs match the Ordo input.
-    grep -ch "\"$ENGINE_NAME\"" "$GAMES"/calib-"$VERSION"-*.pgn 2>/dev/null \
-        | awk '{s+=$1} END{print s+0}'
+    local d
+    for d in $SOLVE_DIRS; do
+        grep -ch "\"$ENGINE_NAME\"" "$d"/calib-"$VERSION"-*.pgn 2>/dev/null
+    done | awk '{s+=$1} END{print s+0}'
 }
 
 # Launch the gauntlet
 # Run from benchmarks and give fastchess Windows or local relative paths.
 CMD=("$(cygpath -m "$FC")" -tournament gauntlet -seeds 1 -srand "$SEED"
      -engine "cmd=$(cygpath -m "$REL_EXE")" "name=$ENGINE_NAME")
+# CALIB_OPPONENTS (comma-separated names) limits the gauntlet to some pool
+# engines, to top up a version that already has games against the rest.
+# Every pool engine stays an anchor in the solve either way. An engine's
+# `options` in pool.json are passed to it, for example to turn off its book.
+OPPONENTS=$(CALIB_OPPONENTS="${CALIB_OPPONENTS:-}" python -c "
+import json, os, sys
+p = json.load(open(r'$WIN_BM/pool.json'))
+want = [n for n in os.environ['CALIB_OPPONENTS'].split(',') if n]
+names = [e['name'] for e in p['engines']]
+unknown = [n for n in want if n not in names]
+if unknown: sys.exit('unknown pool engine(s): ' + ', '.join(unknown))
+for e in p['engines']:
+    if not want or e['name'] in want:
+        opts = ' '.join(f'option.{k}={v}' for k, v in e.get('options', {}).items())
+        print(e['name'], e['cmd'], opts)
+") || { echo "ABORT: CALIB_OPPONENTS names an engine that is not in pool.json" >&2; exit 1; }
+OPPONENTS=${OPPONENTS//$'\r'/}
 N_OPP=0
-while read -r name cmd; do
+while read -r name cmd opts; do
     # Convert each pool binary to an absolute Windows path.
-    [ -n "$name" ] && { CMD+=(-engine "cmd=$(cygpath -m "$BM/$cmd")" "name=$name"); N_OPP=$((N_OPP + 1)); }
-done < <(python -c "
-import json
-p=json.load(open(r'$WIN_BM/pool.json'))
-for e in p['engines']: print(e['name'], e['cmd'])
-" | tr -d '\r')
+    [ -n "$name" ] || continue
+    # shellcheck disable=SC2086
+    CMD+=(-engine "cmd=$(cygpath -m "$BM/$cmd")" "name=$name" $opts)
+    N_OPP=$((N_OPP + 1))
+done <<< "$OPPONENTS"
+echo "opponents : $(awk '{printf "%s%s ", $1, ($3 ? " [" $3 "]" : "")}' <<< "$OPPONENTS")" \
+    | tee -a "$OUT/manifest.txt"
 # Strip CRLF output from Windows Python so engine paths contain no carriage return.
 CMD+=(-each "tc=$TC" "option.Hash=$HASH" -rounds "$ROUNDS" -repeat
       -concurrency "$CONCURRENCY" -recover

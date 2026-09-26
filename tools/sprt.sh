@@ -48,7 +48,7 @@ if grep -aq 'Finished match' "$RUN/sprt.txt" 2>/dev/null; then
 else
     busy=$(powershell -NoProfile -Command "(Get-Process fastchess,datagen -ErrorAction SilentlyContinue | Measure-Object).Count" 2>/dev/null | tr -d '\r ')
     [ "${busy:-0}" = "0" ] || die "$busy fastchess/datagen process(es) already running"
-    for p in spsa.py calibrate_pool_e.sh run_calibrate.sh overnight_chain.sh; do
+    for p in spsa.py calibrate_pool.sh run_calibrate.sh; do
         [ -z "$(procs_matching $p)" ] || die "$p is running"
     done
     for pair in "$NEW $NEW_NODES" "$BASE $BASE_NODES"; do

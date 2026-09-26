@@ -59,6 +59,20 @@ plus a warning.
 higher throughput and a pentanomial SPRT. Use the same book and bounds.
 `fastchess.md` has the exact command.
 
+### C) `tools/sprt.sh`, the standard run
+
+Every SPRT now goes through one script, so conditions cannot drift between
+runs: fastchess at 8+0.08, Hash 256, the generic `8moves_v3.pgn`, concurrency
+7, `elo0=0 elo1=5`, capped at 5,000 games.
+
+    tools/sprt.sh NAME NEW.exe NEW_NODES BASE.exe BASE_NODES [MAX_GAMES]
+    tools/sprt.sh --stop
+
+Both binaries sit in `sgurr_cpp/` with their nets baked in. The node counts
+are their bench fingerprints, and the run refuses to start if either binary is
+not the one that was checked. Results land in `runs/sprt/NAME/summary.txt`.
+Each run has a prediction committed in `benchmarks/` before it starts.
+
 ## The opening book
 
 `book.epd` is a starter book of balanced positions (each ~8 plies in, filtered
@@ -104,6 +118,33 @@ since some gains (deeper search, time management) scale with thinking time.
 Avoid extremely fast TC with the Python harness: its per-move overhead can
 cause spurious time forfeits below ~1s base.
 
+## Pool calibration
+
+Absolute ratings come from a gauntlet against pool-2026-09-F: 18 engine
+families from 3087 to 3438 on the CCRL Blitz list, at 10+0.1 and Hash 256 with
+`8moves_v3.pgn`. `benchmarks/pool.json` pins each engine's build and records
+why the pool is built the way it is.
+
+    tools/calibrate_pool.sh VERSION EXE NET
+    tools/calibrate_pool.sh --stop
+
+The run stops at about ±12 and can be paused without losing games. Pool-F is
+pool-E plus nine families under identical conditions, so Ordo solves pool-F's
+games together with pool-E's and with nothing older. A version's first run uses
+opening seed 1, so every version meets the same openings, and a continued run
+takes a new seed.
+
+When engines join the pool, a version that already has games can be topped up
+against just those engines for a fixed number of games:
+
+    CALIB_OPPONENTS=Onyx-2.0,Svart-6 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh VERSION EXE NET
+
+An engine joins the pool only after passing `engine_gate.py`. Before any rating
+is read, `pgn_endings.py` checks how every game ended, since a forfeit or a
+time loss makes the rating untrustworthy. Results go into
+`benchmarks/ledger.md`.
+
+
 ## Files
 
 - `match.py`      plain two-engine match
@@ -113,6 +154,9 @@ cause spurious time forfeits below ~1s base.
 - `book_gen.py`   balanced-book generator (uses the engine's eval)
 - `book.epd`      starter book (150 balanced positions)
 - `fastchess.md`  fastchess / cutechess-cli setup and command
+- `engine_gate.py` UCI checks an engine must pass before joining the pool
+- `pgn_endings.py` counts games that ended abnormally
+- `spsa.py`       SPSA tuner; its steps are too large (METHODOLOGY §10)
 
 `sprt.py` decides whether a change ships, so its arithmetic is checked rather
 than trusted. The tests pin closed-form values (the Elo formula is analytic),
