@@ -170,13 +170,24 @@ echo
 solve() {
     local threads="${1:-2}"
     local combined="$OUT/all_calib.pgn"
-    : > "$combined"
-    local d p
-    for d in $SOLVE_DIRS; do
-        for p in "$d"/calib-*.pgn; do
-            [ -f "$p" ] && cat "$p" >> "$combined"
-        done
-    done
+    # Every game in the pool's folders, except games against engines the pool
+    # has since dropped (excluded_engines in pool.json). Theirs stay on disk.
+    local d
+    # shellcheck disable=SC2046
+    python - "$WIN_BM/pool.json" "$(cygpath -m "$combined")" \
+        $(for d in $SOLVE_DIRS; do cygpath -m "$d"; done) <<'EOF'
+import glob, json, re, sys
+pool, out, dirs = sys.argv[1], sys.argv[2], sys.argv[3:]
+dropped = set(json.load(open(pool, encoding="utf-8")).get("excluded_engines", []))
+with open(out, "w", encoding="utf-8") as combined:
+    for d in dirs:
+        for path in sorted(glob.glob(d + "/calib-*.pgn")):
+            text = open(path, encoding="utf-8", errors="replace").read()
+            for game in re.split(r"(?=\[Event )", text):
+                players = set(re.findall(r'\[(?:White|Black) "([^"]+)"\]', game))
+                if game.strip() and not players & dropped:
+                    combined.write(game.rstrip("\n") + "\n\n")
+EOF
 
     # Write to a scratch file because Ordo truncates its output before solving.
     # Replace the last table only after a successful solve.

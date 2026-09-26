@@ -120,7 +120,7 @@ cause spurious time forfeits below ~1s base.
 
 ## Pool calibration
 
-Absolute ratings come from a gauntlet against pool-2026-09-F: 18 engine
+Absolute ratings come from a gauntlet against pool-2026-09-F: 16 engine
 families from 3087 to 3438 on the CCRL Blitz list, at 10+0.1 and Hash 256 with
 `8moves_v3.pgn`. `benchmarks/pool.json` pins each engine's build and records
 why the pool is built the way it is.
@@ -129,15 +129,17 @@ why the pool is built the way it is.
     tools/calibrate_pool.sh --stop
 
 The run stops at about ±12 and can be paused without losing games. Pool-F is
-pool-E plus nine families under identical conditions, so Ordo solves pool-F's
-games together with pool-E's and with nothing older. A version's first run uses
+pool-E plus seven families under identical conditions, so Ordo solves pool-F's
+games together with pool-E's and with nothing older. Engines listed under
+`excluded_engines` have left the pool, and their games stay on disk but are
+left out of the solve. A version's first run uses
 opening seed 1, so every version meets the same openings, and a continued run
 takes a new seed.
 
 When engines join the pool, a version that already has games can be topped up
 against just those engines for a fixed number of games:
 
-    CALIB_OPPONENTS=Onyx-2.0,Svart-6 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh VERSION EXE NET
+    CALIB_OPPONENTS=Svart-6,Cadie-2.1 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh VERSION EXE NET
 
 An engine joins the pool only after passing `engine_gate.py`. Before any rating
 is read, `pgn_endings.py` checks how every game ended, since a forfeit or a

@@ -9,7 +9,7 @@
 # To top up a version against some engines only, for example after engines
 # join the pool, name them and fix the games per engine. That plays a fixed
 # number of games instead of stopping at the error target:
-#   CALIB_OPPONENTS=Onyx-2.0,Svart-6 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh ...
+#   CALIB_OPPONENTS=Svart-6,Cadie-2.1 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh ...
 #
 # A version that already has games carries on with a new opening seed, so no
 # opening is replayed, and Ordo solves all of its games together. A version's

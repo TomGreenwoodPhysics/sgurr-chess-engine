@@ -5,6 +5,7 @@
   "hash_mb": 256,
   "games_dir": "games/pool-2026-09-F",
   "include_games": ["games/pool-2026-09-E"],
+  "excluded_engines": ["Onyx-2.0", "Priessnitz-2.0"],
   "book": {
       "file": "../testing/8moves_v3.pgn",
       "format": "pgn",
@@ -16,7 +17,6 @@
   },
   "engines": [
     {"name": "Bit-Genie-9", "cmd": "engines/bit-genie-9.exe", "ccrl_blitz": 3087, "ccrl_error": 9, "ccrl_games": 3969, "source": "https://github.com/Aryan1508/Bit-Genie/releases/tag/v9", "build": "Bit-Genie-9-bmi2.exe", "sha256": "ee1bc0d98178626df49db325da71ab5be2bc70a5c4aad3b9eaa95eafbb0e59aa"},
-    {"name": "Priessnitz-2.0", "cmd": "engines/priessnitz-2.0.exe", "ccrl_blitz": 3176, "ccrl_error": 11, "ccrl_games": 2539, "source": "https://github.com/kfeske/Priessnitz/releases/tag/2.0", "build": "priessnitz_2.0_bmi2.exe", "sha256": "2d0e1ca36cb6317f9df21c65585cf7768419192d87715360d45f1b36aa0ffc0e"},
     {"name": "Pounce-3.0.0", "cmd": "engines/pounce-3.0.0.exe", "ccrl_blitz": 3219, "ccrl_error": 12, "ccrl_games": 1915, "source": "https://github.com/0xflick/pounce/releases/tag/v3.0.0", "build": "pounce-windows-x86_64-v3.0.0.exe (matches its published sha256)", "sha256": "052bb1962e45c8dcb847e73c28c560324714d02aa7fd1409bd55ca56b866a0e2"},
     {"name": "Bitfox-2.5.0", "cmd": "engines/bitfox-2.5.0.exe", "ccrl_blitz": 3231, "ccrl_error": 9, "ccrl_games": 5763, "source": "https://github.com/Azeel1/bitfox-engine/releases/tag/v2.5.0", "build": "bitfox.exe from bitfox-2.5.0-windows-x86_64.zip (zip matches its published sha256)", "sha256": "b75ca817384e9467be1c52563a5625834f7341d7a7b9145102b7dfa42e47f712"},
     {"name": "Svart-6", "cmd": "engines/svart-6.exe", "ccrl_blitz": 3256, "ccrl_error": 11, "ccrl_games": 2383, "source": "https://github.com/1337crisis/svart/releases/tag/v6.0.0", "build": "svart6-x86_64-win-v3.exe", "sha256": "f97d898671e27af36c94115f8ad216389bbee9b345cf25cd00ad16869e4ef7b9"},
@@ -29,13 +29,13 @@
     {"name": "Lynx-1.11.0", "cmd": "engines/lynx-1.11.0/Lynx.Cli.exe", "ccrl_blitz": 3361, "ccrl_error": 12, "ccrl_games": 1859, "source": "https://github.com/lynx-chess/Lynx/releases/tag/v1.11.0", "build": "Lynx.Cli.exe from Lynx-1.11.0-win-x64.zip, with its appsettings.json (online tablebase off, 1 thread)", "sha256": "965ea77015d11466d951e70ba37ba18a0769b48d24c6904592b80a91b07a1ecd"},
     {"name": "Frozenight-6.0.0", "cmd": "engines/frozenight-6.0.0.exe", "ccrl_blitz": 3362, "ccrl_error": 9, "ccrl_games": 4360, "source": "https://github.com/MinusKelvin/frozenight/releases/tag/v6.0.0", "build": "frozenight-6.0.0-windows-x86-64-v3.exe", "sha256": "e51521ed88881459ebfea1db5239f1bbef0a9db5c730baf853c0394503e00485"},
     {"name": "MrBob-1.3.0", "cmd": "engines/mr-bob-1.3.0.exe", "ccrl_blitz": 3368, "ccrl_error": 9, "ccrl_games": 4076, "source": "https://github.com/bobsquared/Mr_Bob_Chess/releases/tag/v1.3.0", "build": "Windows/bob_avx2.exe from Mr_Bob_1.3.0_binaries_windows.zip", "sha256": "67fb9f5544e397a2c0875c3988e20d9aef3116122075c271241abc262d6ee359"},
-    {"name": "Onyx-2.0", "cmd": "engines/onyx-2.0.exe", "ccrl_blitz": 3391, "ccrl_error": 9, "ccrl_games": 6208, "source": "https://github.com/dylan2554/onyx/releases/tag/v2.0", "build": "onyx-2.0-win-avx2.exe", "sha256": "55113811ee0e64b08fbede9b0324d748773f89113be67fdc0d0aa24ade69001a", "options": {"OwnBook": "false"}},
     {"name": "StockDory-Starfish-0.1", "cmd": "engines/stockdory-starfish-0.1.exe", "ccrl_blitz": 3395, "ccrl_error": 9, "ccrl_games": 4486, "source": "https://github.com/TheBlackPlague/StockDory/releases/tag/0.1", "build": "StockDory-Starfish-0.1-windows-latest-x86-64-v3.exe", "sha256": "87b463458a81b237f7a3fb8e230a094ecfbe382189fcb4a3eaba992551bee8b8"},
     {"name": "Molybdenum-4.1", "cmd": "engines/molybdenum-4.1.exe", "ccrl_blitz": 3432, "ccrl_error": 10, "ccrl_games": 2757, "source": "https://github.com/rn5f107s2/Molybdenum/releases/tag/v4.1", "build": "Molybdenum4.1_windows_avx2bmi2.exe", "sha256": "8da881d3eb276413c21cd62f12945cc46a14d42729db4b676b5b3ce3eaf2a6af"},
     {"name": "BlackCore-6.0", "cmd": "engines/blackcore-6.0.exe", "ccrl_blitz": 3438, "ccrl_error": 8, "ccrl_games": 5268, "source": "https://github.com/SzilBalazs/BlackCore/releases/tag/6.0", "build": "BlackCore-bmi2-win.exe", "sha256": "53ace5c7d328fa1e6149378db0c2b69b75b631c8aa5ddd2779804b67c2e43379"}
   ],
   "notes": [
     "Built 2026-09-26 by adding nine families to pool-E. Pool-E's nine anchors, conditions and games are unchanged, so every pool-E game is also a pool-F game. pool-E is archived verbatim at pool-2026-09-E.json.",
+    "Removed 2026-09-26 after the first night, under the rule registered in pool_f_prediction.md: Priessnitz 2.0 lost on time in 230 of its 746 games at 10+0.1 here, and Onyx 2.0 implied ratings for Sgurr 407 to 486 above the solve on the other sixteen. Its binary reports its author as 'Dylan (with Claude)', which suggests it is a different engine from the Onyx 2.0 CCRL rated. Their games stay in the folder but are left out of solves.",
     "Why more families: on pool-E the anchors implied ratings for Sgurr about 52 Elo apart beyond sampling noise, which left about +/-35 systematic on an absolute rating from nine families. Gains between versions were the same against every engine within noise, so this is about the absolute number, not the gaps. Eighteen families should bring it to about +/-25.",
     "The new nine come from the live CCRL Blitz list of 2026-09-26: single-CPU ratings within +/-12, an official Windows build of exactly the rated version, and between them they fill pool-E's gaps (nothing from 3087 to 3231, nothing above 3362). The pool now runs 3087 to 3438, nine families either side of 3311.",
     "Each build is the fastest one without AVX-512, as for pool-E. Every binary reports the rated version via `id name`, supports Hash, runs one thread and passed testing/engine_gate.py. Onyx 2.0 has its own book switched on by default, so `options` switches it off.",
