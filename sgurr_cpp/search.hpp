@@ -42,6 +42,17 @@ constexpr int BM_STABILITY_COUNT = 5;
 #define SGR_BMSTAB 1
 #endif
 
+// Clock management. Each move gets a budget from an estimate of the moves
+// still to play. Iterations stop early once the root has settled, and carry
+// on, up to a hard maximum of several budgets, while the best move keeps
+// changing, the nodes spread across rival moves or the score falls. An
+// iteration cut short by the maximum still counts if it found a better move.
+// Only clock searches are affected: movetime, node and depth limits behave
+// exactly as before, so datagen, the web app and bench do not change.
+#ifndef SGR_TM2
+#define SGR_TM2 1
+#endif
+
 // History malus penalises quiets tried before a quiet cutoff.
 // Continuation history scores replies in the context of the previous move.
 #ifndef SGR_HMALUS
@@ -272,10 +283,45 @@ struct SearchParams {
     // Time management
     int soft_time_fraction_x100 = static_cast<int>(SGR_SOFT_TIME_FRACTION * 100);
     int bm_stability_x100[BM_STABILITY_COUNT] = {220, 130, 100, 85, 75};
+
+    // Clock management under SGR_TM2. Shares are of the clock left once the
+    // move overhead is held back; see allocate_time() in search.cpp. Starting
+    // values match the anchors' spending by game stage in a model of the
+    // pool's own game lengths; the tune sets them properly.
+    int tm_horizon_start        = 30;    // Moves the clock is spread over at move 1.
+    int tm_horizon_drop_x100    = 50;    // Moves the horizon shortens per move played.
+    int tm_horizon_min          = 18;    // Floor on the horizon.
+    int tm_inc_pct              = 50;    // Share of the increment added to each budget.
+    int tm_budget_clock_pct     = 20;    // Cap on a budget as a share of the clock.
+    int tm_optimum_pct          = 85;    // No new iteration once past this share of the budget.
+    int tm_max_budget_x10       = 50;    // Hard limit in tenths of a budget,
+    int tm_max_clock_pct        = 30;    // and at most this share of the clock.
+    int tm_node_base_pct        = 50;    // Time factor if every root node went to the best move,
+    int tm_node_slope_pct       = 150;   // plus this per unit share spent on other moves,
+    int tm_node_min_pct         = 50;    // clamped to this range.
+    int tm_node_max_pct         = 160;
+    int tm_score_drop_cp        = 100;   // A fall of this many centipawns doubles the time,
+    int tm_score_min_pct        = 80;    // clamped to this range.
+    int tm_score_max_pct        = 160;
 };
 
 // Global parameters for the single-threaded engine.
 extern SearchParams params;
+
+#if SGR_TM2
+// Time for one move under a clock, in milliseconds. The budget is the planned
+// spend; no new iteration starts past the optimum; the search stops at the
+// maximum whatever happens.
+struct TimeAllocation {
+    double budget;
+    double optimum;
+    double maximum;
+};
+
+TimeAllocation allocate_time(long long time_left_ms, long long inc_ms,
+                             std::optional<long long> movestogo,
+                             int fullmove_number, long long overhead_ms);
+#endif
 
 // Rebuild tables derived from params after a relevant option changes.
 void refresh_derived_params();
@@ -361,6 +407,15 @@ private:
     std::optional<double> soft_time_limit = std::nullopt;    // Deadline for new iterations.
     std::optional<long long> node_limit = std::nullopt;
     bool stop_search = false;
+
+#if SGR_TM2
+    // Nodes spent under each root move in this search, for the node share.
+    std::vector<std::pair<Move, long long>> root_effort;
+    // The last clock search's final score, from the side it moved for. A
+    // lower score now means the reply was a surprise.
+    int last_clock_score = 0;
+    bool have_last_clock_score = false;
+#endif
 
     std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};
     std::array<std::array<int, 64>, 64> history{};

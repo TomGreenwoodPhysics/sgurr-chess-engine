@@ -88,7 +88,25 @@ const Tunable TUNABLES[] = {
     {"EvalScaleStart",        &SearchParams::evalscale_start,           0,      90},
     {"EvalScaleMinPct",       &SearchParams::evalscale_min_pct,        10,     100},
     // Time management. See the warning in search.hpp before tuning these.
+#if SGR_TM2
+    {"TmHorizonStart",        &SearchParams::tm_horizon_start,         10,      80},
+    {"TmHorizonDropX100",     &SearchParams::tm_horizon_drop_x100,      0,     200},
+    {"TmHorizonMin",          &SearchParams::tm_horizon_min,            5,      60},
+    {"TmIncPct",              &SearchParams::tm_inc_pct,                0,     100},
+    {"TmBudgetClockPct",      &SearchParams::tm_budget_clock_pct,       5,      50},
+    {"TmOptimumPct",          &SearchParams::tm_optimum_pct,           30,     150},
+    {"TmMaxBudgetX10",        &SearchParams::tm_max_budget_x10,        10,     100},
+    {"TmMaxClockPct",         &SearchParams::tm_max_clock_pct,         10,      80},
+    {"TmNodeBasePct",         &SearchParams::tm_node_base_pct,         10,     200},
+    {"TmNodeSlopePct",        &SearchParams::tm_node_slope_pct,         0,     400},
+    {"TmNodeMinPct",          &SearchParams::tm_node_min_pct,          10,     100},
+    {"TmNodeMaxPct",          &SearchParams::tm_node_max_pct,         100,     400},
+    {"TmScoreDropCp",         &SearchParams::tm_score_drop_cp,         10,    1000},
+    {"TmScoreMinPct",         &SearchParams::tm_score_min_pct,         10,     100},
+    {"TmScoreMaxPct",         &SearchParams::tm_score_max_pct,        100,     400},
+#else
     {"SoftTimeFractionX100",  &SearchParams::soft_time_fraction_x100,  20,     100},
+#endif
 };
 
 // Array-backed stability options are handled by index.
@@ -311,6 +329,13 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
     }
 
     long long inc = parse_go_value(command, white ? "winc" : "binc").value_or(0);
+
+#if SGR_TM2
+    // The optimum becomes the soft limit and the maximum the hard one.
+    TimeAllocation a = allocate_time(*time_left, inc, parse_go_value(command, "movestogo"),
+                                     board.fullmove_number, g_move_overhead_ms);
+    return TimeBudget{ a.maximum / 1000.0, a.optimum / 1000.0 };
+#else
     long long mtg = parse_go_value(command, "movestogo").value_or(30);
 
     if (mtg < 1) {
@@ -327,6 +352,7 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
     long long soft = std::max(10LL, static_cast<long long>(hard * (params.soft_time_fraction_x100 / 100.0)));
 
     return TimeBudget{ hard / 1000.0, soft / 1000.0 };
+#endif
 }
 
 // Declared here so bench works inside a live UCI session.

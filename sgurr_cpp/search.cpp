@@ -41,6 +41,23 @@ double elapsed_seconds(std::chrono::steady_clock::time_point start) {
     return duration<double>(steady_clock::now() - start).count();
 }
 
+#if SGR_TM2
+// How much longer or shorter than planned to think, judged from the root
+// after an iteration. A best move that took most of the root's nodes is a
+// clear choice; nodes spread over rival moves mean it is not. A falling score
+// means something was missed. Both factors are clamped, then multiplied.
+double time_scale(double best_share, int score_drop) {
+    double node = params.tm_node_base_pct / 100.0
+                + params.tm_node_slope_pct / 100.0 * (1.0 - best_share);
+    node = std::clamp(node, params.tm_node_min_pct / 100.0, params.tm_node_max_pct / 100.0);
+
+    double score = 1.0 + double(score_drop) / params.tm_score_drop_cp;
+    score = std::clamp(score, params.tm_score_min_pct / 100.0, params.tm_score_max_pct / 100.0);
+
+    return node * score;
+}
+#endif
+
 #if SGR_TRACE_SEARCH
 // Optional bounded search trace for the visualiser.
 struct SearchTraceState {
@@ -516,7 +533,47 @@ void Engine::clear_for_new_position() {
 void Engine::clear_for_new_game() {
     clear_transposition_table();
     clear_search_heuristics();
+#if SGR_TM2
+    have_last_clock_score = false;
+#endif
 }
+
+#if SGR_TM2
+TimeAllocation allocate_time(long long time_left_ms, long long inc_ms,
+                             std::optional<long long> movestogo,
+                             int fullmove_number, long long overhead_ms) {
+    // Hold the move overhead back once. The rest can be spent before the flag.
+    const double clock = std::max(1.0, double(time_left_ms - overhead_ms));
+    const double inc = std::max(0.0, double(inc_ms));
+
+    double horizon, budget_cap, max_cap;
+
+    if (movestogo.has_value() && *movestogo > 0) {
+        // The clock is refilled after movestogo moves. Spread it over one
+        // more than that, and allow a larger share when few are left.
+        horizon = double(*movestogo) + 1.0;
+        budget_cap = std::max(params.tm_budget_clock_pct / 100.0, 1.0 / horizon);
+        max_cap = std::max(params.tm_max_clock_pct / 100.0, std::min(0.8, 3.0 / horizon));
+    } else {
+        // Sudden death: fewer moves are likely to remain as the game goes on.
+        horizon = std::max(double(params.tm_horizon_min),
+                           params.tm_horizon_start
+                               - params.tm_horizon_drop_x100 / 100.0 * (fullmove_number - 1));
+        budget_cap = params.tm_budget_clock_pct / 100.0;
+        max_cap = params.tm_max_clock_pct / 100.0;
+    }
+
+    double budget = clock / horizon + params.tm_inc_pct / 100.0 * inc;
+    budget = std::min(budget, budget_cap * clock);
+
+    double maximum = std::min(budget * params.tm_max_budget_x10 / 10.0, max_cap * clock);
+    maximum = std::max(maximum, budget);   // Options set out of step cannot invert them.
+
+    double optimum = std::min(budget * params.tm_optimum_pct / 100.0, maximum);
+
+    return {budget, optimum, maximum};
+}
+#endif
 
 std::optional<Move> Engine::valid_tt_move_key(
     U64 board_hash,
@@ -593,10 +650,30 @@ SearchResult Engine::search_best_move(
     int bm_stable = 0;   // Consecutive iterations with the same best move.
 #endif
 
+#if SGR_TM2
+    // Only a clock search manages its own time.
+    const bool clock_search = soft_time_limit.has_value();
+    root_effort.clear();
+    for (const Move& root_move : legal_moves) {
+        root_effort.push_back({root_move, 0});
+    }
+    double stop_scale = 1.0;   // From the node share and the score trend.
+    int prev_iter_score = 0;
+    bool have_prev_iter = false;
+#endif
+
     for (int depth = 1; depth <= max_depth; ++depth) {
         // Scale the soft limit by best-move stability. Depth 1 always runs.
         if (depth > 1 && soft_time_limit.has_value()) {
+#if SGR_TM2
+            // With one legal move there is nothing to decide.
+            if (legal_moves.size() == 1) {
+                break;
+            }
+            double soft = *soft_time_limit * stop_scale;
+#else
             double soft = *soft_time_limit;
+#endif
 #if SGR_BMSTAB
             soft *= params.bm_stability_x100[
                         std::min(bm_stable, BM_STABILITY_COUNT - 1)] / 100.0;
@@ -611,6 +688,7 @@ SearchResult Engine::search_best_move(
 
         int score;
         std::optional<Move> move;
+        [[maybe_unused]] int call_alpha = -INF;   // Lower bound of the last root window.
 
 #if SGR_TRACE_SEARCH
         trace_begin_pass(depth, board.hash_key);
@@ -626,6 +704,7 @@ SearchResult Engine::search_best_move(
             int alpha = best_score - params.aspiration_window;
             int beta = best_score + params.aspiration_window;
 
+            call_alpha = alpha;
             auto result = negamax_root(board, depth, alpha, beta);
             score = result.first;
             move = result.second;
@@ -635,11 +714,13 @@ SearchResult Engine::search_best_move(
                 alpha = score - params.aspiration_window * 4;
                 beta = score + params.aspiration_window * 4;
 
+                call_alpha = alpha;
                 result = negamax_root(board, depth, alpha, beta);
                 score = result.first;
                 move = result.second;
 
                 if (!stop_search && (score <= alpha || score >= beta)) {
+                    call_alpha = -INF;
                     result = negamax_root(board, depth, -INF, INF);
                     score = result.first;
                     move = result.second;
@@ -648,6 +729,15 @@ SearchResult Engine::search_best_move(
         }
 
         if (stop_search) {
+#if SGR_TM2
+            // The maximum cut this iteration short. A root move searched in
+            // full at this depth that beat the window is better than the last
+            // completed iteration's choice, so it is kept.
+            if (clock_search && move.has_value() && score > call_alpha) {
+                best_move = move;
+                best_score = score;
+            }
+#endif
 #if SGR_TRACE_SEARCH
             trace_finish_pass(0, std::nullopt);
 #endif
@@ -667,6 +757,41 @@ SearchResult Engine::search_best_move(
             best_move = move;
             best_score = score;
             completed_depth = depth;
+
+#if SGR_TM2
+            if (clock_search) {
+                // Share of all root nodes so far spent under the best move.
+                long long total = 0;
+                long long mine = 0;
+                for (const auto& [root_move, spent] : root_effort) {
+                    total += spent;
+                    if (root_move == *move) {
+                        mine = spent;
+                    }
+                }
+                double share = total > 0 ? double(mine) / double(total) : 1.0;
+
+                // Fall in the score since the last iteration and since the
+                // previous move, averaged over whichever is known. Mate
+                // scores say nothing about a fall and are left out.
+                int drop = 0;
+                int terms = 0;
+                if (std::abs(score) < MATE_THRESHOLD) {
+                    if (have_prev_iter && std::abs(prev_iter_score) < MATE_THRESHOLD) {
+                        drop += std::clamp(prev_iter_score - score, -200, 200);
+                        ++terms;
+                    }
+                    if (have_last_clock_score && std::abs(last_clock_score) < MATE_THRESHOLD) {
+                        drop += std::clamp(last_clock_score - score, -200, 200);
+                        ++terms;
+                    }
+                }
+
+                stop_scale = time_scale(share, terms > 0 ? drop / terms : 0);
+                prev_iter_score = score;
+                have_prev_iter = true;
+            }
+#endif
         } else if (completed_depth == 0) {
             // Keep the checkmate or stalemate score when the root has no move.
             best_score = score;
@@ -698,6 +823,13 @@ SearchResult Engine::search_best_move(
 
         std::cout << "\n";
     }
+
+#if SGR_TM2
+    if (clock_search && best_move.has_value()) {
+        last_clock_score = best_score;
+        have_last_clock_score = true;
+    }
+#endif
 
     return SearchResult{
         best_move,
@@ -882,6 +1014,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         int trace_child = trace_expected_child();
         trace_prepare_move(move);
 #endif
+#if SGR_TM2
+        const long long nodes_before = nodes;
+#endif
         UndoInfo undo = board.make_move(move);
 
         // Prefetch the TT slot probed by the child.
@@ -910,6 +1045,15 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         int score = -negamax(board, depth - 1, -beta, -alpha, 1);
 #endif
         board.unmake_move(undo);
+
+#if SGR_TM2
+        for (auto& [root_move, spent] : root_effort) {
+            if (root_move == move) {
+                spent += nodes - nodes_before;
+                break;
+            }
+        }
+#endif
 
         if (stop_search) {
             break;
