@@ -23,7 +23,7 @@ FC="$BM/tools/fastchess.exe"
 ORDO="$BM/tools/ordo.exe"
 # Calibration uses a larger book than datagen and SPRT.
 # Reusing a small set understates uncertainty caused by opening choice.
-# A Sgurr-filtered book would also bias the sample toward its own evaluation.
+# A Sgurr-filtered book would also bias the sample towards its own evaluation.
 # The generic 8moves_v3 book provides 34,700 game-derived opening lines.
 # Its provenance is recorded with the external pool assets.
 BOOK="${BOOK_FILE:-$ROOT/testing/8moves_v3.pgn}"

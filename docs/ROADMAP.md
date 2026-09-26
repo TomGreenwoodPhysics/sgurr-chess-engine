@@ -59,7 +59,7 @@ while it runs.
 | build | `-DSGR_RFP=0`, SIMD on | RFP returns unsearched scores: it cost gen6 entirely |
 | λ | 0.9 | sweep-confirmed optimum; 0.6/0.7/0.85/1.0 all worse or level |
 | width | HL384 | genuinely does not matter (§4); keep the simple option |
-| king buckets | off | measured ~0 twice, naive and factorized |
+| king buckets | off | measured ~0 twice, naive and factorised |
 | nodes/position | 150,000 | unchanged; see the open question below |
 | **target** | **as much as the calendar allows: 100M+** | returns were still *accelerating* at 56M |
 

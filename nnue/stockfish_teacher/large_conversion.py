@@ -88,7 +88,7 @@ def _pairs(scores, results):
 
 
 def add_binary_stats(stats, data, raw_scores):
-    """Vectorized exact statistics, checked against the ordinary board path."""
+    """Vectorised exact statistics, checked against the ordinary board path."""
     a = np.frombuffer(data, dtype=np.uint8).reshape(-1, 32)
     scores = np.asarray(raw_scores, dtype=np.int16)
     if len(a) != len(scores):

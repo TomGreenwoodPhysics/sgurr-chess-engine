@@ -1,6 +1,6 @@
 // Self-play data generator for NNUE training.
 // Writes 32-byte records to auto-numbered data_NNNN_TAG.bin shards.
-// Existing shards count toward the target, and each run gets a unique tag.
+// Existing shards count towards the target, and each run gets a unique tag.
 //
 // Little-endian record layout decoded by nnue_tools.py
 //   u64    occupancy       (set bit = occupied square, LSB = a1)

@@ -440,7 +440,7 @@ function capturedPieceForMove(uci, previousPieces) {
   return null;
 }
 
-// Animate captured pieces toward the capturer's presence. Dissolve locally if no target is visible.
+// Animate captured pieces towards the capturer's presence. Dissolve locally if no target is visible.
 function triggerCaptureAbsorb(lastMove, previousPieces, { byHuman = false } = {}) {
   if (app.animationMode === "Off" || !lastMove?.uci) {
     return;

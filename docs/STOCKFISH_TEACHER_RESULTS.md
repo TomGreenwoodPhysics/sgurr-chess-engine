@@ -95,7 +95,7 @@ Normal, external and pre-edit-reference variants were built with the documented
 MSYS2 clang64, PGO and ThinLTO. Both Gen8 and the pilot passed **4,516 NNUE
 self-checks each, zero failures**. Export repeated byte-identically. C++ raw
 integer forward matched the existing Python/NumPy reference on all 20 known
-and real positions; the largest observed float/quantized difference was
+and real positions; the largest observed float/quantised difference was
 29.28 cp. UCI names, loaded networks and legal moves passed, including both
 promotion colours. The external engine identifies as `Sgurr-StockfishTeacher
 8.2`; the normal engine remains `Sgurr 8.2`.
@@ -110,7 +110,7 @@ own trained net and fails clearly if it is missing.
 The final test suite has **25 passing tests**, including the official native
 converter integration, interrupted training with bit-identical CPU resume,
 cross-chunk duplicates, committed-segment corruption rejection, and rollback
-of uncommitted output/dedup writes. Vectorized merge statistics match the
+of uncommitted output/dedup writes. Vectorised merge statistics match the
 ordinary board-based reference. On real data, the first eight ranked shards
 reproduce the original pilot's entire 1,828,654-element feature set exactly;
 source/filter/duplicate totals also agree. Record order differs as declared,
@@ -205,7 +205,7 @@ Export round-trip repeated **byte-identically**. Both Gen8 and the candidate
 passed **4,516 NNUE self-checks each, zero failures** (`evalsum` -142,859 for
 Gen8, -781,404 for the candidate). The C++ raw integer forward matched the
 Python/NumPy reference on all known and real positions, largest observed
-float/quantized difference **22.22 cp**. Normal, external and pre-edit
+float/quantised difference **22.22 cp**. Normal, external and pre-edit
 reference builds all reproduced the same Gen8 depth-10 bench fingerprint of
 **1,857,606 nodes**, and the normal engine's default startup was identical
 before and after the edits. The candidate's own depth-10 fingerprint is

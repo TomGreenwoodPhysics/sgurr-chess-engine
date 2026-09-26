@@ -17,7 +17,7 @@ class EngineError(RuntimeError):
 
 
 class EngineStartupError(EngineError):
-    """Raised when the Sgurr process cannot be started or initialized."""
+    """Raised when the Sgurr process cannot be started or initialised."""
 
 
 class EngineCrashedError(EngineError):

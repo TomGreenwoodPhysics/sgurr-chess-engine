@@ -65,7 +65,7 @@ def train(config, dataset_manifest, data_dir, run_dir, net_path):
     if tr["hl"] not in (128, 256, 384, 512) or buckets not in (1, nt.BUCKETS) or tr["val_frac"] != 0:
         raise ValueError("Require engine-supported HL, one or eight buckets, and deployment val_frac=0")
     if factorize and buckets == 1:
-        raise ValueError("Factorization requires king buckets")
+        raise ValueError("Factorisation requires king buckets")
     if not 0 <= tr["lambda"] <= 1:
         raise ValueError("lambda must be in [0,1]")
     if tr["lambda"] != 1 and not dataset_manifest["provenance"]["results_trusted_for_training"]:

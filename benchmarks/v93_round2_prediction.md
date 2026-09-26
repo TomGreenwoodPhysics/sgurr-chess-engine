@@ -30,8 +30,8 @@ the 1,201-move game identical; trace and datagen build. Final speed
 
 ## Prediction
 
-**+6 Elo, band 0 to +15.** Speed has converted here at roughly 1 to 2 Elo per
-percent. An effect this size may not reach a bound within the cap.
+**+6 Elo, band 0 to +15.** Speed has converted here at roughly 1 to 2 Elo for
+each 1% faster. An effect this size may not reach a bound within the cap.
 
 ## Falsification
 

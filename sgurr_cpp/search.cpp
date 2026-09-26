@@ -909,7 +909,7 @@ int Engine::evaluate_position(const Board& board) const {
 }
 
 #if SGR_MATSCALE
-// The same raw score means less once the board simplifies, so shrink it toward
+// The same raw score means less once the board simplifies, so shrink it towards
 // zero as material leaves. game_phase() runs 24 (full) down to 0 (bare kings),
 // and the defaults are neutral at 24.
 int Engine::scale_for_material(const Board& board, int score) const {

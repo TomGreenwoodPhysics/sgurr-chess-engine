@@ -57,7 +57,7 @@ CSS uses system font stacks.
 
 ## Project-Created Audio
 
-The following ordinary cues are synthesized at runtime in
+The following ordinary cues are synthesised at runtime in
 `web/frontend/js/audio.js` with oscillators and generated noise. They do not load a
 sampled media asset:
 

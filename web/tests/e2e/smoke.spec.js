@@ -740,7 +740,7 @@ test("matches the C++ SCReLU scores and scales lane contributions in every phase
   expect([transition.before.raw, transition.before.whiteRelative]).toEqual([1166, 40]);
   expect([transition.after.raw, transition.after.whiteRelative]).toEqual([-316, 10]);
 
-  // Exercise the visualization's calculations without constructing its canvas.
+  // Exercise the visualisation's calculations without constructing its canvas.
   const visual = Object.create(CortexVisual.prototype);
   visual.transition = transition;
   visual.valueCache = new Map();

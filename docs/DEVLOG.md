@@ -533,7 +533,7 @@ self-play depth-per-node is exactly the currency that matters.
 ## 2026-07-11, gen6 datagen launched (flywheel restarts at HL=384)
 
 The label flywheel, dead at 256, restarts on the wider net with a much
-stronger labeller. gen6 datagen kicked off toward **8.0M positions**
+stronger labeller. gen6 datagen kicked off towards **8.0M positions**
 (`data/gen6_raw`, dataset v5.0 "Gillean") labelled by **`nets/gen5.nnue`** at
 **nodes:150000**: the node budget held *identical* to gen3/gen4 on purpose,
 so the generation-over-generation comparison stays controlled at one variable
@@ -796,7 +796,7 @@ unavailable. Reading: at 150k-node label depth, a 768×384 net already
 absorbs essentially everything the labels contain; added capacity fits label
 noise (lower loss) without adding chess (no Elo). Candidate co-factors, in
 falling order of belief: label-information ceiling; 56M still thin for 8
-buckets (~7M/bucket, skewed toward castled kings); untuned map. The v2
+buckets (~7M/bucket, skewed towards castled kings); untuned map. The v2
 format, engine support, and selfcheck coverage are merged and verified, so
 the retest is cheap when either labels deepen or data grows. Nets kept:
 `nets/gen8-k8.nnue`, `nets/gen8-ctrl768.nnue`.
@@ -838,7 +838,7 @@ gain, and this is NET of the ~20% NPS tax since the match is at fixed TC).
 Notably HL=512 measured *flat* on gen6's RFP-poisoned data and pays here:
 cleaner labels do support somewhat more capacity. Carry HL=512 into gen9.
 
-**King buckets, take two: the factorizer.** The naive per-bucket net's
+**King buckets, take two: the factoriser.** The naive per-bucket net's
 −10.7 was diagnosed as data starvation (8 buckets, each weight seeing ~⅛ of
 the positions). Implemented the standard fix in `train.py`: a **shared base
 table trained on ALL positions plus a small per-bucket delta**, deltas
@@ -849,7 +849,7 @@ inference is untouched, verified by selfcheck PASS and a
 Python-vs-engine golden match on the coalesced net.
 
 **It worked as engineering and bought nothing as chess: +2.0 ±10.0.** The
-factorizer moved buckets ~+13 Elo (−10.7 → +2.0), i.e. it removed the
+factoriser moved buckets ~+13 Elo (−10.7 → +2.0), i.e. it removed the
 starvation penalty exactly as intended, and the gain never materialised.
 Two independent implementations now say **these labels carry no
 king-zone-specific information beyond what shared weights already
@@ -857,7 +857,7 @@ capture**. Buckets are dropped for gen9; the code stays (verified, dormant,
 zero cost) for retest when labels change.
 
 **Sharpest loss≠Elo evidence yet: the ranking is inverted.** On identical
-data: factorized-k8 **best loss 0.00471 → +2 Elo**; naive-k8 0.00493 →
+data: factorised-k8 **best loss 0.00471 → +2 Elo**; naive-k8 0.00493 →
 **−10.7**; ctrl768 0.00558 → baseline; HL512 **worst loss 0.00661 → +9
 Elo**. Training loss is not merely uninformative here: it is
 *anti-correlated* with strength. Fourth instance in this log (gen6 net A/B,
@@ -893,7 +893,7 @@ assumed this number was ~0. Anything under roughly ±25 was never established:
 | gen7 vs gen6 **+44** | survives |
 | **HL512 width +9.0** | **inside noise, withdrawn** |
 | naive buckets −10.7 | inside noise |
-| factorizer +2.0 | inside noise (conclusion unchanged; it was ~0) |
+| factoriser +2.0 | inside noise (conclusion unchanged; it was ~0) |
 | λ=0.85 −4.4, λ=0.7 −12.6 | inside noise (curve *shape* survives on λ=0.6) |
 
 The structural findings all stand. The architecture micro-results do not, and

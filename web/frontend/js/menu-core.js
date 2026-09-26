@@ -232,7 +232,7 @@ function resetRegard() {
   clearPupilGazes();
 }
 
-// Lean the menu heart toward the cursor and update visible eyes.
+// Lean the menu heart towards the cursor and update visible eyes.
 function onPointerMove(event) {
   if (!motionOn()) {
     return;

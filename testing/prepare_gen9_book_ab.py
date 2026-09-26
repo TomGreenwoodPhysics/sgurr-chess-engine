@@ -172,7 +172,7 @@ def main() -> None:
     for path in (old_output, new_output, manifest_path):
         if path.exists():
             raise RuntimeError(
-                f"refusing to overwrite existing experiment artifact: {path}"
+                f"refusing to overwrite existing experiment artefact: {path}"
             )
 
     old_result = copy_prefixes(old_inventory, old_allocations, old_output)

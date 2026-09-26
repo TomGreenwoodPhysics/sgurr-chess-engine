@@ -119,11 +119,11 @@ def download(spec, directory=CACHE, opener=urllib.request.urlopen):
         if dest.exists():
             verified(dest, spec)
             atomic_json(meta_path, {"identity": identity, "verified_sha256": spec["sha256"], "complete": True})
-            print("Existing artifact verified; no download needed", flush=True)
+            print("Existing artefact verified; no download needed", flush=True)
             return dest
         meta = read_json(meta_path) if meta_path.exists() else {"identity": identity}
         if meta.get("identity") != identity:
-            raise RuntimeError("Resume metadata differs from requested artifact")
+            raise RuntimeError("Resume metadata differs from requested artefact")
         if partial.exists() and not meta_path.exists():
             raise RuntimeError("Unidentified partial file; preserve it and choose a fresh cache directory")
         offset = partial.stat().st_size if partial.exists() else 0

@@ -386,7 +386,7 @@ def main():
     if args.factorize and args.buckets <= 1:
         ap.error("--factorize requires --buckets > 1")
     print(f"king buckets = {args.buckets}  (features = {n_features})"
-          + ("  [factorized: shared + delta]" if args.factorize else ""))
+          + ("  [factorised: shared + delta]" if args.factorize else ""))
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print("device:", dev)

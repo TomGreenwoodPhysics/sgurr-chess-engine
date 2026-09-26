@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze the completed Gen9 production shards into one training artifact.
+"""Freeze the completed Gen9 production shards into one training artefact.
 
 The raw shard directory is left untouched.  The aggregate is written through
 an adjacent temporary file and atomically installed only after every shard has

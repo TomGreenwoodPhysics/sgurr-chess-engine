@@ -762,7 +762,7 @@ class Experiment:
             "uncertainty_note": (
                 "The same opening sample is reused across seeds, so the two match "
                 "confidence intervals must not be naively combined. Two training seeds "
-                "test direction consistency but do not fully characterize seed noise."
+                "test direction consistency but do not fully characterise seed noise."
             ),
             "production_datagen_resumed": False,
         }

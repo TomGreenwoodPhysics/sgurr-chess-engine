@@ -3,7 +3,7 @@
 Sgurr-StockfishTeacher trains Sgurr's own NNUE using public external evaluations.
 It is still Sgurr: move generation, search, time management, colour-relative
 piece-square features, 768 -> 384 shared feature transformer, two-perspective
-output, quantization and incremental accumulator all remain Sgurr's. It is
+output, quantisation and incremental accumulator all remain Sgurr's. It is
 **not self-contained or exclusively trained on Sgurr self-play**. Stockfish is
 the evaluation teacher in the dataset, not the engine running at inference.
 
@@ -40,7 +40,7 @@ to be the historical labeller revision.
 
 Candidates were distinguished as follows:
 
-| Artifact | Compressed bytes | Origin/labels and decision |
+| Artefact | Compressed bytes | Origin/labels and decision |
 | --- | ---: | --- |
 | `wrongIsRight_nodes5000pv2.binpack` | 7,319,926,088 | Stockfish self-play/search labels, historically attributed; chosen. |
 | `nodes5000pv2_UHO.binpack` | 40,292,454,358 | Official wiki identifies Stockfish generation at 5,000 nodes; exceeds the initial download limit. A useful broader later candidate, requiring approval. |
@@ -48,14 +48,14 @@ Candidates were distinguished as follows:
 | `wrongNNUE_02_d9.binpack` | 5,781,185,404 | Older candidate; exact standalone provenance was less well established in this inspection. Smaller size alone was insufficient to prefer it. |
 | `fishpack32.binpack` | 5,579,166,857 | Smallest collection file; standalone origin/label chain not established. Not selected by guessing from its name. |
 | `training_data_pylon.binpack` | 14,366,468,016 | Leela T60/T74-derived data, not a pure Stockfish teacher. |
-| `farseerT76.binpack` | 6,141,321,549 | Lc0-derived family; no established Stockfish-search relabelling for this artifact. Future separately named experiment only. |
+| `farseerT76.binpack` | 6,141,321,549 | Lc0-derived family; no established Stockfish-search relabelling for this artefact. Future separately named experiment only. |
 | `T60T70wIsRightFarseer.binpack` | 32,981,564,118 | Explicit mixture of Lc0-derived data and Stockfish self-play. Not a pure Stockfish teacher. |
 
 [Stockfish's Pylon training record](https://github.com/official-stockfish/Stockfish/commit/8ec9e108664ce38fa98ccfb69f048d7d804f99f9)
 identifies its Leela origin. Lc0 data converted with the Lc0 rescorer can include
 tablebase corrections; that is not evidence that Stockfish produced its search
 scores. No sufficiently documented standalone Lc0-position/Stockfish-search-
-rescored artifact was selected here. Stockfish's use of a dataset and the
+rescored artefact was selected here. Stockfish's use of a dataset and the
 engine that produced its labels are separate facts. RobotMoon was consulted
 for historical context; downloads use the official publisher.
 
@@ -69,7 +69,7 @@ estimate, not a measured count. The workflow never implicitly expands it all.
 The pilot indexes every chunk and expands only eight deterministic selections.
 The follow-on experiment targets **56 million unique accepted positions**,
 matching Gen8's approximate volume, from the same verified download.
-Exact sample, text and 32-byte output sizes are recorded in the run artifacts.
+Exact sample, text and 32-byte output sizes are recorded in the run artefacts.
 
 ## Licences and the software boundary
 
@@ -103,8 +103,8 @@ defines compressed stems and move/score continuations. Chunk lengths are
 little-endian; stem score/result fields use a signed-to-unsigned mapping and
 big-endian words. Scores and stored -1/0/+1 results are side-to-move relative.
 The official tool's generator writes native search `Value` scores, and the
-converter preserves them. These are not assumed to be today's normalized UCI
-centipawns. The exact historical labeller's pawn normalization is unknown.
+converter preserves them. These are not assumed to be today's normalised UCI
+centipawns. The exact historical labeller's pawn normalisation is unknown.
 
 The adapter independently checks each selected chunk's first score/result/
 ply/rule50 against the raw stem bytes, then parses official `.plain` output.
@@ -122,7 +122,7 @@ also reconstructed independently through Sgurr's existing `chesslite` and
 `nnue_tools.decode_record`, with FENs, board diagrams and record hex retained.
 Tests cover both sides, negative scores, castling, en passant, promotions and
 malformation. The official converter round-trip reconstructs FEN fullmove
-from the stored ply field; this metadata normalization is expected.
+from the stored ply field; this metadata normalisation is expected.
 
 Pilot filters are explicit: source ply >=8, not in check, source best move
 not a capture/promotion, and absolute **mapped** score <2,000 cp. Duplicate
@@ -197,7 +197,7 @@ the machine's policy. Each stage can also be called directly with
 `.venv\Scripts\python.exe nnue\stockfish_teacher\workflow.py <stage>`.
 
 The pilot config is `nnue/stockfish_teacher/pilot.json`: seed 0, batch 16,384,
-2,000 optimizer steps, Adam, cosine LR 1e-3 -> 1e-5, lambda 1, scale 361,
+2,000 optimiser steps, Adam, cosine LR 1e-3 -> 1e-5, lambda 1, scale 361,
 HL384, one bucket, deployment val_frac=0, checkpoint every 100 steps. This is
 a bounded plumbing/strength pilot, shorter than the approximately 27,000-step
 normal deployment recipe. Exact software, device, code and data hashes enter
@@ -207,7 +207,7 @@ Changing data, scale, code, environment or hyperparameters requires a new run ID
 
 Rerun the same stage after an interruption. The downloader checks identity,
 Range/Content-Range/ETag/size and final SHA-256 before publishing its partial
-file. A changed or corrupt existing artifact is preserved and rejected.
+file. A changed or corrupt existing artefact is preserved and rejected.
 Official conversion resumes at completed chunk files. The streaming Sgurr
 adapter restarts its own temporary output/dedup index from the pinned plain
 chunks, not the network download. For the 56M run, validation is sharded over
@@ -269,7 +269,7 @@ teacher match -Config $cfg
 
 Use the `teacher` function defined above. If the pilot download/tool setup has not been run, add `download` and
 `tool-setup` with the same `-Config $cfg` before conversion. The broader
-40,292,454,358-byte UHO artifact is outside the initial authorization; no
+40,292,454,358-byte UHO artefact is outside the initial authorisation; no
 command here downloads it. A future dataset manifest and approval are needed.
 
 ## Engine and game verification
@@ -316,7 +316,7 @@ Training and match launch refuse while Trackmania, datagen or another
 fastchess process is running. Match batches additionally sample CPU/GPU idle
 load; new named competing work interrupts the batch. They never stop another
 application. PGNs are parsed for legal moves, complete results, paired colours
-and abnormal terminations before scores are summarized. Unknown warnings are
+and abnormal terminations before scores are summarised. Unknown warnings are
 fatal; only known PV-beyond-repetition/fifty-move warnings are exempted.
 
 ## Evidence needed next

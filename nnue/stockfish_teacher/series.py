@@ -1,4 +1,4 @@
-"""Run the authorized Sgurr-X experiments sequentially, with durable stage logs.
+"""Run the authorised Sgurr-X experiments sequentially, with durable stage logs.
 
 No promotion, downloads, commits or management of other processes. A failed
 stage stops the series. Rerunning resumes through the existing stage receipts.

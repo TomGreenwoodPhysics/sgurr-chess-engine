@@ -70,7 +70,7 @@ Measuring it invalidated several published conclusions:
 | gen7 net vs gen6 **+44.4** | survives |
 | HL512 width **+9.0** | **inside noise, withdrawn** |
 | naive king buckets **−10.7** | inside noise |
-| factorized buckets **+2.0** | inside noise |
+| factorised buckets **+2.0** | inside noise |
 | λ=0.85 **−4.4** | inside noise |
 
 **More games do not fix this.** The variance is in the *training*, not the
@@ -102,7 +102,7 @@ identical data:
 
 | net (gen8 56M, λ=1.0) | training loss | measured Elo |
 |---|---|---|
-| factorized king buckets | **0.00471** (best) | +2.0 |
+| factorised king buckets | **0.00471** (best) | +2.0 |
 | naive king buckets | 0.00493 | **−10.7** (worst) |
 | unbucketed 768×384 | 0.00558 | 0 (reference) |
 | HL512 | **0.00661** (worst) | **+9.0** (best) |
@@ -177,7 +177,7 @@ Ranked by measured Elo per unit of effort:
 | PGO + ThinLTO + data layout (v8.1) | ~+20% NPS → **+21.2 measured** | ~2 days |
 | AVX-512 / int16 NNUE inference | ~+22% NPS (≈+15 to +22 Elo) | ~3 h coding |
 | Improving flag alone (inside the v6.0 package) | **+19.6** | part of days |
-| King buckets (naive, then factorized) | ~0 | ~2 days |
+| King buckets (naive, then factorised) | ~0 | ~2 days |
 | Width, λ tuning | ~0 (inside noise) | ~1 day |
 | History-adjusted LMR as shipped | **~0** (inert divisor) | part of days |
 

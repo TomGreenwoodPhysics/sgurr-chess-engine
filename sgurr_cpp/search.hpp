@@ -130,7 +130,7 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #define SGR_ROOTPVS 1
 #endif
 
-// Scale evaluation toward zero as the halfmove clock nears a draw.
+// Scale evaluation towards zero as the halfmove clock nears a draw.
 #ifndef SGR_EVALSCALE
 #define SGR_EVALSCALE 1
 #endif

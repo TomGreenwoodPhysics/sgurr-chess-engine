@@ -353,7 +353,7 @@ visibly alive after each bounded structural-node sample is full.
   sequences;
 - a Search Lab with a real v8.2 walkthrough, an optional live
   completed-depth stream, and a glowing radial search web whose depth-from-root
-  rings, timestamped traveling light, cutoffs, and transposition chords come
+  rings, timestamped travelling light, cutoffs, and transposition chords come
   from real engine events;
 - an Evaluation Lab that verifies and evaluates the shipped Gen9 network in a
   browser worker, then exposes both 384-lane accumulators as cortex, circuit,
