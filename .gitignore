@@ -79,3 +79,6 @@ desktop.ini
 
 # Local web demo server logs
 *.log
+
+# Public release builds, made by tools/release.sh
+dist/

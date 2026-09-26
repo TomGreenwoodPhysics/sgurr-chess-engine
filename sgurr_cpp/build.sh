@@ -11,19 +11,25 @@
 #   ./build.sh -r -o sgr_v9_0.exe --version 9.0
 #   ./build.sh -d                     # datagen build  -> datagen.exe (RFP off)
 #   ./build.sh -t                     # visual trace   -> sgr_trace.exe
+#   ./build.sh -r --arch x86-64-v3    # target a CPU level instead of this machine
+#   ./build.sh -r --embed-net ../nets/gen9_screlu_cos_s1.nnue
+#                                     # compile the network into the binary
 #
 set -u
 
 CLANG=/c/msys64/clang64/bin/clang++
 PROFDATA=/c/msys64/clang64/bin/llvm-profdata
-FLAGS="-std=c++20 -O3 -march=native -DNDEBUG -static -Wall -Wextra"
+arch=native
 ENGINE_SRC="main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
 DATAGEN_SRC="datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
 MAX_LINK_ATTEMPTS=6
+# The network release builds are profiled with, unless one is embedded.
+PROFILE_NET=../nets/gen9_screlu_cos_s1.nnue
 
 mode=dev
 out=""
 extra=""
+embed=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -31,6 +37,8 @@ while [ $# -gt 0 ]; do
         -d|--datagen) mode=datagen ;;
         -t|--trace)   mode=trace ;;
         -o|--out)     out="$2"; shift ;;
+        --arch)       arch="$2"; shift ;;
+        --embed-net)  embed="$2"; shift ;;
         --version)    extra="$extra -DSGR_VERSION=\"$2\""; shift ;;
         -D*)          extra="$extra $1" ;;
         -h|--help)    sed -n '2,30p' "$0"; exit 0 ;;
@@ -38,6 +46,16 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+FLAGS="-std=c++20 -O3 -march=$arch -DNDEBUG -static -Wall -Wextra"
+
+# #embed finds a relative path from nnue.cpp, not from here, so pass it whole.
+if [ -n "$embed" ]; then
+    [ -f "$embed" ] || { echo "build.sh: no network at '$embed'" >&2; exit 2; }
+    embed_abs=$(cd "$(dirname "$embed")" && pwd)/$(basename "$embed")
+    command -v cygpath >/dev/null 2>&1 && embed_abs=$(cygpath -m "$embed_abs")
+    extra="$extra -DSGR_EMBED_NET=\"$embed_abs\""
+fi
 
 case "$mode" in
     datagen) src="$DATAGEN_SRC"; [ -n "$out" ] || out=datagen.exe
@@ -112,8 +130,18 @@ if [ "$mode" = release ]; then
         verify sgr_prof.exe || { echo "build.sh: instrumented build will not start" >&2; exit 1; }
     fi
 
-    echo "  [2/4] profiling run (bench 13)"
-    ./sgr_prof.exe bench 13 >/dev/null 2>&1
+    # Profile the evaluation the engine plays with. On the hand-crafted eval
+    # the network's code counts as cold, and the build ran 1.6% slower.
+    if [ -n "$embed" ]; then
+        profile=$(env -u SGR_EVALFILE ./sgr_prof.exe bench 13 2>&1)
+    else
+        profile=$(SGR_EVALFILE="${SGR_EVALFILE:-$PROFILE_NET}" ./sgr_prof.exe bench 13 2>&1)
+    fi
+    if echo "$profile" | grep -q 'eval nnue'; then
+        echo "  [2/4] profiling run (bench 13, network)"
+    else
+        echo "  [2/4] profiling run (bench 13, hand-crafted eval: no network this build can load)"
+    fi
 
     echo "  [3/4] merging profile"
     $PROFDATA merge -output=pgo/sgurr.profdata pgo/*.profraw || exit 1
