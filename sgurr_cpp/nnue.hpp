@@ -92,6 +92,9 @@ constexpr int SCALE = 400;
 // Load a network. Failure leaves the handcrafted evaluation active.
 bool load(const std::string& path);
 
+// Load the network compiled into this binary. False if there is none.
+bool load_embedded();
+
 // Whether a network is loaded and NNUE evaluation should be used.
 bool active();
 

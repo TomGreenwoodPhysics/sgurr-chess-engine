@@ -107,6 +107,10 @@ jobs:
           cd sgurr_cpp
           ./sgr seetest 2>&1 | tee /dev/stderr | grep -q 'SEE: 9/9 passed'
 
+      # stop, isready and quit while searching, go infinite, and clock searches.
+      - name: UCI protocol
+        run: python3 testing/uci_protocol.py sgurr_cpp/sgr --net nets/gen9_screlu_cos_s1.nnue
+
       # Compare engine inference with the trainer across special and random moves.
       - name: NNUE bit-exactness against the trainer
         run: |

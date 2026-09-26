@@ -6,6 +6,8 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 // SGR_SIMD uses int16 accumulators and vectorised output.
@@ -632,7 +634,23 @@ int evaluate(const Board& board) {
 }
 #endif
 
-bool load(const std::string& path) {
+#ifdef SGR_EMBED_NET
+// Release builds compile the network in, so the engine needs no file beside it
+// and no environment variable. See --embed-net in build.sh.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc23-extensions"
+#endif
+static const unsigned char kEmbeddedNet[] = {
+#embed SGR_EMBED_NET
+};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#endif
+
+// Read a network from a file or from memory. path only names it in messages.
+static bool load_stream(std::istream& in, const std::string& path) {
     // Old-weight accumulators and scores are stale.
 #if SGR_EVAL_CACHE
     clear_eval_cache();
@@ -643,11 +661,6 @@ bool load(const std::string& path) {
 #else
     g_acc_valid = false;
 #endif
-
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        return false;
-    }
 
     char magic[4];
     in.read(magic, 4);
@@ -768,6 +781,24 @@ bool load(const std::string& path) {
 
     g_active = true;
     return true;
+}
+
+bool load(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    return load_stream(in, path);
+}
+
+bool load_embedded() {
+#ifdef SGR_EMBED_NET
+    std::istringstream in(std::string(reinterpret_cast<const char*>(kEmbeddedNet),
+                                      sizeof(kEmbeddedNet)));
+    return load_stream(in, "<embedded>");
+#else
+    return false;
+#endif
 }
 
 bool active() {

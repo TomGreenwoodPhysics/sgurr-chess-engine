@@ -825,7 +825,8 @@ SearchResult Engine::search_best_move(
             }
         }
 
-        std::cout << "\n";
+        // A GUI shows each iteration as it lands, so do not hold it back.
+        std::cout << "\n" << std::flush;
     }
 
 #if SGR_TM2
@@ -902,6 +903,10 @@ int Engine::hashfull() const {
 }
 
 bool Engine::time_is_up() const {
+    if (poll != nullptr && poll()) {
+        return true;
+    }
+
     if (!time_limit.has_value()) {
         return false;
     }

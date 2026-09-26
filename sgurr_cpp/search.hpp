@@ -408,6 +408,11 @@ public:
     // Transposition table occupancy in permille for UCI hashfull.
     int hashfull() const;
 
+    // Called with each time check, every few hundred nodes. Returning true
+    // stops the search as if time had run out. The UCI loop uses it to act
+    // on stop and quit mid-search; everything else leaves it unset.
+    bool (*poll)() = nullptr;
+
 private:
     std::chrono::steady_clock::time_point start_time;
     std::optional<double> time_limit = std::nullopt;         // Hard search deadline.

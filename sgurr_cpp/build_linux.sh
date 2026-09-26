@@ -14,6 +14,7 @@ COMMON_FLAGS=(
     -O3
     -DNDEBUG
     -DSGR_SIMD=0
+    -pthread
     -Wall
     -Wextra
 )

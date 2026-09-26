@@ -4,24 +4,35 @@
 #include "nnue.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <iomanip>
 #include <iostream>
 #include <cstdlib>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 // Build-time override for the version reported through UCI.
 #ifndef SGR_VERSION
-#define SGR_VERSION "8.2"
+#define SGR_VERSION "9.4"
 #endif
 #ifndef SGR_ENGINE_NAME
 #define SGR_ENGINE_NAME "Sgurr"
 #endif
 constexpr const char* ENGINE_NAME = SGR_ENGINE_NAME;
-constexpr const char* ENGINE_AUTHOR = "Tom";
+constexpr const char* ENGINE_AUTHOR = "Tom Greenwood";
+
+// Advertise the search parameters as UCI options, for tuning. Public release
+// builds turn this off so a GUI shows only the options a user needs.
+#ifndef SGR_TUNING_OPTIONS
+#define SGR_TUNING_OPTIONS 1
+#endif
 
 // Runtime UCI options. Threads is advertised but fixed at one.
 int g_move_overhead_ms = static_cast<int>(MOVE_OVERHEAD_MS);
@@ -122,6 +133,7 @@ void print_uci_options(const Engine& engine) {
               << MOVE_OVERHEAD_MS << " min 0 max 5000\n";
     std::cout << "option name Threads type spin default 1 min 1 max 1\n";
 
+#if SGR_TUNING_OPTIONS
     const SearchParams defaults{};
 
     for (const Tunable& t : TUNABLES) {
@@ -135,6 +147,7 @@ void print_uci_options(const Engine& engine) {
                   << " type spin default " << defaults.bm_stability_x100[i]
                   << " min 25 max 400\n";
     }
+#endif
 
     (void)engine;
 }
@@ -285,28 +298,34 @@ Board apply_uci_position(Board board, const std::string& command) {
     return board;
 }
 
-std::optional<int> parse_go_depth(const std::string& command) {
+// A malformed number is treated as absent rather than ending the process.
+std::optional<long long> parse_go_value(const std::string& command, const std::string& token) {
     std::vector<std::string> parts = split(command);
 
     for (std::size_t i = 0; i + 1 < parts.size(); ++i) {
-        if (parts[i] == "depth") {
-            return std::stoi(parts[i + 1]);
+        if (parts[i] == token) {
+            try {
+                return std::stoll(parts[i + 1]);
+            } catch (...) {
+                return std::nullopt;
+            }
         }
     }
 
     return std::nullopt;
 }
 
-std::optional<long long> parse_go_value(const std::string& command, const std::string& token) {
-    std::vector<std::string> parts = split(command);
-
-    for (std::size_t i = 0; i + 1 < parts.size(); ++i) {
-        if (parts[i] == token) {
-            return std::stoll(parts[i + 1]);
-        }
+std::optional<int> parse_go_depth(const std::string& command) {
+    std::optional<long long> depth = parse_go_value(command, "depth");
+    if (!depth.has_value()) {
+        return std::nullopt;
     }
+    return static_cast<int>(std::clamp<long long>(*depth, 1, MAX_PLY - 1));
+}
 
-    return std::nullopt;
+bool go_has(const std::string& command, const std::string& token) {
+    std::vector<std::string> parts = split(command);
+    return std::find(parts.begin(), parts.end(), token) != parts.end();
 }
 
 // Time allowance in seconds. Hard aborts the search and soft stops new iterations.
@@ -359,29 +378,137 @@ std::optional<TimeBudget> parse_go_time_budget(const std::string& command, const
 constexpr int BENCH_DEPTH = 11;
 int run_bench(int depth);
 
+// UCI input is read on its own thread, so stop, quit and isready are seen while
+// the main thread searches. The search stays on the main thread, and only the
+// main thread writes to stdout, so output lines never interleave.
+namespace uci_input {
+
+std::mutex mutex;
+std::condition_variable wake;         // A command, a stop or an isready arrived.
+std::deque<std::string> queue;
+
+// go commands read and bestmoves sent. They differ while a search is running
+// or waiting to start, and the next search is number done + 1.
+std::atomic<long long> go_read{0};
+std::atomic<long long> go_done{0};
+std::atomic<long long> stop_for{0};   // The search a stop or quit applies to.
+std::atomic<bool> ready_pending{false};
+
+long long current_search = 0;         // Main thread only.
+
+bool is_go(const std::string& line) {
+    return line.rfind("go", 0) == 0 && (line.size() == 2 || line[2] == ' ');
+}
+
+void read_commands() {
+    std::string line;
+    for (;;) {
+        // A closed input ends the session, as quit does.
+        if (!std::getline(std::cin, line)) {
+            line = "quit";
+        }
+        // Trim spaces and the \r a Windows GUI may leave on each line.
+        const std::size_t first = line.find_first_not_of(" \t\r");
+        const std::size_t last = line.find_last_not_of(" \t\r");
+        line = first == std::string::npos ? "" : line.substr(first, last - first + 1);
+
+        std::lock_guard<std::mutex> lock(mutex);
+        const bool searching = go_read.load() != go_done.load();
+
+        if (line == "stop") {
+            if (searching) {
+                stop_for.store(go_read.load());
+            }
+        } else if (line == "isready" && searching) {
+            // Answered from the search at its next check, without stopping it.
+            ready_pending.store(true);
+        } else {
+            if (is_go(line)) {
+                go_read.fetch_add(1);
+            } else if (line == "quit") {
+                stop_for.store(go_read.load());
+            }
+            queue.push_back(line);
+        }
+        wake.notify_one();
+
+        if (line == "quit") {
+            return;
+        }
+    }
+}
+
+// Called from the search every few hundred nodes, and while idle.
+bool poll() {
+    if (ready_pending.load(std::memory_order_relaxed) && ready_pending.exchange(false)) {
+        std::cout << "readyok\n" << std::flush;
+    }
+    return stop_for.load(std::memory_order_relaxed) == current_search;
+}
+
+std::string next_command() {
+    std::unique_lock<std::mutex> lock(mutex);
+    for (;;) {
+        wake.wait(lock, [] { return !queue.empty() || ready_pending.load(); });
+        if (!queue.empty()) {
+            std::string command = queue.front();
+            queue.pop_front();
+            return command;
+        }
+        // An isready that arrived just as a search finished.
+        lock.unlock();
+        poll();
+        lock.lock();
+    }
+}
+
+// An infinite search may only report once told to stop, however soon it ends.
+void wait_for_stop() {
+    std::unique_lock<std::mutex> lock(mutex);
+    while (stop_for.load() != current_search) {
+        wake.wait(lock, [] {
+            return stop_for.load() == current_search || ready_pending.load();
+        });
+        lock.unlock();
+        poll();
+        lock.lock();
+    }
+}
+
+}  // namespace uci_input
+
 void uci_loop() {
     Board board;
     Engine engine;
+    engine.poll = uci_input::poll;
 
-    std::string command;
+    // Only the main thread writes to stdout. Untying stops the reader thread
+    // flushing it on every read.
+    std::cin.tie(nullptr);
+    std::thread reader(uci_input::read_commands);
 
-    while (std::getline(std::cin, command)) {
+    for (;;) {
+        const std::string command = uci_input::next_command();
+
         if (command == "uci") {
             std::cout << "id name " << ENGINE_NAME << " " << SGR_VERSION << "\n";
             std::cout << "id author " << ENGINE_AUTHOR << "\n";
             print_uci_options(engine);
-            std::cout << "uciok\n";
+            std::cout << "uciok\n" << std::flush;
         } else if (command.rfind("setoption", 0) == 0) {
             handle_setoption(command, engine);
         } else if (command == "isready") {
-            std::cout << "readyok\n";
+            std::cout << "readyok\n" << std::flush;
         } else if (command == "ucinewgame") {
             board = Board();
             engine.clear_for_new_game();
         } else if (command.rfind("position", 0) == 0) {
             board = apply_uci_position(board, command);
             engine.clear_for_new_position();
-        } else if (command.rfind("go", 0) == 0) {
+        } else if (uci_input::is_go(command)) {
+            uci_input::current_search = uci_input::go_done.load() + 1;
+            const bool infinite = go_has(command, "infinite");
+
             std::optional<int> requested_depth = parse_go_depth(command);
             std::optional<TimeBudget> budget = parse_go_time_budget(command, board);
             std::optional<long long> node_limit = parse_go_value(command, "nodes");
@@ -391,9 +518,11 @@ void uci_loop() {
             std::optional<double> soft_limit =
                 budget.has_value() ? budget->soft : std::nullopt;
 
-            // Let time or node limits bound an otherwise uncapped depth.
+            // Let time or node limits bound an otherwise uncapped depth. An
+            // infinite search runs until stop.
             int depth = requested_depth.value_or(
-                (budget.has_value() || node_limit.has_value()) ? MAX_PLY - 1 : MAX_DEPTH
+                (infinite || budget.has_value() || node_limit.has_value())
+                    ? MAX_PLY - 1 : MAX_DEPTH
             );
 
             // Keep requested depth within the search and TT limits.
@@ -407,11 +536,18 @@ void uci_loop() {
                 soft_limit
             );
 
+            if (infinite) {
+                uci_input::wait_for_stop();
+            }
+
             if (result.best_move.has_value()) {
                 std::cout << "bestmove " << move_to_string(*result.best_move) << "\n";
             } else {
                 std::cout << "bestmove 0000\n";
             }
+            std::cout << std::flush;
+            uci_input::go_done.fetch_add(1);
+            uci_input::poll();
         } else if (command == "bench" || command.rfind("bench ", 0) == 0) {
             // Accept an optional depth and fall back on invalid input.
             int depth = BENCH_DEPTH;
@@ -426,10 +562,14 @@ void uci_loop() {
             }
 
             run_bench(depth);
+            std::cout << std::flush;
         } else if (command == "quit") {
             break;
         }
     }
+
+    // The reader stops after passing on quit, so this returns at once.
+    reader.join();
 }
 
 void test_mode() {
@@ -651,9 +791,16 @@ int main(int argc, char* argv[]) {
 #ifndef SGR_DEFAULT_NET
 #define SGR_DEFAULT_NET ""
 #endif
+        // Without either, use the network compiled into the binary, if any.
+        // SGR_EVALFILE set but empty asks for the hand-crafted eval.
         const char* env = std::getenv("SGR_EVALFILE");
         std::string net_path = env ? env : SGR_DEFAULT_NET;
-        if (!net_path.empty() && nnue::load(net_path)) {
+        bool loaded = !net_path.empty() && nnue::load(net_path);
+        if (!loaded && net_path.empty() && env == nullptr && nnue::load_embedded()) {
+            net_path = "<embedded>";
+            loaded = true;
+        }
+        if (loaded) {
             std::cerr << "info string nnue: loaded " << net_path
                       << " (" << nnue::simd_kind();
             if (nnue::buckets() > 1) std::cerr << ", k=" << nnue::buckets();
