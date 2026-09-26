@@ -1534,3 +1534,19 @@ included, and the public release drops its AVX-512 binary. The search is
 unchanged, with bench and fixed-depth searches identical. SPRT bases built
 before the switch have to be rebuilt, or a new version would start 2.7% faster
 for reasons of its own.
+
+## 2026-09-26, The SPSA tuner, fixed
+
+The tuner now sizes its steps the way fishtest and OpenBench do. Each parameter
+has c_end, its perturbation at the end of the run, and all share r_end 0.002,
+so each game pair moves a parameter a small, known amount. The old rule moved
+it about fifty times further. Game pairs now run side by side and update the
+parameters as each finishes, where the old tuner waited for the slowest of
+eight games before starting the next eight.
+
+It was checked against a simulated engine with a known optimum, over twenty
+runs of 20,000 pairs. From three c_end away, the worst parameter ended 0.5
+c_end from its optimum, against 2.9 for the old rule on the same games. A
+parameter that changes nothing drifted at most 1.1 c_end, against 14. The
+tuner also refuses the old configs and runs, so the stopped tune cannot be
+resumed by mistake.

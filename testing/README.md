@@ -165,6 +165,19 @@ it stopped. Each line of a queue file is `NAME | NEEDS | COMMAND`.
     tools/queue.sh QUEUE_FILE
     tools/queue.sh --stop
 
+## Tuning
+
+`spsa.py` tunes the engine's UCI parameters by SPSA, playing game pairs side
+by side at 8+0.08. Each parameter needs a `c_end`, set so that moving it that
+far costs about 2 to 5 Elo. The docstring shows a config. A tune only proposes
+values: compile them in as defaults and SPRT that build against the base.
+
+    python testing/spsa.py --config CONFIG.json
+    python testing/spsa.py --config CONFIG.json --status
+
+The three `spsa_v9*.json` configs record tunes run under the old step rule
+(METHODOLOGY §10). The tuner refuses them, and refuses to resume their runs.
+
 ## UCI protocol
 
 `uci_protocol.py` checks the parts of UCI a GUI depends on. Stop and quit must
@@ -187,7 +200,8 @@ no games and takes under a minute. CI runs it on every push, and
 - `engine_gate.py` UCI checks an engine must pass before joining the pool
 - `uci_protocol.py` UCI behaviour a GUI relies on, for Sgurr's own builds
 - `pgn_endings.py` counts games that ended abnormally
-- `spsa.py`       SPSA tuner; its steps are too large (METHODOLOGY §10)
+- `spsa.py`       SPSA tuner, with fishtest and OpenBench step sizes
+- `test_spsa.py`  the tuner against a simulated engine with a known optimum
 
 `sprt.py` decides whether a change ships, so its arithmetic is checked rather
 than trusted. The tests pin closed-form values (the Elo formula is analytic),

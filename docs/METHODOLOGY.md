@@ -531,10 +531,26 @@ Consequences:
 * **The v9.1 values stand as a set,** because the set was validated in games.
   A single value that moved no further than noise would carry it, such as
   `IirMinDepth` from 4 to 8, says nothing about that parameter.
-* **The tuner is fixed before the next tune,** with steps sized from an
-  end-of-run rate as OpenBench does. A tune is also checked while it runs,
-  since values that keep moving are not progress unless their steps favour a
-  direction.
+* **The tuner was fixed before the next tune.** Steps now follow fishtest and
+  OpenBench: each parameter has a perturbation at the end of the run, c_end,
+  and all share an end-of-run rate, r_end 0.002, so each game pair moves a
+  parameter a small known amount. Pairs run side by side and update as each
+  one finishes. Each parameter's steps are also checked while the run goes:
+  t = sum / sqrt(sum of squares) stays near zero when noise alone moves it.
+
+The new rule was checked against a simulated engine with a known optimum,
+losing 3 Elo for every c_end a parameter strays and drawing 60% of games.
+Over 20 runs of 20,000 pairs, with the same games for each rule:
+
+| | new rule | old rule |
+|---|---|---|
+| worst final error, parameters starting 3 c_end off | 0.5 c_end | 2.9 c_end |
+| worst drift of a parameter that changes nothing | 1.1 c_end | 14 c_end |
+| Elo lost at the end, median | 0.7 | 10.5 |
+
+The old rule's 14 c_end on parameters that do nothing is the pattern of the
+stopped tune, where `NullMoveReduction` went from 2 to 5. `testing/test_spsa.py`
+keeps one of these runs as a test.
 
 ---
 
