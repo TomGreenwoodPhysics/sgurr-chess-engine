@@ -9,7 +9,8 @@
 # BASE_NODES are their bench fingerprints: the run refuses to start unless each
 # binary is the one that was checked. MAX_GAMES defaults to 5,000.
 # A finished SPRT is never replayed; an unfinished one is moved aside and
-# restarted clean. Results land in runs/sprt/NAME/summary.txt.
+# restarted clean. Results land in runs/sprt/NAME/summary.txt. It exits 1 if
+# H0 was accepted or the run did not finish, so a queue can skip what follows.
 set -u
 
 ROOT=/c/coding/Sgurr
@@ -34,7 +35,7 @@ if [ "${1:-}" = "--stop" ]; then
     exit 0
 fi
 
-[ $# -ge 5 ] || { sed -n '2,12p' "$0"; exit 2; }
+[ $# -ge 5 ] || { sed -n '2,13p' "$0"; exit 2; }
 NAME=$1; NEW=$2; NEW_NODES=$3; BASE=$4; BASE_NODES=$5; MAX=${6:-5000}
 RUN=$ROOT/runs/sprt/$NAME
 mkdir -p "$RUN"
@@ -94,3 +95,8 @@ else v="DID NOT FINISH"; fi
     tail -n +2 "$RUN/endings.txt" | head -10
 } > "$RUN/summary.txt"
 tee -a "$LOG" < "$RUN/summary.txt"
+
+case "$v" in
+    H0|"DID NOT FINISH") exit 1 ;;
+esac
+exit 0

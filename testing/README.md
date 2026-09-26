@@ -144,6 +144,20 @@ is read, `pgn_endings.py` checks how every game ended, since a forfeit or a
 time loss makes the rating untrustworthy. Results go into
 `benchmarks/ledger.md`.
 
+## Unattended runs
+
+`tools/match.sh` plays a fixed number of games between two builds at any time
+control, with the same checks as an SPRT. It fails if any game ended
+abnormally, so a flag test is just a short match:
+
+    tools/match.sh NAME NEW.exe NEW_NODES BASE.exe BASE_NODES TC GAMES
+
+`tools/queue.sh` runs a list of jobs one after another. A job whose
+prerequisites failed is skipped, and starting the queue again carries on where
+it stopped. Each line of a queue file is `NAME | NEEDS | COMMAND`.
+
+    tools/queue.sh QUEUE_FILE
+    tools/queue.sh --stop
 
 ## Files
 
