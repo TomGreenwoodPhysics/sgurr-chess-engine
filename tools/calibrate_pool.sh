@@ -92,6 +92,9 @@ fi
 if [ -n "${CALIB_GAMES_PER_ENGINE:-}" ]; then
     rounds=$(( (CALIB_GAMES_PER_ENGINE + 1) / 2 ))
     target=1   # no early stop: play every game
+    # Nothing to decide until the end, so skip the interim solves, which
+    # would only take CPU from the games.
+    export CALIB_MIN_GAMES=1000000000
     plan="$((rounds * 2 * n_opp)) games, $((rounds * 2)) against each of $n_opp engines"
 else
     rounds=$(( MAX_GAMES / (2 * n_opp) ))
