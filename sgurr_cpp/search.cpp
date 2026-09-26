@@ -800,7 +800,11 @@ SearchResult Engine::search_best_move(
         long long ms = static_cast<long long>(elapsed_seconds(start_time) * 1000);
         std::vector<Move> pv;
         if (best_move.has_value()) {
+#if SGR_PV_TABLE
+            pv = recorded_principal_variation(board, *best_move, depth);
+#else
             pv = extract_principal_variation(*this, board, *best_move, depth);
+#endif
         }
 
         // hashfull reports TT occupancy; there are no tablebases.
@@ -840,6 +844,49 @@ SearchResult Engine::search_best_move(
         elapsed_seconds(start_time)
     };
 }
+
+#if SGR_PV_TABLE
+void Engine::update_pv(int ply, const Move& move) {
+    Move* row = &pv_moves[ply * MAX_PLY];
+    const Move* child = row + MAX_PLY;
+    row[ply] = move;
+    const int child_length = std::clamp(pv_length[ply + 1], ply + 1, MAX_PLY);
+    for (int index = ply + 1; index < child_length; ++index) {
+        row[index] = child[index];
+    }
+    pv_length[ply] = child_length;
+}
+
+std::vector<Move> Engine::recorded_principal_variation(
+    Board& board,
+    const Move& best_move,
+    int depth
+) {
+    // A completed root search always records its best move first. Anything
+    // else falls back to the table walk rather than report a stray line.
+    const int length = std::clamp(pv_length[0], 0, MAX_PLY);
+    if (length == 0 || pv_moves[0] != best_move) {
+        return extract_principal_variation(*this, board, best_move, depth);
+    }
+
+    std::vector<Move> pv;
+    std::vector<UndoInfo> undos;
+    for (int index = 0; index < length; ++index) {
+        const Move move = pv_moves[index];
+        MoveList legal_moves = board.generate_legal_moves();
+        if (std::find(legal_moves.begin(), legal_moves.end(), move) == legal_moves.end()) {
+            break;
+        }
+        pv.push_back(move);
+        undos.push_back(board.make_move(move));
+    }
+
+    for (auto undo = undos.rbegin(); undo != undos.rend(); ++undo) {
+        board.unmake_move(*undo);
+    }
+    return pv;
+}
+#endif
 
 int Engine::hashfull() const {
     // Estimate UCI hashfull from the first 1000 uniformly indexed slots.
@@ -972,6 +1019,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 #if SGR_TRACE_SEARCH
     search_trace.pv_length[0] = 0;
 #endif
+#if SGR_PV_TABLE
+    pv_length[0] = 0;
+#endif
 
     U64 board_hash = board.hash_key;
 
@@ -1026,6 +1076,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         ss_piece[0] = undo.placed_piece;
         ss_to[0] = move.to();
 #endif
+#if SGR_PV_TABLE
+        pv_length[1] = 1;
+#endif
 #if SGR_ROOTPVS
         // Search the first root move fully, then use null windows with re-search.
         int score;
@@ -1062,6 +1115,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         if (score > best_score) {
             best_score = score;
             best_move = move;
+#if SGR_PV_TABLE
+            update_pv(0, move);
+#endif
 #if SGR_TRACE_SEARCH
             search_trace.pv_table[0][0] = move;
             int child_length = std::clamp(search_trace.pv_length[1], 1, MAX_PLY);
@@ -1258,7 +1314,7 @@ int Engine::negamax(
     }
 
     U64 board_hash = board.hash_key;
-#if SGR_PV_TTCUT || SGR_PV_LMR || SGR_SE_DOUBLE || SGR_PV_PRUNE
+#if SGR_PV_TTCUT || SGR_PV_LMR || SGR_SE_DOUBLE || SGR_PV_PRUNE || SGR_PV_TABLE
     // An open window marks a principal-variation node. Read it before mate
     // distance or the table can narrow the window.
     const bool pv_node = beta - alpha > 1;
@@ -1750,6 +1806,13 @@ int Engine::negamax(
 #if SGR_SE_DOUBLE
         ss_double_ext[ply + 1] = ss_double_ext[ply] + (extension >= 2 ? 1 : 0);
 #endif
+#if SGR_PV_TABLE
+        // Only a child searched as a PV node records a line, so clear it
+        // first. A null-window result then cannot pick up an old line.
+        if (pv_node) {
+            pv_length[ply + 1] = ply + 1;
+        }
+#endif
 
         int score;
 
@@ -1818,6 +1881,11 @@ int Engine::negamax(
         if (score > best_score) {
             best_score = score;
             best_move_key = move;
+#if SGR_PV_TABLE
+            if (pv_node && !excluded.has_value()) {
+                update_pv(ply, move);
+            }
+#endif
 #if SGR_TRACE_SEARCH
             if (!excluded.has_value()) {
                 search_trace.pv_table[ply][ply] = move;

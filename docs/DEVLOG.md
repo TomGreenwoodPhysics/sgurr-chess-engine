@@ -1487,3 +1487,16 @@ v9.3, both unchanged, and batch C ships as v9.4. Their pool games keep the
 names they were played under. On pool-F v9.4 measured **3322.0 ±11.5**, 64.7
 above v9.3 and 155.8 above v9.1 in the same solve. It is the default in the web
 app and the engine on the hosted demo.
+
+## 2026-09-26, CI caught short principal variations
+
+The first CI run after the release failed in the container test, which expects
+the web app's trace search to report a line of at least two moves. The engine
+read its line back out of the transposition table, whose slots are replaced as
+it fills, so a deep iteration could report one or two moves. v9.1 did the same,
+but rarely enough to pass.
+
+The line is now recorded at PV nodes as the search runs. Bench and fixed-depth
+searches are unchanged, move for move, and the container test passes. Kept
+inside the engine object the table cost 1 to 2% in speed, apparently by
+shifting the object's hot tables. On the heap it costs about 0.5%.

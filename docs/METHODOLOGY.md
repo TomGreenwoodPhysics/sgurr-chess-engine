@@ -563,9 +563,16 @@ What it measured in September 2026, every change leaving the tree identical:
 | move predicates computed once per move | +0.0% ±0.6% |
 | early TT prefetch of the child position | -0.7% ±0.9% |
 | uninitialised move list | -0.8% ±1.6% |
+| PV table, 32 KB inside the engine object | -1.0% to -2.1% |
+| the same table on the heap | -0.6% ±0.3% |
 
 The largest gain was a cost the profiler found and no reading of the code had
 flagged. Two standard techniques, the per-ply stack and the early prefetch,
 measured nothing on this engine. The eval cache's size mattered more than
 expected: 1 MB gave +3.4%, 2 MB +5.3%, 4 MB +3.0% and 16 MB -0.3%, so the size
 was chosen by measurement.
+
+Where data sits can matter more than what the code does. Inside the engine
+object the PV table cost 1 to 2%, and a build with its per-node lines removed
+was about as slow, so the cost came from the object's layout. On the heap it
+costs 0.6%.

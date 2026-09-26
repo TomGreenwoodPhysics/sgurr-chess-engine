@@ -27,6 +27,10 @@ engines it played.
 - No losses on time in 600 games of flag tests down to 1+0.01. The old rule
   lost 23 of 200 on time at 2+0.
 - Every constant is a UCI option (`Tm*`), ready for the tune.
+- The reported line now comes from the search itself. It used to be read back
+  from the transposition table, where later entries overwrote it, so a deep
+  search could report a line of one or two moves. The search is unchanged,
+  with bench and fixed-depth searches identical. It costs about 0.5% in speed.
 
 ## v9.3 "Dearg" (Sgùrr Dearg), 2026-09-26
 

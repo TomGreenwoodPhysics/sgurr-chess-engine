@@ -53,6 +53,13 @@ constexpr int BM_STABILITY_COUNT = 5;
 #define SGR_TM2 1
 #endif
 
+// Report the line the search proved, recorded at PV nodes, instead of reading
+// it back from the transposition table, where later entries overwrite it and
+// cut it short. Reporting only: the search itself is unchanged.
+#ifndef SGR_PV_TABLE
+#define SGR_PV_TABLE 1
+#endif
+
 // History malus penalises quiets tried before a quiet cutoff.
 // Continuation history scores replies in the context of the previous move.
 #ifndef SGR_HMALUS
@@ -579,5 +586,22 @@ private:
 #if SGR_QS_TT
     // Depth-0 store that never evicts a main-search entry for another position.
     void store_tt_qs(U64 board_hash, int score, int flag, Move best_move_key);
+#endif
+
+#if SGR_PV_TABLE
+    // Make move the best at ply, followed by the line recorded below it.
+    void update_pv(int ply, const Move& move);
+
+    // The last root search's line, if it starts with best_move.
+    std::vector<Move> recorded_principal_variation(
+        Board& board,
+        const Move& best_move,
+        int depth
+    );
+
+    // Row ply of pv_moves holds the best line found from ply, up to
+    // pv_length[ply]. Both are on the heap so the engine object keeps its size.
+    std::vector<Move> pv_moves = std::vector<Move>(MAX_PLY * MAX_PLY);
+    std::vector<int> pv_length = std::vector<int>(MAX_PLY);
 #endif
 };
