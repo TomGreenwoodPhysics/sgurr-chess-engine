@@ -49,10 +49,10 @@ with the SPRT verdict.
 
 ## Notes specific to Sgurr
 
-- Sgurr has no UCI options, so no `option.Hash=...` etc. is needed.
-- Sgurr does not currently clear its transposition table on `ucinewgame`, so
-  games within one process share TT state. Both engines are affected equally,
-  but clearing it would remove a minor source of noise.
+- Pin `option.Hash=256` for both engines, as `tools/sprt.sh` does. Sgurr's
+  default is smaller, and every project measurement uses 256.
+- Sgurr clears its transposition table on `ucinewgame`, so games within one
+  process do not share TT state.
 - Use the same book and TC as the Python harness so numbers are comparable
   across the two tools.
 

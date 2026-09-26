@@ -80,3 +80,18 @@ Any loss on time, in the flag test or on the pool: the hard limit or the
 reserve is too aggressive. A gain below +15 with its interval excluding +40:
 the extra time is not converting, and the allocation and the stopping
 signals are then tested apart, allocation first.
+
+## Result, 2026-09-26
+
+**SPRT: H1 at 798 games, +54.9 ±13.3**, W 197 L 72 D 529, no abnormal
+endings. Inside the band and 15 above the point prediction.
+
+**Flag tests:** the new build lost no game on time in 600 and won each match
+by 63 to 131 Elo. Batch D, on the old rule, lost 23 of its 200 games on time
+at 2+0.
+
+**Pool-F:** 3322.0 ±11.5 over 1,840 games as v9.3-rc2, **+64.7 ±14.5 over
+v9.3-rc1** in the same solve. Its one abnormal ending was a time loss by
+MrBob. The gain held up in full against other engines, as predicted.
+
+Shipped as v9.4.

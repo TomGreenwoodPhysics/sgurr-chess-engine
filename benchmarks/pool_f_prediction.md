@@ -44,3 +44,23 @@ Its final solve failed, which was expected with two games per engine: two
 engines lost both games, and Ordo cannot place a player with only losses. With
 those games relabelled as v9.3-rc1, the solve connected every other engine and
 reproduced v9.3-rc1, v9.2-rc and v9.1 at their pool-E values.
+
+## Result, 2026-09-26
+
+**v9.3-rc1 at 3257.3 ±8.8, inside the band** and 9 below the point
+prediction, solved on the sixteen families left after two were removed.
+
+**Two new families failed the checks registered above.** Onyx 2.0 implied
+ratings for Sgurr 407 to 486 above the solve on the other sixteen, far past
+the 150 allowed. Its binary gives its author as "Dylan (with Claude)", which
+suggests a different engine from the Onyx 2.0 that CCRL rated. Priessnitz 2.0
+lost on time in 230 of its 746 games, so the prediction of no abnormal endings
+failed on its account. Both were dropped. Their games are kept but left out of
+every solve, listed under `excluded_engines` in `pool.json`.
+
+**The spread came in below 50.** For v9.3-rc1 the anchors imply ratings 42
+Elo apart beyond noise, and 30 to 49 across the four versions solved, which
+leaves about ±15 to ±24 of systematic error. That beats the ±25 predicted for
+eighteen families.
+
+v9.1 reads 3166.2 on pool-F, 40.0 below pool-D and 19.4 below pool-E alone.

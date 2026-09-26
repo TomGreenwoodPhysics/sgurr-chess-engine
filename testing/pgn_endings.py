@@ -2,8 +2,8 @@
 """Count how calibration games ended, from the PGN files themselves.
 
 fastchess writes the reason into the last move comment ("..., White mates}").
-A game that did not end in a mate or a draw by rule -- a time loss, an illegal
-move, a crash or disconnect -- makes a rating untrustworthy (METHODOLOGY 9).
+A game that ended any other way, such as a time loss, an illegal move or a
+crash, makes a rating untrustworthy (METHODOLOGY 9).
 
     python testing/pgn_endings.py FILE.pgn [FILE.pgn ...]
 

@@ -32,3 +32,9 @@ stack adds perhaps 1 or 2 through speed. In practice this run firms up batch A.
 
 A result below +5 with its interval excluding +17 would say batch A's first
 1,142 games ran high.
+
+## Result, 2026-09-25
+
+Stopped at 60 games, when a bigger speed bundle replaced it
+(`v93_fast_prediction.md`). Sixty games say nothing, so this prediction was
+never tested.

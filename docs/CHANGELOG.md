@@ -316,6 +316,13 @@ release also moves absolute ratings onto a re-anchored pool.
 
 ## v4.0 "MacKenzie" (Sgùrr MhicChoinnich), 2026-07-10
 
+> **Time-management figures corrected.** A direct test at 10+0.1 on this
+> release, with only the clock policy changed, found stability scaling, the
+> flat soft limit and hard-only level (963 games, all within ±23). The flat
+> limit's −48 below compared gauntlets from different days and did not
+> reproduce; stability's +17 over it did not hold either. The rest of this
+> entry is left as written. See DEVLOG 2026-07-10 → 07-11 and METHODOLOGY §6.
+
 The gen5 NNUE, the first architecture change since NNUE arrived, plus two
 measured search improvements, all landed and tested in one day.
 

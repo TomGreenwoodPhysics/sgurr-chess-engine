@@ -51,3 +51,9 @@ be small.
 
 A clearly negative result. Then split it: negative extensions alone first,
 since they move the tree most.
+
+## Result, 2026-09-25
+
+Stopped under rule 9 once the interval cleared zero: **+16.2 ±13.7** over 860
+games, W 183 L 143 D 534, LLR 0.88 of 2.94. No abnormal endings in the 871
+games in the PGN. On the prediction of +15 and inside its band.

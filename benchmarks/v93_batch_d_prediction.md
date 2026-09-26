@@ -90,3 +90,16 @@ by 42%, and measured +16.4.
 A clearly negative result. Then test the PV change without the null-move
 gate. Null move is the only one of the four that acts at every depth from 3
 up, so it probably carries most of the extra tree.
+
+## Result, 2026-09-26
+
+Stopped by decision at 1,940 games: **+4.3 ±8.8**, W 362 L 338 D 1240, LLR
+0.41 of 2.94. No abnormal endings in the 1,958 games in the PGN. Inside the
+band and a little below the +8 predicted.
+
+The interval had not cleared zero, so this is not a stop under rule 9. It was
+stopped because the question that mattered was already answered: batch D is
+not a large gain, and it is unlikely to be a regression, with the interval
+reaching down only to -4.5. The rest of the cap would have spent about two and
+a half hours telling +1 from +5. Batch D stays in, and the next pool run
+checks it against other engines.

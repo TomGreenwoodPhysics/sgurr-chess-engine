@@ -41,4 +41,5 @@ A's first measurement ran high.
 ## Result, 2026-09-25
 
 Stopped by decision once clearly positive, before a bound was crossed:
-Elo: 25.97 +/- 16.16 over 764 games, 1.17 LLR. Inside the predicted band, at its low end. No abnormal endings.
+**+26.0 ±16.2** over 764 games, LLR 1.17. Inside the predicted band, at its low
+end. No abnormal endings.

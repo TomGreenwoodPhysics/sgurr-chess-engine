@@ -54,3 +54,18 @@ not choose anything (§3).
 - A second cosine seed trains after the games, ready for a seed-luck check.
 - Feature weights clip at 127/255 even at QA=181; 1.3% of the shipped net's
   weights sit on the clip. Separate test.
+
+## Result, 2026-09-24
+
+No decision at the 3,000-game cap: **+0.2 ±9.5**, W 915 L 913 D 1172, 0
+abnormal endings. The prediction was wrong. The result falls just short of the
+falsification condition, with the estimate barely above zero and the interval
+stopping short of +10.
+
+The schedule did change the training. Final validation loss fell from 0.01132
+to 0.01113, and seed 1 reached the same figure. Seed 1 then scored +14.1
+against v9.1 (`v91_seedcheck_spsa_prediction.md`), so the two seeds average
+about +7, inside the seed noise of §2. Cosine stays the default. It is worth a
+few Elo at most, and the lower loss bought less than it seemed to promise (§3).
+
+The pool calibration was skipped, as planned for a run without H1.

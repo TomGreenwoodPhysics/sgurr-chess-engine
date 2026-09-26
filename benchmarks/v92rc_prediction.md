@@ -26,3 +26,13 @@ carry over to other engines, and v9.2 does not ship on self-play alone.
 
 At ±12 per version the gap carries about ±17, so this run can confirm a
 transfer or catch a failed one. It cannot size a gain to better than ±17.
+
+## Result, 2026-09-25
+
+v9.2-rc **3219.4 ±11.3** over 1,988 games, v9.1 3185.5 ±11.9 in the same
+solve: a gap of **+33.9 ±16.4**. No abnormal endings for either. Inside the
+band and 19 above the point prediction.
+
+The gain carried over to other engines. In self-play the fixes measured +50.5
+and the net somewhere between +0.2 and +14.1, and the pool shows about 60% of
+that total, in line with §6.

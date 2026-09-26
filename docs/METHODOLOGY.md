@@ -18,9 +18,22 @@ improvement?"* with a bounded error rate.
 
 **Pool calibration**: a gauntlet against fixed open-source engines with
 published CCRL Blitz ratings, at 10+0.1, solved with Ordo anchored to those
-published values. The current pool (pool-2026-08-D) is five families (4ku,
-Bit-Genie, Monolith, Drofa, Mantissa) spanning 3056 to 3312, all at or above
-the engine's own level. Answers *"how strong is it on an absolute scale?"*
+published values. The current pool (pool-2026-09-F) is 16 families spanning
+3087 to 3438, listed with their exact builds in `benchmarks/pool.json`. It
+extends pool-E under identical conditions, so it is solved on pool-E's games
+and its own, and on nothing older. Answers *"how strong is it on an absolute
+scale?"*
+
+More families make the absolute figure firmer, not the gaps. On pool-E the
+anchors implied ratings for Sgurr about 52 Elo apart beyond sampling noise,
+while every version gap was the same against every engine within noise. So
+nine families left about ±35 of systematic error on the absolute rating. On
+pool-F the spread is 30 to 49 Elo across sixteen families, which leaves about
+±15 to ±24.
+
+Since pool-E, gains are decided and sized by SPRT, which reaches a given error
+bar far more cheaply. Each release then gets one pool run at about ±12 to
+confirm the gain carries over to other engines (§6).
 
 **Conditions are part of the instrument, not a detail.** Hash is pinned at 256
 for every engine, the book is generic and external, pondering is off and
@@ -97,6 +110,11 @@ identical data:
 Loss is not merely uninformative here: across these variants it is
 *anti-correlated* with playing strength. Earlier instances: the gen6 net A/B,
 HL=512 on gen6 data, and the data-volume probe (§4).
+
+A sixth instance, 2026-09-24: retraining the v9.1 net with a cosine learning
+rate instead of a constant one lowered validation loss from 0.01132 to 0.01113
+on the same holdout. Two seeds scored +0.2 and +14.1 against the original, an
+average inside the seed noise of §2.
 
 **Rule: never select an architecture, dataset size, or hyper-parameter on
 loss. Only games decide.** Loss retains exactly one valid use, *train-vs-val
@@ -256,11 +274,25 @@ backwards. There is unlikely to be a third that behaves better.
 | refinement package (v6.0) | +57.3 | +83 | ~1.0 (no compression) |
 | gen8 net | +126.5 | +103 | ~0.81 |
 | history malus | +33 | ~0 | ~0 |
-| v3.1 soft time limit | +24.6 | negative | <0 |
+| v3.1 soft time limit | +24.6 | −48, **withdrawn** | n/a |
+| v9.2 (search fixes and cosine net) | +50.5 and +0.2 to +14.1 | +33.9 on pool-E, +43.1 on pool-F | ~0.6 to 0.75 |
+| v9.3 (search batches and speed) | about +50 | +47.2 on pool-E, +48.0 on pool-F | ~0.95 |
+| v9.4 time management | +54.9 | +64.7 | ~1.2 |
 
-Large gains largely survive; small ones evaporate or invert. With §2 in hand,
+Large gains largely survive; small ones evaporate. With §2 in hand,
 the likely explanation is not a mysterious "compression" but that the small
 self-play numbers were never real: they sat inside the noise floor.
+
+The soft-limit row was first entered as negative, the only case of a small
+gain inverting. The −48 compared v3.1's gauntlet with v3.0's from four
+days earlier, 420 games against 210, with a joint error near ±47; the three
+solves that seemed to confirm it reused the same games. A direct test at
+10+0.1, one net with only the clock policy changed, then found the flat soft
+limit, stability scaling and hard-only level (963 games, all within ±23). The
+lesson drawn from the −48, that time-management results do not carry between
+time controls, may still be true, but nothing in this project shows it.
+v9.4's rebuilt time management carried over in full: +54.9 in self-play at
+8+0.08 and +64.7 on the pool at 10+0.1.
 
 ---
 
@@ -289,6 +321,26 @@ produced plausible output instead of an error.**
   which they promoted: 23.9% and 17.6% of their games, 14% of the whole run.
   Nothing errored. The gauntlet produced a complete result whose only tell was
   a number that had moved. See §9.
+* **A training default nobody chose (2026-09-24).** `train.py` defaulted to a
+  constant learning rate and the SCReLU launcher never asked for cosine, so the
+  v9.1 net trained without the decay every net since gen3 had used. The run
+  looked normal and the net was strong. The default is now cosine, and the
+  trainer logs the schedule it used.
+* **Solves that mixed pools, and repeated openings (2026-09-24).** Ordo read
+  every calibration PGN in the folder, so pool-D ratings included pool-B's
+  uncontrolled games: v8.2 read 3033 in the combined solve against 3012 on
+  pool-D alone. Separately, two runs of v9.1 started from the same opening seed
+  and replayed about 470 openings. Neither showed in the output. Each pool now
+  has its own games folder, and a continued run takes a new seed.
+* **Broken anchors on pool-F (2026-09-26).** Onyx 2.0 played more than 400
+  Elo below its CCRL rating, and its binary names its author as "Dylan (with
+  Claude)", so it is probably a different engine with the same name.
+  Priessnitz 2.0 lost on time in 31% of its games under our conditions. Both
+  would have inflated Sgurr's rating. The implied-rating check registered
+  before the run caught the first, and the endings check the second. Both
+  engines were dropped and their games are left out of the solve. The lesson
+  for the next pool: compare an engine's `id author` with the author CCRL lists
+  before its first game.
 
 Practices adopted in response: binaries self-report their configuration at
 startup (`nnue: loaded <net> (avx512, k=8)`); a bit-exactness selfcheck gates
@@ -321,6 +373,20 @@ precondition fails.
    quietly reshaped into a right one afterwards. The 2026-08-03 singular result
    is the case in point: the reasoning was wrong in a way that would have been
    easy to forget having believed.
+8. **A change that cannot alter the tree needs no SPRT.** When the bench
+   fingerprint matches on the AVX-512, AVX2 and scalar builds, and a set of
+   fixed-depth searches return the same nodes, scores, PVs and moves, the
+   change can only affect speed. It is accepted on measured speed (§11), and
+   its Elo is carried into the next pool run with everything else.
+9. **An SPRT may be stopped once its 95% interval clears zero, after at least
+   300 games.** Its job here is to confirm the sign and give a rough size. The
+   minimum is there so that a real regression does not slip through. Simulated
+   with the noise of a typical run here and a look every 100 games, a change
+   that costs 5 Elo clears zero 2.3% of the time and one that costs 10 about
+   0.4%. A stopped run is recorded with its estimate as it stood and marked as
+   stopped. That estimate reads high, most of all after an early stop: at 300
+   games the interval is ±23, so stopping there means the run read +23 or
+   more. The release's pool run is the check on it.
 
 ---
 
@@ -433,3 +499,73 @@ needs runs that vary one variable at a time.
 * **An error bar is only as good as its widest ignored term.** ±5.4 was quoted
   while the opening draw alone contributed ±15. Before quoting an interval,
   ask what it is not counting.
+
+---
+
+## 10. SPSA steps were far too large
+
+The tune of the v9.0 search batch validated at +90 as a set and shipped in
+v9.1. The next, of 17 search parameters that had never been tuned, was stopped
+on 2026-09-24 after 5,008 games because it had become a random walk.
+
+The values had moved a long way. `NullMoveReduction` went from 2 to 5 and
+`CheckExtMaxDepth` from 4 to 10. The check was whether each parameter's steps
+favoured one direction more than chance would. Across 626 iterations, 16 of
+the 17 t-statistics lay between -1.6 and +1.6. The 17th was 2.56, and 17 tests
+of pure noise produce one that large about one time in six.
+
+The cause is the step rule in `testing/spsa.py`. It derives `a` so that an
+early step is about a fifth of the perturbation `c`:
+
+    step = a_k * (s - 0.5) / c_k        a = c^2 * (A + 1)^alpha / (5 * 0.15)
+
+An 8-game match gives a typical `|s - 0.5|` of 0.15, so every iteration moves
+every parameter by about `c/5`, and over 8 games most of that result is noise.
+OpenBench's
+usual end-of-run rate, `R_end` 0.002, moves parameters roughly fifty times less
+per game. Small steps let many matches average out before a value goes
+anywhere. Large ones let each match push it.
+
+Consequences:
+
+* **The v9.1 values stand as a set,** because the set was validated in games.
+  A single value that moved no further than noise would carry it, such as
+  `IirMinDepth` from 4 to 8, says nothing about that parameter.
+* **The tuner is fixed before the next tune,** with steps sized from an
+  end-of-run rate as OpenBench does. A tune is also checked while it runs,
+  since values that keep moving are not progress unless their steps favour a
+  direction.
+
+---
+
+## 11. Speed: profile first, then measure pinned
+
+**Profile the release build, and only the search thread.** `tools/profile.py`
+suspends the search thread about every millisecond, reads its instruction
+pointer and maps it to functions and source lines with llvm-symbolizer. Two
+early mistakes shaped it. Sampling every thread put half or more of the
+samples in `??`, which turned out to be idle Windows worker threads parked in
+ntdll. And a build without LTO overstated call costs that the PGO and ThinLTO
+release build inlines away. Profile what ships.
+
+**Measure speed pinned and paired.** `tools/npscmp.ps1` runs two binaries
+alternately at Hash 256, each pinned to one core at High priority, and reports
+the paired change with a 95% interval, usually over 16 pairs. Pairing cancels
+drift in clock speed and temperature. Pinning keeps the scheduler out of it.
+
+What it measured in September 2026, every change leaving the tree identical:
+
+| change | nps |
+|---|---|
+| move picker stores raw moves (zeroing them was 12.6% of search time) | **+19.5% ±1.9%** |
+| eval cache, 2 MB | **+5.2% ±0.8%** |
+| accumulator stack, one level per ply | +0.5% ±1.2% |
+| move predicates computed once per move | +0.0% ±0.6% |
+| early TT prefetch of the child position | -0.7% ±0.9% |
+| uninitialised move list | -0.8% ±1.6% |
+
+The largest gain was a cost the profiler found and no reading of the code had
+flagged. Two standard techniques, the per-ply stack and the early prefetch,
+measured nothing on this engine. The eval cache's size mattered more than
+expected: 1 MB gave +3.4%, 2 MB +5.3%, 4 MB +3.0% and 16 MB -0.3%, so the size
+was chosen by measurement.

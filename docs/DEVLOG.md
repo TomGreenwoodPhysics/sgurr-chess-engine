@@ -1306,3 +1306,184 @@ selected lambda 0.8 over 0.9 and 0.7.
 The final pool result is **3081.2 ±6.7** over 6,508 valid games
 (+1515 =1578 -3415). Three games broken by closing VS Code were removed before
 the solve. `nets/gen9.nnue` passed all 4,516 inference checks.
+
+## 2026-09-23, v9.1 "Dearg" released
+
+v9.1 uses the same 102M positions as v9.0 and gets more out of them. The v9.0
+search batch had measured -1.0 ±21.1 and was held back. With SPSA-tuned
+constants it measured +90.2 ±16.7. SCReLU at QA=181 added +22.6 ±17.1 on its
+own, and the two together measured +142.3 ±18.7 in self-play. On pool-D v9.1
+measured **3206.2 ±11.8**, 124.5 above v9.0 in the same solve.
+
+## 2026-09-24, The v9.1 net trained at a flat learning rate
+
+`train.py` defaulted to a constant rate, and the SCReLU launcher never asked
+for cosine, so the v9.1 net trained at 1e-3 from start to finish. Every net
+since gen3 had used cosine decay, including v9.0's, so its lambda playoff is
+unaffected. Nothing warned about it, which is the pattern in METHODOLOGY §7.
+Cosine is now the default and the trainer logs the schedule it used.
+
+A cosine retrain on the same data and seed lowered validation loss from
+0.01132 to 0.01113 but scored +0.2 ±9.5 against v9.1 over 3,000 games. A
+second seed scored +14.1 ±12.0. The average of about +7 is inside the seed
+noise, so the fix is worth a few Elo at most.
+
+## 2026-09-24, SPSA was taking steps far too large
+
+A tune of the 17 search parameters that had never been tuned was stopped at
+5,008 games. The values had moved a long way: `NullMoveReduction` from 2 to 5,
+`CheckExtMaxDepth` from 4 to 10. Yet a test of each parameter's steps found no
+direction favoured more than chance would give. The tune was a random walk.
+
+`spsa.py` sizes its steps so that one 8-game match moves a parameter by about a
+fifth of its perturbation. OpenBench's usual setting moves parameters roughly
+fifty times less per game. At that size noise decides where the values go.
+
+The v9.1 tune used the same formula. Its values validated at +90 as a set, so
+v9.1 stands, but single moves such as `IirMinDepth` from 4 to 8 are the size
+noise alone would produce. The tuner gets fixed before the next tune.
+
+## 2026-09-24, Pool-E
+
+The aim was a pool that can resolve medium gains between versions, where a gain
+it shows also holds up against other engines. Pool-E has nine families from
+3087 to 3362 on the live CCRL Blitz list. Five are new, four of them rated 3340
+or more so the next few versions stay bracketed, and 4ku was dropped because
+v9.1 scored about 70% against it. The time control stays at 10+0.1.
+
+Building it turned up two faults in how pool-D had been solved. Ordo had been
+reading every calibration PGN, pool-B's included, which is why v8.2 read 3033 in
+the combined table and 3012 on pool-D alone. And both v9.1 runs on pool-D used
+opening seed 1, so about 470 games replayed openings that had already been
+played. Pool-E is solved on its own games. Continuing a run now needs a new
+seed, while different versions share one on purpose so that they meet the same
+openings.
+
+Adjudication was tested and rejected. Replayed over 8,168 pool-D games, resign
+adjudication saved 8% of the time but turned 22 Sgurr draws into losses, and
+draw adjudication turned 28 Sgurr wins into draws. A bias that depends on the
+engine under test is not worth 8%.
+
+v9.1 measured **3185.6 ±11.9** on pool-E, 20.6 below its pool-D figure. The
+planned v9.0 run was dropped, because a gap of +124 says nothing about whether
+the pool can see a gain of 20. Gains are now decided and sized by SPRT, and each
+release gets one pool run at ±12 to confirm the gain carries over.
+
+## 2026-09-25, Two search defects worth +50
+
+Null move was tried even when the static eval sat far below beta, where the
+eval term cut the reduction to one ply and the search almost always failed. And
+the TT was losing moves. Fail-low nodes stored a meaningless best move, and a
+store with no move wiped the one already held. Gating null move on eval at or
+above beta, and keeping the stored move, measured **+50.5 ±14.2** over 1,040
+games against v9.1. I had predicted +10.
+
+With the cosine seed-1 net added, the candidate v9.2-rc measured 3219.4 on
+pool-E, **+33.9 ±16.4** over v9.1 in the same solve. It was not released. The
+next work goes on top of it and ships as v9.3.
+
+## 2026-09-25, Batch A and the speed bundle
+
+Batch A lets quiescence use the TT, and handles PV nodes more carefully: no TT
+cutoffs there, and late moves reduced one ply less. It measured +16.4 ±12.9
+over 1,142 games against v9.2-rc.
+
+Speed came next. A sampling profile of the release build found the move picker
+zeroing four 256-entry buckets on every node, because a default `Move` zeroes
+itself. That was 12.6% of search time. Storing raw 16-bit moves, and running
+SEE only once the capture stage is reached, made the engine 19.5% faster with
+an identical tree. The per-ply accumulator stack, which I had expected more
+from, measured +0.5% ±1.2%. Batch A with both measured **+26.0 ±16.2** over 764
+games against v9.2-rc.
+
+A second round caches NNUE scores by position key. Sizes from 256 KB to 16 MB
+were measured and 2 MB was best, at +5.3%. Three other ideas measured nothing
+and were dropped; `benchmarks/v93_round2_prediction.md` lists them.
+
+Two testing rules came out of this, now in METHODOLOGY §8. A change that cannot
+alter the tree is accepted on its bench fingerprint and measured speed, without
+an SPRT. And an SPRT may be stopped once its 95% interval clears zero, after at
+least 300 games.
+
+Batch B refines singular extensions. It extends by two or three plies when the
+TT move stands far above the rest, returns early when another move also beats
+beta, and searches a TT move that is not singular less deeply. It measured
+**+16.2 ±13.7** over 860 games against batch A with the speed work, close to
+the +15 predicted.
+
+## 2026-09-25, Batch D: no pruning shortcuts on the PV
+
+PV nodes no longer take reverse futility pruning, the shallow drop into
+quiescence, razoring or null move, and mate-distance pruning bounds the window
+near a mate. Searching the PV properly grows the tree by about half at depth
+17. It measured **+4.3 ±8.8** over 1,940 games against batch B, and the run
+was stopped there by decision: too small a gain to be worth the rest of the
+cap, and unlikely to be a regression, so it stays in.
+
+The planned aspiration-window change was dropped before any games. A narrower
+start and gentler widening both cost nodes at depth 17, because a failed search
+returns the window edge and small steps crawl after a big swing in the score.
+Mate-distance pruning also showed that the PV is read back out of the TT. The
+mate scores stay sound against Stockfish, but a few mate lines show stale
+moves.
+
+## 2026-09-26, v9.3-rc1 on pool-E: +47 over v9.2-rc
+
+Before starting on time management, the current build was calibrated as a
+checkpoint. It measured **3266.3 ±11.9**, +47.2 ±16.5 over v9.2-rc in the
+same solve. Batch A, the speed work, batch B and batch D had come to about +50
+in self-play, so nearly all of it carried over to other engines, far more than
+the 60% seen for v9.2-rc.
+
+The same games show the anchors disagree more than we had assumed. Each pool-E
+engine implies a rating for Sgurr about 52 Elo away from the others beyond
+sampling noise, so the absolute figure carries about ±35 systematic, not the
+±25 measured on pool-D. Gaps between versions are unaffected, being the same
+against every engine within noise. More anchor families would bring the
+absolute error down, and candidates for that have been surveyed.
+
+## 2026-09-26, Pool-F
+
+Nine families from the live CCRL Blitz list were added to pool-E, to fill the
+gap below 3231 and bracket the next few versions from above. Two failed after
+the first night. Onyx 2.0 played more than 400 Elo below its rating, and its
+binary names its author as "Dylan (with Claude)", so it is probably another
+engine with the same name. Priessnitz 2.0 lost on time in 31% of its games.
+Both were dropped under the rule registered before the run, and their games
+are left out of the solve. That leaves sixteen families from 3087 to 3438.
+
+The extra families did their job. The anchors now disagree by 30 to 49 Elo
+beyond noise, depending on the version, and the systematic error on an
+absolute rating is about ±15 to ±24, down from ±35 on pool-E. v9.1 reads
+3166.2 on pool-F, 40 below its pool-D figure.
+
+## 2026-09-26, Batch C: time management rebuilt
+
+On pool-E, v9.3-rc1 finished its games with a median 5.3 s of its 10 s unused,
+where the anchors kept 1.4 to 2.4 s. The old rule gave each move a thirtieth of
+the clock and could never spend more.
+
+The new rule spreads the clock over the moves likely to remain, 30 at the start
+and falling to 18, adds half the increment, and caps a move's budget at 20% of
+the clock. No new iteration starts past 85% of the budget. That point moves
+after every iteration: a stable best move that takes most of the nodes brings
+it forward, and a falling score pushes it back. The hard limit is five budgets
+and never more than 30% of the clock. A better move found in an interrupted
+iteration is now kept instead of thrown away.
+
+The constants were set with a model of the pool's own game lengths, not by
+tuning. The model reproduces what the old rule actually spent to within 0.02 s
+a move. With the new constants it matches the anchors' spending and finishes
+with about 1.2 s left.
+
+It measured **+54.9 ±13.3** against batch D over 798 games, and **+64.7 ±14.5**
+over v9.3-rc1 on pool-F. It never lost on time in 600 games of fast flag
+tests, where the old rule lost 23 games on time at 2+0.
+
+## 2026-09-26, v9.2 to v9.4 released
+
+The checkpoints lose their rc names. v9.2-rc ships as v9.2 and v9.3-rc1 as
+v9.3, both unchanged, and batch C ships as v9.4. Their pool games keep the
+names they were played under. On pool-F v9.4 measured **3322.0 ±11.5**, 64.7
+above v9.3 and 155.8 above v9.1 in the same solve. It is the default in the web
+app and the engine on the hosted demo.

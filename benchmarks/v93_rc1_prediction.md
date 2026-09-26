@@ -31,3 +31,19 @@ absolute scale cancels. Only its sampling error, about ±16, applies.
 A gap at or below +10: less than a third of the self-play gain carried over
 to other engines. Then each batch is checked on its own before anything is
 stacked on top.
+
+## Result, 2026-09-26
+
+**3266.3 ±11.9** over 1,902 games (+526 =725 -651), no abnormal endings. In
+the same solve v9.2-rc is 3219.1 and v9.1 3185.1, so the gap is **+47.2
+±16.5** over v9.2-rc and +81.2 over v9.1. Inside the band, 17 above the point
+prediction.
+
+The batches carried over almost in full: about +50 in self-play became +47 on
+the pool, where the estimate assumed 60% for search changes. Per engine the
+gap runs from -5 against Counter to +101 against Drofa, which is consistent
+with one gain and sampling noise (Q = 11.8 on 8 degrees of freedom).
+
+The anchors disagree about the absolute rating as much as they did for v9.1:
+about 52 Elo per engine beyond noise, which over nine families is about ±35
+systematic.

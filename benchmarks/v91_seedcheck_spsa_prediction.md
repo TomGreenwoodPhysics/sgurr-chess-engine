@@ -41,3 +41,35 @@ excluding +10. The hand-set values were already close, and more search Elo has
 to come from new features rather than tuning.
 
 Values read before the 5,000 iterations finish are not validated and not used.
+
+## Result, 2026-09-25
+
+### Seed check
+
+Seed 1 scored **+14.1 ±12.0** against v9.1 over 2,000 games, W 659 L 578 D 763.
+Its log was overwritten by a file whose name differed only in case, so the
+figure was worked out again from the PGN, in pairs as fastchess counts them.
+
+Seed 0 was +0.2, so the two seeds sit 13.9 apart. That is inside the 15
+predicted and inside their joint interval, so seed spread at 102M positions is
+consistent with §2. The conditional part missed: seed 0 did not accept H1, so
+seed 1 was expected at or below +10, and it came in at +14.1.
+
+The net is `nets/gen9_screlu_cos_s1.nnue`, SHA-256
+`e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b`, self-check
+evalsum 194037. It became the v9.2-rc network and will be committed when it
+ships.
+
+### SPSA
+
+Stopped at iteration 626 of 5,000, after 5,008 games. No values were used, and
+the validation SPRT never ran, so the prediction was not tested.
+
+The tune had become a random walk. A t-statistic on each parameter's steps,
+testing whether they favoured one direction more than chance would, found
+nothing: 16 of the 17 lay between -1.6 and +1.6. The 17th was 2.56, and 17
+tests of pure noise produce one that large about one time in six. The values
+kept moving all the same.
+Between iterations 600 and 625 alone, `RfpMaxDepth` went from 8 to 5 and
+`NmpDepthDiv` from 6 to 4. The cause is the step size in `testing/spsa.py`,
+set out in METHODOLOGY §10.

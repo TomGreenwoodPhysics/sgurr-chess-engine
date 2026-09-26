@@ -42,3 +42,6 @@ direct match reaches in about 1,650.
 So v9.1 is calibrated to ±12 as a baseline only. Gains are decided and sized
 by SPRT; each release gets one pool run at ±12 to confirm the gain carries over
 to other engines, the METHODOLOGY 6 question.
+
+The absolute part can still be checked. v9.1 finished at 3185.6 ±11.9 over
+1,899 games, 20.6 below its pool-D figure and inside the ±25 band.

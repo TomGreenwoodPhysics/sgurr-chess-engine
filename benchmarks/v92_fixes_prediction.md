@@ -34,3 +34,12 @@ fail-low could order some nodes worse.
 
 H0 accepted. Then build each toggle alone and test them separately, TT change
 first, since it moves the tree far more.
+
+## Result, 2026-09-25
+
+H1 accepted at 1,040 games: **+50.5 ±14.2**, W 351 L 201 D 488, 0 abnormal
+endings. Five times the prediction and far above the band.
+
+I priced both changes as refinements to working code. The result says the old
+behaviour was costing a great deal. Neither toggle was tested alone, so how the
+gain divides between them is not known.
