@@ -16,26 +16,29 @@ from web.backend.sgurr_uci import EngineCrashedError, SgurrUciEngine
 
 
 class PublicDemoTest(unittest.TestCase):
-    def test_historical_ratings_use_v82_bridge(self) -> None:
+    def test_historical_ratings_are_on_pool_f(self) -> None:
         ratings = {str(entry["id"]): entry["rating"] for entry in main.ENGINE_SPECS}
 
         self.assertEqual(
             ratings,
             {
-                "v9.1": 3206,
-                "v9.0": 3081,
-                "v8.2": 3012,
-                "v8.1": 2981,
-                "v8.0": 2960,
-                "v7.0": 2857,
-                "v6.0": 2761,
-                "v5.0": 2677,
-                "v4.0": 2559,
-                "v3.1": 2497,
-                "v3.0": 2545,
-                "v2.0": 2423,
-                "v1.0": 2341,
-                "classical": 2332,
+                "v9.4": 3322,
+                "v9.3": 3257,
+                "v9.2": 3209,
+                "v9.1": 3166,
+                "v9.0": 3041,
+                "v8.2": 2972,
+                "v8.1": 2941,
+                "v8.0": 2920,
+                "v7.0": 2817,
+                "v6.0": 2721,
+                "v5.0": 2637,
+                "v4.0": 2519,
+                "v3.1": 2457,
+                "v3.0": 2505,
+                "v2.0": 2383,
+                "v1.0": 2301,
+                "classical": 2292,
             },
         )
 

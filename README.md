@@ -7,8 +7,8 @@
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
 Sgurr is a C++20 UCI chess engine with an NNUE trained on its own self-play
-games. The current release is **v9.1 "Dearg"**, measured at an estimated
-**3206** on a CCRL-Blitz-anchored scale.
+games. The current release is **v9.4 "Dearg"**, measured at an estimated
+**3322** on a CCRL-Blitz-anchored scale.
 
 The hosted site runs the real Sgurr executable. It is on Render's free tier,
 so the first visit after a quiet period can take 30 to 60 seconds to start.
@@ -16,7 +16,7 @@ so the first visit after a quiet period can take 30 to 60 seconds to start.
 <details>
 <summary><strong>About the hosted demo</strong></summary>
 
-This is the real Sgurr v9.1 C++ engine, not a static or prerecorded version of
+This is the real Sgurr v9.4 C++ engine, not a static or prerecorded version of
 the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
@@ -27,7 +27,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v9.1 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.4 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -192,28 +192,31 @@ split-frontend development setup.
 
 ## Strength
 
-Sgurr v9.1 was measured under controlled conditions matching CCRL's published
+Sgurr v9.4 was measured under controlled conditions matching CCRL's published
 requirements for hash, book, pondering and thread count.
 
 | engine | rating | pool | games |
 |---|---|---|---|
-| **Sgurr v9.1 "Dearg"** | **3206.2 ±11.8** sampling, **about ±25** systematic | pool-2026-08-D | 1,724 |
-| **Sgurr v9.0 "Dearg"** | **3081.2 ±6.7** sampling, **about ±25** systematic | pool-2026-08-D | 6,508 |
-| **Sgurr v8.2 "Thearlaich"** | **3012 ±6** sampling, **about ±25** systematic | pool-2026-08-D | 9,890 |
+| **Sgurr v9.4 "Dearg"** | **3322.0 ±11.5** | pool-2026-09-F | 1,840 |
+| Sgurr v9.3 "Dearg" | 3257.3 ±8.8 | pool-2026-09-F | 3,372 |
+| Sgurr v9.2 "Dearg" | 3209.3 ±8.7 | pool-2026-09-F | 3,458 |
+| Sgurr v9.1 "Dearg" | 3166.2 ±9.5 | pool-2026-09-F | 3,369 |
+| Sgurr v9.0 "Dearg" | 3081.2 ±6.7 | pool-2026-08-D | 6,508 |
+| Sgurr v8.2 "Thearlaich" | 3012 ±6 | pool-2026-08-D | 9,890 |
 
 This is an internal estimate, not an official CCRL rating. Sgurr has not been
 submitted to CCRL and does not appear on its published lists. The value comes
-from an Ordo solve against five open-source engine families with published
-CCRL Blitz ratings.
+from an Ordo solve against sixteen open-source engine families with published
+CCRL Blitz ratings. Pool-D reads about 40 higher for the same engine: v9.1
+measured 3206.2 there.
 
-The small error bar measures sampling noise. The larger one reflects the fact
-that the anchors do not transfer perfectly to another machine and time control.
-The five opponents place v9.1 between roughly 3187 and 3248. More games would
-narrow the first uncertainty, but not that spread.
+The intervals above count sampling noise only. The anchors do not transfer
+perfectly to another machine and time control, and on pool-F that adds about
+±20 to any absolute figure. More games would not narrow it.
 
-Version-to-version gaps are the firmer number. Both versions are measured
-against the same anchors in one solve, so the transfer bias cancels: v9.1 is
-**+124.5 ±13.6** over v9.0, and that figure carries no systematic term.
+Version-to-version gaps are the firmer number. Versions measured against the
+same anchors in one solve share that transfer error, so it cancels: v9.4 is
+**+64.7 ±14.5** over v9.3 and **+155.8 ±14.9** over v9.1.
 
 The v8.2 figure replaced an earlier estimate of 3058. The engine did not
 change. The measurement did. The old setup left hash sizes uncontrolled, used
@@ -316,7 +319,7 @@ blocking a freshly linked unsigned binary before it silently forfeits a match.
 Run the engine over UCI.
 
 ```bash
-SGR_EVALFILE=../nets/gen9_screlu.nnue ./sgr.exe
+SGR_EVALFILE=../nets/gen9_screlu_cos_s1.nnue ./sgr.exe
 ```
 
 ```text
@@ -350,7 +353,7 @@ variables are covered in [web/README.md](web/README.md).
 From `sgurr_cpp/`, the main engine checks are straightforward.
 
 ```bash
-SGR_EVALFILE=../nets/gen9_screlu.nnue ./sgr.exe bench
+SGR_EVALFILE=../nets/gen9_screlu_cos_s1.nnue ./sgr.exe bench
 ./sgr.exe bench
 ./sgr.exe test
 ./sgr.exe seetest
@@ -405,7 +408,10 @@ canonical and the peak names are codenames.
 
 | version | change | measured result |
 |---|---|---|
-| v9.1 "Dearg" | SPSA-tuned search batch and a SCReLU network on the same data | 3206 ±12 in the controlled pool |
+| v9.4 "Dearg" | time management rebuilt | 3322 ±12 on pool-F, +65 over v9.3 |
+| v9.3 "Dearg" | three search batches and a faster search | 3257 ±9 on pool-F |
+| v9.2 "Dearg" | null-move and TT fixes, and a network retrained with cosine decay | 3209 ±9 on pool-F |
+| v9.1 "Dearg" | SPSA-tuned search batch and a SCReLU network on the same data | 3206 ±12 on pool-D, 3166 ±10 on pool-F |
 | v9.0 "Dearg" | Gen9 NNUE trained on 102.0 million self-play positions | 3081 ±7 in the controlled pool |
 | v8.0 "Thearlaich" | Gen8 NNUE trained on 55.9 million clean positions | +126.5 ±26.6 against v7.0 |
 | v8.1 "Thearlaich" | PGO, ThinLTO and nine node-identical optimisations | about 20% faster and +21.2 ±8.7 against v8.0 |

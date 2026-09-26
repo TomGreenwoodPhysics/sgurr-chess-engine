@@ -1,18 +1,18 @@
 # Sgurr Web
 
 Sgurr Web is a browser chess experience backed by the Sgurr UCI engine.
-Every canonical release from the classical evaluation up to v9.1 is
-selectable locally, newest first, and v9.1 is the default. The hosted demo runs
-v9.1 only. FastAPI
+Every canonical release from the classical evaluation up to v9.4 is
+selectable locally, newest first, and v9.4 is the default. The hosted demo runs
+v9.4 only. FastAPI
 validates chess state, owns the engine process, serves the production
 frontend and allowlisted media, and exposes a small JSON API. The same
 frontend can also run from VS Code Live Server during development.
 
-The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`; the
-v9.1 rating comes from its 1,724-game calibration; v9.0 and v8.2 use controlled
-pool-2026-08-D solves. Older releases
-are translated onto that scale using v8.2 as the bridge. Adding an engine there
-puts it in the picker.
+The opponent ladder is defined by `ENGINE_SPECS` in `backend/main.py`. v9.1 to
+v9.4 are measured on pool-2026-09-F. v9.0 and v8.2 come from pool-2026-08-D
+solves and older releases from earlier pools, carried over first with v8.2 as
+the bridge and then with v9.1, which reads 40 Elo lower on pool-F than on
+pool-D. Adding an engine there puts it in the picker.
 
 ## Structure
 
@@ -84,17 +84,17 @@ Use the MSYS2 `clang64` shell on Windows, from the repository root:
 
 ```bash
 cd sgurr_cpp
-./build.sh -r -o sgr_v9_1.exe --version 9.1
+./build.sh -r -o sgr_v9_4.exe --version 9.4
 ```
 
 The backend looks for the binary each `ENGINE_SPECS` entry names, so build
-whichever releases you want selectable. Only the default (`sgr_v9_1.exe`) is
+whichever releases you want selectable. Only the default (`sgr_v9_4.exe`) is
 needed to play; the rest degrade to unavailable entries in the picker.
 
 Quick UCI check:
 
 ```bash
-./sgr_v9_1.exe uci
+./sgr_v9_4.exe uci
 ```
 
 Then enter `uci`, `isready`, `position startpos`, `go movetime 500`, and
@@ -119,12 +119,12 @@ For a reproducible release build, install the audited exact versions instead:
 python -m pip install -r web\backend\requirements.lock.txt
 ```
 
-The default engine path is `sgurr_cpp\sgr_v9_1.exe` with `nets\gen9_screlu.nnue`.
+The default engine path is `sgurr_cpp\sgr_v9_4.exe` with `nets\gen9_screlu_cos_s1.nnue`.
 Override it before starting Uvicorn when necessary:
 
 ```bat
-set SGURR_ENGINE_EXE=C:\path\to\sgr_v9_1.exe
-set SGR_EVALFILE=C:\path\to\gen9_screlu.nnue
+set SGURR_ENGINE_EXE=C:\path\to\sgr_v9_4.exe
+set SGR_EVALFILE=C:\path\to\gen9_screlu_cos_s1.nnue
 ```
 
 ## 3. Start Sgurr Web
@@ -206,7 +206,7 @@ process supervision, request logging, and request limits.
 The public demo is available at
 <https://sgurr-chess-engine.onrender.com/>.
 
-This is the real Sgurr v9.1 C++ engine, not a static or prerecorded version of
+This is the real Sgurr v9.4 C++ engine, not a static or prerecorded version of
 the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
@@ -217,7 +217,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v9.1 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.4 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -239,7 +239,7 @@ the project locally gives you every engine version you have built, continuous
 self-play, Search Network depths up to 20, longer game searches and no
 shared-server rate limit.
 
-The root `Dockerfile` builds scalar Linux versions of v9.1 and the trace
+The root `Dockerfile` builds scalar Linux versions of v9.4 and the trace
 engine, verifies the committed NNUE, and runs one Uvicorn worker:
 
 ```bash
@@ -366,7 +366,7 @@ transformer work, ONNX, and quantisation remain outside this web layer.
 ## Troubleshooting
 
 If `/health` reports `"engine_exists": false`, build
-`sgurr_cpp\sgr_v9_1.exe` or set `SGURR_ENGINE_EXE`.
+`sgurr_cpp\sgr_v9_4.exe` or set `SGURR_ENGINE_EXE`.
 
 If the browser reports a backend error, keep the backend terminal visible. The
 frontend polls the backend periodically and should recover without a refresh.

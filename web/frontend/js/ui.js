@@ -1048,8 +1048,8 @@ function renderMenu() {
   refs.demoLimitsButton.hidden = !app.publicDemo;
   refs.menuTimeButton.textContent = currentTimeControl().label;
   refs.menuThemeButton.textContent = THEMES[app.themeKey]?.label || THEMES.wood.label;
-  const engineLabel = app.engineLabel || 'Sgurr v9.1 "Dearg"';
-  const engineSubtitle = app.engineSubtitle || "GEN9 SCRELU NNUE (102M SELF-PLAY) · ~3206";
+  const engineLabel = app.engineLabel || 'Sgurr v9.4 "Dearg"';
+  const engineSubtitle = app.engineSubtitle || "GEN9 SCRELU NNUE + TIME MANAGEMENT · ~3322";
   refs.menuEngineButton.textContent = engineLabel;
   if (refs.menuEngineCaption) {
     refs.menuEngineCaption.textContent = engineSubtitle;
@@ -1083,7 +1083,7 @@ function renderMenu() {
     ? "Self-play runs continuously and is available when running Sgurr locally."
     : "";
   const historicalReason = app.publicDemo
-    ? "Historical Sgurr builds are available locally; the free demo runs v9.1 only."
+    ? "Historical Sgurr builds are available locally; the free demo runs v9.4 only."
     : "";
   refs.playWhiteButton.disabled = !canStart;
   refs.playBlackButton.disabled = !canStart;

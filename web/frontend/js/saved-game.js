@@ -46,7 +46,7 @@ function saveCurrentGame() {
   if (app.review.active) return;
   cached = {
     version: 1, snapshot: makeSnapshot(), side: app.humanSide,
-    engineId: app.engines[app.selectedEngineIndex]?.id || "v9.1",
+    engineId: app.engines[app.selectedEngineIndex]?.id || "v9.4",
     timeKey: TIME_CONTROLS[app.timeIndex].key,
     history: app.history, redo: app.redoStack, review: app.review.plies,
     manualFlip: app.manualFlip, origin: app.gameOrigin,

@@ -88,13 +88,45 @@ if not TRACE_ENGINE_PATH.is_absolute():
     TRACE_ENGINE_PATH = REPO_ROOT / TRACE_ENGINE_PATH
 TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # Canonical releases appear newest first, with index 0 as the default.
-# Older ratings use old rating + (3012.1 - 3058.5), rounded to the nearest Elo.
-# They are estimates rather than official CCRL ratings.
+# v9.1 and later are measured on pool-F. Older ratings come from earlier
+# pools: old rating + (3012.1 - 3058.5) moved pool-B onto pool-D, and a
+# further (3166.2 - 3206.2), v9.1's own move from pool-D to pool-F, moves
+# them onto pool-F. They are estimates rather than official CCRL ratings.
 # v3.1 ranks below v3.0 because its flat soft limit lost games at the pool TC.
 # `rating` supplies both the subtitle and the frontend ladder.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
-        # Controlled pool calibration: 3206.2 +/-11.8 over 1,724 games.
+        # Pool-F: 3322.0 +/-11.5 over 1,840 games, played as v9.3-rc2.
+        # v9.3 with its time management rebuilt: +65 over v9.3 on the pool.
+        "id": "v9.4",
+        "exe": CPP_DIR / "sgr_v9_4.exe",
+        "net": NETS_DIR / "gen9_screlu_cos_s1.nnue",
+        "label": 'Sgurr v9.4 "Dearg"',
+        "tech": "GEN9 SCRELU NNUE + TIME MANAGEMENT",
+        "rating": 3322,
+    },
+    {
+        # Pool-F: 3257.3 +/-8.8 over 3,372 games, played as v9.3-rc1.
+        # Three search batches and a faster search on the v9.2 network.
+        "id": "v9.3",
+        "exe": CPP_DIR / "sgr_v9_3.exe",
+        "net": NETS_DIR / "gen9_screlu_cos_s1.nnue",
+        "label": 'Sgurr v9.3 "Dearg"',
+        "tech": "GEN9 SCRELU NNUE + SEARCH REFINEMENTS",
+        "rating": 3257,
+    },
+    {
+        # Pool-F: 3209.3 +/-8.7 over 3,458 games, played as v9.2-rc.
+        # Null-move and TT fixes, and the network retrained with cosine decay.
+        "id": "v9.2",
+        "exe": CPP_DIR / "sgr_v9_2.exe",
+        "net": NETS_DIR / "gen9_screlu_cos_s1.nnue",
+        "label": 'Sgurr v9.2 "Dearg"',
+        "tech": "GEN9 SCRELU NNUE + SEARCH FIXES",
+        "rating": 3209,
+    },
+    {
+        # Pool-F: 3166.2 +/-9.5 over 3,369 games. Pool-D read 3206.2.
         # Same training data as v9.0. The gain is a tuned search batch plus a
         # SCReLU network, which needs its own net and its own QA.
         "id": "v9.1",
@@ -102,16 +134,16 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen9_screlu.nnue",
         "label": 'Sgurr v9.1 "Dearg"',
         "tech": "GEN9 SCRELU NNUE (102M SELF-PLAY)",
-        "rating": 3206,
+        "rating": 3166,
     },
     {
-        # Controlled pool calibration: 3081.2 +/-6.7 over 6,508 games.
+        # Pool-D: 3081.2 +/-6.7 over 6,508 games.
         "id": "v9.0",
         "exe": CPP_DIR / "sgr_v9_0.exe",
         "net": NETS_DIR / "gen9.nnue",
         "label": 'Sgurr v9.0 "Dearg"',
         "tech": "GEN9 NNUE (102M SELF-PLAY)",
-        "rating": 3081,
+        "rating": 3041,
     },
     {
         # v8.2 keeps the v8.1 net and search but is about 15% faster.
@@ -122,7 +154,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.2 "Thearlaich"',
         "tech": "GEN8 NNUE + PACKED TT",
-        "rating": 3012,
+        "rating": 2972,
     },
     {
         # The 2026-08-03 pool gauntlet measured a 20.9 Elo gain over v8.0.
@@ -132,7 +164,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.1 "Thearlaich"',
         "tech": "GEN8 NNUE + PGO SPEED",
-        "rating": 2981,
+        "rating": 2941,
     },
     {
         "id": "v8.0",
@@ -140,7 +172,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen8.nnue",
         "label": 'Sgurr v8.0 "Thearlaich"',
         "tech": "GEN8 NNUE",
-        "rating": 2960,
+        "rating": 2920,
     },
     {
         "id": "v7.0",
@@ -148,7 +180,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen7.nnue",
         "label": 'Sgurr v7.0 "Ghreadaidh"',
         "tech": "GEN7 NNUE (CLEAN REGEN)",
-        "rating": 2857,
+        "rating": 2817,
     },
     {
         "id": "v6.0",
@@ -156,7 +188,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v6.0 "Banachdaich"',
         "tech": "GEN5 NNUE + REFINED SEARCH",
-        "rating": 2761,
+        "rating": 2721,
     },
     {
         "id": "v5.0",
@@ -164,7 +196,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v5.0 "Gillean"',
         "tech": "GEN5 NNUE + RFP SEARCH",
-        "rating": 2677,
+        "rating": 2637,
     },
     {
         "id": "v4.0",
@@ -172,7 +204,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen5.nnue",
         "label": 'Sgurr v4.0 "MacKenzie"',
         "tech": "GEN5 NNUE",
-        "rating": 2559,
+        "rating": 2519,
     },
     {
         "id": "v3.1",
@@ -180,7 +212,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.1 "Blackpeak"',
         "tech": "GEN3 NNUE + SOFT TIME",
-        "rating": 2497,
+        "rating": 2457,
     },
     {
         "id": "v3.0",
@@ -188,7 +220,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen3.nnue",
         "label": 'Sgurr v3.0 "Blackpeak"',
         "tech": "GEN3 NNUE",
-        "rating": 2545,
+        "rating": 2505,
     },
     {
         "id": "v2.0",
@@ -196,7 +228,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen2.nnue",
         "label": 'Sgurr v2.0 "Notches"',
         "tech": "GEN2 NNUE",
-        "rating": 2423,
+        "rating": 2383,
     },
     {
         "id": "v1.0",
@@ -204,7 +236,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": NETS_DIR / "gen1.nnue",
         "label": 'Sgurr v1.0 "Fox"',
         "tech": "GEN1 NNUE",
-        "rating": 2341,
+        "rating": 2301,
     },
     {
         # Classical release: hand-crafted evaluation, no network.
@@ -213,7 +245,7 @@ ENGINE_SPECS: list[dict[str, object]] = [
         "net": None,
         "label": "Sgurr classical",
         "tech": "HAND-CRAFTED EVAL",
-        "rating": 2332,
+        "rating": 2292,
     },
 ]
 _engine_override = os.environ.get("SGURR_ENGINE_EXE") or os.environ.get("SGR_ENGINE_EXE")
@@ -266,7 +298,7 @@ DEMO_TRACE_REQUESTS_PER_MINUTE = bounded_env_int(
     "SGURR_TRACE_REQUESTS_PER_MINUTE", 6, 1, 60
 )
 MAX_REQUEST_BYTES = 65_536
-EXPECTED_NET_SHA256 = "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e"
+EXPECTED_NET_SHA256 = "e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b"
 NNUE_ASSET_ROUTE = f"/api/nnue/gen9/{EXPECTED_NET_SHA256}.nnue"
 EXPOSE_ENGINE_PATH = os.environ.get("SGURR_EXPOSE_ENGINE_PATH", "").lower() in {
     "1",
@@ -534,7 +566,7 @@ def engine_availability(
     if PUBLIC_DEMO and engine_id != DEFAULT_ENGINE_ID:
         return (
             False,
-            "Available locally; the free demo includes Sgurr v9.1 only.",
+            "Available locally; the free demo includes Sgurr v9.4 only.",
             "LOCAL ONLY",
         )
     if not Path(entry["exe"]).is_file():

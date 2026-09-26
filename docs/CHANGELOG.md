@@ -4,6 +4,56 @@ Versions are named after Sgùrr peaks in ascending height; version numbers are
 canonical, codenames are flavour. All Elo figures are measured self-play match
 results with 95% error bars, never estimates.
 
+v9.2 and v9.3 were measured checkpoints on the way to v9.4 and are released
+with it. Their pool games carry the names v9.2-rc and v9.3-rc1, and v9.4's
+carry v9.3-rc2. All three are measured on pool-F, where v9.1 reads 3166.2
+against 3206.2 on pool-D.
+
+## v9.4 "Dearg" (Sgùrr Dearg), 2026-09-26
+
+**Time management, rebuilt.** Sgurr used to finish its games with half of its
+clock unused: a median 5.3 s of 10 s on the pool, where its opponents kept 1.4
+to 2.4 s. The middlegame paid for it, at about half the thinking time of the
+engines it played.
+
+- Each move now gets a budget from an estimate of the moves still to play,
+  falling as the game goes on. The search stops early once the best move has
+  settled, and keeps going on a contested root or a falling score, up to five
+  budgets.
+- A move searched in full at a depth cut short by the hard limit is kept. The
+  old engine threw the whole iteration away.
+- **+54.9 ±13.3** in self-play, H1 at 798 games. **3322.0 ±11.5** on pool-F,
+  **+65 over v9.3** in the same solve.
+- No losses on time in 600 games of flag tests down to 1+0.01. The old rule
+  lost 23 of 200 on time at 2+0.
+- Every constant is a UCI option (`Tm*`), ready for the tune.
+
+## v9.3 "Dearg" (Sgùrr Dearg), 2026-09-26
+
+Search work on the v9.2 network. **3257.3 ±8.8** on pool-F, **+48 over v9.2**.
+
+- The TT is used in quiescence, and PV nodes take no TT cutoffs and less LMR:
+  +16.4 ±12.9 in self-play.
+- A faster search with an identical tree. The move picker no longer zeroes
+  1,024 moves at every node, and SEE waits until captures are reached.
+  Evaluations are also cached by position. Together that is about 26% more
+  nodes per second.
+- Singular extensions reach up to three plies when the TT move stands out, and
+  search it less, or cut the node, when it does not: +16.2 ±13.7.
+- PV nodes no longer take the pruning shortcuts that stand in for a search, and
+  mate-distance pruning is added: +4.3 ±8.8.
+
+## v9.2 "Dearg" (Sgùrr Dearg), 2026-09-26
+
+**3209.3 ±8.7** on pool-F, **+43 over v9.1**.
+
+- Null move is tried only with the static eval at or above beta, and the TT no
+  longer loses its best move to fail-low stores: **+50.5 ±14.2** in self-play.
+- The v9.1 network had trained at a flat learning rate by mistake. It was
+  retrained with cosine decay on the same data as
+  `nets/gen9_screlu_cos_s1.nnue`, which measured +14.1 ±12.0 (a second seed
+  measured +0.2).
+
 ## v9.1 "Dearg" (Sgùrr Dearg), 2026-09-23
 
 The largest single-version gain the project has measured. Same network data as

@@ -85,7 +85,7 @@ class ProductionConfigTest(unittest.TestCase):
     def test_nnue_asset_uses_canonical_route_and_headers(self) -> None:
         self.assertEqual(
             main.EXPECTED_NET_SHA256,
-            "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e",
+            "e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b",
         )
         self.assertEqual(
             main.NNUE_ASSET_ROUTE,
@@ -96,7 +96,7 @@ class ProductionConfigTest(unittest.TestCase):
 
         self.assertEqual(
             Path(response.path),
-            (main.REPO_ROOT / "nets" / "gen9_screlu.nnue").resolve(),
+            (main.REPO_ROOT / "nets" / "gen9_screlu_cos_s1.nnue").resolve(),
         )
         self.assertEqual(response.media_type, "application/octet-stream")
         self.assertEqual(response.headers["content-type"], "application/octet-stream")

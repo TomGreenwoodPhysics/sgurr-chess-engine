@@ -847,7 +847,7 @@ async function runLiveSearch() {
     const response = await fetch(apiUrl("/api/search-trace"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fen: position.fen, engine: "v9.1", movetime_ms: 1500 }),
+      body: JSON.stringify({ fen: position.fen, engine: "v9.4", movetime_ms: 1500 }),
       signal: liveController.signal,
     });
     if (!response.ok) {

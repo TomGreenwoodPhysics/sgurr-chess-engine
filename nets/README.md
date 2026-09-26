@@ -1,17 +1,45 @@
 # Networks
 
 Trained NNUE files are build artefacts, so only shipped networks are committed.
-`gen9_screlu.nnue` is the current v9.1 network. `gen9.nnue` and `gen8.nnue`
-remain for older releases and require `-DSGR_SCRELU=0 -DSGR_QA=255` builds.
+`gen9_screlu_cos_s1.nnue` is the current network, shipped in v9.2 to v9.4.
+`gen9_screlu.nnue` is v9.1's. `gen9.nnue` and `gen8.nnue` remain for older
+releases and require `-DSGR_SCRELU=0 -DSGR_QA=255` builds.
 
 ```bash
-SGR_EVALFILE=nets/gen9_screlu.nnue sgurr_cpp/sgr.exe bench
-#   -> nodes 2199384 on the reference MSYS2 clang64 build
+SGR_EVALFILE=nets/gen9_screlu_cos_s1.nnue sgurr_cpp/sgr.exe bench
+#   -> nodes 1847491 on the reference MSYS2 clang64 build
 ```
 
 The engine reads `$SGR_EVALFILE`, defaulting to `sgurr.nnue` in the working
 directory. With no network it uses the hand-crafted evaluation and says so on
 stdout, so a missing net is visible rather than silent.
+
+---
+
+## Model release record: gen9_screlu_cos_s1.nnue
+
+| | |
+|---|---|
+| file | `gen9_screlu_cos_s1.nnue` |
+| SHA-256 | `e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b` |
+| size | 592,160 bytes |
+| architecture | `768 -> 384 -> 1`, squared clipped ReLU, QA 181, QB 64, output scale 400 |
+| shipped in | v9.2, v9.3 and v9.4 "Dearg" |
+| training | the gen9_screlu recipe and data (102,011,689 positions, lambda 0.8, 22 epochs, 5% holdout) with cosine learning-rate decay, seed 1 |
+| build | Current defaults: `SGR_SCRELU=1`, `SGR_QA=181` |
+
+The v9.1 network trained at a flat learning rate because its launcher never
+asked for cosine decay. This retrain fixes that. It is the better of two seeds:
+seed 1 measured +14.1 ±12.0 against `gen9_screlu.nnue` and seed 0 measured
++0.2 ±9.5, so its real edge is probably a few Elo.
+
+```bash
+sha256sum nets/gen9_screlu_cos_s1.nnue
+# e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b
+
+cd sgurr_cpp && ./nnue_selfcheck.exe ../nets/gen9_screlu_cos_s1.nnue
+# checks=4516 fails=0 evalsum=194037 -> PASS
+```
 
 ---
 

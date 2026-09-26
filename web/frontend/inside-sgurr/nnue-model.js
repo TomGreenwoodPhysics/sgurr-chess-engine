@@ -10,7 +10,7 @@ const EXPECTED_NETWORK = Object.freeze({
   qa: 181,
   qb: 64,
   scale: 400,
-  sha256: "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e",
+  sha256: "e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b",
 });
 
 // Per-lane contributions are shown before the shared integer divisions and

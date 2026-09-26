@@ -19,9 +19,9 @@ COMMON_FLAGS=(
 )
 SOURCES=(main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp)
 
-"$CXX" "${COMMON_FLAGS[@]}" '-DSGR_VERSION="9.1"' "${SOURCES[@]}" -o "$OUT_DIR/sgr_v9_1"
+"$CXX" "${COMMON_FLAGS[@]}" '-DSGR_VERSION="9.4"' "${SOURCES[@]}" -o "$OUT_DIR/sgr_v9_4"
 "$CXX" "${COMMON_FLAGS[@]}" \
-    '-DSGR_VERSION="9.1"' \
+    '-DSGR_VERSION="9.4"' \
     -DSGR_TRACE_SEARCH=1 \
     -DSGR_TRACE_NODE_LIMIT=1200 \
     "${SOURCES[@]}" \

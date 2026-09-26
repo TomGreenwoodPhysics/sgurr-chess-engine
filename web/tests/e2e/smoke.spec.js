@@ -10,8 +10,8 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const AFTER_E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
 const AFTER_E4_E5_FEN = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
 const PROMOTION_FEN = "7k/P7/8/8/8/8/8/7K w - - 0 1";
-const NNUE_SHA256 = "966b06143d67ad18fb48325d06cff152b35d11dfd52533df232f7ecde46eef0e";
-const NNUE_BYTES = readFileSync(new URL("../../../nets/gen9_screlu.nnue", import.meta.url));
+const NNUE_SHA256 = "e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b";
+const NNUE_BYTES = readFileSync(new URL("../../../nets/gen9_screlu_cos_s1.nnue", import.meta.url));
 
 const WHITE_START_MOVES = [
   "a2a3", "a2a4", "b2b3", "b2b4", "c2c3", "c2c4", "d2d3", "d2d4",
@@ -202,25 +202,25 @@ async function installMockBackend(page, {
     }
     if (path === "/api/engines") {
       await json(route, {
-        default: "v9.1",
+        default: "v9.4",
         public_demo: publicDemo,
         engines: [
           {
-            id: "v9.1",
-            label: 'Sgurr v9.1 "Dearg"',
-            subtitle: "GEN9 SCRELU NNUE (102M SELF-PLAY) · ~3206",
-            tech: "GEN9 SCRELU NNUE (102M SELF-PLAY)",
-            rating: 3206,
+            id: "v9.4",
+            label: 'Sgurr v9.4 "Dearg"',
+            subtitle: "GEN9 SCRELU NNUE + TIME MANAGEMENT · ~3322",
+            tech: "GEN9 SCRELU NNUE + TIME MANAGEMENT",
+            rating: 3322,
             available: engineExists,
           },
           {
             id: "v8.1",
             label: 'Sgurr v8.1 "Thearlaich"',
-            subtitle: "GEN8 NNUE + PGO SPEED · ~2981",
+            subtitle: "GEN8 NNUE + PGO SPEED · ~2941",
             tech: "GEN8 NNUE + PGO SPEED",
-            rating: 2981,
+            rating: 2941,
             available: !publicDemo && engineExists,
-            unavailable_reason: "Available locally; the free demo includes Sgurr v9.1 only.",
+            unavailable_reason: "Available locally; the free demo includes Sgurr v9.4 only.",
             unavailable_badge: "LOCAL ONLY",
           },
         ],
@@ -280,7 +280,7 @@ async function installMockBackend(page, {
     }
     if (path === "/api/search-trace") {
       const events = [
-        { type: "started", engine: "v9.1", label: 'Sgurr v9.1 "Dearg"', perspective: "white", movetime_ms: 5000 },
+        { type: "started", engine: "v9.4", label: 'Sgurr v9.4 "Dearg"', perspective: "white", movetime_ms: 5000 },
         {
           type: "iteration", kind: "cp", value: 8, display: "+0.1", depth: 3,
           nodes: 720, nps: 240000, time_ms: 3, pv: ["d2d4"],
@@ -617,7 +617,7 @@ test("resumes a reloaded game with its clocks, opponent and move history", async
   await expect(page.locator("#moveRows")).toContainText("e4");
   await expect(page.locator("#moveRows")).toContainText("e5");
   await expect(page.locator("#bottomPlayerName")).toContainText("You");
-  await expect(page.locator("#coreEngineName")).toContainText("v9.1");
+  await expect(page.locator("#coreEngineName")).toContainText("v9.4");
   await expect(page.locator("#bottomPlayerClock")).toContainText("2:");
   expect(calls.find((call) => call.path === "/api/resume").body).toEqual({ fen: AFTER_E4_E5_FEN, start_fen: START_FEN, moves: ["e2e4", "e7e5"] });
   const resumed = await page.evaluate(() => JSON.parse(localStorage.getItem("sgurrSavedGame")));
@@ -737,17 +737,17 @@ test("matches the C++ SCReLU scores and scales lane contributions in every phase
   ));
   const transition = evaluateTransition(network, START_FEN, AFTER_E4_FEN);
   // Independently measured with nnue_selfcheck's C++ fwd command on this net.
-  expect([transition.before.raw, transition.before.whiteRelative]).toEqual([1514, 52]);
-  expect([transition.after.raw, transition.after.whiteRelative]).toEqual([-807, 27]);
+  expect([transition.before.raw, transition.before.whiteRelative]).toEqual([1166, 40]);
+  expect([transition.after.raw, transition.after.whiteRelative]).toEqual([-316, 10]);
 
   // Exercise the visualization's calculations without constructing its canvas.
   const visual = Object.create(CortexVisual.prototype);
   visual.transition = transition;
   visual.valueCache = new Map();
   visual.phase = "before";
-  const lane = visual.laneDetails({ perspective: "white", index: 3 });
-  expect([lane.clipped, lane.signedWeight, lane.product]).toEqual([80, -4, -25600]);
-  expect(lane.centipawns).toBeCloseTo(-4.883855804157382, 10);
+  const lane = visual.laneDetails({ perspective: "white", index: 11 });
+  expect([lane.clipped, lane.signedWeight, lane.product]).toEqual([64, 9, 36864]);
+  expect(lane.centipawns).toBeCloseTo(7.03275235798663, 10);
 
   for (const phase of ["before", "after", "delta"]) {
     visual.phase = phase;
@@ -783,7 +783,7 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#insideShell")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#nnueBoard .board-square")).toHaveCount(64);
   await expect(page.locator("#modelStatus")).toContainText("Gen9 v1 loaded");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.52");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.40");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White");
   await expect(page.locator("#nnueEvalDetail")).toContainText("no search");
   const boardOpacity = await page.evaluate(() => ({
@@ -832,14 +832,14 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator('[data-square="e2"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-square="e4"]')).toHaveClass(/legal/);
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.27");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.10");
   await expect(page.locator("#pieceEdits")).toHaveText("2");
   await expect(page.locator("#weightRows")).toHaveText("4");
   await expect(page.locator("#laneOperations")).toHaveText("1,536");
   await expect(page.locator("#featureTrace")).toContainText("inputs W 12→28 · B 436→420");
   await expect(page.locator("#moveAutopsy")).toHaveAttribute("data-state", "ready");
   await expect(page.locator("#autopsyTitle")).toHaveText("e2 → e4");
-  await expect(page.locator("#autopsyNet")).toHaveText("−0.25 eval");
+  await expect(page.locator("#autopsyNet")).toHaveText("−0.30 eval");
   await expect(page.locator("#autopsyList .autopsy-lane")).toHaveCount(5);
   await page.locator("#autopsyList .autopsy-lane").first().click();
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
@@ -851,13 +851,13 @@ test("opens Sgurr's exact NNUE evaluator and reveals a move update", async ({ pa
   await expect(page.locator("#deltaState")).toBeEnabled();
 
   await page.locator("#beforeState").click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.52");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.40");
   await page.locator("#deltaState").click();
-  await expect(page.locator("#nnueEval")).toHaveText("−0.25");
+  await expect(page.locator("#nnueEval")).toHaveText("−0.30");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#undoPosition").click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.52");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.40");
   await expect(page.locator("#positionTurn")).toHaveText("White to move");
   await expect(page.locator('[data-square="e2"] .piece-image')).toBeVisible();
   await expect(page.locator("#undoPosition")).toBeDisabled();
@@ -1002,7 +1002,7 @@ test("walks a move along the evaluation path and back to the current state", asy
   await expect(page.locator("#stateTimeline")).toBeDisabled();
   await page.locator('[data-square="e2"]').click();
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.27");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.10");
   await expect(page.locator("#stateTimeline")).toBeEnabled();
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "idle");
 
@@ -1010,7 +1010,7 @@ test("walks a move along the evaluation path and back to the current state", asy
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "lanes");
   await expect(page.locator("#insideShell")).toHaveAttribute("data-anatomy", "idle", { timeout: 8000 });
   await expect(page.locator("#afterState")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.27");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.10");
 });
 
 test("scrubs the state timeline through before, change and after", async ({ page }) => {
@@ -1021,15 +1021,15 @@ test("scrubs the state timeline through before, change and after", async ({ page
 
   await page.locator('[data-square="e2"]').click();
   await page.locator('[data-square="e4"]').click();
-  await expect(page.locator("#nnueEval")).toHaveText("+0.27");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.10");
   await expect(page.locator("#stateTimeline")).toHaveValue("2");
 
   await page.locator("#stateTimeline").fill("0");
-  await expect(page.locator("#nnueEval")).toHaveText("+0.52");
+  await expect(page.locator("#nnueEval")).toHaveText("+0.40");
   await expect(page.locator("#beforeState")).toHaveAttribute("aria-pressed", "true");
 
   await page.locator("#stateTimeline").fill("1");
-  await expect(page.locator("#nnueEval")).toHaveText("−0.25");
+  await expect(page.locator("#nnueEval")).toHaveText("−0.30");
   await expect(page.locator(".eval-readout > span")).toHaveText("Static NNUE · White change");
 
   await page.locator("#afterState").click();
@@ -1198,17 +1198,17 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#watchButton")).toHaveAttribute("title", /available.*locally/i);
   await expect(page.locator("#engineDownButton")).toBeDisabled();
   await expect(page.locator("#engineUpButton")).toBeDisabled();
-  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v9\.1 only/i);
+  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v9\.4 only/i);
   await page.locator("#engineDownButton").hover({ force: true });
   await expect(page.locator("#demoTooltip")).toBeVisible();
-  await expect(page.locator("#demoTooltip")).toContainText("v9.1 only");
+  await expect(page.locator("#demoTooltip")).toContainText("v9.4 only");
 
   await expect(page.locator("#demoLimitsButton")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#demoLimitsButton")).toBeInViewport();
   await page.locator("#demoLimitsButton").click();
   await expect(page.locator("#demoLimitsModal")).toBeVisible();
-  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v9.1 C++ engine");
+  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v9.4 C++ engine");
   await expect(page.locator("#demoLimitsModal li")).toHaveCount(7);
   await expect(page.locator("#demoLimitsModal")).toContainText("1.5 million nodes");
   await expect(page.locator("#demoLimitsModal .modal-box")).toBeInViewport();
@@ -1220,11 +1220,11 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await page.locator("#menuEngineButton").click();
   const localOnly = page.locator('.engine-card[aria-disabled="true"]');
   await expect(localOnly).toContainText("LOCAL ONLY");
-  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v9\.1/i);
+  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v9\.4/i);
   await expect(localOnly).toBeDisabled();
   await localOnly.evaluate((button) => button.click());
   await expect(page.locator("#engineModal")).toBeVisible();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.1");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
 
   await page.locator("#engineModal [data-close-modal]").click();
   await page.locator("#positionLabButton").click();
@@ -1233,16 +1233,16 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#positionLabButton")).toBeEnabled();
 });
 
-test("starts at v9.1 and cycles left through weaker engines", async ({ page }) => {
+test("starts at v9.4 and cycles left through weaker engines", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
 
   await expect(page.locator("#engineDownButton")).toBeEnabled();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.1");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
   await page.locator("#engineDownButton").click();
   await expect(page.locator("#menuEngineButton")).toContainText("v8.1");
   await page.locator("#engineDownButton").click();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.1");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
 });
 
 test("introduces the Search Lab once and lets the guide be reopened", async ({ page }) => {
@@ -1381,7 +1381,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   ];
   await page.route(`${API_BASE}/api/search-trace`, async (route) => {
     const events = [
-      { type: "started", engine: "v9.1", label: 'Sgurr v9.1 "Dearg"', perspective: "white" },
+      { type: "started", engine: "v9.4", label: 'Sgurr v9.4 "Dearg"', perspective: "white" },
       { type: "iteration", kind: "cp", value: -26, display: "-0.3", depth: 1, nodes: 60, nps: 60000, time_ms: 1, pv: ["a7a6"] },
       { type: "iteration", kind: "cp", value: 40, display: "+0.4", depth: 12, nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["a7a6"] },
       { type: "complete", bestmove: "a7a6" },

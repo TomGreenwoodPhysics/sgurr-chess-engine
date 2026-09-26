@@ -35,6 +35,7 @@ nets/*
 !nets/gen8.nnue
 !nets/gen9.nnue
 !nets/gen9_screlu.nnue
+!nets/gen9_screlu_cos_s1.nnue
 
 assets/*
 !assets/music/
