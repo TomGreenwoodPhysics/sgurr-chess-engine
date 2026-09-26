@@ -1522,3 +1522,15 @@ the previous build.
 Two speed findings came out of the release builds. `build.sh` had been
 profiling on the hand-crafted eval, and profiling on the network is 1.6%
 faster. And on this Zen 4 the AVX2 build beats the AVX-512 one by 3.1%.
+
+## 2026-09-26, Builds target AVX2
+
+A clean test settled the AVX-512 question: three PGO builds of the same source,
+each profiled on the network, measured in both orders. `-march=native` was
+2.7% ±0.9% slower than `x86-64-v3`. Native with AVX-512 switched off matched
+`x86-64-v3` to within 0.1%, so AVX-512 was the whole cost and the Zen 4 tuning
+added nothing. `build.sh` now targets `x86-64-v3` for every build, datagen
+included, and the public release drops its AVX-512 binary. The search is
+unchanged, with bench and fixed-depth searches identical. SPRT bases built
+before the switch have to be rebuilt, or a new version would start 2.7% faster
+for reasons of its own.

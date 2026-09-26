@@ -40,6 +40,8 @@ engines it played.
   `tools/release.sh` builds and checks them.
 - Release builds are now profiled on the network instead of the hand-crafted
   eval, which makes them 1.6% faster.
+- Builds target AVX2 instead of AVX-512, which is 2.7% faster on Zen 4. The
+  public release ships an AVX2 binary and a compatibility one for older CPUs.
 
 ## v9.3 "Dearg" (Sgùrr Dearg), 2026-09-26
 

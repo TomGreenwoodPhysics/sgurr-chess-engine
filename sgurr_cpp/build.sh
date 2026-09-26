@@ -11,7 +11,7 @@
 #   ./build.sh -r -o sgr_v9_0.exe --version 9.0
 #   ./build.sh -d                     # datagen build  -> datagen.exe (RFP off)
 #   ./build.sh -t                     # visual trace   -> sgr_trace.exe
-#   ./build.sh -r --arch x86-64-v3    # target a CPU level instead of this machine
+#   ./build.sh -r --arch native       # this machine's own instruction set
 #   ./build.sh -r --embed-net ../nets/gen9_screlu_cos_s1.nnue
 #                                     # compile the network into the binary
 #
@@ -19,13 +19,15 @@ set -u
 
 CLANG=/c/msys64/clang64/bin/clang++
 PROFDATA=/c/msys64/clang64/bin/llvm-profdata
-arch=native
 ENGINE_SRC="main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
 DATAGEN_SRC="datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
 MAX_LINK_ATTEMPTS=6
 # The network release builds are profiled with, unless one is embedded.
 PROFILE_NET=../nets/gen9_screlu_cos_s1.nnue
 
+# AVX2. -march=native picks AVX-512 on this Zen 4, which splits 512-bit
+# instructions into two 256-bit halves, and measured 2.7% slower.
+arch=x86-64-v3
 mode=dev
 out=""
 extra=""

@@ -441,7 +441,8 @@ class Pipeline:
     # Build stage
     def _build(self, net_path, exe_path):
         log(f"build: {exe_path.name} (net={net_path.name})")
-        run([CLANG, "-std=c++20", "-O3", "-march=native", "-DNDEBUG", "-static",
+        # AVX2, as build.sh: faster here than the AVX-512 -march=native picks.
+        run([CLANG, "-std=c++20", "-O3", "-march=x86-64-v3", "-DNDEBUG", "-static",
              f'-DSGR_DEFAULT_NET="{net_path.as_posix()}"', *ENGINE_SRC,
              "-o", exe_path.name],
             log_path=self.run_dir / "build.log", cwd=ROOT / "sgurr_cpp")
@@ -459,7 +460,7 @@ class Pipeline:
         corrupt or mis-exported net for seconds of CPU, before hours of games."""
         sc = ROOT / "sgurr_cpp" / "nnue_selfcheck.exe"
         if not getattr(self, "_selfcheck_built", False):
-            run([CLANG, "-std=c++20", "-O3", "-march=native", "-DNDEBUG", "-static",
+            run([CLANG, "-std=c++20", "-O3", "-march=x86-64-v3", "-DNDEBUG", "-static",
                  "nnue_selfcheck.cpp", "board.cpp", "evaluation.cpp", "search.cpp",
                  "nnue.cpp", "-o", sc.name],
                 log_path=self.run_dir / "build.log", cwd=ROOT / "sgurr_cpp")

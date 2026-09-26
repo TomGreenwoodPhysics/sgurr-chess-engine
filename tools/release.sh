@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the public Windows release: three binaries with the network compiled
-# in, each checked, then zipped with a readme, the licence and checksums.
+# Build the public Windows release: two binaries with the network compiled in,
+# each checked, then zipped with a readme, the licence and checksums.
 #
 #   tools/release.sh VERSION
 #
@@ -19,8 +19,10 @@ ZIP=$ROOT/dist/sgurr-$VERSION-windows.zip
 
 die() { echo "release: $*" >&2; exit 1; }
 
-# name, CPU level and extra flags. Without AVX2 the scalar path is used.
-TARGETS="avx2:x86-64-v3: avx512:x86-64-v4: compat:x86-64-v2:-DSGR_SIMD=0"
+# name, CPU level and extra flags. Without AVX2 the scalar path is used. There
+# is no AVX-512 build: on Zen 4 it measured 2.7% slower than AVX2, and a tester
+# who saw avx512 in a file name would likely pick it.
+TARGETS="avx2:x86-64-v3: compat:x86-64-v2:-DSGR_SIMD=0"
 
 cd "$ROOT" || exit 1
 [ -f "$NET" ] || die "missing $NET"
@@ -56,14 +58,13 @@ cat > "$OUT/README.txt" <<EOF
 Sgurr $VERSION, a UCI chess engine by Tom Greenwood
 
 Which build:
-  sgurr-$VERSION-avx2.exe     most CPUs: any with AVX2, which nearly every x86-64
-                             CPU of the last ten years has. Use this one if unsure.
-  sgurr-$VERSION-avx512.exe   CPUs with AVX-512. It is not always faster: on AMD
-                             Zen 4 it runs about 3% slower than avx2.
-  sgurr-$VERSION-compat.exe   older CPUs without AVX2, about a third slower
+  sgurr-$VERSION-avx2.exe
+      any CPU with AVX2, which nearly every x86-64 CPU of the last ten years has
+  sgurr-$VERSION-compat.exe
+      older CPUs without AVX2, about a third slower
 
-The builds search identically, so a faster one only looks further in the same
-time. The neural network is built in, so no other file is needed.
+Both builds search identically, so the faster one only looks further in the
+same time. The neural network is built in, so no other file is needed.
 
 UCI options
   Hash            transposition table size in MB, default 48

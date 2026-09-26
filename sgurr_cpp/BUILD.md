@@ -19,7 +19,7 @@ Use **clang** from the MSYS2 `clang64` environment:
     ./build.sh -d                 # datagen build  -> datagen.exe (RFP disabled)
     ./build.sh -t                 # visual trace   -> sgr_trace.exe
     ./build.sh -r -o sgr_v8_1.exe # choose the output name
-    ./build.sh -r --arch x86-64-v3                      # a CPU level, not this machine
+    ./build.sh -r --arch native                         # this machine's own instruction set
     ./build.sh -r --embed-net ../nets/gen9_screlu_cos_s1.nnue   # network inside
 
 It runs the recipes documented below **and then proves the binary starts**,
@@ -69,34 +69,33 @@ HCE. `nnue.cpp` must always be linked, since the evaluation references
 
     tools/release.sh 9.4
 
-builds three binaries with the network embedded:
-
-* `x86-64-v3` (AVX2), which most people should use
-* `x86-64-v4` (AVX-512)
-* `x86-64-v2` with the scalar path, for older CPUs
-
-Each must reproduce the bench fingerprint from its embedded
-network and pass `testing/uci_protocol.py`, and `-DSGR_TUNING_OPTIONS=0` hides
-the tuning options. The zip lands in `dist/`. On this Zen 4 machine the AVX2
-build is 3.1% ±0.9% faster than the AVX-512 one, which is why AVX-512 is not
-the default recommendation.
+builds two binaries with the network embedded: `x86-64-v3` (AVX2), and
+`x86-64-v2` with the scalar path for older CPUs. Each must reproduce the bench
+fingerprint from its embedded network and pass `testing/uci_protocol.py`, and
+`-DSGR_TUNING_OPTIONS=0` hides the tuning options. The zip lands in `dist/`.
+There is no AVX-512 build: it is slower on this Zen 4 (see below), and a
+tester who saw avx512 in a file name would likely pick it.
 
 ### Development build (fast to compile)
 
-    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
+    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=x86-64-v3 -DNDEBUG -static \
         -Wall -Wextra main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
         -o sgr.exe
 
 `-static` makes the binary standalone (no clang64 DLLs needed on PATH), which
 is convenient for the SPRT harness.
 
-`-march=native` also enables the vectorised NNUE path (`SGR_SIMD`, default
-on): AVX-512 when the target has it (Zen 4+, prints `(avx512)` at startup),
-AVX2 otherwise (`(avx2)`). It is ~22% faster than and bit-identical to the
-scalar eval. Add `-DSGR_SIMD=0` only to build the scalar fallback for an A/B
-(prints `(scalar)`). A build for a pre-AVX2 CPU must pass `-DSGR_SIMD=0`
-(the SIMD path `#error`s without AVX2). The startup line always names the
-active path, check it when a build seems slow.
+Builds target `x86-64-v3`, which enables the vectorised NNUE path (`SGR_SIMD`,
+default on) with AVX2 and prints `(avx2)` at startup. It is ~22% faster than
+and bit-identical to the scalar eval. `-march=native` would pick the AVX-512
+path instead (`(avx512)`), and on this Zen 4, which splits 512-bit instructions
+into two 256-bit halves, that measured 2.7% ±0.9% slower in both orders. Native
+with AVX-512 switched off matched `x86-64-v3` to within 0.1%, so the Zen 4
+tuning adds nothing. The AVX-512 path stays for CPUs where it may pay:
+`--arch native` or `--arch x86-64-v4`. Add `-DSGR_SIMD=0` only to build the
+scalar fallback for an A/B (prints `(scalar)`). A build for a pre-AVX2 CPU
+must pass `-DSGR_SIMD=0` (the SIMD path `#error`s without AVX2). The startup
+line always names the active path, check it when a build seems slow.
 
 ### Release build: PGO + ThinLTO (**+11.3% NPS**, measured)
 
@@ -110,7 +109,7 @@ engine actually takes, so the common paths get laid out for the instruction
 cache. Search is extremely branch-heavy, so PGO carries most of the win.
 
     C=/c/msys64/clang64/bin/clang++
-    F="-std=c++20 -O3 -march=native -DNDEBUG -static -Wall -Wextra"
+    F="-std=c++20 -O3 -march=x86-64-v3 -DNDEBUG -static -Wall -Wextra"
     S="main.cpp board.cpp evaluation.cpp search.cpp nnue.cpp"
 
     # 1. instrumented build
@@ -176,7 +175,7 @@ So a v9.0-compatible binary is still one command:
 
 ## Datagen
 
-    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
+    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=x86-64-v3 -DNDEBUG -static \
         -DSGR_RFP=0 \
         datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp \
         -o datagen.exe

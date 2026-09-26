@@ -139,8 +139,9 @@ The shipped network has a `768 → 384 → 1` perspective architecture. Its
 accumulators update incrementally through make and unmake, and inference stays
 integer-quantised from the network file to the returned score.
 
-The engine selects AVX-512, AVX2 or scalar inference at runtime. All three
-paths produce bit-identical output. Every accumulator update checks the
+Inference is hand-written for AVX2 and AVX-512, with a scalar fallback for
+older CPUs, and every path gives bit-identical output. Builds use AVX2, which
+is faster than AVX-512 on this Zen 4. Every accumulator update checks the
 position's Zobrist key first and rebuilds from the board if the state does not
 match. A missed update can lose time, but it cannot quietly corrupt the score.
 
@@ -311,9 +312,9 @@ cd sgurr_cpp
 ./build.sh -t                  # search trace build
 ```
 
-`tools/release.sh 9.4` builds the public Windows release, three binaries for
-different CPUs with the network compiled in. Each is checked against the bench
-fingerprint and the UCI protocol tests before the zip is made.
+`tools/release.sh 9.4` builds the public Windows release, an AVX2 binary and a
+compatibility one for older CPUs, with the network compiled in. Each is checked
+against the bench fingerprint and the UCI protocol tests before the zip is made.
 
 The release build is 11.3% faster than plain `-O3 -march=native` over 12
 interleaved runs and keeps the same search fingerprint. `build.sh` also checks

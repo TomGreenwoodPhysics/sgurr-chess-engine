@@ -16,7 +16,7 @@ of the search. The engine side (loading and running nets) lives in
 Build the generator against the engine (use clang, not the broken ucrt64 gcc,
 see `../sgurr_cpp/BUILD.md`):
 
-    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=native -DNDEBUG -static \
+    /c/msys64/clang64/bin/clang++ -std=c++20 -O3 -march=x86-64-v3 -DNDEBUG -static \
         -DSGR_RFP=0 \
         datagen.cpp board.cpp evaluation.cpp search.cpp nnue.cpp -o datagen.exe
 

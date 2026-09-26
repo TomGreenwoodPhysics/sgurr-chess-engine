@@ -28,6 +28,10 @@ opponent:
 4. If it passes (H1), `sgr_new` becomes the new `sgr_base`. If it fails (H0),
    discard the change. One idea per test.
 
+Build both sides with the same `build.sh`. A base built before builds moved to
+AVX2 runs 2.7% slower than one built after, and the SPRT would credit that to
+the change under test.
+
 ### Reading the result
 
 - **H1 ACCEPTED (pass)**: the change is an improvement (by more than `elo0`).
