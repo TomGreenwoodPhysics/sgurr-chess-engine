@@ -31,6 +31,15 @@ engines it played.
   from the transposition table, where later entries overwrote it, so a deep
   search could report a line of one or two moves. The search is unchanged,
   with bench and fixed-depth searches identical. It costs about 0.5% in speed.
+- Ready for GUIs and rating lists. Commands are now read while the engine
+  searches, so stop and quit work mid-search and isready is answered at once.
+  go infinite runs until stopped, and every line of output is flushed as it
+  is written.
+- Public release binaries carry the network inside them, so a GUI needs no
+  settings, and they show only the four options a user needs.
+  `tools/release.sh` builds and checks them.
+- Release builds are now profiled on the network instead of the hand-crafted
+  eval, which makes them 1.6% faster.
 
 ## v9.3 "Dearg" (Sgùrr Dearg), 2026-09-26
 

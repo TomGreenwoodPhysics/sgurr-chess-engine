@@ -1500,3 +1500,25 @@ The line is now recorded at PV nodes as the search runs. Bench and fixed-depth
 searches are unchanged, move for move, and the container test passes. Kept
 inside the engine object the table cost 1 to 2% in speed, apparently by
 shifting the object's hot tables. On the heap it costs about 0.5%.
+
+## 2026-09-26, Ready for CCRL
+
+Before a rating list can test Sgurr, it has to behave in any GUI. Testing it
+as a GUI would found four problems. The UCI loop searched on the thread that
+read commands, so stop and quit were ignored until the search ended. A GUI
+that sent go depth 60 and then stop would wait for the whole search. go
+infinite ran to depth 5 and answered at once. Output reached the GUI only
+because each read of input flushed it. And the network loaded only through
+SGR_EVALFILE, so a GUI starting the engine normally would have had it play on
+the hand-crafted eval, several hundred Elo weaker.
+
+Commands are now read on their own thread. The search stays on the main thread,
+which alone writes output, and checks for a stop with its time check every 512
+nodes. Release binaries embed the network with `#embed`, and `tools/release.sh`
+builds three versions for different CPUs, each checked by
+`testing/uci_protocol.py`. Fixed-depth searches through UCI are identical to
+the previous build.
+
+Two speed findings came out of the release builds. `build.sh` had been
+profiling on the hand-crafted eval, and profiling on the network is 1.6%
+faster. And on this Zen 4 the AVX2 build beats the AVX-512 one by 3.1%.

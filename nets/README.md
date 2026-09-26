@@ -10,9 +10,10 @@ SGR_EVALFILE=nets/gen9_screlu_cos_s1.nnue sgurr_cpp/sgr.exe bench
 #   -> nodes 1847491 on the reference MSYS2 clang64 build
 ```
 
-The engine reads `$SGR_EVALFILE`, defaulting to `sgurr.nnue` in the working
-directory. With no network it uses the hand-crafted evaluation and says so on
-stdout, so a missing net is visible rather than silent.
+The engine reads the network `$SGR_EVALFILE` names. Release binaries also carry
+the current network inside them and use it when `SGR_EVALFILE` is unset. With
+no network the engine uses the hand-crafted evaluation and says so, so a
+missing net is visible rather than silent.
 
 ---
 

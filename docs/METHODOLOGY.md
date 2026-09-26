@@ -565,6 +565,8 @@ What it measured in September 2026, every change leaving the tree identical:
 | uninitialised move list | -0.8% ±1.6% |
 | PV table, 32 KB inside the engine object | -1.0% to -2.1% |
 | the same table on the heap | -0.6% ±0.3% |
+| PGO profile run on the network, not the hand-crafted eval | **+1.6% ±1.0%** |
+| AVX2 build instead of AVX-512, on this Zen 4 | **+3.1% ±0.9%** |
 
 The largest gain was a cost the profiler found and no reading of the code had
 flagged. Two standard techniques, the per-ply stack and the early prefetch,
@@ -576,3 +578,8 @@ Where data sits can matter more than what the code does. Inside the engine
 object the PV table cost 1 to 2%, and a build with its per-node lines removed
 was about as slow, so the cost came from the object's layout. On the heap it
 costs 0.6%.
+
+Two build settings had been costing speed without anyone choosing them.
+`build.sh` profiled release builds on the hand-crafted eval, so the network's
+code was laid out as cold. And `-march=native` picks AVX-512, which Zen 4
+runs as two 256-bit halves, so the AVX2 build is faster here.

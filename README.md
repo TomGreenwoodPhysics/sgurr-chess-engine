@@ -311,6 +311,10 @@ cd sgurr_cpp
 ./build.sh -t                  # search trace build
 ```
 
+`tools/release.sh 9.4` builds the public Windows release, three binaries for
+different CPUs with the network compiled in. Each is checked against the bench
+fingerprint and the UCI protocol tests before the zip is made.
+
 The release build is 11.3% faster than plain `-O3 -march=native` over 12
 interleaved runs and keeps the same search fingerprint. `build.sh` also checks
 that the new executable can start. This catches Windows Smart App Control
@@ -329,13 +333,15 @@ position startpos moves e2e4 e7e5
 go movetime 1000
 ```
 
-Without `SGR_EVALFILE`, Sgurr loads the hand-written evaluation and reports the
-fallback on standard output.
+Without `SGR_EVALFILE`, a development build uses the hand-written evaluation
+and says so on standard error. Release binaries carry the network inside them
+and use it instead, so a GUI needs no settings. `SGR_EVALFILE` set to nothing
+still selects the hand-written evaluation.
 
-The engine exposes 48 UCI options. Four cover hash, hash clearing, move overhead
-and threads. The other 44 expose search margins, divisors and thresholds for
-tuning. Search is intentionally single-threaded because the rating work uses a
-single-core scale.
+Development builds expose 67 UCI options. Four cover hash, hash clearing, move
+overhead and threads. The other 63 expose search and time-management constants
+for tuning, and release binaries leave them out. Search is intentionally
+single-threaded because the rating work uses a single-core scale.
 
 To run the web application locally, build the release and trace executables,
 then install the backend requirements and start Uvicorn.

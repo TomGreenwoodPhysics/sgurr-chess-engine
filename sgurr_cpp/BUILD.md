@@ -19,6 +19,8 @@ Use **clang** from the MSYS2 `clang64` environment:
     ./build.sh -d                 # datagen build  -> datagen.exe (RFP disabled)
     ./build.sh -t                 # visual trace   -> sgr_trace.exe
     ./build.sh -r -o sgr_v8_1.exe # choose the output name
+    ./build.sh -r --arch x86-64-v3                      # a CPU level, not this machine
+    ./build.sh -r --embed-net ../nets/gen9_screlu_cos_s1.nnue   # network inside
 
 It runs the recipes documented below **and then proves the binary starts**,
 relinking automatically if it does not. That second part is not optional here:
@@ -56,11 +58,28 @@ without attempting to transmit the full exponential tree.
 
 ## Engine
 
-There is a single engine binary. It uses the hand-crafted evaluation (HCE)
-when no network loads, and the NNUE when a network is provided via
-`$SGR_EVALFILE` (default `sgurr.nnue` in the working dir). `nnue.cpp` must
-always be linked, since the evaluation references `nnue::` symbols even when
-no net is loaded.
+There is a single engine binary. It uses the NNUE when a network loads and the
+hand-crafted evaluation (HCE) otherwise. The network comes from
+`$SGR_EVALFILE`, or, in a build made with `--embed-net`, from inside the
+binary when `SGR_EVALFILE` is unset. `SGR_EVALFILE` set to nothing selects the
+HCE. `nnue.cpp` must always be linked, since the evaluation references
+`nnue::` symbols even when no net is loaded.
+
+### Public release
+
+    tools/release.sh 9.4
+
+builds three binaries with the network embedded:
+
+* `x86-64-v3` (AVX2), which most people should use
+* `x86-64-v4` (AVX-512)
+* `x86-64-v2` with the scalar path, for older CPUs
+
+Each must reproduce the bench fingerprint from its embedded
+network and pass `testing/uci_protocol.py`, and `-DSGR_TUNING_OPTIONS=0` hides
+the tuning options. The zip lands in `dist/`. On this Zen 4 machine the AVX2
+build is 3.1% ±0.9% faster than the AVX-512 one, which is why AVX-512 is not
+the default recommendation.
 
 ### Development build (fast to compile)
 
@@ -108,6 +127,10 @@ cache. Search is extremely branch-heavy, so PGO carries most of the win.
 
 Notes:
 
+* **Profile the evaluation the engine plays with.** `build.sh` runs bench on
+  the network, or on the embedded one, and says which it used. Profiled on the
+  hand-crafted eval, the network's code counted as cold and the build ran
+  1.6% ±1.0% slower.
 * **Regenerate the profile after significant search changes.** clang will warn
   `function control flow change detected (hash mismatch)` and silently drop the
   profile for any function whose shape moved, so a stale profile quietly

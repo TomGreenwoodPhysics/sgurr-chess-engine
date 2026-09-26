@@ -161,6 +161,16 @@ it stopped. Each line of a queue file is `NAME | NEEDS | COMMAND`.
     tools/queue.sh QUEUE_FILE
     tools/queue.sh --stop
 
+## UCI protocol
+
+`uci_protocol.py` checks the parts of UCI a GUI depends on. Stop and quit must
+work while searching and isready must be answered without stopping. It also
+covers go infinite, a closed input, clock searches and malformed input, plays
+no games and takes under a minute. CI runs it on every push, and
+`tools/release.sh` on every release binary.
+
+    python testing/uci_protocol.py ENGINE --net nets/gen9_screlu_cos_s1.nnue
+
 ## Files
 
 - `match.py`      plain two-engine match
@@ -171,6 +181,7 @@ it stopped. Each line of a queue file is `NAME | NEEDS | COMMAND`.
 - `book.epd`      starter book (150 balanced positions)
 - `fastchess.md`  fastchess / cutechess-cli setup and command
 - `engine_gate.py` UCI checks an engine must pass before joining the pool
+- `uci_protocol.py` UCI behaviour a GUI relies on, for Sgurr's own builds
 - `pgn_endings.py` counts games that ended abnormally
 - `spsa.py`       SPSA tuner; its steps are too large (METHODOLOGY §10)
 
