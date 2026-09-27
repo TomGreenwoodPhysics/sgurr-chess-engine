@@ -107,3 +107,15 @@ next.
 A clearly negative result. Then switch the parts off by halves, with their UCI
 options or, for losing captures, the toggle: the re-search depth and cut nodes
 first, since they account for most of the extra depth.
+
+## Result, 2026-09-27
+
+Stopped under rule 9 at 516 games, with its minimum raised to 500 for this
+run: **+16.1 ±16.0**, W 92 L 69 D 337 over the 498 games of the last report,
+LLR 0.58 of 2.94. All 516 games ended normally. Close to the +15 predicted.
+
+The interval cleared zero by 0.02 Elo, so this establishes that batch E is not
+a regression and says little more about its size. The two sides spent the same
+time, 177 ms a move against 178, and batch E's reported depth averaged 20.93
+against 19.45: a ply and a half deeper, which matches the replays. The
+release's pool run is the check on its size.

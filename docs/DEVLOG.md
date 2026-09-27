@@ -1651,5 +1651,8 @@ alpha, the search again goes a ply deeper or shallower depending on the margin.
 At the same node count the search reaches a ply deeper, and it runs 3% faster.
 Judged by agreement with BlackCore at a much deeper search, it picks moves no
 worse. That judge proved blunt: batch F, worth +62 in games, moved it by a fifth
-of a point (METHODOLOGY §12). The SPRT is registered in
-`benchmarks/v95_batch_e_prediction.md`.
+of a point (METHODOLOGY §12).
+
+It measured **+16.1 ±16.0** against batch G over 516 games, stopped under rule
+9 once past a minimum of 500, against a prediction of +15. In games it
+searched a ply and a half deeper at the same time per move.
