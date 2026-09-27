@@ -1634,5 +1634,8 @@ The first builds crashed in the replays. The engine object lives on the main
 thread's stack, which Windows sizes at 1 MB, and the tables took it from 54 KB
 to 388 KB. They moved to the heap. `build.sh` also reserves 16 MB now: a search
 128 plies deep with singular tests along the way could have overflowed 1 MB in
-any earlier version at long time controls. The SPRT is registered in
-`benchmarks/v95_batch_g_prediction.md`.
+any earlier version at long time controls.
+
+It measured **+21.9 ±21.3** against batch F over 313 games, stopped under
+rule 9 with the interval clearing zero by less than one Elo, against a
+prediction of +12. At the same time per move it searched half a ply deeper.

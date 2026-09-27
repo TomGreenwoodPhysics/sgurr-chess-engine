@@ -121,3 +121,16 @@ of change run low, but this one also carries the most new risk.
 A clearly negative result. Then halve the weights with the UCI options, then
 turn off the correction in quiescence (`SGR_CORR_QS=0`), before doubting the
 tables themselves.
+
+## Result, 2026-09-27
+
+Stopped under rule 9 at 313 games: **+21.9 ±21.3**, W 66 L 47 D 189 over the
+302 games of the last report, LLR 0.47 of 2.94. All 313 games ended normally.
+Above the +12 predicted, inside the band.
+
+The interval cleared zero by less than one Elo, the narrowest stop so far, and
+an early stop reads high, so the true gain is probably well below +22. The two
+sides spent the same time, 172 ms a move against 173, and batch G's reported
+depth averaged 19.98 against 19.46: half a ply deeper despite running 4.5%
+slower per node, which fits better pruning. The release's pool run is the check
+on its size.
