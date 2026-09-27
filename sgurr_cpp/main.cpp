@@ -93,9 +93,22 @@ const Tunable TUNABLES[] = {
     {"SeeQuietMargin",        &SearchParams::see_quiet_margin,          5,     300},
     {"SeeCapMargin",          &SearchParams::see_cap_margin,            2,     150},
     {"HistPruneMaxDepth",     &SearchParams::histprune_max_depth,       1,       8},
-    {"HistPruneMargin",       &SearchParams::histprune_margin,         10,    2000},
+    {"HistPruneMargin",       &SearchParams::histprune_margin,         10,   20000},
+#if SGR_CAPHIST_FULL
+    {"CapMvvMul",             &SearchParams::cap_mvv_mul,               1,      64},
+#else
     {"CapHistDiv",            &SearchParams::caphist_div,               1,      64},
     {"CapHistMax",            &SearchParams::caphist_max,              16,    2000},
+#endif
+#if SGR_HIST_GRAVITY
+    {"HistBonusMul",          &SearchParams::hist_bonus_mul,           20,    1000},
+    {"HistBonusSub",          &SearchParams::hist_bonus_sub,            0,    1000},
+    {"HistBonusMax",          &SearchParams::hist_bonus_max,          200,    8000},
+#endif
+#if SGR_PICKER2
+    {"QuietSortLimit",        &SearchParams::quiet_sort_limit,          0,   20000},
+    {"GoodQuietMin",          &SearchParams::good_quiet_min,      -30000,  100000},
+#endif
     {"EvalScaleStart",        &SearchParams::evalscale_start,           0,      90},
     {"EvalScaleMinPct",       &SearchParams::evalscale_min_pct,        10,     100},
     // Time management. See the warning in search.hpp before tuning these.
@@ -563,6 +576,11 @@ void uci_loop() {
 
             run_bench(depth);
             std::cout << std::flush;
+#if SGR_ORDER_STATS
+        } else if (command == "orderstats") {
+            print_order_stats();
+            std::cout << "orderstats done\n" << std::flush;
+#endif
         } else if (command == "quit") {
             break;
         }
@@ -780,6 +798,9 @@ int run_bench(int depth) {
                       ? static_cast<long long>(total_nodes / search_seconds)
                       : 0LL)
               << "\n";
+#if SGR_ORDER_STATS
+    print_order_stats();
+#endif
 
     return 0;
 }

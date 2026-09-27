@@ -72,6 +72,33 @@ constexpr int BM_STABILITY_COUNT = 5;
 // Clamp butterfly and continuation history scores to this magnitude.
 constexpr int HISTORY_MAX = 1'000'000;
 
+// Move-ordering counters, printed after bench and by the orderstats command.
+// Measurement only: never on in a build that plays.
+#ifndef SGR_ORDER_STATS
+#define SGR_ORDER_STATS 0
+#endif
+#if SGR_ORDER_STATS
+struct OrderStats {
+    long long cutoffs = 0;         // beta cutoffs in the move loop
+    long long first_move = 0;      // ... made by the first move searched
+    long long index_sum = 0;       // sum of the cutoff move's position
+    long long lmr_adj[5] = {};     // history's adjustment to a reduction, -2..+2
+    long long prune_checked = 0;   // quiets tested for history pruning
+    long long pruned = 0;          // ... and pruned
+    long long hist_sign[2] = {};   // combined history at the reduction: <0, >=0
+    long long hist_bits[24] = {};  // ... by bit length of its magnitude
+    // What other settings would have done with the same history values.
+    static constexpr int LMR_DIVS[] = {150, 228, 300, 4000, 5000, 5500, 6000, 6200,
+                                       6500, 7000, 8000, 9000};
+    static constexpr int PRUNE_MARGINS[] = {50, 75, 100, 1000, 1500, 1750, 2000, 2250,
+                                            2500, 3000, 4000};
+    long long lmr_by_div[std::size(LMR_DIVS)][5] = {};
+    long long pruned_by_margin[std::size(PRUNE_MARGINS)] = {};
+};
+extern OrderStats order_stats;
+void print_order_stats();
+#endif
+
 // Reverse futility and late move pruning.
 // Datagen builds must set SGR_RFP=0 because labels require searched scores.
 #ifndef SGR_RFP
@@ -131,6 +158,41 @@ constexpr int NO_STATIC_EVAL = -INF;          // In-check plies have no static e
 #ifndef SGR_CAPHIST
 #define SGR_CAPHIST 1
 #endif
+
+// Batch F, move ordering. See benchmarks/v95_batch_f_prediction.md.
+// One butterfly table per side to move, where both sides shared one.
+#ifndef SGR_HIST_COLOUR
+#define SGR_HIST_COLOUR 1
+#endif
+// History updates pull an entry towards a bound instead of adding to it, so
+// entries stay bounded and recent results count for more.
+#ifndef SGR_HIST_GRAVITY
+#define SGR_HIST_GRAVITY 1
+#endif
+// Continuation history from our own moves two and four plies back, as well as
+// the opponent's last move.
+#ifndef SGR_CONTHIST_24
+#define SGR_CONTHIST_24 1
+#endif
+// Captures ordered by victim value and capture history at full weight, not
+// history held to a nudge within its victim's tier.
+#ifndef SGR_CAPHIST_FULL
+#define SGR_CAPHIST_FULL 1
+#endif
+// A picker that scores quiets only when it reaches them, runs SEE only on the
+// capture about to be tried and sorts only the quiets likely to be searched.
+// Quiets with strong history can go ahead of losing captures, and
+// underpromotions wait with the losing captures.
+#ifndef SGR_PICKER2
+#define SGR_PICKER2 1
+#endif
+// Test builds abort if the picker repeats, invents or loses a move.
+#ifndef SGR_PICKER_CHECK
+#define SGR_PICKER_CHECK 0
+#endif
+
+// Bound on a history entry under gravity.
+constexpr int HIST_LIMIT = 16384;
 
 // Principal variation search at the root.
 #ifndef SGR_ROOTPVS
@@ -241,8 +303,11 @@ struct SearchParams {
     int lmr_min_depth           = 3;
     int lmr_full_depth_moves    = 2;
     int lmr_div_x100            = 241;   // SPSA 250 -> 241   // Scaled form of the 2.5 LMR divisor.
-    // Near-inert until history scaling is validated in games.
-    int histlmr_div             = 228;   // SPSA 400000 -> 228
+    // Bounded history (SGR_HIST_GRAVITY) sits on a larger scale. Its
+    // settings change reductions and prune quiets at the old rates, measured
+    // replaying games at 400k nodes a move: 19% of reduced quiets reduced
+    // further, 20% of tested quiets pruned.
+    int histlmr_div             = SGR_HIST_GRAVITY ? 6200 : 228;   // SPSA 400000 -> 228
     int histlmr_max             = 2;
 
     // Extensions
@@ -278,11 +343,21 @@ struct SearchParams {
     int see_cap_margin          = 26;   // SPSA 20 -> 26    // Quadratic capture SEE margin.
     int histprune_max_depth     = 3;
     // Prune quiets below the negative history margin times depth.
-    int histprune_margin        = 75;   // SPSA 50 -> 75
+    int histprune_margin        = SGR_HIST_GRAVITY ? 2000 : 75;   // SPSA 50 -> 75
 
     // Keep capture history within its MVV-LVA tier.
     int caphist_div             = 1;
     int caphist_max             = 87;   // SPSA 256 -> 87
+
+    // Move ordering, batch F. Starting values, for the tune to set.
+    int hist_bonus_mul          = 200;   // History bonus per ply of depth.
+    int hist_bonus_sub          = 100;
+    int hist_bonus_max          = 2000;
+    int cap_mvv_mul             = 16;    // Victim value's weight in capture order.
+    int quiet_sort_limit        = 3000;  // Quiets below -limit * depth stay unsorted.
+    // Quiets above this go before losing captures. Cutoffs came sooner with
+    // losing captures ahead of all but the strongest quiets.
+    int good_quiet_min          = 16000;
     // Start and floor for halfmove-clock evaluation scaling.
     int evalscale_start         = 40;
     int evalscale_min_pct       = 40;    // Minimum retained evaluation percentage.
@@ -430,7 +505,25 @@ private:
 #endif
 
     std::array<std::array<std::optional<Move>, 2>, MAX_PLY> killer_moves{};
-    std::array<std::array<int, 64>, 64> history{};
+    // Butterfly history by from and to square, one table per side to move
+    // under SGR_HIST_COLOUR.
+    std::array<std::array<std::array<int, 64>, 64>, SGR_HIST_COLOUR ? 2 : 1> history{};
+
+    int& butterfly(int side, const Move& move) {
+        return history[SGR_HIST_COLOUR ? side : 0][move.from()][move.to()];
+    }
+    int butterfly(int side, const Move& move) const {
+        return history[SGR_HIST_COLOUR ? side : 0][move.from()][move.to()];
+    }
+
+    // A quiet move's ordering score: butterfly history plus, in the main
+    // search, continuation history for the moves before it.
+    int quiet_history(const Board& board, const Move& move, int ply, bool with_cont) const;
+
+    // Reward (bonus > 0) or penalise a quiet move in every table that scores it.
+    void update_quiet_history(const Board& board, const Move& move, int ply, int bonus);
+
+    int history_bonus(int depth) const;
 
 #if SGR_IMPROVING
     // Static eval stack used by the improving heuristic.
@@ -522,6 +615,63 @@ private:
 
     void store_killer(int ply, const Move& move);
 
+#if SGR_PICKER2
+    // Staged picker. Stages run TT move, winning captures, killers, promising
+    // quiets, losing captures, then the other quiets. Each stage scores its own
+    // moves when it starts, so a node that cuts off early pays for little, and
+    // quiets are scored with history learnt while the earlier moves were
+    // searched. Outside the main search there is no split by SEE.
+    class MovePicker {
+    public:
+        MovePicker(const Engine& eng,
+                   Board& board,
+                   const MoveList& moves,
+                   const std::optional<Move>& tt_move_key,
+                   int ply,
+                   int depth,
+                   bool main_search);
+
+        // Return the next move or false when exhausted.
+        bool next(Move& out);
+
+    private:
+        // Raw 16-bit moves, so the arrays need no initialising.
+        struct Scored { std::uint16_t move; int score; };
+
+        enum Stage {
+            S_TT, S_CAPTURE_INIT, S_GOOD_CAPTURE, S_KILLER1, S_KILLER2,
+            S_QUIET_INIT, S_GOOD_QUIET, S_BAD_CAPTURE, S_BAD_QUIET, S_DONE
+        };
+
+        bool in_list(const Move& move) const;
+        bool next_move(Move& out);
+
+#if SGR_PICKER_CHECK
+        // Test builds check every move comes out exactly once.
+        bool seen_[256] = {};
+        int returned_ = 0;
+#endif
+
+        const Engine* eng_;
+        const Board* board_;
+        const MoveList* moves_;
+        int ply_;
+        int depth_;
+        bool main_;
+
+        Move tt_move_ = NO_MOVE;   bool has_tt_ = false;
+        Move killer_[2];           // killers tried, skipped among the quiets
+        int n_killers_ = 0;
+
+        Scored caps_[256];            int n_caps_ = 0;
+        std::uint16_t bad_caps_[256]; int n_bad_ = 0;
+        Scored quiets_[256];          int n_quiets_ = 0;
+
+        int stage_ = S_TT;
+        int index_ = 0;       // next capture, then next quiet
+        int bad_index_ = 0;   // next losing capture
+    };
+#else
     // Lazy move picker that sorts each bucket only when reached.
     class MovePicker {
     public:
@@ -530,6 +680,7 @@ private:
                    const MoveList& moves,
                    const std::optional<Move>& tt_move_key,
                    int ply,
+                   int depth,
                    bool split_bad_captures);
 
         // Return the next move or false when exhausted.
@@ -567,6 +718,7 @@ private:
         bool sorted_gq_ = false;
         bool sorted_oq_ = false;
     };
+#endif
 
     MoveList order_moves(
         Board& board,

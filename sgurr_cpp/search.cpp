@@ -4,10 +4,54 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <new>
 #include <string>
 #include <vector>
+
+#if SGR_ORDER_STATS
+OrderStats order_stats;
+
+void print_order_stats() {
+    const OrderStats& s = order_stats;
+    auto pct = [](long long part, long long whole) {
+        return whole > 0 ? 100.0 * double(part) / double(whole) : 0.0;
+    };
+    std::cerr << std::fixed << std::setprecision(2)
+              << "order: " << s.cutoffs << " cutoffs, " << pct(s.first_move, s.cutoffs)
+              << "% on the first move, mean position "
+              << (s.cutoffs > 0 ? double(s.index_sum) / double(s.cutoffs) : 0.0) << "\n";
+    long long adj_total = 0;
+    for (long long n : s.lmr_adj) adj_total += n;
+    std::cerr << "order: history's adjustment to reductions, -2 (two plies more) .. +2 (two less):";
+    for (long long n : s.lmr_adj) std::cerr << ' ' << pct(n, adj_total) << '%';
+    std::cerr << "  (" << adj_total << " reduced quiets)\n";
+    std::cerr << "order: history pruning took " << pct(s.pruned, s.prune_checked) << "% of "
+              << s.prune_checked << " quiets tested\n";
+    std::cerr << "order: combined history at reductions, negative "
+              << pct(s.hist_sign[0], s.hist_sign[0] + s.hist_sign[1]) << "%, by bits:";
+    for (int b = 0; b < 24; ++b) {
+        if (s.hist_bits[b] > 0) std::cerr << ' ' << b << ':' << pct(s.hist_bits[b], adj_total) << '%';
+    }
+    std::cerr << "\n";
+    // What other settings would have done with the same history values.
+    std::cerr << "order: the same adjustment by divisor:\n";
+    for (std::size_t k = 0; k < std::size(OrderStats::LMR_DIVS); ++k) {
+        std::cerr << "  " << std::setw(5) << OrderStats::LMR_DIVS[k] << ':';
+        for (long long n : s.lmr_by_div[k]) std::cerr << ' ' << std::setw(6) << pct(n, adj_total) << '%';
+        std::cerr << "\n";
+    }
+    std::cerr << "order: history pruning rate by margin:";
+    for (std::size_t k = 0; k < std::size(OrderStats::PRUNE_MARGINS); ++k) {
+        std::cerr << ' ' << OrderStats::PRUNE_MARGINS[k] << ':'
+                  << pct(s.pruned_by_margin[k], s.prune_checked) << '%';
+    }
+    std::cerr << "\n";
+}
+#endif
 
 #ifndef SGR_TRACE_SEARCH
 #define SGR_TRACE_SEARCH 0
@@ -435,8 +479,10 @@ void Engine::reset_killers() {
 }
 
 void Engine::reset_history() {
-    for (auto& row : history) {
-        row.fill(0);
+    for (auto& side : history) {
+        for (auto& row : side) {
+            row.fill(0);
+        }
     }
 
 #if SGR_CONTHIST
@@ -449,6 +495,17 @@ void Engine::reset_history() {
 }
 
 namespace {
+
+// Move a history entry by bonus, negative for a penalty. Under gravity the
+// step shrinks as the entry nears the bound, so entries stay within
+// +-HIST_LIMIT and recent results count for more than old ones.
+inline void apply_bonus(int& entry, int bonus) {
+#if SGR_HIST_GRAVITY
+    entry += bonus - entry * std::abs(bonus) / HIST_LIMIT;
+#else
+    entry = std::clamp(entry + bonus, -HISTORY_MAX, HISTORY_MAX);
+#endif
+}
 
 constexpr int MATE_THRESHOLD = MATE - 1000;
 
@@ -499,6 +556,70 @@ void Engine::clear_transposition_table() {
     transposition_table.assign(tt_size, TTEntry{});
 }
 
+int Engine::history_bonus(int depth) const {
+#if SGR_HIST_GRAVITY
+    return std::clamp(params.hist_bonus_mul * depth - params.hist_bonus_sub,
+                      0, params.hist_bonus_max);
+#else
+    return depth * depth;
+#endif
+}
+
+int Engine::quiet_history(const Board& board, const Move& move, int ply, bool with_cont) const {
+    int score = butterfly(board.side_to_move, move);
+#if SGR_CONTHIST
+    if (with_cont && ply > 0) {
+        auto piece = board.piece_at(move.from());
+        if (piece.has_value()) {
+            const int to = move.to();
+            if (ss_piece[ply - 1] >= 0) {
+                score += conthist[conthist_index(ss_piece[ply - 1], ss_to[ply - 1], *piece, to)];
+            }
+#if SGR_CONTHIST_24
+            if (ply >= 2 && ss_piece[ply - 2] >= 0) {
+                score += conthist[conthist_index(ss_piece[ply - 2], ss_to[ply - 2], *piece, to)];
+            }
+            if (ply >= 4 && ss_piece[ply - 4] >= 0) {
+                score += conthist[conthist_index(ss_piece[ply - 4], ss_to[ply - 4], *piece, to)];
+            }
+#endif
+        }
+    }
+#else
+    (void)ply;
+    (void)with_cont;
+#endif
+    return score;
+}
+
+void Engine::update_quiet_history(const Board& board, const Move& move, int ply, int bonus) {
+    apply_bonus(butterfly(board.side_to_move, move), bonus);
+#if SGR_CONTHIST
+    if (ply > 0) {
+        auto piece = board.piece_at(move.from());
+        if (piece.has_value()) {
+            const int to = move.to();
+            if (ss_piece[ply - 1] >= 0) {
+                apply_bonus(conthist[conthist_index(ss_piece[ply - 1], ss_to[ply - 1], *piece, to)],
+                            bonus);
+            }
+#if SGR_CONTHIST_24
+            if (ply >= 2 && ss_piece[ply - 2] >= 0) {
+                apply_bonus(conthist[conthist_index(ss_piece[ply - 2], ss_to[ply - 2], *piece, to)],
+                            bonus);
+            }
+            if (ply >= 4 && ss_piece[ply - 4] >= 0) {
+                apply_bonus(conthist[conthist_index(ss_piece[ply - 4], ss_to[ply - 4], *piece, to)],
+                            bonus);
+            }
+#endif
+        }
+    }
+#else
+    (void)ply;
+#endif
+}
+
 void Engine::clear_search_heuristics() {
     reset_killers();
     reset_history();
@@ -511,9 +632,11 @@ void Engine::clear_for_new_position() {
     // Keep the TT, reset ply-based killers and age history.
     reset_killers();
 
-    for (auto& row : history) {
-        for (int& value : row) {
-            value /= 2;
+    for (auto& side : history) {
+        for (auto& row : side) {
+            for (int& value : row) {
+                value /= 2;
+            }
         }
     }
 
@@ -1560,7 +1683,7 @@ int Engine::negamax(
 
     MoveList moves = generate_moves(board);
     std::optional<Move> tt_move_key = valid_tt_move_key(board_hash, moves);
-    MovePicker picker(*this, board, moves, tt_move_key, ply, true);
+    MovePicker picker(*this, board, moves, tt_move_key, ply, depth, true);
     LegalityInfo li = board.legality_info();
 
 #if SGR_IIR
@@ -1709,15 +1832,13 @@ int Engine::negamax(
 #if SGR_HISTPRUNE
             // Prune a quiet with poor continuation history.
             if (quiet && depth <= params.histprune_max_depth) {
-                int h = history[move.from()][move.to()];
-#if SGR_CONTHIST
-                if (ply > 0 && ss_piece[ply - 1] >= 0) {
-                    auto pc = board.piece_at(move.from());
-                    if (pc.has_value()) {
-                        h += conthist[conthist_index(
-                            ss_piece[ply - 1], ss_to[ply - 1], *pc, move.to())];
-                    }
+                const int h = quiet_history(board, move, ply, true);
+#if SGR_ORDER_STATS
+                order_stats.prune_checked += 1;
+                for (std::size_t k = 0; k < std::size(OrderStats::PRUNE_MARGINS); ++k) {
+                    order_stats.pruned_by_margin[k] += h < -OrderStats::PRUNE_MARGINS[k] * depth;
                 }
+                order_stats.pruned += h < -params.histprune_margin * depth;
 #endif
                 if (h < -params.histprune_margin * depth) {
                     continue;
@@ -1782,6 +1903,12 @@ int Engine::negamax(
         int trace_child = trace_expected_child();
 #endif
 
+#if SGR_HISTLMR
+        // A reduced quiet's history, read before the move changes the board.
+        const int lmr_hist = reduce_late_move && lmr_reduction(depth, legal_moves_searched) > 0
+            ? quiet_history(board, move, ply, true) : 0;
+#endif
+
         // Use precomputed node geometry to detect checks before making the move.
         bool gives_check = board.gives_check(move, ci);
 
@@ -1836,16 +1963,24 @@ int Engine::negamax(
 #if SGR_HISTLMR
             // Adjust quiet-move reduction from its history.
             if (reduction > 0) {
-                int hist_score = history[move.from()][move.to()];
-#if SGR_CONTHIST
-                if (ply > 0 && ss_piece[ply - 1] >= 0) {
-                    hist_score += conthist[conthist_index(
-                        ss_piece[ply - 1], ss_to[ply - 1],
-                        ss_piece[ply], move.to())];
+                const int hist_score = lmr_hist;
+                const int adjust = std::clamp(
+                    hist_score / params.histlmr_div, -params.histlmr_max, params.histlmr_max);
+#if SGR_ORDER_STATS
+                order_stats.lmr_adj[std::clamp(adjust, -2, 2) + 2] += 1;
+                for (std::size_t k = 0; k < std::size(OrderStats::LMR_DIVS); ++k) {
+                    const int bin = std::clamp(hist_score / OrderStats::LMR_DIVS[k], -2, 2);
+                    order_stats.lmr_by_div[k][bin + 2] += 1;
+                }
+                order_stats.hist_sign[hist_score >= 0] += 1;
+                {
+                    unsigned magnitude = static_cast<unsigned>(std::abs(hist_score));
+                    int bits = 0;
+                    while (magnitude > 0 && bits < 23) { magnitude >>= 1; ++bits; }
+                    order_stats.hist_bits[bits] += 1;
                 }
 #endif
-                reduction -= std::clamp(
-                    hist_score / params.histlmr_div, -params.histlmr_max, params.histlmr_max);
+                reduction -= adjust;
                 reduction = std::max(0, std::min(reduction, next_depth - 1));
             }
 #endif
@@ -1910,69 +2045,45 @@ int Engine::negamax(
 #if SGR_TRACE_SEARCH
             trace_cutoff(trace_scope.id, trace_child, move, score);
 #endif
+#if SGR_ORDER_STATS
+            order_stats.cutoffs += 1;
+            order_stats.index_sum += legal_moves_searched;
+            order_stats.first_move += legal_moves_searched == 1;
+#endif
+            // After unmake, the mover and any victim are back on the board.
+            const int bonus = history_bonus(depth);
+#if SGR_CAPHIST
+            auto update_capture = [&](const Move& m, int amount) {
+                auto piece = board.piece_at(m.from());
+                if (piece.has_value()) {
+                    apply_bonus(caphist[caphist_index(*piece, m.to(), caphist_victim(board, m))],
+                                amount);
+                }
+            };
+#endif
             if (!is_noisy_move(board, move)) {
                 store_killer(ply, move);
-
-                int bonus = depth * depth;
-                int& hist = history[move.from()][move.to()];
-                hist = std::min(hist + bonus, HISTORY_MAX);
-
-#if SGR_CONTHIST
-                // After unmake, piece_at(from) is the mover.
-                int prev_piece = ply > 0 ? ss_piece[ply - 1] : -1;
-                int prev_to = ply > 0 ? ss_to[ply - 1] : 0;
-
-                if (prev_piece >= 0) {
-                    auto piece = board.piece_at(move.from());
-                    if (piece.has_value()) {
-                        int& ch = conthist[conthist_index(
-                            prev_piece, prev_to, *piece, move.to())];
-                        ch = std::min(ch + bonus, HISTORY_MAX);
-                    }
-                }
-#endif
+                update_quiet_history(board, move, ply, bonus);
 
 #if SGR_HMALUS
                 // Penalise quiets tried before the cutoff move.
                 for (int i = 0; i < n_tried - 1; ++i) {
-                    const Move& q = tried_quiets[i];
-                    int& qh = history[q.from()][q.to()];
-                    qh = std::max(qh - bonus, -HISTORY_MAX);
-
-#if SGR_CONTHIST
-                    if (prev_piece >= 0) {
-                        auto qp = board.piece_at(q.from());
-                        if (qp.has_value()) {
-                            int& qch = conthist[conthist_index(
-                                prev_piece, prev_to, *qp, q.to())];
-                            qch = std::max(qch - bonus, -HISTORY_MAX);
-                        }
-                    }
+                    update_quiet_history(board, tried_quiets[i], ply, -bonus);
+                }
 #endif
+#if SGR_CAPHIST && SGR_CAPHIST_FULL
+                // The captures tried before a quiet cutoff failed as well.
+                for (int i = 0; i < n_caps; ++i) {
+                    update_capture(tried_caps[i], -bonus);
                 }
 #endif
             }
 #if SGR_CAPHIST
             else if (!move.is_promotion()) {
                 // Reward the cutoff capture and penalise earlier captures.
-                // After unmake, the mover and victim are back on the board.
-                int bonus = depth * depth;
-                auto pc = board.piece_at(move.from());
-
-                if (pc.has_value()) {
-                    int& ch = caphist[caphist_index(
-                        *pc, move.to(), caphist_victim(board, move))];
-                    ch = std::min(ch + bonus, HISTORY_MAX);
-                }
-
+                update_capture(move, bonus);
                 for (int i = 0; i < n_caps - 1; ++i) {
-                    const Move& c = tried_caps[i];
-                    auto cp = board.piece_at(c.from());
-                    if (cp.has_value()) {
-                        int& cch = caphist[caphist_index(
-                            *cp, c.to(), caphist_victim(board, c))];
-                        cch = std::max(cch - bonus, -HISTORY_MAX);
-                    }
+                    update_capture(tried_caps[i], -bonus);
                 }
             }
 #endif
@@ -2069,9 +2180,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     if (board.in_check(us)) {
         MoveList moves = generate_moves(board);
 #if SGR_QS_TT
-        MovePicker qpicker(*this, board, moves, valid_tt_move_key(qs_key, moves), ply, false);
+        MovePicker qpicker(*this, board, moves, valid_tt_move_key(qs_key, moves), ply, 0, false);
 #else
-        MovePicker qpicker(*this, board, moves, std::nullopt, ply, false);
+        MovePicker qpicker(*this, board, moves, std::nullopt, ply, 0, false);
 #endif
         LegalityInfo li = board.legality_info();
 
@@ -2149,9 +2260,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
 
 #if SGR_QS_TT
     // Only a stored move that is itself a capture or promotion can be tried.
-    MovePicker npicker(*this, board, noisy_moves, valid_tt_move_key(qs_key, noisy_moves), ply, false);
+    MovePicker npicker(*this, board, noisy_moves, valid_tt_move_key(qs_key, noisy_moves), ply, 0, false);
 #else
-    MovePicker npicker(*this, board, noisy_moves, std::nullopt, ply, false);
+    MovePicker npicker(*this, board, noisy_moves, std::nullopt, ply, 0, false);
 #endif
     LegalityInfo li = board.legality_info();
 
@@ -2249,12 +2360,211 @@ struct ByScoreDesc {
 };
 }  // namespace
 
+#if SGR_PICKER2
+namespace {
+// Move every entry scoring at least limit to the front and sort those,
+// highest first; the rest follow unsorted. At most nodes only the first few
+// quiets are searched before a cutoff or pruning, so sorting all of them
+// would be wasted.
+template <class T>
+void sort_from(T* moves, int n, int limit) {
+    int kept = 0;
+    for (int i = 0; i < n; ++i) {
+        if (moves[i].score >= limit) {
+            std::swap(moves[i], moves[kept++]);
+        }
+    }
+    for (int i = 1; i < kept; ++i) {
+        const T item = moves[i];
+        int j = i;
+        while (j > 0 && moves[j - 1].score < item.score) {
+            moves[j] = moves[j - 1];
+            --j;
+        }
+        moves[j] = item;
+    }
+}
+}  // namespace
+
 Engine::MovePicker::MovePicker(
     const Engine& eng,
     Board& board,
     const MoveList& moves,
     const std::optional<Move>& tt_move_key,
     int ply,
+    int depth,
+    bool main_search
+) : eng_(&eng), board_(&board), moves_(&moves), ply_(ply), depth_(depth), main_(main_search) {
+    // The caller has checked that the TT move is in the list.
+    if (tt_move_key.has_value()) {
+        tt_move_ = *tt_move_key;
+        has_tt_ = true;
+    }
+}
+
+bool Engine::MovePicker::in_list(const Move& move) const {
+    for (const Move& m : *moves_) {
+        if (m == move) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Engine::MovePicker::next(Move& out) {
+#if SGR_PICKER_CHECK
+    const bool got = next_move(out);
+    if (got) {
+        int at = -1;
+        for (int i = 0; i < moves_->size(); ++i) {
+            if ((*moves_)[i] == out) { at = i; break; }
+        }
+        if (at < 0 || seen_[at]) {
+            std::cerr << "picker: " << (at < 0 ? "stray" : "repeated") << " move "
+                      << move_to_string(out) << "\n";
+            std::abort();
+        }
+        seen_[at] = true;
+        ++returned_;
+    } else if (returned_ != moves_->size()) {
+        std::cerr << "picker: returned " << returned_ << " of " << moves_->size() << " moves\n";
+        std::abort();
+    }
+    return got;
+#else
+    return next_move(out);
+#endif
+}
+
+bool Engine::MovePicker::next_move(Move& out) {
+    for (;;) {
+        switch (stage_) {
+            case S_TT:
+                stage_ = S_CAPTURE_INIT;
+                if (has_tt_) { out = tt_move_; return true; }
+                break;
+
+            case S_CAPTURE_INIT:
+                for (const Move& m : *moves_) {
+                    if ((has_tt_ && m == tt_move_) || !eng_->is_noisy_move(*board_, m)) {
+                        continue;
+                    }
+                    caps_[n_caps_++] = {m.data, eng_->capture_score(*board_, m)};
+                }
+                sort_from(caps_, n_caps_, std::numeric_limits<int>::min());
+                index_ = 0;
+                stage_ = S_GOOD_CAPTURE;
+                break;
+
+            case S_GOOD_CAPTURE:
+                while (index_ < n_caps_) {
+                    Move m;
+                    m.data = caps_[index_++].move;
+                    // SEE runs only on the capture about to be tried. In the
+                    // main search a losing one waits for its own stage, and
+                    // so does an underpromotion.
+                    if (main_ && (m.is_promotion() ? m.promo_type() != PROMO_Q
+                                                   : !board_->see_ge(m, 0))) {
+                        bad_caps_[n_bad_++] = m.data;
+                        continue;
+                    }
+                    out = m;
+                    return true;
+                }
+                stage_ = S_KILLER1;
+                break;
+
+            case S_KILLER1:
+            case S_KILLER2: {
+                const int slot = stage_ == S_KILLER1 ? 0 : 1;
+                stage_ = stage_ == S_KILLER1 ? S_KILLER2 : S_QUIET_INIT;
+                if (ply_ >= MAX_PLY || !eng_->killer_moves[ply_][slot].has_value()) {
+                    break;
+                }
+                // A killer comes from another position at this ply, so it must
+                // be a move here, and a quiet one, or the captures had it.
+                const Move k = *eng_->killer_moves[ply_][slot];
+                if ((has_tt_ && k == tt_move_) || !in_list(k) || eng_->is_noisy_move(*board_, k)) {
+                    break;
+                }
+                killer_[n_killers_++] = k;
+                out = k;
+                return true;
+            }
+
+            case S_QUIET_INIT:
+                for (const Move& m : *moves_) {
+                    if ((has_tt_ && m == tt_move_) || eng_->is_noisy_move(*board_, m)
+                            || (n_killers_ > 0 && m == killer_[0])
+                            || (n_killers_ > 1 && m == killer_[1])) {
+                        continue;
+                    }
+                    quiets_[n_quiets_++] = {m.data, eng_->quiet_history(*board_, m, ply_, main_)};
+                }
+                // Everything the promising stage returns must be in the
+                // sorted part, so the limit never sits above that threshold.
+                sort_from(quiets_, n_quiets_,
+                          main_ ? std::min(-params.quiet_sort_limit * depth_, params.good_quiet_min)
+                                : std::numeric_limits<int>::min());
+                index_ = 0;
+                stage_ = S_GOOD_QUIET;
+                break;
+
+            case S_GOOD_QUIET:
+                if (index_ < n_quiets_ && (!main_ || quiets_[index_].score > params.good_quiet_min)) {
+                    out.data = quiets_[index_++].move;
+                    return true;
+                }
+                stage_ = S_BAD_CAPTURE;
+                bad_index_ = 0;
+                break;
+
+            case S_BAD_CAPTURE:
+                if (bad_index_ < n_bad_) {
+                    out.data = bad_caps_[bad_index_++];
+                    return true;
+                }
+                stage_ = S_BAD_QUIET;
+                break;
+
+            case S_BAD_QUIET:
+                if (index_ < n_quiets_) {
+                    out.data = quiets_[index_++].move;
+                    return true;
+                }
+                stage_ = S_DONE;
+                break;
+
+            default:
+                return false;
+        }
+    }
+}
+
+MoveList Engine::order_moves(
+    Board& board,
+    const MoveList& moves,
+    const std::optional<Move>& tt_move_key,
+    int ply,
+    bool split_bad_captures
+) const {
+    // The root takes the picker's order, fully sorted.
+    MovePicker picker(*this, board, moves, tt_move_key, ply, MAX_PLY, split_bad_captures);
+    MoveList ordered;
+    Move move;
+    while (picker.next(move)) {
+        ordered.add(move);
+    }
+    return ordered;
+}
+#else
+Engine::MovePicker::MovePicker(
+    const Engine& eng,
+    Board& board,
+    const MoveList& moves,
+    const std::optional<Move>& tt_move_key,
+    int ply,
+    int /* depth */,
     bool split_bad_captures
 ) {
     // Score eagerly: history changes while earlier moves are searched, and the
@@ -2297,17 +2607,7 @@ Engine::MovePicker::MovePicker(
             continue;
         }
 
-        int hist = eng.history[move.from()][move.to()];
-
-#if SGR_CONTHIST
-        if (split_bad_captures && ply > 0 && eng.ss_piece[ply - 1] >= 0) {
-            auto piece = board.piece_at(move.from());
-            if (piece.has_value()) {
-                hist += eng.conthist[conthist_index(
-                    eng.ss_piece[ply - 1], eng.ss_to[ply - 1], *piece, move.to())];
-            }
-        }
-#endif
+        int hist = eng.quiet_history(board, move, ply, split_bad_captures);
 
         if (hist > 0) {
             good_quiets_[n_gq_++] = {move.data, hist};
@@ -2458,18 +2758,7 @@ MoveList Engine::order_moves(
             continue;
         }
 
-        int hist = history[move.from()][move.to()];
-
-#if SGR_CONTHIST
-        // Add continuation history from the previous ply outside quiescence.
-        if (split_bad_captures && ply > 0 && ss_piece[ply - 1] >= 0) {
-            auto piece = board.piece_at(move.from());
-            if (piece.has_value()) {
-                hist += conthist[conthist_index(
-                    ss_piece[ply - 1], ss_to[ply - 1], *piece, move.to())];
-            }
-        }
-#endif
+        int hist = quiet_history(board, move, ply, split_bad_captures);
 
         if (hist > 0) {
             good_quiets[n_gq++] = {move, hist};
@@ -2524,7 +2813,32 @@ MoveList Engine::order_moves(
     return ordered;
 }
 
+#endif
+
 int Engine::capture_score(const Board& board, const Move& move) const {
+#if SGR_CAPHIST && SGR_CAPHIST_FULL
+    // The victim's value, less a little for the attacker's, plus what capture
+    // history has learnt about this capture, which can overturn the victim
+    // order when it has cause. A queen promotion counts as capturing a queen.
+    // Underpromotions are rarely best and go after every capture.
+    auto attacker = board.piece_at(move.from());
+    if (!attacker.has_value()) {
+        return 0;
+    }
+    auto victim = board.piece_at(move.to());
+    int gain = victim.has_value() ? PIECE_VALUE[*victim] : 0;
+    if (move.is_promotion()) {
+        if (move.promo_type() != PROMO_Q) {
+            return -INF + PIECE_VALUE[move.promo_piece(board.side_to_move)];
+        }
+        return params.cap_mvv_mul * (gain + PIECE_VALUE[WQ]);
+    }
+    if (move.is_en_passant()) {
+        gain = PIECE_VALUE[*attacker];   // a pawn for a pawn
+    }
+    return params.cap_mvv_mul * gain - PIECE_VALUE[*attacker]
+           + caphist[caphist_index(*attacker, move.to(), caphist_victim(board, move))];
+#else
     if (move.is_promotion()) {
         return 8'000 + PIECE_VALUE[move.promo_piece(board.side_to_move)];
     }
@@ -2550,6 +2864,7 @@ int Engine::capture_score(const Board& board, const Move& move) const {
 #endif
 
     return score;
+#endif
 }
 
 void Engine::store_tt(
