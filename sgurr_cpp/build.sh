@@ -49,7 +49,9 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-FLAGS="-std=c++20 -O3 -march=$arch -DNDEBUG -static -Wall -Wextra"
+# A 16 MB stack: the search recurses up to 128 plies, with a frame of about
+# 7 KB each, and Windows gives the main thread only 1 MB unless told.
+FLAGS="-std=c++20 -O3 -march=$arch -DNDEBUG -static -Wall -Wextra -Wl,--stack,16777216"
 
 # #embed finds a relative path from nnue.cpp, not from here, so pass it whole.
 if [ -n "$embed" ]; then
