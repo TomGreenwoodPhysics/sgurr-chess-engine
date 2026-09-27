@@ -102,6 +102,11 @@ struct OrderStats {
     // Decisions made on the static eval: tested, then taken.
     long long rfp[2] = {}, fut_drop[2] = {}, razor[2] = {}, nmp[2] = {}, fut_move[2] = {};
     long long nodes = 0;   // main-search nodes past the TT probe
+    // Late move reductions: searches reduced, plies taken off in total,
+    // re-searches after beating alpha, and those made a ply deeper or
+    // shallower.
+    long long lmr_searches = 0, lmr_plies = 0, lmr_research = 0;
+    long long lmr_deeper = 0, lmr_shallower = 0, lmr_captures = 0;
     // The correction applied: signed from white's side, and its size.
     long long corr_count = 0;
     double corr_white = 0, corr_size = 0;
@@ -299,6 +304,33 @@ constexpr int HIST_LIMIT = 16384;
 #define SGR_MDP 1
 #endif
 
+// Batch E, late move reductions. See benchmarks/v95_batch_e_prediction.md.
+// Reduce more at nodes expected to fail high, which the search now tracks.
+#ifndef SGR_LMR_CUTNODE
+#define SGR_LMR_CUTNODE 1
+#endif
+// Reduce more when the static eval is not improving.
+#ifndef SGR_LMR_IMPROVING
+#define SGR_LMR_IMPROVING 1
+#endif
+// Reduce less for a move that gives check.
+#ifndef SGR_LMR_CHECK
+#define SGR_LMR_CHECK 1
+#endif
+// Reduce losing captures, which were never reduced. Needs SGR_PICKER2,
+// which knows when it hands out a losing capture.
+#ifndef SGR_LMR_CAPTURES
+#define SGR_LMR_CAPTURES 1
+#endif
+#if SGR_LMR_CAPTURES && !SGR_PICKER2
+#error "SGR_LMR_CAPTURES needs SGR_PICKER2"
+#endif
+// After a reduced search beats alpha, search it again a ply deeper if it
+// beat the best move by a wide margin, a ply shallower if only just.
+#ifndef SGR_LMR_RESEARCH
+#define SGR_LMR_RESEARCH 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.
@@ -325,6 +357,14 @@ struct SearchParams {
     // further, 20% of tested quiets pruned.
     int histlmr_div             = SGR_HIST_GRAVITY ? 6200 : 228;   // SPSA 400000 -> 228
     int histlmr_max             = 2;
+    // Batch E. Plies added or taken off a reduction, and the re-search
+    // margins in centipawns. Starting values, for the tune to set.
+    int lmr_cut                 = 1;     // at an expected cut node
+    int lmr_not_improving       = 1;
+    int lmr_check               = 1;     // taken off for a checking move
+    int lmr_capture_less        = 1;     // taken off for a losing capture
+    int lmr_deeper_margin       = 50;
+    int lmr_shallower_margin    = 10;
 
     // Extensions
     int singular_min_depth      = 7;
@@ -633,12 +673,15 @@ private:
     );
 
     // Singular searches exclude one move and disable null moves and TT stores.
+    // cut_node marks a node expected to fail high, where the move that
+    // refutes the line is likely to come early.
     int negamax(
         Board& board,
         int depth,
         int alpha,
         int beta,
         int ply,
+        bool cut_node = false,
         std::optional<Move> excluded = std::nullopt
     );
 
@@ -653,7 +696,8 @@ private:
         int ply,
         int legal_moves_searched,
         const std::optional<Move>& tt_move_key,
-        bool in_check
+        bool in_check,
+        bool losing_capture
     ) const;
 
     int lmr_reduction(int depth, int legal_moves_searched) const;
@@ -682,6 +726,10 @@ private:
 
         // Return the next move or false when exhausted.
         bool next(Move& out);
+
+        // Whether the move just returned came from the losing captures,
+        // where underpromotions also wait.
+        bool losing_capture() const { return stage_ == S_BAD_CAPTURE; }
 
     private:
         // Raw 16-bit moves, so the arrays need no initialising.

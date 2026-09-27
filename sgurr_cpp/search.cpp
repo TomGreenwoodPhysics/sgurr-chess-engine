@@ -61,6 +61,14 @@ void print_order_stats() {
         std::cerr << ' ' << name << ' ' << c[1] << '/' << c[0] << " (" << pct(c[1], c[0])
                   << "%, " << 1000.0 * double(c[1]) / double(std::max(1LL, s.nodes)) << "/k nodes)";
     };
+    if (s.lmr_searches > 0) {
+        std::cerr << "lmr: " << s.lmr_searches << " reduced searches, mean reduction "
+                  << double(s.lmr_plies) / double(s.lmr_searches) << " plies, "
+                  << pct(s.lmr_captures, s.lmr_searches) << "% of them captures; "
+                  << pct(s.lmr_research, s.lmr_searches) << "% searched again, of which "
+                  << pct(s.lmr_deeper, s.lmr_research) << "% deeper and "
+                  << pct(s.lmr_shallower, s.lmr_research) << "% shallower\n";
+    }
     if (s.corr_count > 0) {
         std::cerr << "corr: mean size " << s.corr_size / double(s.corr_count)
                   << " cp, mean from white's side " << s.corr_white / double(s.corr_count)
@@ -1291,7 +1299,7 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
         if (!legal_found_any) {
             score = -negamax(board, depth - 1, -beta, -alpha, 1);
         } else {
-            score = -negamax(board, depth - 1, -alpha - 1, -alpha, 1);
+            score = -negamax(board, depth - 1, -alpha - 1, -alpha, 1, true);
 
             if (score > alpha && score < beta && !stop_search) {
                 score = -negamax(board, depth - 1, -beta, -alpha, 1);
@@ -1390,7 +1398,8 @@ bool Engine::can_reduce_late_move(
     int ply,
     int legal_moves_searched,
     const std::optional<Move>& tt_move_key,
-    bool in_check
+    bool in_check,
+    bool losing_capture
 ) const {
     if (depth < params.lmr_min_depth) {
         return false;
@@ -1408,7 +1417,7 @@ bool Engine::can_reduce_late_move(
         return false;
     }
 
-    if (is_noisy_move(board, move)) {
+    if (is_noisy_move(board, move) && !losing_capture) {
         return false;
     }
 
@@ -1484,6 +1493,7 @@ int Engine::negamax(
     int alpha,
     int beta,
     int ply,
+    [[maybe_unused]] bool cut_node,
     std::optional<Move> excluded
 ) {
 #if SGR_TRACE_SEARCH
@@ -1762,7 +1772,8 @@ int Engine::negamax(
             depth - 1 - R,
             -beta,
             -beta + 1,
-            ply + 1
+            ply + 1,
+            !cut_node
         );
 
         board.unmake_null_move(undo);
@@ -1830,6 +1841,7 @@ int Engine::negamax(
                 singular_beta - 1,
                 singular_beta,
                 ply,
+                false,
                 tt_move_key
             );
 
@@ -2000,6 +2012,11 @@ int Engine::negamax(
         }
 #endif
 
+#if SGR_LMR_CAPTURES
+        const bool losing_capture = picker.losing_capture() && is_noisy_move(board, move);
+#else
+        const bool losing_capture = false;
+#endif
         bool reduce_late_move = can_reduce_late_move(
             board,
             move,
@@ -2007,7 +2024,8 @@ int Engine::negamax(
             ply,
             legal_moves_searched,
             tt_move_key,
-            in_check_node
+            in_check_node,
+            losing_capture
         );
 
         legal_found = true;
@@ -2019,7 +2037,8 @@ int Engine::negamax(
 
 #if SGR_HISTLMR
         // A reduced quiet's history, read before the move changes the board.
-        const int lmr_hist = reduce_late_move && lmr_reduction(depth, legal_moves_searched) > 0
+        const int lmr_hist = reduce_late_move && !losing_capture
+                             && lmr_reduction(depth, legal_moves_searched) > 0
             ? quiet_history(board, move, ply, true) : 0;
 #endif
 
@@ -2070,7 +2089,7 @@ int Engine::negamax(
 #if SGR_TRACE_SEARCH
             trace_prepare_move(move);
 #endif
-            score = -negamax(board, next_depth, -beta, -alpha, ply + 1);
+            score = -negamax(board, next_depth, -beta, -alpha, ply + 1, !pv_node && !cut_node);
         } else {
             // Test later moves with a reduced null window and re-search surprises.
             int reduction = reduce_late_move
@@ -2079,7 +2098,7 @@ int Engine::negamax(
 
 #if SGR_HISTLMR
             // Adjust quiet-move reduction from its history.
-            if (reduction > 0) {
+            if (reduction > 0 && !losing_capture) {
                 const int hist_score = lmr_hist;
                 const int adjust = std::clamp(
                     hist_score / params.histlmr_div, -params.histlmr_max, params.histlmr_max);
@@ -2101,6 +2120,29 @@ int Engine::negamax(
                 reduction = std::max(0, std::min(reduction, next_depth - 1));
             }
 #endif
+            if (reduction > 0) {
+#if SGR_LMR_CAPTURES
+                if (losing_capture) {
+                    reduction -= params.lmr_capture_less;
+                }
+#endif
+#if SGR_LMR_CUTNODE
+                if (cut_node) {
+                    reduction += params.lmr_cut;
+                }
+#endif
+#if SGR_LMR_IMPROVING && SGR_IMPROVING
+                if (!improving) {
+                    reduction += params.lmr_not_improving;
+                }
+#endif
+#if SGR_LMR_CHECK
+                if (gives_check) {
+                    reduction -= params.lmr_check;
+                }
+#endif
+                reduction = std::max(0, std::min(reduction, next_depth - 1));
+            }
 #if SGR_PV_LMR
             // Principal-variation nodes search late moves one ply deeper.
             if (pv_node && reduction > 0) {
@@ -2108,24 +2150,50 @@ int Engine::negamax(
             }
 #endif
             int reduced_depth = std::max(0, next_depth - reduction);
+#if SGR_ORDER_STATS
+            if (reduction > 0) {
+                order_stats.lmr_searches += 1;
+                order_stats.lmr_plies += reduction;
+                order_stats.lmr_captures += losing_capture;
+            }
+#endif
 
 #if SGR_TRACE_SEARCH
             trace_prepare_move(move);
 #endif
-            score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1);
+            // A late move is expected to be refuted, so its child to fail high.
+            score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1, true);
 
+            // The depth for searches that follow a reduced one that beat alpha.
+            int full_depth = next_depth;
             if (score > alpha && reduction > 0 && !stop_search) {
-#if SGR_TRACE_SEARCH
-                trace_prepare_move(move);
+#if SGR_LMR_RESEARCH
+                if (score > best_score + params.lmr_deeper_margin) {
+                    full_depth += 1;
+                } else if (score < best_score + params.lmr_shallower_margin) {
+                    full_depth -= 1;
+                }
 #endif
-                score = -negamax(board, next_depth, -alpha - 1, -alpha, ply + 1);
+#if SGR_ORDER_STATS
+                order_stats.lmr_research += 1;
+                order_stats.lmr_deeper += full_depth > next_depth;
+                order_stats.lmr_shallower += full_depth < next_depth;
+#endif
+                // A ply shallower may be no deeper than the reduced search.
+                if (full_depth > reduced_depth) {
+#if SGR_TRACE_SEARCH
+                    trace_prepare_move(move);
+#endif
+                    // The child just failed low, so no longer expected to fail high.
+                    score = -negamax(board, full_depth, -alpha - 1, -alpha, ply + 1, false);
+                }
             }
 
             if (score > alpha && score < beta && !stop_search) {
 #if SGR_TRACE_SEARCH
                 trace_prepare_move(move);
 #endif
-                score = -negamax(board, next_depth, -beta, -alpha, ply + 1);
+                score = -negamax(board, full_depth, -beta, -alpha, ply + 1);
             }
         }
 

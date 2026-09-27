@@ -66,6 +66,12 @@ const Tunable TUNABLES[] = {
     // Keep a wide range because useful history scaling varies greatly.
     {"HistLmrDiv",            &SearchParams::histlmr_div,              16, 2'000'000},
     {"HistLmrMax",            &SearchParams::histlmr_max,               0,       6},
+    {"LmrCut",                &SearchParams::lmr_cut,                   0,       3},
+    {"LmrNotImproving",       &SearchParams::lmr_not_improving,         0,       3},
+    {"LmrCheck",              &SearchParams::lmr_check,                 0,       3},
+    {"LmrCaptureLess",        &SearchParams::lmr_capture_less,         -2,       3},
+    {"LmrDeeperMargin",       &SearchParams::lmr_deeper_margin,         0,     400},
+    {"LmrShallowerMargin",    &SearchParams::lmr_shallower_margin,      0,     200},
     // Extensions
     {"SingularMinDepth",      &SearchParams::singular_min_depth,        4,      16},
     {"SingularTtDepthSlack",  &SearchParams::singular_tt_depth_slack,   0,       8},
