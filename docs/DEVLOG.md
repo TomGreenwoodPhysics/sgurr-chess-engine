@@ -1668,5 +1668,7 @@ search that stored it, losing value as searches pass.
 Replayed with the table kept between moves, the search reaches about a third
 of a ply deeper at the same node count, at every table size from 4 MB to
 256 MB. Most of that comes from the buckets, and ageing adds the rest. It
-costs 1.8% in speed. The SPRT is registered in
-`benchmarks/v95_batch_h_prediction.md`.
+costs 1.8% in speed.
+
+It measured **+14.5 ±13.5** against batch E over 720 games, stopped under
+rule 9 once past a minimum of 500, against a prediction of +10.

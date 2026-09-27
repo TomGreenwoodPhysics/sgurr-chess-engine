@@ -97,3 +97,17 @@ A clearly negative result. Then run with ageing off (`SGR_TT_AGE=0`), then
 the old table, and suspect the same-position rule first: the old table never
 let a shallower result replace a deeper entry, and this one does, up to six
 plies deeper. `TtKeepDepth` at 0 brings it close to the old rule.
+
+## Result, 2026-09-27
+
+Stopped under rule 9 at 720 games, with its minimum raised to 500: **+14.5
+±13.5**, W 121 L 92 D 483 over the 696 games of the last report, LLR 0.72 of
+2.94. All 720 games ended normally. Inside the band, a little above the +10
+predicted.
+
+The interval did not clear zero at 500 or 600 games and cleared by one Elo at
+700, so the size is soft. Batch H spent slightly less time, 179 ms a move
+against 182, and its reported depth averaged 20.67 against 20.44: about a
+quarter of a ply deeper, as the replays measured once the speed cost is taken
+off. The release's pool run is the check on its size, and a long time control
+is where it should matter more.
