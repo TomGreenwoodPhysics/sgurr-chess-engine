@@ -1575,3 +1575,38 @@ At the same node count, cutoffs come sooner (mean position 1.27 against 1.33)
 and the search averages 0.6 to 0.8 ply deeper, for 1.2% in speed. With the old
 picker's `std::sort` gone, bench gives the same fingerprint under GCC and
 clang. The SPRT is registered in `benchmarks/v95_batch_f_prediction.md`.
+
+## 2026-09-27, Time controls for rating lists
+
+Every game Sgurr has played in testing had an increment. CCRL's 40/15 has none:
+the GUI sends the moves left to the control instead, and the clock refills at
+move 40. That path had never been exercised, so it was checked without playing.
+
+fastchess records the time each move took. Over 55,227 moves by v9.4 in the
+batch C SPRT, the engine spent a median of 0.84 of its budget and never passed
+its hard maximum by more than 0.3 ms, with seven games running at once. Asked
+to move with a clock of 1 ms, or a negative one, it answers in under a
+millisecond. `tools/clock_sim.py` plays that real spending through whole games
+under other time controls, with extra latency charged on every move. Its copy
+of the allocation matches the engine's at 19,890 test points.
+
+CCRL's 2'+1" was safe by a wide margin: even with every move at its maximum and
+200 ms of latency, the clock never fell below 1.7 seconds. 40/15 never flagged
+either, but only because real spending rarely stays at the maximum. The move
+overhead was held back once, for the current move, so nothing covered the
+latency of the moves still to come. With every move at its maximum and 30 ms
+of latency, every simulated 40/15 game flagged. Faster controls showed the
+same thing: at one minute with no increment, 5 ms of latency flagged 37% of
+simulated games, which ran 40 to 160 moves.
+
+The allocation now holds the overhead back for every later move whose
+increment does not cover it: the rest of the control, or 60 moves in sudden
+death. Where the increment covers the overhead, as in all of Sgurr's testing
+and in CCRL Blitz, nothing changes, so no games were needed. In the
+simulations, real spending no longer flags under repeating controls with
+latency up to the 30 ms overhead, and survives 20 ms in sudden death without
+an increment. With every move at its maximum, repeating controls survive
+20 ms. A long enough game without an increment will outlast any reserve. The
+cost at 40/15 is about 1.2 seconds of each 15-minute control. What the
+simulation cannot show is a real game under a repeating control, and a short
+match at one is the remaining check before submission.
