@@ -276,16 +276,16 @@ std::vector<Move> trace_extract_pv(
     }
 
     while (!repeated && !pv.empty() && static_cast<int>(pv.size()) < depth) {
-        const TTEntry& slot = engine.transposition_table[board.hash_key & engine.tt_mask];
-        if (slot.key != board.hash_key || slot.best_move == NO_MOVE) {
+        const TTEntry* slot = engine.tt_find(board.hash_key);
+        if (slot == nullptr || slot->best_move == NO_MOVE) {
             break;
         }
         MoveList legal_moves = board.generate_legal_moves();
-        if (std::find(legal_moves.begin(), legal_moves.end(), slot.best_move) == legal_moves.end()) {
+        if (std::find(legal_moves.begin(), legal_moves.end(), slot->best_move) == legal_moves.end()) {
             break;
         }
-        pv.push_back(slot.best_move);
-        undos.push_back(board.make_move(slot.best_move));
+        pv.push_back(slot->best_move);
+        undos.push_back(board.make_move(slot->best_move));
         if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) break;
         seen.push_back(board.hash_key);
     }
@@ -442,16 +442,16 @@ std::vector<Move> extract_principal_variation(
     seen.push_back(board.hash_key);
 
     while (static_cast<int>(pv.size()) < depth) {
-        const TTEntry& slot = engine.transposition_table[board.hash_key & engine.tt_mask];
-        if (slot.key != board.hash_key || slot.best_move == NO_MOVE) {
+        const TTEntry* slot = engine.tt_find(board.hash_key);
+        if (slot == nullptr || slot->best_move == NO_MOVE) {
             break;
         }
         legal_moves = board.generate_legal_moves();
-        if (std::find(legal_moves.begin(), legal_moves.end(), slot.best_move) == legal_moves.end()) {
+        if (std::find(legal_moves.begin(), legal_moves.end(), slot->best_move) == legal_moves.end()) {
             break;
         }
-        pv.push_back(slot.best_move);
-        undos.push_back(board.make_move(slot.best_move));
+        pv.push_back(slot->best_move);
+        undos.push_back(board.make_move(slot->best_move));
         if (std::find(seen.begin(), seen.end(), board.hash_key) != seen.end()) {
             break;
         }
@@ -477,27 +477,28 @@ Engine::Engine() {
 void Engine::resize_hash(int mb) {
     mb = std::clamp(mb, MIN_HASH_MB, MAX_HASH_MB);
 
-    std::size_t entries = (static_cast<std::size_t>(mb) * 1024 * 1024) / sizeof(TTEntry);
+    std::size_t buckets = (static_cast<std::size_t>(mb) * 1024 * 1024) / sizeof(TTBucket);
 
     // Round down for masked indexing and to respect the requested size.
     std::size_t pow2 = 1;
-    while (pow2 * 2 <= entries) {
+    while (pow2 * 2 <= buckets) {
         pow2 *= 2;
     }
 
     // Fall back to the default if the requested allocation fails.
     try {
-        std::vector<TTEntry> fresh(pow2, TTEntry{});
+        std::vector<TTBucket> fresh(pow2, TTBucket{});
         transposition_table.swap(fresh);
-        tt_size = pow2;
+        tt_size = pow2 * TT_WAYS;
         tt_mask = pow2 - 1;
     } catch (const std::bad_alloc&) {
         std::cerr << "info string Hash: could not allocate " << mb
                   << " MB, keeping " << (tt_size / 1024) << "k entries\n";
         if (tt_size == 0) {                     // Ensure probes always have a table.
-            tt_size = 1 << 16;
-            tt_mask = tt_size - 1;
-            transposition_table.assign(tt_size, TTEntry{});
+            const std::size_t fallback = (1 << 16) / TT_WAYS;
+            tt_size = fallback * TT_WAYS;
+            tt_mask = fallback - 1;
+            transposition_table.assign(fallback, TTBucket{});
         }
     }
 }
@@ -584,7 +585,7 @@ std::string uci_score(int score) {
 } // namespace
 
 void Engine::clear_transposition_table() {
-    transposition_table.assign(tt_size, TTEntry{});
+    transposition_table.assign(transposition_table.size(), TTBucket{});
 }
 
 int Engine::history_bonus(int depth) const {
@@ -739,17 +740,13 @@ std::optional<Move> Engine::valid_tt_move_key(
     U64 board_hash,
     const MoveList& moves
 ) const {
-    const TTEntry& slot = transposition_table[board_hash & tt_mask];
+    const TTEntry* slot = tt_find(board_hash);
 
-    if (slot.key != board_hash) {
+    if (slot == nullptr || slot->best_move == NO_MOVE) {
         return std::nullopt;
     }
 
-    if (slot.best_move == NO_MOVE) {
-        return std::nullopt;
-    }
-
-    const Move key = slot.best_move;
+    const Move key = slot->best_move;
 
     for (const Move& move : moves) {
         if (move == key) {
@@ -769,6 +766,9 @@ SearchResult Engine::search_best_move(
 ) {
     nodes = 0;
     tt_hits = 0;
+#if SGR_TT_AGE
+    tt_generation = (tt_generation + 1) & 63;
+#endif
     start_time = std::chrono::steady_clock::now();
     time_limit = limit;
     soft_time_limit = soft_arg;
@@ -1063,11 +1063,13 @@ std::vector<Move> Engine::recorded_principal_variation(
 #endif
 
 int Engine::hashfull() const {
-    // Estimate UCI hashfull from the first 1000 uniformly indexed slots.
+    // Estimate UCI hashfull from the first 1000 uniformly indexed entries,
+    // counting only the current search's when entries are aged.
     int used = 0;
 
     for (int i = 0; i < 1000; ++i) {
-        if (transposition_table[i].key != 0) {
+        const TTEntry& entry = transposition_table[i / TT_WAYS].entries[i % TT_WAYS];
+        if (entry.key != 0 && tt_age(entry) == 0) {
             used += 1;
         }
     }
@@ -1550,29 +1552,29 @@ int Engine::negamax(
 #endif
     int original_alpha = alpha;
 
-    const TTEntry& tt_slot = transposition_table[board_hash & tt_mask];
+    TTEntry* const tt_slot = tt_probe(board_hash);
 
     // Excluded-move searches may read the TT but cannot cut off or store.
-    if (!excluded.has_value() && tt_slot.key == board_hash && tt_slot.depth >= depth
+    if (!excluded.has_value() && tt_slot != nullptr && tt_slot->depth >= depth
 #if SGR_PV_TTCUT
             && !pv_node
 #endif
     ) {
-        const TTEntry& entry = tt_slot;
+        const TTEntry& entry = *tt_slot;
         tt_hits += 1;
 
         int tt_score = score_from_tt(entry.score, ply);
 
-        if (entry.flag == TT_EXACT) {
+        if (entry.flag() == TT_EXACT) {
 #if SGR_TRACE_SEARCH
             trace_end(trace_scope.id, "tt-hit", tt_score);
 #endif
             return tt_score;
         }
 
-        if (entry.flag == TT_LOWER) {
+        if (entry.flag() == TT_LOWER) {
             alpha = std::max(alpha, tt_score);
-        } else if (entry.flag == TT_UPPER) {
+        } else if (entry.flag() == TT_UPPER) {
             beta = std::min(beta, tt_score);
         }
 
@@ -1825,12 +1827,13 @@ int Engine::negamax(
         && !excluded.has_value()
         && tt_move_key.has_value()
         && ply < MAX_PLY - 2
-        && tt_slot.key == board_hash
-        && tt_slot.flag != TT_UPPER
-        && tt_slot.depth >= depth - params.singular_tt_depth_slack
+        && tt_slot != nullptr
+        && tt_slot->key == board_hash
+        && tt_slot->flag() != TT_UPPER
+        && tt_slot->depth >= depth - params.singular_tt_depth_slack
     ) {
         // Copy the entry before recursion can replace its slot.
-        int tt_score = score_from_tt(tt_slot.score, ply);
+        int tt_score = score_from_tt(tt_slot->score, ply);
 
         if (std::abs(tt_score) < MATE_THRESHOLD) {
             int singular_beta = tt_score - params.singular_margin * depth;
@@ -2365,12 +2368,12 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     // fail-hard, so what is stored is exactly what is returned.
     const U64 qs_key = board.hash_key;
     const int qs_alpha = alpha;
-    const TTEntry& qs_slot = transposition_table[qs_key & tt_mask];
-    if (beta - alpha == 1 && qs_slot.key == qs_key) {
-        const int tt_score = score_from_tt(qs_slot.score, ply);
-        if (qs_slot.flag == TT_EXACT
-                || (qs_slot.flag == TT_LOWER && tt_score >= beta)
-                || (qs_slot.flag == TT_UPPER && tt_score <= alpha)) {
+    const TTEntry* const qs_slot = tt_probe(qs_key);
+    if (beta - alpha == 1 && qs_slot != nullptr) {
+        const int tt_score = score_from_tt(qs_slot->score, ply);
+        if (qs_slot->flag() == TT_EXACT
+                || (qs_slot->flag() == TT_LOWER && tt_score >= beta)
+                || (qs_slot->flag() == TT_UPPER && tt_score <= alpha)) {
             tt_hits += 1;
             return tt_score;
         }
@@ -3078,6 +3081,46 @@ int Engine::capture_score(const Board& board, const Move& move) const {
 #endif
 }
 
+TTEntry* Engine::tt_probe(U64 board_hash) {
+    for (TTEntry& entry : transposition_table[board_hash & tt_mask].entries) {
+        if (entry.key == board_hash) {
+#if SGR_TT_AGE
+            // Written only when stale, so a hit rarely dirties the line.
+            if (entry.generation() != tt_generation) {
+                entry.bound = static_cast<std::uint8_t>(entry.flag() | (tt_generation << 2));
+            }
+#endif
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+const TTEntry* Engine::tt_find(U64 board_hash) const {
+    for (const TTEntry& entry : transposition_table[board_hash & tt_mask].entries) {
+        if (entry.key == board_hash) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+int Engine::tt_age(const TTEntry& entry) const {
+#if SGR_TT_AGE
+    return (tt_generation - entry.generation()) & 63;
+#else
+    (void)entry;
+    return 0;
+#endif
+}
+
+int Engine::tt_worth(const TTEntry& entry) const {
+    if (entry.key == 0) {
+        return std::numeric_limits<int>::min();
+    }
+    return entry.depth - params.tt_age_weight * tt_age(entry);
+}
+
 void Engine::store_tt(
     U64 board_hash,
     int depth,
@@ -3085,29 +3128,91 @@ void Engine::store_tt(
     int flag,
     Move best_move_key
 ) {
-    TTEntry& slot = transposition_table[board_hash & tt_mask];
-
-    // Replace collisions or entries no deeper than this search.
-    if (slot.key != board_hash || depth >= slot.depth) {
-#if SGR_TTMOVE_KEEP
-        if (best_move_key == NO_MOVE && slot.key == board_hash) {
-            best_move_key = slot.best_move;
+    TTBucket& bucket = transposition_table[board_hash & tt_mask];
+#if SGR_TT_BUCKETS
+    // This position's entry if it has one, or else the bucket's least
+    // valuable. A much deeper entry for the same position stays, unless it
+    // is from an earlier search or this result is exact.
+    TTEntry* slot = nullptr;
+    for (TTEntry& entry : bucket.entries) {
+        if (entry.key == board_hash) {
+            slot = &entry;
+            break;
         }
-#endif
-        // Depth and flag are bounded to their packed field widths.
-        slot = TTEntry{
-            board_hash,
-            static_cast<std::int32_t>(score),
-            static_cast<std::int8_t>(depth),
-            static_cast<std::uint8_t>(flag),
-            best_move_key
-        };
     }
+    if (slot != nullptr) {
+        if (flag != TT_EXACT && depth + params.tt_keep_depth < slot->depth
+                && tt_age(*slot) == 0) {
+            return;
+        }
+    } else {
+        slot = &bucket.entries[0];
+        for (TTEntry& entry : bucket.entries) {
+            if (tt_worth(entry) < tt_worth(*slot)) {
+                slot = &entry;
+            }
+        }
+    }
+#else
+    // Replace collisions or entries no deeper than this search.
+    TTEntry* slot = &bucket.entries[0];
+    if (slot->key == board_hash && depth < slot->depth) {
+        return;
+    }
+#endif
+#if SGR_TTMOVE_KEEP
+    if (best_move_key == NO_MOVE && slot->key == board_hash) {
+        best_move_key = slot->best_move;
+    }
+#endif
+    // Depth and flag are bounded to their packed field widths.
+    *slot = TTEntry{
+        board_hash,
+        static_cast<std::int32_t>(score),
+        static_cast<std::int8_t>(depth),
+        static_cast<std::uint8_t>(flag | (tt_generation << 2)),
+        best_move_key
+    };
 }
 
 #if SGR_QS_TT
 void Engine::store_tt_qs(U64 board_hash, int score, int flag, Move best_move_key) {
-    const TTEntry& slot = transposition_table[board_hash & tt_mask];
+#if SGR_TT_BUCKETS
+    // Quiescence goes only where it costs nothing: this position's own
+    // quiescence entry, or a slot that is empty, from quiescence or stale.
+    TTBucket& bucket = transposition_table[board_hash & tt_mask];
+    TTEntry* slot = nullptr;
+    for (TTEntry& entry : bucket.entries) {
+        if (entry.key == board_hash) {
+            slot = &entry;
+            break;
+        }
+    }
+    if (slot == nullptr) {
+        slot = &bucket.entries[0];
+        for (TTEntry& entry : bucket.entries) {
+            if (tt_worth(entry) < tt_worth(*slot)) {
+                slot = &entry;
+            }
+        }
+    }
+    if (slot->key != 0 && tt_worth(*slot) > 0) {
+        return;
+    }
+#if SGR_TTMOVE_KEEP
+    if (best_move_key == NO_MOVE && slot->key == board_hash) {
+        best_move_key = slot->best_move;
+    }
+#endif
+    *slot = TTEntry{
+        board_hash,
+        static_cast<std::int32_t>(score),
+        0,
+        static_cast<std::uint8_t>(flag | (tt_generation << 2)),
+        best_move_key
+    };
+#else
+    const TTEntry& slot = transposition_table[board_hash & tt_mask].entries[0];
 
     // Leave a main-search entry for another position alone. For the same
     // position, store_tt already keeps anything deeper than depth 0.
@@ -3116,15 +3221,11 @@ void Engine::store_tt_qs(U64 board_hash, int score, int flag, Move best_move_key
     }
 
     store_tt(board_hash, 0, score, flag, best_move_key);
+#endif
 }
 #endif
 
 Move Engine::get_tt_move(U64 board_hash) const {
-    const TTEntry& slot = transposition_table[board_hash & tt_mask];
-
-    if (slot.key != board_hash) {
-        return NO_MOVE;
-    }
-
-    return slot.best_move;
+    const TTEntry* slot = tt_find(board_hash);
+    return slot != nullptr ? slot->best_move : NO_MOVE;
 }

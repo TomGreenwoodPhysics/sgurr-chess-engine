@@ -72,6 +72,10 @@ const Tunable TUNABLES[] = {
     {"LmrCaptureLess",        &SearchParams::lmr_capture_less,         -2,       3},
     {"LmrDeeperMargin",       &SearchParams::lmr_deeper_margin,         0,     400},
     {"LmrShallowerMargin",    &SearchParams::lmr_shallower_margin,      0,     200},
+#if SGR_TT_BUCKETS
+    {"TtAgeWeight",           &SearchParams::tt_age_weight,             0,      32},
+    {"TtKeepDepth",           &SearchParams::tt_keep_depth,             0,      16},
+#endif
     // Extensions
     {"SingularMinDepth",      &SearchParams::singular_min_depth,        4,      16},
     {"SingularTtDepthSlack",  &SearchParams::singular_tt_depth_slack,   0,       8},

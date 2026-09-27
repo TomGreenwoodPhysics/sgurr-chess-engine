@@ -1656,3 +1656,17 @@ of a point (METHODOLOGY §12).
 It measured **+16.1 ±16.0** against batch G over 516 games, stopped under rule
 9 once past a minimum of 500, against a prediction of +15. In games it
 searched a ply and a half deeper at the same time per move.
+
+## 2026-09-27, Batch H: transposition table buckets with ageing
+
+The table gave each position one slot, and any store for another position took
+it, so a shallow result could evict a deep one, and entries from earlier moves
+were never known to be stale. Now four entries share a cache line, a new
+position replaces the least valuable of them, and each entry records the
+search that stored it, losing value as searches pass.
+
+Replayed with the table kept between moves, the search reaches about a third
+of a ply deeper at the same node count, at every table size from 4 MB to
+256 MB. Most of that comes from the buckets, and ageing adds the rest. It
+costs 1.8% in speed. The SPRT is registered in
+`benchmarks/v95_batch_h_prediction.md`.

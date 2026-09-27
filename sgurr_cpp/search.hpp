@@ -331,6 +331,19 @@ constexpr int HIST_LIMIT = 16384;
 #define SGR_LMR_RESEARCH 1
 #endif
 
+// Batch H, the transposition table. See benchmarks/v95_batch_h_prediction.md.
+// Four entries share a bucket, one cache line, and a new position replaces
+// the least valuable of them instead of whatever held its single slot.
+#ifndef SGR_TT_BUCKETS
+#define SGR_TT_BUCKETS 1
+#endif
+// Each entry records the search that stored it. Older entries give way
+// first, a probe renews the entry it finds, and hashfull counts only the
+// current search's entries.
+#ifndef SGR_TT_AGE
+#define SGR_TT_AGE 1
+#endif
+
 
 // Search parameters exposed through UCI.
 // Fractional values use integer scaling because UCI spin options are integral.
@@ -365,6 +378,11 @@ struct SearchParams {
     int lmr_capture_less        = 1;     // taken off for a losing capture
     int lmr_deeper_margin       = 50;
     int lmr_shallower_margin    = 10;
+    // Batch H. Plies of depth an entry loses for each search since it was
+    // stored, and how much deeper an entry for the same position must be
+    // to survive a shallower result that is not exact.
+    int tt_age_weight           = 4;
+    int tt_keep_depth           = 6;
 
     // Extensions
     int singular_min_depth      = 7;
@@ -488,21 +506,41 @@ struct TTEntry {
     U64 key = 0;                    // Full hash. Zero marks an empty entry.
     std::int32_t score = 0;
     std::int8_t depth = -1;
-    std::uint8_t flag = TT_EXACT;
+    std::uint8_t bound = TT_EXACT;  // The flag in bits 0-1, the storing search in 2-7.
     Move best_move = NO_MOVE;       // NO_MOVE means no stored move.
+
+    int flag() const { return bound & 3; }
+    int generation() const { return bound >> 2; }
 };
 
 static_assert(sizeof(TTEntry) == 16,
               "TTEntry must stay 16 bytes: 4 per cache line is the point");
+
+// The unit the table probes and replaces in: a cache line of four entries,
+// or one entry without SGR_TT_BUCKETS.
+constexpr int TT_WAYS = SGR_TT_BUCKETS ? 4 : 1;
+struct alignas(sizeof(TTEntry) * TT_WAYS) TTBucket {
+    TTEntry entries[TT_WAYS];
+};
 
 class Engine {
 public:
     long long nodes = 0;
     long long tt_hits = 0;
 
-    std::vector<TTEntry> transposition_table;   // Indexed by hash & tt_mask.
-    std::size_t tt_size = 0;
+    std::vector<TTBucket> transposition_table;  // Buckets, indexed by hash & tt_mask.
+    std::size_t tt_size = 0;                    // Entries, TT_WAYS to a bucket.
     U64 tt_mask = 0;
+    int tt_generation = 0;                      // The current search, 0 to 63.
+
+    // The entry for this position, or nullptr. tt_probe marks the entry as
+    // used by the current search; tt_find only reads.
+    TTEntry* tt_probe(U64 board_hash);
+    const TTEntry* tt_find(U64 board_hash) const;
+    // Searches since an entry was stored, and how much it is worth keeping:
+    // its depth less a penalty for age. An empty entry is worth least.
+    int tt_age(const TTEntry& entry) const;
+    int tt_worth(const TTEntry& entry) const;
 
     Engine();
 
