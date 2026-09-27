@@ -1550,3 +1550,28 @@ c_end from its optimum, against 2.9 for the old rule on the same games. A
 parameter that changes nothing drifted at most 1.1 c_end, against 14. The
 tuner also refuses the old configs and runs, so the stopped tune cannot be
 resumed by mistake.
+
+## 2026-09-27, Batch F: move ordering
+
+Batch F reworks how moves are ordered. History is kept per side and bounded by
+gravity, continuation history also looks at our own moves two and four plies
+back, capture history counts at full weight, and a new picker does less work
+per node. Each part has its own toggle, and with all five off the search is
+identical to v9.4.
+
+Bounded history sits on a different scale, so history pruning and the history
+adjustment to reductions needed new settings. Matching the rates seen in bench
+was the wrong target: the old history grew over a search, and in games it
+prunes half as much again as in bench 14. The settings were matched in games
+instead, replayed with history carried between moves, and the tool for that is
+now in the repo (METHODOLOGY §12).
+
+The replays also corrected the picker. It first tried quiets with history above
+-4,000 ahead of losing captures, as many engines do, and cutoffs came later
+than with the old picker. Losing captures now go ahead of all but the strongest
+quiets.
+
+At the same node count, cutoffs come sooner (mean position 1.27 against 1.33)
+and the search averages 0.6 to 0.8 ply deeper, for 1.2% in speed. With the old
+picker's `std::sort` gone, bench gives the same fingerprint under GCC and
+clang. The SPRT is registered in `benchmarks/v95_batch_f_prediction.md`.

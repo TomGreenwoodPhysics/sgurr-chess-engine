@@ -602,3 +602,38 @@ splits into two 256-bit halves. Measured in both orders it was 2.7% slower than
 `x86-64-v3`, while native with AVX-512 switched off matched `x86-64-v3`, so
 AVX-512 was the whole cost. Builds now profile on the network and target
 `x86-64-v3`.
+
+---
+
+## 12. Calibrating a change to history: replay games, not bench
+
+History pruning and the history adjustment to reductions compare a quiet's
+history with fixed settings, so a change to how history is kept moves every
+decision they make. Batch F bounded history, which put it on a new scale, and
+both settings had to move with it. The first attempt matched the rates seen in
+bench, and bench misled.
+
+The old history grew without limit over a search, so how often it pruned
+depended on how long the search ran:
+
+| searches | quiets pruned | reductions changed |
+|---|---|---|
+| 400 positions to depth 12, history cleared before each | 5.6% | 9% |
+| bench 14 | 13.4% | 20% |
+| games replayed at 400,000 nodes a move | 19.8% | 33% |
+
+The settings were tuned in games, so games are where the rates should match.
+`tools/replay_stats.py` replays the 48 games in `testing/replay_games.txt`
+move by move for one side, carrying history and the TT between moves as a
+match does, with a fixed node budget for each move. A build with
+`-DSGR_ORDER_STATS=1` then prints how often the first move cut off and the mean
+position of the cutoff move. It also prints how history changed reductions and
+how often it pruned, with what other divisors and margins would have done on
+the same history values. Everything depends on nodes alone, so machine load
+does not matter and repeat runs agree exactly.
+
+The cutoff position and those rates were steady enough to compare settings.
+Bench node totals were not: moving the pruning margin from 75 to 50 took bench
+14 from 6.07M nodes to 7.99M, and 25 took it to 7.75M, as a few positions
+swung the total. Like tree size (§5), these measures set up a fair test. They
+do not predict what it will measure.
