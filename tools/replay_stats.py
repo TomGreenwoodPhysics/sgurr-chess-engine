@@ -69,7 +69,7 @@ def replay(name, exe, opts, nodes, games, net, out):
     read_until("uciok")
     for key, value in opts:
         send(f"setoption name {key} value {value}")
-    depths, seconds, scores, roots = [], 0.0, {}, {}
+    depths, seconds, scores, roots, best = [], 0.0, {}, {}, {}
     for key, first, fen, moves in games:
         send("ucinewgame")
         for ply in range(first, len(moves), 2):
@@ -79,7 +79,9 @@ def replay(name, exe, opts, nodes, games, net, out):
             depth = 0
             for line in read_until("bestmove"):
                 parts = line.split()
-                if line.startswith("info string rooteval"):
+                if parts[:1] == ["bestmove"] and len(parts) > 1:
+                    best[f"{key}:{ply}"] = parts[1]
+                elif line.startswith("info string rooteval"):
                     roots[f"{key}:{ply}"] = (int(parts[3]), int(parts[4]))
                 elif parts[:1] == ["info"] and "depth" in parts and "nodes" in parts:
                     depth = int(parts[parts.index("depth") + 1])
@@ -95,7 +97,7 @@ def replay(name, exe, opts, nodes, games, net, out):
              if not l.startswith(("info", "bestmove", "readyok", "orderstats done"))]
     send("quit")
     p.wait(timeout=30)
-    out[name] = (depths, seconds, stats, scores, roots)
+    out[name] = (depths, seconds, stats, scores, roots, best)
 
 
 def main():
@@ -135,26 +137,31 @@ def main():
         t.join()
 
     if args.write_reference:
-        scores = {}
+        entries = {}
         for result in out.values():
-            scores.update(result[3])
-        json.dump(scores, open(args.write_reference, "w"))
-        print(f"{len(scores)} reference scores written to {args.write_reference}")
+            for key, move in result[5].items():
+                entries[key] = {"score": result[3].get(key), "move": move}
+        json.dump(entries, open(args.write_reference, "w"))
+        print(f"{len(entries)} reference positions written to {args.write_reference}")
         return
 
     reference = json.load(open(args.reference)) if args.reference else None
+    # Older reference files hold a bare score per position.
+    if reference is not None:
+        reference = {k: v if isinstance(v, dict) else {"score": v, "move": None}
+                     for k, v in reference.items()}
     first = out[specs[0][0]][0] if specs[0][0] in out else []
     print(f"set {args.set}: {len(games)} games, {len(first)} searches of {args.nodes} nodes")
     for name, _, _ in specs:
         if name not in out:
             print(f"{name:>14}: failed")
             continue
-        depths, seconds, _, _, roots = out[name]
+        depths, seconds, _, _, roots, best = out[name]
         line = f"{name:>14}: mean depth {sum(depths) / len(depths):.3f}  time {seconds:7.1f}s"
         if reference is not None:
             raw_errors, corrected_errors = [], []
             for key, (raw, corrected) in roots.items():
-                target = reference.get(key)
+                target = reference.get(key, {}).get("score")
                 if target is not None and abs(target) <= 2000:
                     raw_errors.append(abs(raw - target))
                     corrected_errors.append(abs(corrected - target))
@@ -162,6 +169,23 @@ def main():
                 line += (f"  root eval against the reference: raw {statistics.mean(raw_errors):.1f},"
                          f" corrected {statistics.mean(corrected_errors):.1f}"
                          f" over {len(raw_errors)} positions")
+            agree = [best[k] == r["move"] for k, r in reference.items() if r["move"] and k in best]
+            if agree:
+                line += (f"  best move as the reference: {100 * sum(agree) / len(agree):.2f}%"
+                         f" of {len(agree)}")
+            # Paired against the first engine on the same positions.
+            first_best = out[specs[0][0]][5]
+            if name != specs[0][0] and first_best:
+                gain = loss = n = 0
+                for k, r in reference.items():
+                    if r["move"] and k in best and k in first_best:
+                        n += 1
+                        mine, theirs = best[k] == r["move"], first_best[k] == r["move"]
+                        gain += mine and not theirs
+                        loss += theirs and not mine
+                if n:
+                    line += (f"  vs {specs[0][0]}: +{gain} -{loss},"
+                             f" {100 * (gain - loss) / n:+.2f} ±{100 * (gain + loss) ** 0.5 / n:.2f} points")
         print(line)
     for name, _, _ in specs:
         if name in out and out[name][2]:

@@ -651,3 +651,12 @@ replay games is searched deeply once by the engine without the change
 what it has learnt from the game so far, is scored against that search
 (`--reference`). The tables and weights of batch G were chosen that way, with
 the error in the engine's own search kept only as a second view.
+
+### Agreeing with a stronger engine is a blunt measure of search
+
+For batch E the judge was BlackCore 6.0, 110 Elo above Sgurr, searching every
+replay position to 8 million nodes, and the measure was how often Sgurr's move
+at 400,000 nodes matched. Checked first against changes with known results,
+it ranked v9.4, batch F and batch G in the right order, but batch F, worth
++61.8 in games, moved it by 0.20 ±0.74 points. At this sample size it can show
+that a change does not pick worse moves, and not how much a change is worth.

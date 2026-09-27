@@ -1639,3 +1639,17 @@ any earlier version at long time controls.
 It measured **+21.9 ±21.3** against batch F over 313 games, stopped under
 rule 9 with the interval clearing zero by less than one Elo, against a
 prediction of +12. At the same time per move it searched half a ply deeper.
+
+## 2026-09-27, Batch E: late move reductions
+
+Five refinements to the reductions, each behind its own toggle. The search now
+tracks nodes expected to fail high and reduces late moves there one ply more.
+It reduces one more when the eval is not improving, one less for checks, and
+reduces losing captures, which it never did. After a reduced search beats
+alpha, the search again goes a ply deeper or shallower depending on the margin.
+
+At the same node count the search reaches a ply deeper, and it runs 3% faster.
+Judged by agreement with BlackCore at a much deeper search, it picks moves no
+worse. That judge proved blunt: batch F, worth +62 in games, moved it by a fifth
+of a point (METHODOLOGY §12). The SPRT is registered in
+`benchmarks/v95_batch_e_prediction.md`.
