@@ -637,3 +637,17 @@ Bench node totals were not: moving the pruning margin from 75 to 50 took bench
 14 from 6.07M nodes to 7.99M, and 25 took it to 7.75M, as a few positions
 swung the total. Like tree size (§5), these measures set up a fair test. They
 do not predict what it will measure.
+
+### A change to the eval cannot be judged by the search it changes
+
+Correction history showed why. Judged by how well a node's static eval predicted
+that node's own search score, every design looked good, and the raw eval's
+error doubled when the corrections came on. The search scores were built from
+corrected evals, so a correction could score well by agreeing with itself.
+
+The judge has to be something the change cannot touch. Every position of the
+replay games is searched deeply once by the engine without the change
+(`--write-reference`), and each design's static eval at those positions, with
+what it has learnt from the game so far, is scored against that search
+(`--reference`). The tables and weights of batch G were chosen that way, with
+the error in the engine's own search kept only as a second view.

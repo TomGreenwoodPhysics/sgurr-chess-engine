@@ -1614,3 +1614,25 @@ an increment. With every move at its maximum, repeating controls survive
 cost at 40/15 is about 1.2 seconds of each 15-minute control. What the
 simulation cannot show is a real game under a repeating control, and a short
 match at one is the remaining check before submission.
+
+## 2026-09-27, Batch G: correction history
+
+The pawn-only correction history tried in September measured -1.4 ±16.3 over
+1,000 games, too few to see +10, and its code had faults. It learnt half the
+error, treated fail-high and fail-low scores as exact, capped a correction at
+32 centipawns and left quiescence on the raw eval.
+
+Batch G keeps five tables by side to move: the pawns, each side's pieces, the
+minor pieces and the major pieces. They share every update, learn only where
+the score bounds the error, and correct quiescence too. Judged against a deep
+search by the engine without them (METHODOLOGY §12), the corrected eval is
+about 30% closer than the raw one. Two tables keyed by the previous moves were
+tried and dropped. The lookups cost 4.5% in speed after prefetching them when
+the move is made.
+
+The first builds crashed in the replays. The engine object lives on the main
+thread's stack, which Windows sizes at 1 MB, and the tables took it from 54 KB
+to 388 KB. They moved to the heap. `build.sh` also reserves 16 MB now: a search
+128 plies deep with singular tests along the way could have overflowed 1 MB in
+any earlier version at long time controls. The SPRT is registered in
+`benchmarks/v95_batch_g_prediction.md`.
