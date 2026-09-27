@@ -665,13 +665,19 @@ void Engine::clear_for_new_game() {
 TimeAllocation allocate_time(long long time_left_ms, long long inc_ms,
                              std::optional<long long> movestogo,
                              int fullmove_number, long long overhead_ms) {
-    // Hold the move overhead back once. The rest can be spent before the flag.
-    const double clock = std::max(1.0, double(time_left_ms - overhead_ms));
+    // Every move is charged its overhead. Hold it back for this move and for
+    // each later move whose increment does not cover it: the rest of the
+    // control, or in sudden death the next 60 moves. The rest can be spent
+    // before the flag.
+    const bool to_control = movestogo.has_value() && *movestogo > 0;
     const double inc = std::max(0.0, double(inc_ms));
+    const double later = to_control ? double(*movestogo - 1) : 60.0;
+    const double uncovered = std::max(0.0, double(overhead_ms) - inc);
+    const double clock = std::max(1.0, double(time_left_ms - overhead_ms) - uncovered * later);
 
     double horizon, budget_cap, max_cap;
 
-    if (movestogo.has_value() && *movestogo > 0) {
+    if (to_control) {
         // The clock is refilled after movestogo moves. Spread it over one
         // more than that, and allow a larger share when few are left.
         horizon = double(*movestogo) + 1.0;
