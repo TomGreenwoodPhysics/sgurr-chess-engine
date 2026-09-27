@@ -523,6 +523,37 @@ void Board::set_fen(const std::string& fen) {
     refresh_occupancy();
 
     hash_key = compute_hash();
+    group_keys = compute_group_keys();
+}
+
+namespace {
+// Fold a piece's Zobrist value into the groups the piece belongs to.
+inline void toggle_groups(std::array<U64, GROUP_COUNT>& keys, int piece, U64 z) {
+    const int type = piece % 6;   // pawn, knight, bishop, rook, queen, king
+    if (type == 0) {
+        keys[GROUP_PAWNS] ^= z;
+        return;
+    }
+    keys[piece < 6 ? GROUP_WHITE : GROUP_BLACK] ^= z;
+    if (type == 1 || type == 2) {
+        keys[GROUP_MINORS] ^= z;
+    } else if (type == 3 || type == 4) {
+        keys[GROUP_MAJORS] ^= z;
+    }
+}
+}  // namespace
+
+std::array<U64, GROUP_COUNT> Board::compute_group_keys() const {
+    std::array<U64, GROUP_COUNT> keys{};
+    for (int piece = 0; piece < 12; ++piece) {
+        U64 bb = bitboards[piece];
+        while (bb) {
+            auto [sq, next] = pop_lsb(bb);
+            bb = next;
+            toggle_groups(keys, piece, ZOBRIST_PIECES[piece][sq]);
+        }
+    }
+    return keys;
 }
 
 U64 Board::compute_hash() const {
@@ -578,6 +609,7 @@ void Board::assert_occupancy_sync() const {
     assert(occ_white == white);
     assert(occ_black == black);
     assert(occ_all == (white | black));
+    assert(group_keys == compute_group_keys());
 #endif
 }
 
@@ -1484,6 +1516,7 @@ UndoInfo Board::make_move(const Move& move) {
     undo.old_halfmove_clock = halfmove_clock;
     undo.old_fullmove_number = fullmove_number;
     undo.old_hash_key = hash_key;
+    undo.old_group_keys = group_keys;
 
     U64 from_mask = bit(move.from());
     U64 to_mask = bit(move.to());
@@ -1583,24 +1616,32 @@ UndoInfo Board::make_move(const Move& move) {
     // Incremental Zobrist update.
     U64 h = undo.old_hash_key;
 
-    h ^= ZOBRIST_PIECES[piece][move.from()];
-    h ^= ZOBRIST_PIECES[placed_piece][move.to()];
+    const U64 z_from = ZOBRIST_PIECES[piece][move.from()];
+    const U64 z_to = ZOBRIST_PIECES[placed_piece][move.to()];
+    h ^= z_from ^ z_to;
+    toggle_groups(group_keys, piece, z_from);
+    toggle_groups(group_keys, placed_piece, z_to);
 
     // Captured piece and square are either both set or both -1.
     if (captured >= 0) {
-        h ^= ZOBRIST_PIECES[captured][captured_square];
+        const U64 z = ZOBRIST_PIECES[captured][captured_square];
+        h ^= z;
+        toggle_groups(group_keys, captured, z);
     }
 
     if (move.is_castling()) {
+        U64 z = 0;
         if (move.to() == 6) {
-            h ^= ZOBRIST_PIECES[WR][7] ^ ZOBRIST_PIECES[WR][5];
+            z = ZOBRIST_PIECES[WR][7] ^ ZOBRIST_PIECES[WR][5];
         } else if (move.to() == 2) {
-            h ^= ZOBRIST_PIECES[WR][0] ^ ZOBRIST_PIECES[WR][3];
+            z = ZOBRIST_PIECES[WR][0] ^ ZOBRIST_PIECES[WR][3];
         } else if (move.to() == 62) {
-            h ^= ZOBRIST_PIECES[BR][63] ^ ZOBRIST_PIECES[BR][61];
+            z = ZOBRIST_PIECES[BR][63] ^ ZOBRIST_PIECES[BR][61];
         } else if (move.to() == 58) {
-            h ^= ZOBRIST_PIECES[BR][56] ^ ZOBRIST_PIECES[BR][59];
+            z = ZOBRIST_PIECES[BR][56] ^ ZOBRIST_PIECES[BR][59];
         }
+        h ^= z;
+        toggle_groups(group_keys, move.to() < 8 ? WR : BR, z);
     }
 
     h ^= ZOBRIST_CASTLING[undo.old_castling];
@@ -1692,6 +1733,7 @@ void Board::unmake_move(const UndoInfo& undo) {
     halfmove_clock = undo.old_halfmove_clock;
     fullmove_number = undo.old_fullmove_number;
     hash_key = undo.old_hash_key;
+    group_keys = undo.old_group_keys;
 
     assert_occupancy_sync();
 }

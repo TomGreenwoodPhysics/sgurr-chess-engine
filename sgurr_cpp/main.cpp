@@ -109,6 +109,13 @@ const Tunable TUNABLES[] = {
     {"QuietSortLimit",        &SearchParams::quiet_sort_limit,          0,   20000},
     {"GoodQuietMin",          &SearchParams::good_quiet_min,      -30000,  100000},
 #endif
+#if SGR_CORRHIST
+    {"CorrPawnW",             &SearchParams::corr_pawn_w,               0,    1024},
+    {"CorrNonPawnW",          &SearchParams::corr_nonpawn_w,            0,    1024},
+    {"CorrMinorW",            &SearchParams::corr_minor_w,              0,    1024},
+    {"CorrMajorW",            &SearchParams::corr_major_w,              0,    1024},
+    {"CorrRate",              &SearchParams::corr_rate,                 1,     128},
+#endif
     {"EvalScaleStart",        &SearchParams::evalscale_start,           0,      90},
     {"EvalScaleMinPct",       &SearchParams::evalscale_min_pct,        10,     100},
     // Time management. See the warning in search.hpp before tuning these.

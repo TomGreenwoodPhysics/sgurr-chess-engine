@@ -4,6 +4,7 @@
 
 #include <array>
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -94,6 +95,16 @@ struct OrderStats {
                                             2500, 3000, 4000};
     long long lmr_by_div[std::size(LMR_DIVS)][5] = {};
     long long pruned_by_margin[std::size(PRUNE_MARGINS)] = {};
+    // Static eval against the search score, at nodes whose score bounds the
+    // error: raw eval, then corrected, before that node's own update.
+    long long eval_nodes = 0;
+    double raw_abs = 0, raw_sq = 0, corr_abs = 0, corr_sq = 0;
+    // Decisions made on the static eval: tested, then taken.
+    long long rfp[2] = {}, fut_drop[2] = {}, razor[2] = {}, nmp[2] = {}, fut_move[2] = {};
+    long long nodes = 0;   // main-search nodes past the TT probe
+    // The correction applied: signed from white's side, and its size.
+    long long corr_count = 0;
+    double corr_white = 0, corr_size = 0;
 };
 extern OrderStats order_stats;
 void print_order_stats();
@@ -204,11 +215,16 @@ constexpr int HIST_LIMIT = 16384;
 #define SGR_EVALSCALE 1
 #endif
 
-// Correct the static eval by how wrong it has proved before in positions with
-// the same pawn structure. Needs SGR_IMPROVING, which is where the per-node
-// static eval is computed.
+// Batch G. Correct the static eval by how far it has missed the search in
+// similar positions: the same pawns, the same pieces for either side, or
+// the same minor or major pieces. Needs SGR_IMPROVING, which is where the
+// per-node static eval is computed. See benchmarks/v95_batch_g_prediction.md.
 #ifndef SGR_CORRHIST
-#define SGR_CORRHIST 0
+#define SGR_CORRHIST 1
+#endif
+// Quiescence stands pat on the corrected eval too.
+#ifndef SGR_CORR_QS
+#define SGR_CORR_QS 1
 #endif
 #if SGR_CORRHIST && !SGR_IMPROVING
 #error "SGR_CORRHIST needs SGR_IMPROVING for the per-node static eval"
@@ -358,6 +374,15 @@ struct SearchParams {
     // Quiets above this go before losing captures. Cutoffs came sooner with
     // losing captures ahead of all but the strongest quiets.
     int good_quiet_min          = 16000;
+
+    // Correction history, batch G. A weight per table, 0 to switch it off,
+    // and the learning rate. Chosen by replaying games against a deep
+    // search; the tune sets them properly.
+    int corr_pawn_w             = 512;
+    int corr_nonpawn_w          = 512;   // each side's pieces, two tables
+    int corr_minor_w            = 512;
+    int corr_major_w            = 512;
+    int corr_rate               = 16;
     // Start and floor for halfmove-clock evaluation scaling.
     int evalscale_start         = 40;
     int evalscale_min_pct       = 40;    // Minimum retained evaluation percentage.
@@ -467,14 +492,38 @@ public:
     int scale_for_material(const Board& board, int score) const;
 #endif
 #if SGR_CORRHIST
-    static constexpr int CORRHIST_SIZE  = 1 << 14;
-    static constexpr int CORRHIST_MASK  = CORRHIST_SIZE - 1;
-    static constexpr int CORRHIST_GRAIN = 256;   // fixed point, keeps sub-cp detail
-    static constexpr int CORRHIST_MAX   = CORRHIST_GRAIN * 32;
-    std::array<std::array<int, CORRHIST_SIZE>, 2> pawn_corrhist{};
+    // Correction tables by side to move. An entry is bounded by gravity like
+    // history, and a weight of 512 turns a full entry into 128 centipawns.
+    // They sit on the heap: at a third of a megabyte they would crowd the
+    // main thread's stack, where the engine object lives.
+#ifndef SGR_CORR_BITS
+#define SGR_CORR_BITS 14
+#endif
+    static constexpr int CORR_BITS  = SGR_CORR_BITS;
+    static constexpr int CORR_SIZE  = 1 << CORR_BITS;
+    static constexpr int CORR_LIMIT = 16384;
+    static constexpr int CORR_SCALE = 65536;
+    using CorrTable = std::array<std::array<std::int16_t, CORR_SIZE>, 2>;
+    struct CorrTables {
+        CorrTable pawn;
+        std::array<CorrTable, 2> nonpawn;   // keyed by one colour's pieces
+        CorrTable minor;
+        CorrTable major;
+    };
+    std::unique_ptr<CorrTables> corr = std::make_unique<CorrTables>();
 
-    int corrected_eval(const Board& board, int raw) const;
-    void update_corrhist(const Board& board, int depth, int score, int static_eval);
+    // Where a position's entries sit in each table.
+    struct CorrIndex {
+        int side, pawn, white, black, minor, major;
+    };
+    static CorrIndex corr_index(const Board& board);
+
+    // The correction in centipawns, and the update towards a search score
+    // that missed the corrected eval by error centipawns.
+    int correction(const Board& board) const;
+    void update_correction(const Board& board, int depth, int error);
+    // Start loading a position's entries, from the move that reaches it.
+    void prefetch_correction(const Board& board) const;
     void reset_corrhist();
 #endif
     int evaluate_quiet_position(const Board& board) const;

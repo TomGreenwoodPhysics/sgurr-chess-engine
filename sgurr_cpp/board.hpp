@@ -16,6 +16,10 @@ constexpr const char* START_FEN =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // State saved by make_move for unmake_move. Missing squares and pieces use -1.
+// Zobrist keys over groups of pieces, kept up to date like the position's
+// own key. Correction history indexes its tables by them.
+enum PieceGroup { GROUP_PAWNS, GROUP_WHITE, GROUP_BLACK, GROUP_MINORS, GROUP_MAJORS, GROUP_COUNT };
+
 struct UndoInfo {
     Move move;
     int moved_piece = -1;
@@ -27,6 +31,7 @@ struct UndoInfo {
     int old_halfmove_clock = 0;
     int old_fullmove_number = 1;
     U64 old_hash_key = 0;
+    std::array<U64, GROUP_COUNT> old_group_keys{};
 };
 
 struct NullMoveUndo {
@@ -80,6 +85,9 @@ public:
     int halfmove_clock = 0;
     int fullmove_number = 1;
     U64 hash_key = 0;
+    // Pawns of both sides, each side's other pieces with its king, the
+    // minor pieces and the major pieces of both sides.
+    std::array<U64, GROUP_COUNT> group_keys{};
     // Fixed ring of prior Zobrist keys used for repetition detection.
     // Entries older than the halfmove clock can be overwritten safely.
     std::array<U64, POSITION_HISTORY_CAP> position_history{};
@@ -90,6 +98,7 @@ public:
 
     void set_fen(const std::string& fen);
     U64 compute_hash() const;
+    std::array<U64, GROUP_COUNT> compute_group_keys() const;
 
     // Rebuild cached occupancy after replacing the whole position.
     void refresh_occupancy();

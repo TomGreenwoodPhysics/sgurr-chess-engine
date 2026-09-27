@@ -50,6 +50,29 @@ void print_order_stats() {
                   << pct(s.pruned_by_margin[k], s.prune_checked) << '%';
     }
     std::cerr << "\n";
+    if (s.eval_nodes > 0) {
+        const double n = double(s.eval_nodes);
+        std::cerr << "eval: " << s.eval_nodes << " nodes whose score bounds the error: raw MAE "
+                  << s.raw_abs / n << " RMS " << std::sqrt(s.raw_sq / n) << ", corrected MAE "
+                  << s.corr_abs / n << " RMS " << std::sqrt(s.corr_sq / n) << ", MAE down "
+                  << 100.0 * (s.raw_abs - s.corr_abs) / s.raw_abs << "%\n";
+    }
+    auto rate = [&](const char* name, const long long (&c)[2]) {
+        std::cerr << ' ' << name << ' ' << c[1] << '/' << c[0] << " (" << pct(c[1], c[0])
+                  << "%, " << 1000.0 * double(c[1]) / double(std::max(1LL, s.nodes)) << "/k nodes)";
+    };
+    if (s.corr_count > 0) {
+        std::cerr << "corr: mean size " << s.corr_size / double(s.corr_count)
+                  << " cp, mean from white's side " << s.corr_white / double(s.corr_count)
+                  << " cp, over " << s.corr_count << " nodes\n";
+    }
+    std::cerr << "prune: " << s.nodes << " nodes;";
+    rate("rfp", s.rfp);
+    rate("futility-drop", s.fut_drop);
+    rate("razor", s.razor);
+    rate("null", s.nmp);
+    rate("move-futility", s.fut_move);
+    std::cerr << "\n";
 }
 #endif
 
@@ -756,6 +779,19 @@ SearchResult Engine::search_best_move(
     // position, before incremental updates begin.
     if (nnue::active()) nnue::reset(board);
 
+#if SGR_ORDER_STATS
+    // The root's static eval, raw and corrected, for measuring the correction
+    // against an independent search.
+    if (!board.in_check(board.side_to_move)) {
+        const int raw = evaluate_position(board);
+        int corrected = raw;
+#if SGR_CORRHIST
+        corrected = std::clamp(raw + correction(board), -MATE_THRESHOLD + 1, MATE_THRESHOLD - 1);
+#endif
+        std::cout << "info string rooteval " << raw << ' ' << corrected << std::endl;
+    }
+#endif
+
     reset_killers();
 
 #if SGR_CONTHIST
@@ -1044,36 +1080,68 @@ bool Engine::time_is_up() const {
 }
 
 #if SGR_CORRHIST
-// Nudge the static eval by how wrong it has proved in positions sharing this
-// pawn structure. Pawn structure changes slowly, so one correction stays
-// useful across many nodes -- which is why pawn-indexed correction measures
-// larger than the material- or move-indexed variants in other engines.
-int Engine::corrected_eval(const Board& board, int raw) const {
-    if (raw == NO_STATIC_EVAL) {
-        return raw;
-    }
-    int c = pawn_corrhist[board.side_to_move][board.pawn_key() & CORRHIST_MASK];
-    int adjusted = raw + c / CORRHIST_GRAIN;
-    return std::clamp(adjusted, -MATE_THRESHOLD + 1, MATE_THRESHOLD - 1);
+namespace {
+inline int corr_slot(const Board& board, int group) {
+    return static_cast<int>(board.group_keys[group] >> (64 - Engine::CORR_BITS));
+}
+}  // namespace
+
+Engine::CorrIndex Engine::corr_index(const Board& board) {
+    CorrIndex c;
+    c.side = board.side_to_move;
+    c.pawn = corr_slot(board, GROUP_PAWNS);
+    c.white = corr_slot(board, GROUP_WHITE);
+    c.black = corr_slot(board, GROUP_BLACK);
+    c.minor = corr_slot(board, GROUP_MINORS);
+    c.major = corr_slot(board, GROUP_MAJORS);
+    return c;
 }
 
-// Blend the observed error into the entry, weighted by depth: a deep search
-// disagreeing with the static eval is better evidence than a shallow one.
-void Engine::update_corrhist(const Board& board, int depth, int score,
-                             int static_eval) {
-    if (static_eval == NO_STATIC_EVAL || std::abs(score) >= MATE_THRESHOLD) {
-        return;
-    }
-    int& entry = pawn_corrhist[board.side_to_move][board.pawn_key() & CORRHIST_MASK];
-    int diff = (score - static_eval) * CORRHIST_GRAIN;
-    int weight = std::min(depth + 1, 16);
-    entry = (entry * (256 - weight) + diff * weight) / 256;
-    entry = std::clamp(entry, -CORRHIST_MAX, CORRHIST_MAX);
+int Engine::correction(const Board& board) const {
+    const CorrIndex c = corr_index(board);
+    const long long sum = static_cast<long long>(params.corr_pawn_w) * corr->pawn[c.side][c.pawn]
+        + static_cast<long long>(params.corr_nonpawn_w)
+              * (corr->nonpawn[WHITE][c.side][c.white] + corr->nonpawn[BLACK][c.side][c.black])
+        + static_cast<long long>(params.corr_minor_w) * corr->minor[c.side][c.minor]
+        + static_cast<long long>(params.corr_major_w) * corr->major[c.side][c.major];
+    return static_cast<int>(sum / CORR_SCALE);
+}
+
+// Move every entry for this position towards the error, further for a
+// deeper search, whose score is better evidence. Each entry moves by the
+// same step, so the tables together close the error, not each on its own.
+void Engine::update_correction(const Board& board, int depth, int error) {
+    const int step = static_cast<int>(std::clamp(
+        static_cast<long long>(error) * std::min(depth, 16) * params.corr_rate / 16,
+        -static_cast<long long>(CORR_LIMIT / 4), static_cast<long long>(CORR_LIMIT / 4)));
+    auto pull = [step](std::int16_t& entry) {
+        entry = static_cast<std::int16_t>(entry + step - entry * std::abs(step) / CORR_LIMIT);
+    };
+    const CorrIndex c = corr_index(board);
+    pull(corr->pawn[c.side][c.pawn]);
+    pull(corr->nonpawn[WHITE][c.side][c.white]);
+    pull(corr->nonpawn[BLACK][c.side][c.black]);
+    pull(corr->minor[c.side][c.minor]);
+    pull(corr->major[c.side][c.major]);
+}
+
+// The entries sit apart in memory. Asking for them when the move is made
+// lets them arrive while the child probes the TT.
+void Engine::prefetch_correction(const Board& board) const {
+    const CorrIndex c = corr_index(board);
+    __builtin_prefetch(&corr->pawn[c.side][c.pawn]);
+    __builtin_prefetch(&corr->nonpawn[WHITE][c.side][c.white]);
+    __builtin_prefetch(&corr->nonpawn[BLACK][c.side][c.black]);
+    __builtin_prefetch(&corr->minor[c.side][c.minor]);
+    __builtin_prefetch(&corr->major[c.side][c.major]);
 }
 
 void Engine::reset_corrhist() {
-    for (auto& side : pawn_corrhist) {
-        side.fill(0);
+    for (CorrTable* table : {&corr->pawn, &corr->nonpawn[WHITE], &corr->nonpawn[BLACK],
+                             &corr->minor, &corr->major}) {
+        for (auto& side : *table) {
+            side.fill(0);
+        }
     }
 }
 #endif
@@ -1205,6 +1273,9 @@ std::pair<int, std::optional<Move>> Engine::negamax_root(
 
         // Prefetch the TT slot probed by the child.
         __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#if SGR_CORRHIST
+        prefetch_correction(board);
+#endif
 
 #if SGR_CONTHIST
         ss_piece[0] = undo.placed_piece;
@@ -1525,12 +1596,23 @@ int Engine::negamax(
     // Compare static eval with the same side two plies earlier.
     // In-check plies use a sentinel and count as not improving.
     int node_static_eval = NO_STATIC_EVAL;
+    [[maybe_unused]] int raw_static_eval = NO_STATIC_EVAL;
     bool improving = false;
 
     if (!in_check_node) {
         node_static_eval = evaluate_position(board);
+        raw_static_eval = node_static_eval;
 #if SGR_CORRHIST
-        node_static_eval = corrected_eval(board, node_static_eval);
+        node_static_eval = std::clamp(node_static_eval + correction(board),
+                                      -MATE_THRESHOLD + 1, MATE_THRESHOLD - 1);
+#if SGR_ORDER_STATS
+        {
+            const double c = node_static_eval - raw_static_eval;
+            order_stats.corr_count += 1;
+            order_stats.corr_white += board.side_to_move == WHITE ? c : -c;
+            order_stats.corr_size += std::abs(c);
+        }
+#endif
 #endif
         improving = ply >= 2
             && ss_static_eval[ply - 2] != NO_STATIC_EVAL
@@ -1538,6 +1620,9 @@ int Engine::negamax(
     }
 
     ss_static_eval[ply] = node_static_eval;
+#if SGR_ORDER_STATS
+    order_stats.nodes += 1;
+#endif
 #endif
 
 #if SGR_RFP
@@ -1554,6 +1639,10 @@ int Engine::negamax(
 #if SGR_IMPROVING
         // Waive one ply of margin when the eval is improving.
         int rfp_eval = node_static_eval;
+#if SGR_ORDER_STATS
+        order_stats.rfp[0] += 1;
+        order_stats.rfp[1] += rfp_eval - params.rfp_margin * (depth - (improving ? 1 : 0)) >= beta;
+#endif
 
         if (rfp_eval - params.rfp_margin * (depth - (improving ? 1 : 0)) >= beta) {
 #else
@@ -1587,6 +1676,10 @@ int Engine::negamax(
         int futility_margin = (depth == 1) ? params.futility_margin_1
                                    : params.futility_margin_2;
 
+#if SGR_ORDER_STATS
+        order_stats.fut_drop[0] += 1;
+        order_stats.fut_drop[1] += static_eval + futility_margin <= alpha;
+#endif
         if (static_eval + futility_margin <= alpha) {
             return quiescence(board, alpha, beta, ply);
         }
@@ -1614,6 +1707,10 @@ int Engine::negamax(
             if (stop_search) {
                 return 0;
             }
+#if SGR_ORDER_STATS
+            order_stats.razor[0] += 1;
+            order_stats.razor[1] += q <= alpha;
+#endif
             if (q <= alpha) {
                 return q;
             }
@@ -1632,6 +1729,9 @@ int Engine::negamax(
 #endif
     ) {
         NullMoveUndo undo = board.make_null_move();
+#if SGR_ORDER_STATS
+        order_stats.nmp[0] += 1;
+#endif
 #if SGR_SE_DOUBLE
         ss_double_ext[ply + 1] = ss_double_ext[ply];
 #endif
@@ -1671,6 +1771,9 @@ int Engine::negamax(
             return 0;
         }
 
+#if SGR_ORDER_STATS
+        order_stats.nmp[1] += score >= beta;
+#endif
         if (score >= beta) {
             store_tt(
                 board_hash,
@@ -1860,6 +1963,11 @@ int Engine::negamax(
 #else
                 int fe = evaluate_position(board);
 #endif
+#if SGR_ORDER_STATS
+                order_stats.fut_move[0] += 1;
+                order_stats.fut_move[1] += fe != NO_STATIC_EVAL
+                                           && fe + params.fut_margin * depth <= alpha;
+#endif
                 if (fe != NO_STATIC_EVAL
                         && fe + params.fut_margin * depth <= alpha) {
                     continue;
@@ -1922,6 +2030,9 @@ int Engine::negamax(
 
         // Prefetch the child TT slot before extension and LMR work.
         __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#if SGR_CORRHIST
+        prefetch_correction(board);
+#endif
 
 #if SGR_CONTHIST
         ss_piece[ply] = undo.placed_piece;
@@ -2130,12 +2241,28 @@ int Engine::negamax(
         store_tt(board_hash, depth, score_to_tt(best_score, ply), flag, tt_store_move);
     }
 
-#if SGR_CORRHIST
-    // Learn only from quiet best moves. A capture's score reflects tactics
-    // rather than the static eval having misjudged the position.
+#if SGR_IMPROVING
+    // Learn how far the static eval missed, where the score says something
+    // about it: an exact score, or a bound on the far side of the eval. A
+    // capture's score reflects tactics the eval was never meant to see.
     if (!excluded.has_value() && !in_check_node
-        && (best_move_key == NO_MOVE || !is_noisy_move(board, best_move_key))) {
-        update_corrhist(board, depth, best_score, node_static_eval);
+        && node_static_eval != NO_STATIC_EVAL
+        && std::abs(best_score) < MATE_THRESHOLD
+        && (best_move_key == NO_MOVE || !is_noisy_move(board, best_move_key))
+        && !(flag == TT_LOWER && best_score <= node_static_eval)
+        && !(flag == TT_UPPER && best_score >= node_static_eval)) {
+#if SGR_ORDER_STATS
+        const double raw_error = best_score - raw_static_eval;
+        const double corr_error = best_score - node_static_eval;
+        order_stats.eval_nodes += 1;
+        order_stats.raw_abs += std::abs(raw_error);
+        order_stats.raw_sq += raw_error * raw_error;
+        order_stats.corr_abs += std::abs(corr_error);
+        order_stats.corr_sq += corr_error * corr_error;
+#endif
+#if SGR_CORRHIST
+        update_correction(board, depth, best_score - node_static_eval);
+#endif
     }
 #endif
 
@@ -2204,6 +2331,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
             UndoInfo undo = board.make_move(move);
 #if SGR_QS_TT
             __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#if SGR_CORRHIST
+            prefetch_correction(board);
+#endif
 #endif
             int score = -quiescence(board, -beta, -alpha, ply + 1);
             board.unmake_move(undo);
@@ -2246,6 +2376,10 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
     int stand_pat = scale_for_fifty_move(board, board.evaluate(alpha, beta));
 #else
     int stand_pat = board.evaluate(alpha, beta);
+#endif
+#if SGR_CORRHIST && SGR_CORR_QS
+    stand_pat = std::clamp(stand_pat + correction(board),
+                           -MATE_THRESHOLD + 1, MATE_THRESHOLD - 1);
 #endif
 
     if (stand_pat >= beta) {
@@ -2296,6 +2430,9 @@ int Engine::quiescence(Board& board, int alpha, int beta, int ply) {
         UndoInfo undo = board.make_move(move);
 #if SGR_QS_TT
         __builtin_prefetch(&transposition_table[board.hash_key & tt_mask]);
+#if SGR_CORRHIST
+        prefetch_correction(board);
+#endif
 #endif
         int score = -quiescence(board, -beta, -alpha, ply + 1);
         board.unmake_move(undo);
