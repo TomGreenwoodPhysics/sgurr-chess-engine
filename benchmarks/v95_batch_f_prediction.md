@@ -141,3 +141,17 @@ A clearly negative result. Then bisect by halves with the toggles, gravity
 and the new settings kept together, since neither makes sense without the
 other. A result near zero would point at the calibration first: try the
 divisor and margin a step either side before blaming the ordering.
+
+## Result, 2026-09-27
+
+Stopped under rule 9 at 320 games: **+61.8 ±23.2**, W 84 L 28 D 206 over the
+318 games of the last report, LLR 1.16 of 2.94. All 320 games in the PGN ended
+normally. Far above the band: the prediction was too low.
+
+The two sides used the same time, 175 ms a move for batch F against 178 ms for
+the base, and batch F's reported depth averaged 20.52 against 19.15. So the
+gain is not the time manager spending more. The prediction treated the extra
+depth the replays showed at a fixed node count as weak evidence (§5), and it
+turned out to be strength. An early stop reads high (rule 9), so the true gain
+is probably below +62, but the interval's lower end is +38. The release's pool
+run is the check on its size.

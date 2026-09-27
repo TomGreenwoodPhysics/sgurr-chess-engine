@@ -1574,7 +1574,11 @@ quiets.
 At the same node count, cutoffs come sooner (mean position 1.27 against 1.33)
 and the search averages 0.6 to 0.8 ply deeper, for 1.2% in speed. With the old
 picker's `std::sort` gone, bench gives the same fingerprint under GCC and
-clang. The SPRT is registered in `benchmarks/v95_batch_f_prediction.md`.
+clang.
+
+It measured **+61.8 ±23.2** against v9.4's search over 320 games, stopped
+under rule 9, against a prediction of +18. In games the two sides spent the
+same time, and batch F searched 1.4 ply deeper on average.
 
 ## 2026-09-27, Time controls for rating lists
 
