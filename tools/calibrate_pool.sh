@@ -11,6 +11,9 @@
 # number of games instead of stopping at the error target:
 #   CALIB_OPPONENTS=Svart-6,Cadie-2.1 CALIB_GAMES_PER_ENGINE=210 tools/calibrate_pool.sh ...
 #
+# CALIB_TARGET=10 asks for a tighter interval than 12. Games grow with the
+# square of the ratio, so +/-10 takes about 1.45 times as many.
+#
 # A version that already has games carries on with a new opening seed, so no
 # opening is replayed, and Ordo solves all of its games together. A version's
 # first run uses seed 1, so every version starts on the same openings.
@@ -19,7 +22,7 @@ set -u
 
 ROOT=/c/coding/Sgurr
 POOL_JSON='C:/coding/Sgurr/benchmarks/pool.json'
-TARGET=12         # Ordo +/- per version
+TARGET=${CALIB_TARGET:-12}   # Ordo +/- per version
 MAX_GAMES=4140    # cap on a run to the target
 SEED=1
 
