@@ -469,6 +469,8 @@ RukChess was already the name of a strong engine), and Bitfish before that.
 ## Licence
 
 Original Sgurr material is proprietary under [LICENSE](LICENSE). You may read,
-build, run and evaluate it. Third-party software and assets keep their own
-terms, recorded in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)
-and [docs/THIRD_PARTY_ASSETS.md](docs/THIRD_PARTY_ASSETS.md).
+build, run and evaluate it. Rating lists and testers may also run the released
+binaries and publish the games and results. Third-party software and assets
+keep their own terms, recorded in
+[docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md) and
+[docs/THIRD_PARTY_ASSETS.md](docs/THIRD_PARTY_ASSETS.md).

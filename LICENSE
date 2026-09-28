@@ -10,6 +10,11 @@ You may read, build, run, and evaluate this repository for personal,
 educational, or evaluation purposes, including reviewing it as part of a
 hiring or academic assessment.
 
+Chess engine rating lists, tournament organisers and individual testers may
+also run the released Sgurr binaries in matches and tournaments, and publish
+the games, ratings and results. They may pass an unmodified release, with
+this licence, to other testers for the same purpose.
+
 Beyond that, no permission is granted to copy, modify, publish, distribute,
 sublicense, sell, or create derivative works from those original Sgurr
 materials without prior written permission from the copyright owner.
