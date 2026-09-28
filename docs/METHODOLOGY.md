@@ -278,6 +278,7 @@ backwards. There is unlikely to be a third that behaves better.
 | v9.2 (search fixes and cosine net) | +50.5 and +0.2 to +14.1 | +33.9 on pool-E, +43.1 on pool-F | ~0.6 to 0.75 |
 | v9.3 (search batches and speed) | about +50 | +47.2 on pool-E, +48.0 on pool-F | ~0.95 |
 | v9.4 time management | +54.9 | +64.7 | ~1.2 |
+| v9.5 (four search batches) | +114.3 summed | +101.0 | ~0.88 |
 
 Large gains largely survive; small ones evaporate. With §2 in hand,
 the likely explanation is not a mysterious "compression" but that the small
@@ -292,7 +293,9 @@ limit, stability scaling and hard-only level (963 games, all within ±23). The
 lesson drawn from the −48, that time-management results do not carry between
 time controls, may still be true, but nothing in this project shows it.
 v9.4's rebuilt time management carried over in full: +54.9 in self-play at
-8+0.08 and +64.7 on the pool at 10+0.1.
+8+0.08 and +64.7 on the pool at 10+0.1. v9.5's four search batches summed to
++114.3 in self-play and measured +101.0 on the pool, though each SPRT was
+stopped early under rule 9, so the self-play sum likely reads a little high.
 
 ---
 

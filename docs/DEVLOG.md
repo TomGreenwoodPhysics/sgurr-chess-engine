@@ -1672,3 +1672,26 @@ costs 1.8% in speed.
 
 It measured **+14.5 ±13.5** against batch E over 720 games, stopped under
 rule 9 once past a minimum of 500, against a prediction of +10.
+
+## 2026-09-28, v9.5 released
+
+Batches F, G, E and H ship together as v9.5, on the v9.4 network. On pool-F,
+played as v9.5-rc, it measured **3423.6 ±9.7** over 2,943 games
+(+1343 =1138 -462, 65%) with no abnormal endings. That is **+101.0 ±15.1**
+over v9.4 and +256.7 ±13.3 over v9.1 in the same solve. The four SPRTs summed
+to +114.3, and each was stopped early under rule 9, which tends to read high,
+so the pool kept about 90% of it. This run went to ±10 rather than the usual
+±12, which took 3 hours 40 minutes.
+
+v9.5 now sits third in the pool, 8 below Molybdenum-4.1 and 14 below
+BlackCore-6.0. Only two anchors are left above it, so the next version needs
+stronger engines in the pool before its own run means much.
+
+The last check before a rating list was a flag test at repeating controls,
+batch H against batch E: 200 games at 40 moves in 20 seconds, and 200 at 40
+moves in 5. There were no losses on time and no abnormal endings. Batch C had
+none at 40 in 5 either, before the overhead fix. That matches the clock
+simulation: real move times were already safe, and the fix covers GUI latency
+that games on this machine do not have.
+
+v9.5 is the default in the web app and the engine on the hosted demo.

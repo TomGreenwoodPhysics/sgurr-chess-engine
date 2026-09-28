@@ -111,3 +111,7 @@ against 182, and its reported depth averaged 20.67 against 20.44: about a
 quarter of a ply deeper, as the replays measured once the speed cost is taken
 off. The release's pool run is the check on its size, and a long time control
 is where it should matter more.
+
+**Pool-F, 2026-09-28:** v9.5, batches F to H together, measured 3423.6 ±9.7
+over 2,943 games, +101.0 ±15.1 over v9.4 in the same solve, against +114.3
+summed in self-play.
