@@ -1,192 +1,83 @@
 # Roadmap
 
-> **Status note, 2026-08-10.** This document is the 2026-08-01 snapshot and is
-> left as written. Two speed-only releases shipped since (v8.1, v8.2), and the
-> "rebuild the pool" item below has now been done: pool-2026-08-D, five
-> families at 3056-3312.
->
-> It found more than saturation. Hash had never been pinned, the opening book
-> was filtered by Sgurr's own evaluation, and two candidate engines forfeited
-> ~20% of their games on an illegal promotion. Re-measured under controlled
-> conditions, **v8.2 is 3012 ±6, not 3058 ±7**, with systematic uncertainty
-> ~±25 rather than ~±45. The engine did not change.
->
-> **Every rating quoted below is therefore ~45 Elo high in absolute terms.**
-> Version-to-version gaps are unaffected, so the plan's reasoning stands. See
-> METHODOLOGY §9 and the 2026-08-10 ledger row. Note the book concern flagged
-> under "Rebuild the pool" was correct and understated: the openings turned out
-> to contribute ~±15 Elo irreducibly, three times the interval being quoted.
->
-> **Datagen update, 2026-09-02.** Gen9 does not reuse the 150-position,
-> Sgurr-filtered starter book. Its reproducible `testing/datagen_gen9.epd`
-> contains 15,000 unique engine-neutral roots sampled equally at 8, 10 and 12
-> plies from Stockfish's 34,700-line `8moves_v3` book. This retains early-phase
-> coverage, represents all 385 source ECO codes, and is still followed by
-> datagen's 4-9 random plies and 5,000-node balance gate. The 2.42M-position
-> starter-book pilot is preserved separately and excluded from the clean run.
->
-> A matched 2.42M-position safety check cleared the new book before the long
-> run resumed. The complete first training seed scored 52.48% over 2,000 games
-> (+17.21 ±12.02 Elo for that pair); a second seed was stopped at 405 games
-> with its last complete report also positive at 54.40%. The second result is
-> not used as an Elo estimate because the stop followed an interim look. The
-> decision is limited to the question asked: there is no evidence of practical
-> harm requiring Gen9 to stop. It is not a claim that the book adds +17 Elo.
+Updated 28 September 2026. Current release: v9.5 "Dearg", 3424 ±10 on pool-F.
 
-Current: **v8.0 "Thearlaich", 3006 ±11** (pool-2026-07-B, 3,329 games).
-Written 2026-08-01, after the architecture × data study. Supersedes the
-2026-07-21 roadmap, whose central recommendations (king buckets, width) were
-subsequently measured at ~0 and withdrawn, see `METHODOLOGY.md` §2 and §4.
+The aim for the next few releases is 3500 on the pool. Tuning should get part
+of the way there, and a new generation of training data the rest.
 
----
+## How it got here
 
-## The strategy in one paragraph
+Sgurr was 3012 in August. Most of the 400 Elo since then came from search work:
+tuning, bug fixes, rebuilt time management, and in late September move
+ordering, correction history, better reductions and a bucketed hash table. The
+network has been trained on the same 102 million Gen9 positions since v9.0, and
+has not changed at all since v9.2.
 
-Three things have ever moved this engine: **better data, better search, and
-raw speed.** Architecture has moved it by nothing measurable. Data costs
-*machine time* and no attention; search costs *attention* and no machine time.
-They are therefore complementary, and the plan is to run them concurrently,
-datagen in the background for weeks at a time, search work in the foreground
-while it runs.
+Changing the network's shape, by making it wider or adding king buckets, has
+measured flat every time at the data sizes available. More data has always
+paid.
 
----
+## v9.5 to CCRL
 
-## Now: gen9 datagen (background, ~2 weeks)
+v9.5's public binaries played 60 games at CCRL Blitz's 2'+1" with no losses on
+time and no abnormal endings. It goes to CCRL once the GitHub release is up.
+Later versions get sent only when they are clearly stronger.
 
-| setting | value | why |
-|---|---|---|
-| labeller | **v8.0 net** (`nets/gen8.nnue`) | the flywheel's only proven lever; +126 last turn |
-| build | `-DSGR_RFP=0`, SIMD on | RFP returns unsearched scores: it cost gen6 entirely |
-| λ | 0.9 | sweep-confirmed optimum; 0.6/0.7/0.85/1.0 all worse or level |
-| width | HL384 | genuinely does not matter (§4); keep the simple option |
-| king buckets | off | measured ~0 twice, naive and factorised |
-| nodes/position | 150,000 | unchanged; see the open question below |
-| **target** | **as much as the calendar allows: 100M+** | returns were still *accelerating* at 56M |
+## v9.6: tuning
 
-At the measured ~7.9M positions/day this is ~12-14 days for 100-110M. The
-cost is calendar time, not attention: launch it and leave it.
+- A tune of 48 search parameters at 8+0.08, many of them new in v9.5 and set
+  by hand. An SPRT against v9.5 decides whether the tuned values ship.
+- A tune of the time-management constants at 10+0.1.
+- A check at a longer time control against v9.5. Nearly all testing so far
+  has used 8 or 10 seconds a game.
+- Two or three stronger engines for the pool, rated about 3450 to 3550 on CCRL
+  Blitz. Only two of pool-F's sixteen are above v9.5, so its next run would
+  say little without them.
 
-**Build the curve while you are at it.** gen9 will hold the largest dataset
-the project has ever had. Training on 56M and 110M subsets of it and racing
-them extends the data-scaling curve *beyond* the currently measured range for
-the price of two trainings and two matches: the one place where extrapolation
-is currently unavoidable.
+I expect v9.6 to gain 10 to 30 Elo.
 
----
+## Search changes still to try
 
-## Concurrently: search work (foreground)
+| change | expected |
+|---|---|
+| let a hash table bound tighten the static eval | +2 to +8 |
+| ProbCut | +5 to +15 |
+| history that knows which squares are attacked | +5 to +15 |
 
-Search changes re-use a fixed net, so they carry **no training-seed variance**
-: their only error is match noise, which more games actually fixes. That makes
-them the cheapest things to validate in the whole project, and the historical
-returns are large (RFP +176 self-play; the v6.0 package +57.3).
+None of these is large, so each goes in on its own SPRT, between the bigger
+jobs.
 
-| # | change | est. | notes |
-|---|---|---|---|
-| ~~1~~ | ~~UCI `setoption` infrastructure~~ | 0 | **done 2026-08-02**, 30 options, 26 of them tunable search parameters |
-| 2 | **SPSA: singular extensions first** | +20 to +50 | promoted. Singular measured **+77.2** on 2026-08-03 as an *unrefined* implementation with three never-tuned constants (`SingularMinDepth`, `SingularTtDepthSlack`, `SingularMargin`). The most valuable thing in the search is also among the least tuned |
-| 3 | **Correction history** | +20 to +35 | largest single missing search feature; corrects static eval by eval-vs-search disagreement history |
-| 4 | **Retune `HistLmrDiv`** | +0 to +15 | history-adjusted LMR has been shipped INERT since v6.0: the divisor is ~2 orders of magnitude too large, and removing the feature measures +1.1 ±8.7. At 5,000 the tree moves ~10%. Cheap, and it is already an exposed option |
-| 5 | **SPSA: everything else** | +20 to +40 | the remaining 22 parameters. Exclude the time-management block or tune it against the pool. The v3.1 pooled loss that prompted this was withdrawn (METHODOLOGY §6), so it is caution, not a measured problem |
-| 6 | **Batch: IIR + capture history + move-loop futility + SEE pruning + null-move R scaling** | +40 to +80 | individually sub-20 and unmeasurable; one SPRT resolves the batch in ~2 h. Bisect by halves on failure, never by item |
-| 7 | **Singular refinements** | +15 to +30 | double extensions, negative extensions, multicut return from the singular search. Raised from the original +10 to +20: the base feature is worth far more than assumed, so its refinements plausibly are too |
-| 8 | ProbCut | +8 to +15 | interacts with RFP; measure jointly |
+## v10: Gen10 data
 
-Ordering changed on 2026-08-03. The decomposition put singular extensions at
-**+77.2** (roughly four times the improving flag, and the single most valuable
-thing in the search) while its three constants have never been swept. Tuning
-the most valuable and least tuned feature now outranks adding a new one.
+The network is the biggest lever left. Gen9 was labelled by v8's network at
+150,000 nodes a position. Gen10 will be labelled by v9.6, several hundred Elo
+stronger, and should be two to three times larger. At Gen9's pace of about two
+weeks per hundred million positions, that is four to six weeks in which the
+machine does little else, so it starts once v9.6 has shipped.
 
-Do not judge any of these by tree size. §5 of `METHODOLOGY.md` records what
-happened the last time that was tried.
+Width and king buckets get another test only once the data is several times
+larger. The experiment below suggests they need a billion positions or more.
 
----
+Network results are the hardest to predict. Two trainings on the same data
+with different seeds have differed by 14 Elo, so a network change under about
+20 needs several seeds before it counts. A reasonable hope for Gen10 is 30 to
+60 Elo.
 
-## Owed / housekeeping
+## The external-data experiment
 
-* ~~**Pool-calibrate v8.2.**~~ **Done 2026-08-05: 3058.5 ±6.5** over 11,144
-  games, **+31.5 vs v8.1 same-solve** against **+14.5 predicted**. The
-  ~70-per-doubling rule missed low by 17 Elo; per-anchor solves give +29/+21/
-  +31/+28, so all four agree and it is not a solver artefact. Ledger, CHANGELOG,
-  README and the website carry the measured figure. Two limits surfaced, both
-  now blocking below: **anchor disagreement** and **pool saturation**.
+Sgurr-X is the same engine with networks trained on public Stockfish-labelled
+positions. A 512-wide network trained on about 1.2 billion of them beat v9.0's
+own network by 86 Elo at the same search. It stays private while the terms of
+that data are unclear, and the main line stays trained on Sgurr's own games.
+Its use is as a measure of how far more data could take the main network.
 
-* ~~**Rebuild the pool before v8.3.**~~ **Done 2026-08-10: pool-2026-08-D**,
-  five families at 3056-3312, all at or above v8.2. Every concern listed below
-  was real; two more were found that are not listed, because nobody had thought
-  to look for them (unpinned Hash, and opponents forfeiting on illegal
-  promotions). v8.2 re-measures at **3012 ±6**, anchor spread down from 90 to
-  50 Elo, systematic from ~±45 to ~±25. Still owed: re-measure v8.1 and earlier
-  under these conditions, and decompose the 45 Elo drop, which is confounded
-  across the pool, Hash and book changes. Original text follows.
-  * **Saturation.** v8.2 scores **50.8%** against Weiss-1.2, the strongest
-    engine in the pool, and 86-97% against five of the other seven. Those five
-    contribute almost no information. The pool cannot resolve the next
-    improvement, whatever it is: needs 2-3 engines in the 3050-3200 band.
-  * **Anchor disagreement.** The four anchored engines disagree by **90 Elo**
-    about v8.2's absolute rating (Igel 3106, Weiss-1.0 3016). Longstanding,
-    63/100/90 for v8.0/v8.1/v8.2, and not sampling noise, so Ordo's ±6.5 is
-    sampling error only and the true systematic band is ~±45. Same-solve gaps
-    are unaffected, which is why the ledger has always led with them.
-  * **The 150-position opening book.** At 11,144 games every opening has been
-    played ~74 times. Ordo's interval assumes independent games; heavily
-    recycled openings are not, so reported errors are optimistic and the
-    estimate is partly *"strength on these 150 positions"*. A few thousand
-    positions is standard practice and this is the cheapest of the three fixes.
-* **Validate or drop the v9.0 batch.** Ten search features, measured
-  **−1.0 ±21.1** over 698 games, now default-OFF in the tree. The interval
-  spans −22 to +20, so it is undecided rather than dead. Bisect order and outcome
-  bands: `benchmarks/v90_batch_prediction.md`. Needs machine time that gen10
-  will occupy for weeks.
+## Housekeeping
 
-* **Re-baseline v6.0 and v5.0 on the current machine.** Every row up to v6.0
-  was measured on the old i5; v7.0 and v8.0 on the 7800X3D. One Ordo solve
-  places them on a single scale, but the cross-hardware caveat is currently
-  carried in prose on each row.
-* ~~**Firm up the 3000 milestone.**~~ **Done 2026-08-03**, though not the way
-  this line expected. More games on v8.0 were never needed: v8.1's **3027 ±11**
-  gives an interval of [3016, 3038] that does not touch 3000, where v8.0's
-  [2995, 3016] straddled it at ~84%. The milestone was crossed by making the
-  engine faster, not by measuring it harder.
-* ~~**Leave-one-out decomposition of the v6.0 package.**~~ **Done 2026-08-03.**
-  Singular **−77.2 ±19.6** when removed, improving **−19.6 ±10.5**,
-  history-adjusted LMR **+1.1 ±8.7**. The premise above was wrong on both
-  counts: the components were not "likely sub-20", and the exercise found no
-  passenger to delete: histLMR is inert only because its divisor is
-  mis-scaled, not because the technique is worthless.
-* ~~**Pool-calibrate v8.1.**~~ **Done 2026-08-03: 3026.7 ±11.1** over 3,456
-  games, **+20.9 vs v8.0 same-solve** against +21.2 ±8.7 self-play. No
-  compression: the two agree to 0.3 Elo, which is itself the finding: §6's
-  compression pattern applies to *behaviour* changes, not speed. Ledger,
-  CHANGELOG, README and the website are updated. **3000 is now cleared
-  outright**: [3016, 3038] does not touch it, so that milestone is closed too.
+- Put v9.0 on pool-F, so the web app shows a measured rating for it instead of
+  one carried over from pool-D.
 
----
+## Not doing
 
-## Open questions worth an experiment
-
-* **Does label depth pay?** Everything to date uses 150k nodes/position.
-  Stockfish's experience says moderate depth × huge volume beats deep × few,
-  and our own data agrees that volume is king: but this has never been tested
-  here. A clean test: label ~10M positions at 600k nodes with the v8.0 net,
-  train, and race against a 10M control labelled at 150k. Same position count,
-  only depth differs. ~1 day.
-* **Where does the data curve actually flatten?** Returns were still
-  accelerating at 56M. gen9's dataset answers this for free (above).
-* **Do king buckets ever pay?** Twice measured at ~0, but both times at ~7M
-  positions per bucket. The technique demonstrably works in engines trained on
-  billions of positions. Retest only when the dataset is an order of magnitude
-  larger; the implementation is merged, verified and dormant, so the retest is
-  nearly free.
-
----
-
-## Explicitly not doing
-
-* **LazySMP / multithreading.** Large project, and the rating scale here is
-  single-core: it would measure exactly zero. Revisit only if the goal
-  changes to long-TC or tournament play.
-* **Chasing sub-20 Elo net changes.** Below the noise floor without multi-seed
-  averaging. This is a measurement limit, not pessimism.
-* **Further width / bucket / λ tuning.** All three measured flat on clean
-  data. The dataset, not the architecture, is the product.
+- A multi-threaded search. The rating work is single-core, so it would measure
+  nothing. Worth revisiting only for multi-core lists or tournaments.
+- Releasing anything trained on outside data until its licence is settled.
