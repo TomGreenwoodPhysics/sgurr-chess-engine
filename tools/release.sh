@@ -13,7 +13,7 @@ set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=${1:?usage: tools/release.sh VERSION}
 NET=nets/gen9_screlu_cos_s1.nnue
-BENCH=1847491                  # bench nodes with that network, as BENCH_NNUE in ci.yml
+BENCH=1149339                  # bench nodes with that network, as BENCH_NNUE in ci.yml
 OUT=$ROOT/dist/sgurr-$VERSION
 ZIP=$ROOT/dist/sgurr-$VERSION-windows.zip
 

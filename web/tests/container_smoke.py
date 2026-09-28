@@ -71,11 +71,11 @@ if (inside_sgurr / "index.html").is_file():
 
 engines = get("/api/engines")
 available = [entry["id"] for entry in engines["engines"] if entry["available"]]
-assert available == ["v9.4"]
+assert available == ["v9.5"]
 
 with post(
     "/api/search-trace",
-    {"fen": START_FEN, "engine": "v9.4", "movetime_ms": 2_000},
+    {"fen": START_FEN, "engine": "v9.5", "movetime_ms": 2_000},
 ) as trace:
     assert json.loads(trace.readline())["type"] == "started"
 

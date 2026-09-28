@@ -32,8 +32,8 @@ function playerCardMarkup(colour) {
     return "<strong>You</strong><small>LOCAL PLAYER</small>";
   }
 
-  const engineLabel = app.engineLabel || 'Sgurr v9.4 "Dearg"';
-  const engineSubtitle = app.engineSubtitle || "GEN9 SCRELU NNUE + TIME MANAGEMENT · ~3322";
+  const engineLabel = app.engineLabel || 'Sgurr v9.5 "Dearg"';
+  const engineSubtitle = app.engineSubtitle || "GEN9 SCRELU NNUE + SEARCH OVERHAUL · ~3424";
   return `<strong>${engineLabel}</strong><small>${engineSubtitle} &middot; ${colour.toUpperCase()}</small>`;
 }
 

@@ -9,6 +9,38 @@ with it. Their pool games carry the names v9.2-rc and v9.3-rc1, and v9.4's
 carry v9.3-rc2. All three are measured on pool-F, where v9.1 reads 3166.2
 against 3206.2 on pool-D.
 
+## v9.5 "Dearg" (Sgùrr Dearg), 2026-09-28
+
+**Four search batches on the v9.4 network.** Each was tested against the one
+before it, and together they measured **3423.6 ±9.7** on pool-F, **+101 over
+v9.4** in the same solve. The four self-play results add up to +114, so
+nearly all of it carried over to other engines. Its pool games carry the name
+v9.5-rc.
+
+- **Move ordering.** History is kept per side and bounded, continuation
+  history also looks at the side's own moves two and four plies back, capture
+  history counts in full, and a new staged picker sorts only as far as it
+  needs to. At the same node count the search reaches 0.6 to 0.8 of a ply
+  deeper. **+61.8 ±23.2** in self-play against v9.4's search.
+- **Correction history.** Five tables learn how far the static eval was from
+  what the search found, keyed by the pawns, each side's pieces, the minor
+  pieces and the major pieces. They learn only where the search result bounds
+  the error, and quiescence uses the corrected eval too. The pawn-only version
+  tried in September measured −1.4 ±16.3. **+21.9 ±21.3**.
+- **Late move reductions.** One more ply at nodes expected to fail high and
+  where the eval is not improving, one less for checks, and losing captures
+  are now reduced too. When a reduced search beats alpha, the re-search goes a
+  ply deeper or shallower depending on the margin. **+16.1 ±16.0**.
+- **Hash table.** Four entries share each 64-byte bucket, a new position
+  replaces the least valuable of them, and every entry records the search
+  that stored it, so stale entries go first. **+14.5 ±13.5**.
+- **Time controls without an increment.** The move overhead is now kept back
+  for every later move the increment does not cover, as under CCRL's 40/15.
+  No losses on time in 200 games at 40 moves in 20 seconds, or in 200 at 40
+  in 5.
+- Windows builds reserve a 16 MB stack, so a deep search cannot overflow it.
+- Bench is 1,149,339 nodes with the network and 1,771,369 without it.
+
 ## v9.4 "Dearg" (Sgùrr Dearg), 2026-09-26
 
 **Time management, rebuilt.** Sgurr used to finish its games with half of its

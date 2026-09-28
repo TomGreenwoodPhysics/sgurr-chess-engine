@@ -1,13 +1,13 @@
 # Networks
 
 Trained NNUE files are build artefacts, so only shipped networks are committed.
-`gen9_screlu_cos_s1.nnue` is the current network, shipped in v9.2 to v9.4.
+`gen9_screlu_cos_s1.nnue` is the current network, shipped in v9.2 to v9.5.
 `gen9_screlu.nnue` is v9.1's. `gen9.nnue` and `gen8.nnue` remain for older
 releases and require `-DSGR_SCRELU=0 -DSGR_QA=255` builds.
 
 ```bash
 SGR_EVALFILE=nets/gen9_screlu_cos_s1.nnue sgurr_cpp/sgr.exe bench
-#   -> nodes 1847491 on the reference MSYS2 clang64 build
+#   -> nodes 1149339 on the reference MSYS2 clang64 build, from v9.5's search
 ```
 
 The engine reads the network `$SGR_EVALFILE` names. Release binaries also carry
@@ -25,7 +25,7 @@ missing net is visible rather than silent.
 | SHA-256 | `e733e437ad3fbe7cb8b8ab0dbeeaa6f8c29d1bebdbf36f76a8e1851d1bd4642b` |
 | size | 592,160 bytes |
 | architecture | `768 -> 384 -> 1`, squared clipped ReLU, QA 181, QB 64, output scale 400 |
-| shipped in | v9.2, v9.3 and v9.4 "Dearg" |
+| shipped in | v9.2 to v9.5 "Dearg" |
 | training | the gen9_screlu recipe and data (102,011,689 positions, lambda 0.8, 22 epochs, 5% holdout) with cosine learning-rate decay, seed 1 |
 | build | Current defaults: `SGR_SCRELU=1`, `SGR_QA=181` |
 

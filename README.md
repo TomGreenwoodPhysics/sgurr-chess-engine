@@ -7,8 +7,8 @@
 **[Evaluation Lab](https://sgurr-chess-engine.onrender.com/inside-sgurr/evaluation.html)**
 
 Sgurr is a C++20 UCI chess engine with an NNUE trained on its own self-play
-games. The current release is **v9.4 "Dearg"**, measured at an estimated
-**3322** on a CCRL-Blitz-anchored scale.
+games. The current release is **v9.5 "Dearg"**, measured at an estimated
+**3424** on a CCRL-Blitz-anchored scale.
 
 The hosted site runs the real Sgurr executable. It is on Render's free tier,
 so the first visit after a quiet period can take 30 to 60 seconds to start.
@@ -16,7 +16,7 @@ so the first visit after a quiet period can take 30 to 60 seconds to start.
 <details>
 <summary><strong>About the hosted demo</strong></summary>
 
-This is the real Sgurr v9.4 C++ engine, not a static or prerecorded version of
+This is the real Sgurr v9.5 C++ engine, not a static or prerecorded version of
 the site. The Evaluation Lab also runs the shipped Gen9 NNUE directly in your
 browser.
 
@@ -27,7 +27,7 @@ Once it is awake, the site should respond normally.
 I have put a few limits in place so that one visitor cannot occupy the whole
 server.
 
-- The hosted site runs Sgurr v9.4 only. The older releases shown in the engine
+- The hosted site runs Sgurr v9.5 only. The older releases shown in the engine
   picker are available when the project is run locally.
 - Sgurr can think for up to two seconds when playing a move.
 - Live analysis traces can run for up to five seconds.
@@ -120,11 +120,13 @@ node carries the king square, checker count, pin mask and check mask. That lets
 move legality be answered directly without making and unmaking every candidate.
 
 Search is iterative deepening over negamax, alpha-beta and principal variation
-search. It includes aspiration windows, a transposition table, null-move
-pruning, late move reductions, reverse futility pruning, late move pruning,
-razoring, singular and check extensions, quiescence search, static exchange
-evaluation, killers, butterfly history, continuation history and best-move
-stability time management.
+search. It includes aspiration windows, a transposition table with four-entry
+buckets and ageing, null-move pruning, late move reductions, reverse futility
+pruning, late move pruning, razoring, singular and check extensions, quiescence
+search and static exchange evaluation. Moves are ordered by killers and by
+butterfly, capture and continuation history. Correction history adjusts the
+static evaluation by what earlier searches found. Time management gives each
+move a budget and stops early once the best move has settled.
 
 The singular-extension search is isolated from the normal tree. It cannot use
 a transposition-table cutoff, null move or transposition-table store while a
@@ -193,12 +195,13 @@ split-frontend development setup.
 
 ## Strength
 
-Sgurr v9.4 was measured under controlled conditions matching CCRL's published
+Sgurr v9.5 was measured under controlled conditions matching CCRL's published
 requirements for hash, book, pondering and thread count.
 
 | engine | rating | pool | games |
 |---|---|---|---|
-| **Sgurr v9.4 "Dearg"** | **3322.0 ±11.5** | pool-2026-09-F | 1,840 |
+| **Sgurr v9.5 "Dearg"** | **3423.6 ±9.7** | pool-2026-09-F | 2,943 |
+| Sgurr v9.4 "Dearg" | 3322.0 ±11.5 | pool-2026-09-F | 1,840 |
 | Sgurr v9.3 "Dearg" | 3257.3 ±8.8 | pool-2026-09-F | 3,372 |
 | Sgurr v9.2 "Dearg" | 3209.3 ±8.7 | pool-2026-09-F | 3,458 |
 | Sgurr v9.1 "Dearg" | 3166.2 ±9.5 | pool-2026-09-F | 3,369 |
@@ -216,8 +219,8 @@ perfectly to another machine and time control, and on pool-F that adds about
 ±20 to any absolute figure. More games would not narrow it.
 
 Version-to-version gaps are the firmer number. Versions measured against the
-same anchors in one solve share that transfer error, so it cancels: v9.4 is
-**+64.7 ±14.5** over v9.3 and **+155.8 ±14.9** over v9.1.
+same anchors in one solve share that transfer error, so it cancels: v9.5 is
+**+101.0 ±15.1** over v9.4 and **+256.7 ±13.3** over v9.1.
 
 The v8.2 figure replaced an earlier estimate of 3058. The engine did not
 change. The measurement did. The old setup left hash sizes uncontrolled, used
@@ -277,8 +280,10 @@ Negative results stay in the repository. v3.1 rates below v3.0. Eight king
 buckets reduced training loss but measured −10.7 ±16 Elo, so the plain network
 shipped. A ten-item v9.0 search batch measured −1.0 ±21.1 and was held back; tuning its
 constants a month later turned the same code into +90.2 ±16.7, so the batch was
-never the problem. Pawn correction history (−1.4 ±16.3) and material scaling
-(−10.1 ±17.2) are in the tree and switched off.
+never the problem. Pawn correction history first measured −1.4 ±16.3 and was
+switched off. Rebuilt over five tables with bounded updates, it measured
++21.9 ±21.3 and shipped in v9.5. Material scaling (−10.1 ±17.2) is still in
+the tree and switched off.
 
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md) has the complete account, including
 the findings that were later withdrawn.
@@ -312,7 +317,7 @@ cd sgurr_cpp
 ./build.sh -t                  # search trace build
 ```
 
-`tools/release.sh 9.4` builds the public Windows release, an AVX2 binary and a
+`tools/release.sh 9.5` builds the public Windows release, an AVX2 binary and a
 compatibility one for older CPUs, with the network compiled in. Each is checked
 against the bench fingerprint and the UCI protocol tests before the zip is made.
 
@@ -339,8 +344,8 @@ and says so on standard error. Release binaries carry the network inside them
 and use it instead, so a GUI needs no settings. `SGR_EVALFILE` set to nothing
 still selects the hand-written evaluation.
 
-Development builds expose 67 UCI options. Four cover hash, hash clearing, move
-overhead and threads. The other 63 expose search and time-management constants
+Development builds expose 84 UCI options. Four cover hash, hash clearing, move
+overhead and threads. The other 80 expose search and time-management constants
 for tuning, and release binaries leave them out. Search is intentionally
 single-threaded because the rating work uses a single-core scale.
 
@@ -366,8 +371,8 @@ SGR_EVALFILE=../nets/gen9_screlu_cos_s1.nnue ./sgr.exe bench
 ./sgr.exe seetest
 ```
 
-The expected MSYS2 clang fingerprints are 3,337,275 nodes with Gen9 and
-4,616,415 with the hand-written evaluation. Move generation reaches perft 4 at
+The expected MSYS2 clang fingerprints are 1,149,339 nodes with the shipped
+network and 1,771,369 with the hand-written evaluation. Move generation reaches perft 4 at
 197,281 nodes, and the static exchange suite contains nine hand-checked cases.
 
 The fingerprint is toolchain-local. `std::sort` may order equal-scoring moves
@@ -415,6 +420,7 @@ canonical and the peak names are codenames.
 
 | version | change | measured result |
 |---|---|---|
+| v9.5 "Dearg" | move ordering, correction history, reductions and the hash table reworked | 3424 ±10 on pool-F, +101 over v9.4 |
 | v9.4 "Dearg" | time management rebuilt | 3322 ±12 on pool-F, +65 over v9.3 |
 | v9.3 "Dearg" | three search batches and a faster search | 3257 ±9 on pool-F |
 | v9.2 "Dearg" | null-move and TT fixes, and a network retrained with cosine decay | 3209 ±9 on pool-F |

@@ -13,8 +13,8 @@ on:
 env:
   # MSYS2 clang64 reference values for local comparison.
   # Only EVALSUM is portable across toolchains.
-  BENCH_NNUE: "1847491"   # 19 positions at depth 11, gen9 screlu cosine net
-  BENCH_HCE: "2565625"    # same, hand-crafted eval (no network loaded)
+  BENCH_NNUE: "1149339"   # 19 positions at depth 11, gen9 screlu cosine net
+  BENCH_HCE: "1771369"    # same, hand-crafted eval (no network loaded)
   EVALSUM: "194037"        # nnue_selfcheck checksum, identical on all paths
 
 jobs:

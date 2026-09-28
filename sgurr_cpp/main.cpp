@@ -20,7 +20,7 @@
 
 // Build-time override for the version reported through UCI.
 #ifndef SGR_VERSION
-#define SGR_VERSION "9.4"
+#define SGR_VERSION "9.5"
 #endif
 #ifndef SGR_ENGINE_NAME
 #define SGR_ENGINE_NAME "Sgurr"

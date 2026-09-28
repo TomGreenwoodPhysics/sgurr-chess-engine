@@ -202,15 +202,15 @@ async function installMockBackend(page, {
     }
     if (path === "/api/engines") {
       await json(route, {
-        default: "v9.4",
+        default: "v9.5",
         public_demo: publicDemo,
         engines: [
           {
-            id: "v9.4",
-            label: 'Sgurr v9.4 "Dearg"',
-            subtitle: "GEN9 SCRELU NNUE + TIME MANAGEMENT · ~3322",
-            tech: "GEN9 SCRELU NNUE + TIME MANAGEMENT",
-            rating: 3322,
+            id: "v9.5",
+            label: 'Sgurr v9.5 "Dearg"',
+            subtitle: "GEN9 SCRELU NNUE + SEARCH OVERHAUL · ~3424",
+            tech: "GEN9 SCRELU NNUE + SEARCH OVERHAUL",
+            rating: 3424,
             available: engineExists,
           },
           {
@@ -220,7 +220,7 @@ async function installMockBackend(page, {
             tech: "GEN8 NNUE + PGO SPEED",
             rating: 2941,
             available: !publicDemo && engineExists,
-            unavailable_reason: "Available locally; the free demo includes Sgurr v9.4 only.",
+            unavailable_reason: "Available locally; the free demo includes Sgurr v9.5 only.",
             unavailable_badge: "LOCAL ONLY",
           },
         ],
@@ -280,7 +280,7 @@ async function installMockBackend(page, {
     }
     if (path === "/api/search-trace") {
       const events = [
-        { type: "started", engine: "v9.4", label: 'Sgurr v9.4 "Dearg"', perspective: "white", movetime_ms: 5000 },
+        { type: "started", engine: "v9.5", label: 'Sgurr v9.5 "Dearg"', perspective: "white", movetime_ms: 5000 },
         {
           type: "iteration", kind: "cp", value: 8, display: "+0.1", depth: 3,
           nodes: 720, nps: 240000, time_ms: 3, pv: ["d2d4"],
@@ -617,7 +617,7 @@ test("resumes a reloaded game with its clocks, opponent and move history", async
   await expect(page.locator("#moveRows")).toContainText("e4");
   await expect(page.locator("#moveRows")).toContainText("e5");
   await expect(page.locator("#bottomPlayerName")).toContainText("You");
-  await expect(page.locator("#coreEngineName")).toContainText("v9.4");
+  await expect(page.locator("#coreEngineName")).toContainText("v9.5");
   await expect(page.locator("#bottomPlayerClock")).toContainText("2:");
   expect(calls.find((call) => call.path === "/api/resume").body).toEqual({ fen: AFTER_E4_E5_FEN, start_fen: START_FEN, moves: ["e2e4", "e7e5"] });
   const resumed = await page.evaluate(() => JSON.parse(localStorage.getItem("sgurrSavedGame")));
@@ -1198,17 +1198,17 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#watchButton")).toHaveAttribute("title", /available.*locally/i);
   await expect(page.locator("#engineDownButton")).toBeDisabled();
   await expect(page.locator("#engineUpButton")).toBeDisabled();
-  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v9\.4 only/i);
+  await expect(page.locator("#engineDownButton")).toHaveAttribute("data-demo-reason", /v9\.5 only/i);
   await page.locator("#engineDownButton").hover({ force: true });
   await expect(page.locator("#demoTooltip")).toBeVisible();
-  await expect(page.locator("#demoTooltip")).toContainText("v9.4 only");
+  await expect(page.locator("#demoTooltip")).toContainText("v9.5 only");
 
   await expect(page.locator("#demoLimitsButton")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#demoLimitsButton")).toBeInViewport();
   await page.locator("#demoLimitsButton").click();
   await expect(page.locator("#demoLimitsModal")).toBeVisible();
-  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v9.4 C++ engine");
+  await expect(page.locator("#demoLimitsModal")).toContainText("real Sgurr v9.5 C++ engine");
   await expect(page.locator("#demoLimitsModal li")).toHaveCount(7);
   await expect(page.locator("#demoLimitsModal")).toContainText("1.5 million nodes");
   await expect(page.locator("#demoLimitsModal .modal-box")).toBeInViewport();
@@ -1220,11 +1220,11 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await page.locator("#menuEngineButton").click();
   const localOnly = page.locator('.engine-card[aria-disabled="true"]');
   await expect(localOnly).toContainText("LOCAL ONLY");
-  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v9\.4/i);
+  await expect(localOnly).toHaveAttribute("title", /free demo includes Sgurr v9\.5/i);
   await expect(localOnly).toBeDisabled();
   await localOnly.evaluate((button) => button.click());
   await expect(page.locator("#engineModal")).toBeVisible();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.5");
 
   await page.locator("#engineModal [data-close-modal]").click();
   await page.locator("#positionLabButton").click();
@@ -1233,16 +1233,16 @@ test("keeps local-only controls visible in the free demo", async ({ page }) => {
   await expect(page.locator("#positionLabButton")).toBeEnabled();
 });
 
-test("starts at v9.4 and cycles left through weaker engines", async ({ page }) => {
+test("starts at v9.5 and cycles left through weaker engines", async ({ page }) => {
   await installMockBackend(page);
   await openMainMenu(page);
 
   await expect(page.locator("#engineDownButton")).toBeEnabled();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.5");
   await page.locator("#engineDownButton").click();
   await expect(page.locator("#menuEngineButton")).toContainText("v8.1");
   await page.locator("#engineDownButton").click();
-  await expect(page.locator("#menuEngineButton")).toContainText("v9.4");
+  await expect(page.locator("#menuEngineButton")).toContainText("v9.5");
 });
 
 test("introduces the Search Lab once and lets the guide be reopened", async ({ page }) => {
@@ -1381,7 +1381,7 @@ test("steps through the search microscope and accepts a live trace", async ({ pa
   ];
   await page.route(`${API_BASE}/api/search-trace`, async (route) => {
     const events = [
-      { type: "started", engine: "v9.4", label: 'Sgurr v9.4 "Dearg"', perspective: "white" },
+      { type: "started", engine: "v9.5", label: 'Sgurr v9.5 "Dearg"', perspective: "white" },
       { type: "iteration", kind: "cp", value: -26, display: "-0.3", depth: 1, nodes: 60, nps: 60000, time_ms: 1, pv: ["a7a6"] },
       { type: "iteration", kind: "cp", value: 40, display: "+0.4", depth: 12, nodes: 1271020, nps: 3652356, time_ms: 348, pv: ["a7a6"] },
       { type: "complete", bestmove: "a7a6" },

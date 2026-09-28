@@ -96,6 +96,17 @@ TRACE_ENGINE_PATH = TRACE_ENGINE_PATH.resolve()
 # `rating` supplies both the subtitle and the frontend ladder.
 ENGINE_SPECS: list[dict[str, object]] = [
     {
+        # Pool-F: 3423.6 +/-9.7 over 2,943 games, played as v9.5-rc.
+        # Move ordering, correction history, reductions and the hash table
+        # reworked on the v9.4 network: +101 over v9.4 on the pool.
+        "id": "v9.5",
+        "exe": CPP_DIR / "sgr_v9_5.exe",
+        "net": NETS_DIR / "gen9_screlu_cos_s1.nnue",
+        "label": 'Sgurr v9.5 "Dearg"',
+        "tech": "GEN9 SCRELU NNUE + SEARCH OVERHAUL",
+        "rating": 3424,
+    },
+    {
         # Pool-F: 3322.0 +/-11.5 over 1,840 games, played as v9.3-rc2.
         # v9.3 with its time management rebuilt: +65 over v9.3 on the pool.
         "id": "v9.4",
@@ -566,7 +577,7 @@ def engine_availability(
     if PUBLIC_DEMO and engine_id != DEFAULT_ENGINE_ID:
         return (
             False,
-            "Available locally; the free demo includes Sgurr v9.4 only.",
+            "Available locally; the free demo includes Sgurr v9.5 only.",
             "LOCAL ONLY",
         )
     if not Path(entry["exe"]).is_file():
